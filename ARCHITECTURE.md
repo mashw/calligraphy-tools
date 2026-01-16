@@ -65,6 +65,10 @@ Textura Quadrata uses nib units.
 
 ## Tool architecture
 
+### GuideTemplate overlays
+
+Tools render a shared **GuideTemplate** overlay appropriate to the active script and geometry (straight baseline vs curved baseline). Align/Curve pages should not duplicate guide drawing logic; they should call shared builders and render the reusable overlay layer.
+
 ### Align tool (`src/app/align/page.tsx`)
 
 * Owns UI state (text, x-height, alignment, calibration inputs)

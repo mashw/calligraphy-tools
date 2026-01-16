@@ -9,8 +9,6 @@ import {
   sample,
   lengthPoly,
   pointAt,
-  offset,
-  pathD,
   buildPreset,
   transformCubic,
 } from '@/lib/curve-helpers';
@@ -18,6 +16,8 @@ import {
 import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
 import type { ScriptContext } from '@/lib/scripts/types';
 import { measureRun } from '@/lib/measure/measure-run';
+import { buildGuideSet } from '@/lib/guides/guide-template';
+import GuideOverlay from '@/components/preview/GuideOverlay';
 
 type PaperId = keyof typeof PAPERS_MM;
 type CurvePresetId = 'simpleArch' | 'highArch' | 'shallowArch' | 'compoundArch' | 'zanerian';
@@ -357,10 +357,18 @@ export default function CurvedTitlePage() {
   const translatePoly = (poly: Pt[], dx: number, dy: number) => poly.map(p => ({ x: p.x + dx, y: p.y + dy }));
 
   const baseline = useMemo(() => translatePoly(baselineBase, curveOffset.x, curveOffset.y), [baselineBase, curveOffset]);
-  const waist = useMemo(() => offset(baseline, -xMM), [baseline, xMM]);
-  const ascLine = useMemo(() => offset(waist, -ascMM), [waist, ascMM]);
-  const descLine = useMemo(() => offset(baseline, descMM), [baseline, descMM]);
   const arcLen = useMemo(() => lengthPoly(baseline), [baseline]);
+  const guideSet = useMemo(
+    () =>
+      buildGuideSet('blackletter', {
+        baseline,
+        xMM,
+        ascMM,
+        descMM,
+        tickStepMM: Math.max(nibMM, 1),
+      }),
+    [baseline, xMM, ascMM, descMM, nibMM],
+  );
 
   // ---------- Layout along the curve ----------
   type Place = { ch: string; w: number; h: number; sMid: number };
@@ -472,19 +480,6 @@ export default function CurvedTitlePage() {
     return { waistPts, basePts };
   }, [span, baseline, arcLen, xMM, nibMM]);
 
-  const guides = useMemo(() => {
-    const step = Math.max(nibMM, 1);
-    const out: { u: Pt; d: Pt }[] = [];
-    for (let s = 0; s <= arcLen; s += step) {
-      const { p, n } = pointAt(baseline, s);
-      out.push({
-        u: { x: p.x - n.x * (xMM + ascMM), y: p.y - n.y * (xMM + ascMM) },
-        d: { x: p.x + n.x * descMM, y: p.y + n.y * descMM },
-      });
-    }
-    return out;
-  }, [baseline, arcLen, nibMM, xMM, ascMM, descMM]);
-
   const startPt = baseline[0];
   const endPt = baseline[baseline.length - 1];
   const endpointsDistance = Math.hypot(endPt.x - startPt.x, endPt.y - startPt.y);
@@ -509,7 +504,12 @@ export default function CurvedTitlePage() {
       minY = (box.h - vh) / 2;
     } else {
       const fitPad = 8;
-      const pts = [...ascLine, ...waist, ...baseline, ...descLine];
+      const pts = [
+        ...guideSet.ascLine,
+        ...guideSet.waistLine,
+        ...guideSet.baseLine,
+        ...guideSet.descLine,
+      ];
       const xs = pts.map(p => p.x);
       const ys = pts.map(p => p.y);
       const minX0 = Math.min(...xs) - fitPad;
@@ -532,7 +532,7 @@ export default function CurvedTitlePage() {
     const vhc = vh + stagePadMM * 2;
 
     return { minX: minXc, minY: minYc, vw: vwc, vh: vhc, str: `${minXc} ${minYc} ${vwc} ${vhc}` };
-  }, [view, box, ascLine, waist, baseline, descLine, zoom, pan]);
+  }, [view, box, guideSet, zoom, pan]);
 
   /* ---------------- Export actions ---------------- */
   const MM_TO_PT = 72 / 25.4;
@@ -866,42 +866,22 @@ export default function CurvedTitlePage() {
 
               <g clipPath="url(#pageClip)">
                 {/* Guides */}
-                <path d={pathD(ascLine)} stroke={isCurveDragging ? '#a78bfa' : '#cbd5e1'} strokeWidth={swThin} fill="none" vectorEffect="non-scaling-stroke" />
-                <path d={pathD(offset(baseline, -xMM))} stroke={isCurveDragging ? '#7c3aed' : '#111827'} strokeWidth={swBold} fill="none" vectorEffect="non-scaling-stroke" />
-                <path d={pathD(baseline)} stroke={isCurveDragging ? '#7c3aed' : '#111827'} strokeWidth={swBold} fill="none" vectorEffect="non-scaling-stroke" />
-                <path d={pathD(descLine)} stroke={isCurveDragging ? '#a78bfa' : '#cbd5e1'} strokeWidth={swThin} fill="none" vectorEffect="non-scaling-stroke" />
-
-                {/* hit paths */}
-                {[ascLine, offset(baseline, -xMM), baseline, descLine].map((poly, idx) => (
-                  <path
-                    key={idx}
-                    d={pathD(poly)}
-                    stroke="rgba(0,0,0,0)"
-                    strokeWidth={Math.max(8, swBold * 8)}
-                    fill="none"
-                    pointerEvents="stroke"
-                    className="cursor-move"
-                    onPointerDown={onGuidePointerDown}
-                  />
-                ))}
-
-                {guides.map((g, i) => (
-                  <g key={i}>
-                    <line x1={g.u.x} y1={g.u.y} x2={g.d.x} y2={g.d.y} stroke={isCurveDragging ? '#a78bfa' : '#e2e8f0'} strokeWidth={swThin} vectorEffect="non-scaling-stroke" />
-                    <line
-                      x1={g.u.x}
-                      y1={g.u.y}
-                      x2={g.d.x}
-                      y2={g.d.y}
-                      stroke="rgba(0,0,0,0)"
-                      strokeWidth={Math.max(8, swBold * 8)}
-                      vectorEffect="non-scaling-stroke"
-                      pointerEvents="stroke"
-                      className="cursor-move"
-                      onPointerDown={onGuidePointerDown}
-                    />
-                  </g>
-                ))}
+                <GuideOverlay
+                  guideSet={guideSet}
+                  style={{
+                    thin: swThin,
+                    bold: swBold,
+                    colors: {
+                      thin: isCurveDragging ? '#a78bfa' : '#cbd5e1',
+                      bold: isCurveDragging ? '#7c3aed' : '#111827',
+                      tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
+                    },
+                  }}
+                  interactive={{
+                    onGuidePointerDown,
+                    hitStrokeWidthMM: Math.max(8, swBold * 8),
+                  }}
+                />
 
                 {showSpanFill && spanPoly && (
                   <>

@@ -16,6 +16,13 @@ import { measureRun } from '@/lib/measure/measure-run';
 import { lineMetricFromMeasuredRun } from '@/lib/measure/measure-lines-generic';
 import { buildCopperplateModel } from '@/lib/scripts/copperplate';
 import { buildCopperplateContext } from '@/lib/copperplate/context';
+import {
+  blackletterGuideHeightsMM,
+  buildGuideSet,
+  type GuideTemplateId,
+} from '@/lib/guides/guide-template';
+import { buildStageFrame } from '@/lib/preview/stage';
+import GuideOverlay from '@/components/preview/GuideOverlay';
 
 /** ============================================================
  * Calligraphy Tools — Line Planner (Copperplate + Textura Quadrata)
@@ -166,7 +173,10 @@ type LinePreviewProps = {
   rightEdgeX: number;
   centerX: number;
   lineGap: number;
+  baselineTopY: number;
   showLetterBoxes: boolean;
+  guideTemplate: GuideTemplateId;
+  guideHeights: { xMM: number; ascMM: number; descMM: number };
 };
 
 function LinePreview(props: LinePreviewProps) {
@@ -180,7 +190,10 @@ function LinePreview(props: LinePreviewProps) {
     rightEdgeX,
     centerX,
     lineGap,
+    baselineTopY,
     showLetterBoxes,
+    guideTemplate,
+    guideHeights,
   } = props;
 
   const { lengthMM, segments } = metric;
@@ -189,7 +202,7 @@ function LinePreview(props: LinePreviewProps) {
   const Lmm = lengthMM;
   const Lpx = Lmm * pxScale;
 
-  const baselineY = 50 + index * lineGap;
+  const baselineY = baselineTopY + index * lineGap;
   const yLine = snap(baselineY);
 
   let startXRaw: number;
@@ -213,7 +226,22 @@ function LinePreview(props: LinePreviewProps) {
   const xEnd = snap(endXRaw);
 
   const spanY = baselineY - 14;
-  const baseBoxH = xHeight * pxScale;
+  const baseBoxH = (guideTemplate === 'blackletter' ? guideHeights.xMM : xHeight) * pxScale;
+  const useSkew = guideTemplate === 'copperplate';
+  const guideSet = useMemo(() => {
+    if (guideTemplate !== 'blackletter') return null;
+    const baseline = [
+      { x: 0, y: 0 },
+      { x: Lmm, y: 0 },
+    ];
+    return buildGuideSet('blackletter', {
+      baseline,
+      xMM: guideHeights.xMM,
+      ascMM: guideHeights.ascMM,
+      descMM: guideHeights.descMM,
+      tickStepMM: Math.max(guideHeights.xMM * 0.2, 1),
+    });
+  }, [guideTemplate, guideHeights, Lmm]);
 
   return (
     <g>
@@ -252,7 +280,7 @@ function LinePreview(props: LinePreviewProps) {
                 stroke={strokeColor}
                 strokeDasharray="4 3"
                 strokeWidth={1}
-                transform={skewTransform}
+                transform={useSkew ? skewTransform : undefined}
               />
             );
           }
@@ -271,7 +299,7 @@ function LinePreview(props: LinePreviewProps) {
               stroke={orangeStroke}
               strokeDasharray="4 3"
               strokeWidth={1}
-              transform={skewTransform}
+              transform={useSkew ? skewTransform : undefined}
             />
           );
         })}
@@ -280,14 +308,35 @@ function LinePreview(props: LinePreviewProps) {
         {labelText}
       </text>
 
-      <g transform={`translate(${xStart},${yLine}) skewX(${-SLANT_DEG})`}>
-        <line x1={0} y1={0} x2={0} y2={-baseBoxH} stroke="#0f172a" strokeWidth={TICK_STROKE} strokeLinecap="square" />
-      </g>
-      <g transform={`translate(${xEnd},${yLine}) skewX(${-SLANT_DEG})`}>
-        <line x1={0} y1={0} x2={0} y2={-baseBoxH} stroke="#0f172a" strokeWidth={TICK_STROKE} strokeLinecap="square" />
-      </g>
+      {useSkew && (
+        <>
+          <g transform={`translate(${xStart},${yLine}) skewX(${-SLANT_DEG})`}>
+            <line x1={0} y1={0} x2={0} y2={-baseBoxH} stroke="#0f172a" strokeWidth={TICK_STROKE} strokeLinecap="square" />
+          </g>
+          <g transform={`translate(${xEnd},${yLine}) skewX(${-SLANT_DEG})`}>
+            <line x1={0} y1={0} x2={0} y2={-baseBoxH} stroke="#0f172a" strokeWidth={TICK_STROKE} strokeLinecap="square" />
+          </g>
 
-      <line x1={xStart} y1={yLine} x2={xEnd} y2={yLine} stroke="#111827" strokeWidth={LINE_STROKE} strokeLinecap="square" />
+          <line x1={xStart} y1={yLine} x2={xEnd} y2={yLine} stroke="#111827" strokeWidth={LINE_STROKE} strokeLinecap="square" />
+        </>
+      )}
+
+      {guideTemplate === 'blackletter' && guideSet && (
+        <g transform={`translate(${xStart},${yLine}) scale(${pxScale})`}>
+          <GuideOverlay
+            guideSet={guideSet}
+            style={{
+              thin: 1,
+              bold: 2,
+              colors: {
+                thin: '#e2e8f0',
+                bold: '#111827',
+                tick: '#e2e8f0',
+              },
+            }}
+          />
+        </g>
+      )}
     </g>
   );
 }
@@ -320,6 +369,9 @@ export default function Home() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [userScaleFactor, setUserScaleFactor] = useState(1);
   const [userSpaceFactor, setUserSpaceFactor] = useState(1);
+
+  const guideTemplateForScript = (current: ScriptId): GuideTemplateId =>
+    current === 'Copperplate' ? 'copperplate' : 'blackletter';
 
   const handleStepButtonMouseDown: React.MouseEventHandler<HTMLButtonElement> = (e) => {
     e.preventDefault();
@@ -468,17 +520,26 @@ export default function Home() {
 
   const minWidth = 760;
   const maxWidthPx = 1100;
-
-  const halfContentPx = Math.ceil((maxMM * (pxPerMM || 5)) / 2);
-  const computedWidth = Math.max(minWidth, halfContentPx * 2 + baseMargin * 2);
-  const totalWidth = Math.min(maxWidthPx, computedWidth);
-
-  const centerX = Math.floor(totalWidth / 2);
-  const rightEdgeX = totalWidth - baseMargin;
-  const leftEdgeX = baseMargin;
-
   const lineGap = 42;
-  const svgHeight = Math.max(180, 70 + lineMetrics.length * lineGap);
+  const guideTemplate = useMemo(() => guideTemplateForScript(script), [script]);
+  const guideHeights = useMemo(
+    () => (guideTemplate === 'blackletter' ? blackletterGuideHeightsMM(nibMM) : { xMM: xHeight, ascMM: 0, descMM: 0 }),
+    [guideTemplate, nibMM, xHeight],
+  );
+
+  const stageFrame = useMemo(
+    () =>
+      buildStageFrame({
+        maxMM,
+        pxPerMM: pxPerMM || 5,
+        baseMargin,
+        minWidthPx: minWidth,
+        maxWidthPx,
+        lineGapPx: lineGap,
+        lineCount: lineMetrics.length,
+      }),
+    [maxMM, pxPerMM, baseMargin, minWidth, maxWidthPx, lineGap, lineMetrics.length],
+  );
 
   const effectiveScaleNumeric = script === 'Copperplate' && useCalibration ? copper.debug.effectiveScaleNumeric : 1;
   const effectiveSpaceNumeric = script === 'Copperplate' && useCalibration ? copper.debug.effectiveSpaceNumeric : 1;
@@ -544,24 +605,44 @@ export default function Home() {
 
           <div className="overflow-x-auto">
             <svg
-              viewBox={`0 0 ${totalWidth} ${svgHeight}`}
+              viewBox={`0 0 ${stageFrame.widthPx} ${stageFrame.heightPx}`}
               className="block mx-auto w-full h-auto"
               preserveAspectRatio="xMidYMid meet"
               shapeRendering="crispEdges"
             >
-              <rect x={0} y={0} width={totalWidth} height={svgHeight} fill="white" />
+              <rect x={0} y={0} width={stageFrame.widthPx} height={stageFrame.heightPx} fill="white" />
 
               {alignment === 'center' ? (
                 <>
-                  <line x1={centerX} y1={10} x2={centerX} y2={svgHeight - 10} stroke="#94a3b8" strokeDasharray="4 4" />
-                  <text x={centerX + 6} y={18} className="ct-svg-text" fill="#64748b">
+                  <line
+                    x1={stageFrame.centerX}
+                    y1={10}
+                    x2={stageFrame.centerX}
+                    y2={stageFrame.heightPx - 10}
+                    stroke="#94a3b8"
+                    strokeDasharray="4 4"
+                  />
+                  <text x={stageFrame.centerX + 6} y={18} className="ct-svg-text" fill="#64748b">
                     centerline
                   </text>
                 </>
               ) : (
                 <>
-                  <line x1={rightEdgeX} y1={10} x2={rightEdgeX} y2={svgHeight - 10} stroke="#94a3b8" strokeDasharray="4 4" />
-                  <text x={rightEdgeX - 6} y={18} className="ct-svg-text" fill="#64748b" textAnchor="end">
+                  <line
+                    x1={stageFrame.rightEdgeX}
+                    y1={10}
+                    x2={stageFrame.rightEdgeX}
+                    y2={stageFrame.heightPx - 10}
+                    stroke="#94a3b8"
+                    strokeDasharray="4 4"
+                  />
+                  <text
+                    x={stageFrame.rightEdgeX - 6}
+                    y={18}
+                    className="ct-svg-text"
+                    fill="#64748b"
+                    textAnchor="end"
+                  >
                     right edge
                   </text>
                 </>
@@ -575,11 +656,14 @@ export default function Home() {
                   alignment={alignment}
                   xHeight={xHeight}
                   pxPerMM={pxPerMM}
-                  leftEdgeX={leftEdgeX}
-                  rightEdgeX={rightEdgeX}
-                  centerX={centerX}
-                  lineGap={lineGap}
+                  leftEdgeX={stageFrame.leftEdgeX}
+                  rightEdgeX={stageFrame.rightEdgeX}
+                  centerX={stageFrame.centerX}
+                  lineGap={stageFrame.lineGapPx}
+                  baselineTopY={stageFrame.baselineTopY}
                   showLetterBoxes={showLetterBoxes}
+                  guideTemplate={guideTemplate}
+                  guideHeights={guideHeights}
                 />
               ))}
             </svg>
