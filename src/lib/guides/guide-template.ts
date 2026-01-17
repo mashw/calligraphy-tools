@@ -29,6 +29,8 @@ export const BLACKLETTER_GUIDE_DEFAULTS = {
   descNib: 2,
 };
 
+const COPPERPLATE_SLANT_DEG = 35;
+
 export function blackletterGuideHeightsMM(nibMM: number) {
   return {
     xMM: BLACKLETTER_GUIDE_DEFAULTS.xNib * nibMM,
@@ -59,12 +61,35 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
 }
 
 function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
-  const { baseline, xMM, ascMM, descMM } = params;
+  const { baseline, xMM, ascMM, descMM, tickStepMM } = params;
+  const ascLine = offset(baseline, -(xMM + ascMM));
+  const waistLine = offset(baseline, -xMM);
+  const baseLine = baseline;
+  const descLine = offset(baseline, descMM);
+
+  const step = Math.max(0.5, tickStepMM ?? 1);
+  const ticks: { a: Pt; b: Pt }[] = [];
+  const arcLen = lengthPoly(baseline);
+  const slantRad = (COPPERPLATE_SLANT_DEG * Math.PI) / 180;
+
+  for (let s = 0; s <= arcLen; s += step) {
+    const { p, n, t } = pointAt(baseline, s);
+    const dir = {
+      x: n.x * Math.cos(slantRad) + t.x * Math.sin(slantRad),
+      y: n.y * Math.cos(slantRad) + t.y * Math.sin(slantRad),
+    };
+    ticks.push({
+      a: { x: p.x - dir.x * (xMM + ascMM), y: p.y - dir.y * (xMM + ascMM) },
+      b: { x: p.x + dir.x * descMM, y: p.y + dir.y * descMM },
+    });
+  }
+
   return {
-    ascLine: offset(baseline, -(xMM + ascMM)),
-    waistLine: offset(baseline, -xMM),
-    baseLine: baseline,
-    descLine: offset(baseline, descMM),
+    ascLine,
+    waistLine,
+    baseLine,
+    descLine,
+    ticks,
   };
 }
 

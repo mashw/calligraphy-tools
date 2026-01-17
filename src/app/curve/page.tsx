@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useRef, useState, useLayoutEffect } from 'react';
+import React, { useMemo, useRef, useState, useLayoutEffect, useEffect } from 'react';
 import {
   PAPERS_MM,
   SCRIPT_DEFAULTS,
@@ -13,10 +13,16 @@ import {
   transformCubic,
 } from '@/lib/curve-helpers';
 
+import {
+  CAL_WORD,
+  CAL_WORD_DOUBLE,
+  clamp,
+} from '@/lib/line-widths';
 import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
 import type { ScriptContext } from '@/lib/scripts/types';
 import { measureRun } from '@/lib/measure/measure-run';
-import { buildGuideSet } from '@/lib/guides/guide-template';
+import { buildCopperplateContext } from '@/lib/copperplate/context';
+import { buildGuideSet, BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/guide-template';
 import GuideOverlay from '@/components/preview/GuideOverlay';
 
 type PaperId = keyof typeof PAPERS_MM;
@@ -24,6 +30,11 @@ type CurvePresetId = 'simpleArch' | 'highArch' | 'shallowArch' | 'compoundArch' 
 type Orientation = 'portrait' | 'landscape';
 type AlignMode = 'start' | 'center' | 'end';
 type ViewMode = 'autofit' | 'fullpage';
+
+const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0.5);
+
+const CAL_STORAGE_KEY_PREFIX = 'ct_curveplanner_calibration_v2_xh_';
+const keyForXHeight = (x: number) => `${CAL_STORAGE_KEY_PREFIX}${x.toFixed(1)}`;
 
 /* ---------------- Reusable InfoTip ---------------- */
 type InfoTipProps = {
@@ -228,10 +239,20 @@ export default function CurvedTitlePage() {
   const [align, setAlign] = useState<AlignMode>('center');
   const [text, setText] = useState('Merry Christmas');
 
+  const [xHeightMM, setXHeightMM] = useState(6);
+  const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
+
   const [nibMM, setNibMM] = useState(2);
-  const [xNib, setXNib] = useState(5);
-  const [ascNib, setAscNib] = useState(3);
-  const [descNib, setDescNib] = useState(2);
+  const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
+  const [ascNib, setAscNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.ascNib);
+  const [descNib, setDescNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.descNib);
+
+  const [useCalibration, setUseCalibration] = useState(false);
+  const [calWordLowerMM, setCalWordLowerMM] = useState('');
+  const [calWordDoubleMM, setCalWordDoubleMM] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [userScaleFactor, setUserScaleFactor] = useState(1);
+  const [userSpaceFactor, setUserSpaceFactor] = useState(1);
 
   const [showBoxes, setShowBoxes] = useState(false);
   const [showSpanFill, setShowSpanFill] = useState(true);
@@ -285,6 +306,60 @@ export default function CurvedTitlePage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (script !== 'Copperplate') {
+      setUseCalibration(false);
+      setShowAdvanced(false);
+    }
+  }, [script]);
+
+  useEffect(() => {
+    if (script !== 'Copperplate') return;
+
+    try {
+      const key = keyForXHeight(xHeightMM);
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
+      if (!raw) {
+        setUseCalibration(false);
+        setCalWordLowerMM('');
+        setCalWordDoubleMM('');
+        setUserScaleFactor(1);
+        setUserSpaceFactor(1);
+        setShowAdvanced(false);
+        return;
+      }
+      const data = JSON.parse(raw);
+      setUseCalibration(!!data.useCalibration);
+      setCalWordLowerMM(typeof data.calWordLowerMM === 'string' ? data.calWordLowerMM : '');
+      setCalWordDoubleMM(typeof data.calWordDoubleMM === 'string' ? data.calWordDoubleMM : '');
+      setUserScaleFactor(typeof data.userScaleFactor === 'number' ? clamp(data.userScaleFactor, 0.7, 1.3) : 1);
+      setUserSpaceFactor(typeof data.userSpaceFactor === 'number' ? clamp(data.userSpaceFactor, 0.5, 1.5) : 1);
+      setShowAdvanced(false);
+    } catch {
+      // ignore
+    }
+  }, [xHeightMM, script]);
+
+  useEffect(() => {
+    if (script !== 'Copperplate') return;
+
+    try {
+      const key = keyForXHeight(xHeightMM);
+      const data = {
+        useCalibration,
+        calWordLowerMM,
+        calWordDoubleMM,
+        userScaleFactor,
+        userSpaceFactor,
+      };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(key, JSON.stringify(data));
+      }
+    } catch {
+      // ignore
+    }
+  }, [xHeightMM, script, useCalibration, calWordLowerMM, calWordDoubleMM, userScaleFactor, userSpaceFactor]);
+
   const fs = (mm: number) => mm / Math.max(zoom, 0.001);
 
   // ---------- Page box (mm) ----------
@@ -296,22 +371,55 @@ export default function CurvedTitlePage() {
   }, [raw, orientation]);
 
   // ---------- Derived sizes ----------
-  const xMM = xNib * nibMM;
-  const ascMM = ascNib * nibMM;
-  const descMM = descNib * nibMM;
-  const capMM = (SCRIPT_DEFAULTS[script] ? SCRIPT_DEFAULTS[script].capHeight : 7) * nibMM;
+  const texturaXHeightMM = xNib * nibMM;
+  const copperplateHeights = useMemo(
+    () => ({ xMM: xHeightMM, ascMM: xHeightMM * 0.5, descMM: xHeightMM * 0.3 }),
+    [xHeightMM],
+  );
+  const blackletterHeights = useMemo(
+    () => ({ xMM: texturaXHeightMM, ascMM: ascNib * nibMM, descMM: descNib * nibMM }),
+    [texturaXHeightMM, ascNib, descNib, nibMM],
+  );
+  const guideHeights = script === 'Copperplate' ? copperplateHeights : blackletterHeights;
+  const xMM = guideHeights.xMM;
+  const ascMM = guideHeights.ascMM;
+  const descMM = guideHeights.descMM;
+  const capMM = script === 'Copperplate'
+    ? xHeightMM * 1.05
+    : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * nibMM;
 
 
   const swThin = Math.max(0.35, Math.min(0.7, Math.min(box.w, box.h) * 0.0025));
   const swBold = swThin * 1.8;
 
   // ---------- Measurement (shared) ----------
-  const ctx = useMemo<ScriptContext>(() => ({
-    xHeightMM: xMM,
-    nibMM,
-    scale: 1,
-    spaceMult: 1,
-  }), [xMM, nibMM]);
+  const copper = useMemo(() => {
+    const lower = parseFloat(calWordLowerMM);
+    const dbl = parseFloat(calWordDoubleMM);
+
+    return buildCopperplateContext({
+      xHeightMM,
+      capStyle,
+      calibration: {
+        enabled: useCalibration,
+        calWordLowerMM: Number.isFinite(lower) ? lower : undefined,
+        calWordDoubleMM: Number.isFinite(dbl) ? dbl : undefined,
+        userScaleFactor,
+        userSpaceFactor,
+      },
+    });
+  }, [xHeightMM, capStyle, useCalibration, calWordLowerMM, calWordDoubleMM, userScaleFactor, userSpaceFactor]);
+
+  const ctx = useMemo<ScriptContext>(() => {
+    if (script === 'Copperplate') return copper.ctx;
+    return {
+      xHeightMM: texturaXHeightMM,
+      nibMM,
+      scale: 1,
+      spaceMult: 1,
+      capStyle: 'simple',
+    };
+  }, [script, copper.ctx, texturaXHeightMM, nibMM]);
 
   const run = useMemo(() => measureRun(text, SCRIPT_PROFILES[script], ctx), [text, script, ctx]);
 
@@ -358,16 +466,17 @@ export default function CurvedTitlePage() {
 
   const baseline = useMemo(() => translatePoly(baselineBase, curveOffset.x, curveOffset.y), [baselineBase, curveOffset]);
   const arcLen = useMemo(() => lengthPoly(baseline), [baseline]);
+  const guideTemplate = script === 'Copperplate' ? 'copperplate' : 'blackletter';
   const guideSet = useMemo(
     () =>
-      buildGuideSet('blackletter', {
+      buildGuideSet(guideTemplate, {
         baseline,
         xMM,
         ascMM,
         descMM,
-        tickStepMM: Math.max(nibMM, 1),
+        tickStepMM: Math.max(script === 'Copperplate' ? xMM * 0.2 : nibMM, 1),
       }),
-    [baseline, xMM, ascMM, descMM, nibMM],
+    [baseline, guideTemplate, xMM, ascMM, descMM, nibMM, script],
   );
 
   // ---------- Layout along the curve ----------
@@ -413,6 +522,11 @@ export default function CurvedTitlePage() {
       return { placements: pass1.placements, needed: pass1.totalAdvance, overBy: overBy0 };
     }
 
+    if (script !== 'TexturaQuadrata') {
+      const overBy = Math.max(0, pass1.totalAdvance - arcLen);
+      return { placements: pass1.placements, needed: pass1.totalAdvance, overBy };
+    }
+
     // Pass 2: add a small extra spacing bump on turns (blackletter readability)
     const adv2 = adv1.slice();
     for (let i = 0; i < pass1.placements.length; i++) {
@@ -456,7 +570,7 @@ export default function CurvedTitlePage() {
     const pass2 = placeWithAdvances(adv2);
     const overBy = Math.max(0, pass2.totalAdvance - arcLen);
     return { placements: pass2.placements, needed: pass2.totalAdvance, overBy };
-  }, [run, arcLen, align, baseline, capMM, xMM, nibMM]);
+  }, [run, arcLen, align, baseline, capMM, xMM, nibMM, script]);
 
   const span = useMemo(() => {
     if (!layout.placements.length) return null;
@@ -469,7 +583,7 @@ export default function CurvedTitlePage() {
 
   const spanPoly = useMemo(() => {
     if (!span) return null;
-    const ds = Math.max(0.5, nibMM * 0.5);
+    const ds = script === 'Copperplate' ? Math.max(0.5, xMM * 0.2) : Math.max(0.5, nibMM * 0.5);
     const waistPts: Pt[] = [];
     const basePts: Pt[] = [];
     for (let s = span.sStart; s <= span.sEnd + 0.0001; s += ds) {
@@ -778,7 +892,7 @@ export default function CurvedTitlePage() {
             Calligraphy Tools <span className="text-indigo-600">— Curved Title Planner</span>
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Plan curved headings (“resolutions”) for Textura Quadrata and Fraktur. Letters stay upright; guides follow the curve.
+            Plan curved headings (“resolutions”) for Copperplate and Textura Quadrata. Letters stay upright; guides follow the curve.
           </p>
         </div>
       </header>
@@ -872,9 +986,10 @@ export default function CurvedTitlePage() {
                     thin: swThin,
                     bold: swBold,
                     colors: {
-                      thin: isCurveDragging ? '#a78bfa' : '#cbd5e1',
+                      thin: isCurveDragging ? '#a78bfa' : '#e2e8f0',
                       bold: isCurveDragging ? '#7c3aed' : '#111827',
                       tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
+                      frame: '#cbd5e1',
                     },
                   }}
                   interactive={{
@@ -1001,6 +1116,7 @@ export default function CurvedTitlePage() {
             <div>
               <label className="font-medium text-slate-700">Script</label>
               <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={script} onChange={e => setScript(e.target.value as ScriptId)}>
+                <option value="Copperplate">Copperplate</option>
                 <option value="TexturaQuadrata">Textura Quadrata</option>
               </select>
             </div>
@@ -1064,27 +1180,164 @@ export default function CurvedTitlePage() {
         <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold text-slate-800">Step 2 — Heights & Guides</h2>
-            <InfoTip side="right">Heights are nibs × nib size (mm).</InfoTip>
+            <InfoTip side="right">
+              {script === 'Copperplate'
+                ? 'Copperplate uses x-height (mm) with optional calibration for lowercase scale and spacing.'
+                : 'Heights are nibs × nib size (mm).'}
+            </InfoTip>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 mt-3">
-            <div>
-              <label className="font-medium text-slate-700">Nib size (mm)</label>
-              <input type="number" step={0.1} min={0.2} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={nibMM} onChange={e => setNibMM(parseFloat(e.target.value || '2'))} />
+          {script === 'Copperplate' ? (
+            <div className="mt-3 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="font-medium text-slate-700">X-height (mm)</label>
+                  <select
+                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                    value={xHeightMM}
+                    onChange={(e) => setXHeightMM(parseFloat(e.target.value))}
+                  >
+                    {X_OPTIONS.map((v) => (
+                      <option key={v} value={v}>
+                        {v.toFixed(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="font-medium text-slate-700">Capitals</label>
+                  <select
+                    className="mt-1 w-full p-2 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                    value={capStyle}
+                    onChange={(e) => setCapStyle(e.target.value as 'simple' | 'flourished')}
+                    disabled={useCalibration}
+                  >
+                    <option value="simple">Simple (body widths)</option>
+                    <option value="flourished">Flourished (full widths)</option>
+                  </select>
+                  {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 pt-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium text-slate-700">Calibration (optional)</div>
+                    <p className="text-xs text-slate-500">Stored per x-height. Adjusts lowercase scale + spacing.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setUseCalibration((v) => !v)}
+                    className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+                      ${useCalibration ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition ${useCalibration ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
+                      <span className="h-3 w-3 rounded-full bg-white shadow" />
+                    </span>
+                    {useCalibration ? 'Calibration: On' : 'Calibration: Off'}
+                  </button>
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-mono text-indigo-500">{CAL_WORD}</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      className="w-full p-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50"
+                      placeholder="Lowercase word (mm)"
+                      value={calWordLowerMM}
+                      onChange={(e) => setCalWordLowerMM(e.target.value)}
+                      disabled={!useCalibration}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-mono text-indigo-500">{CAL_WORD_DOUBLE}</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      className="w-full p-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50"
+                      placeholder="Double word (mm)"
+                      value={calWordDoubleMM}
+                      onChange={(e) => setCalWordDoubleMM(e.target.value)}
+                      disabled={!useCalibration}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setShowAdvanced((v) => !v)}
+                    className="flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-indigo-600 select-none"
+                    disabled={!useCalibration}
+                  >
+                    <span className={`inline-block transform transition-transform ${showAdvanced && useCalibration ? 'rotate-90' : 'rotate-0'}`}>▶</span>
+                    <span>Advanced tweaks</span>
+                    {!useCalibration && <span className="ml-1 text-[10px] text-slate-400">(enable calibration to adjust)</span>}
+                  </button>
+
+                  {showAdvanced && useCalibration && (
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-slate-700">Overall scale</span>
+                          <span className="font-mono text-slate-500">×{userScaleFactor.toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.7"
+                          max="1.3"
+                          className="w-full p-2 rounded-lg border border-slate-300 text-sm"
+                          value={userScaleFactor}
+                          onChange={(e) => setUserScaleFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.7, 1.3))}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-slate-700">Spacing factor</span>
+                          <span className="font-mono text-slate-500">×{userSpaceFactor.toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.5"
+                          max="1.5"
+                          className="w-full p-2 rounded-lg border border-slate-300 text-sm"
+                          value={userSpaceFactor}
+                          onChange={(e) => setUserSpaceFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.5, 1.5))}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="font-medium text-slate-700">x-height (nibs)</label>
-              <input type="number" step={0.5} min={1} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={xNib} onChange={e => setXNib(parseFloat(e.target.value || '5'))} />
+          ) : (
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              <div>
+                <label className="font-medium text-slate-700">Nib size (mm)</label>
+                <input type="number" step={0.1} min={0.2} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={nibMM} onChange={e => setNibMM(parseFloat(e.target.value || '2'))} />
+              </div>
+              <div>
+                <label className="font-medium text-slate-700">x-height (nibs)</label>
+                <input type="number" step={0.5} min={1} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={xNib} onChange={e => setXNib(parseFloat(e.target.value || '5'))} />
+              </div>
+              <div>
+                <label className="font-medium text-slate-700">Ascender (nibs)</label>
+                <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={ascNib} onChange={e => setAscNib(parseFloat(e.target.value || '3'))} />
+              </div>
+              <div>
+                <label className="font-medium text-slate-700">Descender (nibs)</label>
+                <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={descNib} onChange={e => setDescNib(parseFloat(e.target.value || '2'))} />
+              </div>
             </div>
-            <div>
-              <label className="font-medium text-slate-700">Ascender (nibs)</label>
-              <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={ascNib} onChange={e => setAscNib(parseFloat(e.target.value || '3'))} />
-            </div>
-            <div>
-              <label className="font-medium text-slate-700">Descender (nibs)</label>
-              <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={descNib} onChange={e => setDescNib(parseFloat(e.target.value || '2'))} />
-            </div>
-          </div>
+          )}
 
           <div className="mt-4 space-y-4">
             <label className="inline-flex items-center gap-2 text-sm text-slate-800">

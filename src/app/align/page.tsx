@@ -16,11 +16,7 @@ import { measureRun } from '@/lib/measure/measure-run';
 import { lineMetricFromMeasuredRun } from '@/lib/measure/measure-lines-generic';
 import { buildCopperplateModel } from '@/lib/scripts/copperplate';
 import { buildCopperplateContext } from '@/lib/copperplate/context';
-import {
-  blackletterGuideHeightsMM,
-  buildGuideSet,
-  type GuideTemplateId,
-} from '@/lib/guides/guide-template';
+import { buildGuideSet, type GuideTemplateId, BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/guide-template';
 import { buildStageFrame } from '@/lib/preview/stage';
 import GuideOverlay from '@/components/preview/GuideOverlay';
 
@@ -358,6 +354,9 @@ export default function Home() {
 
   // Textura-only controls
   const [nibMM, setNibMM] = useState(2);
+  const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
+  const [ascNib, setAscNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.ascNib);
+  const [descNib, setDescNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.descNib);
 
   const [showLetterBoxes, setShowLetterBoxes] = useState(true);
   const [vw, setVw] = useState<number | null>(null);
@@ -483,18 +482,19 @@ export default function Home() {
     });
   }, [xHeight, capStyle, useCalibration, calWordLowerMM, calWordDoubleMM, userScaleFactor, userSpaceFactor]);
 
+  const texturaXHeightMM = xNib * nibMM;
   const scriptCtx = useMemo<ScriptContext>(() => {
     if (script === 'Copperplate') return copper.ctx;
 
     // Textura Quadrata
     return {
-      xHeightMM: xHeight,
+      xHeightMM: texturaXHeightMM,
       nibMM,
       scale: 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [script, copper.ctx, xHeight, nibMM]);
+  }, [script, copper.ctx, texturaXHeightMM, nibMM]);
 
   const lineMetrics = useMemo<LineMetric[]>(() => {
     if (script === 'Copperplate') {
@@ -522,10 +522,16 @@ export default function Home() {
   const maxWidthPx = 1100;
   const lineGap = 42;
   const guideTemplate = useMemo(() => guideTemplateForScript(script), [script]);
-  const guideHeights = useMemo(
-    () => (guideTemplate === 'blackletter' ? blackletterGuideHeightsMM(nibMM) : { xMM: xHeight, ascMM: 0, descMM: 0 }),
-    [guideTemplate, nibMM, xHeight],
-  );
+  const guideHeights = useMemo(() => {
+    if (guideTemplate !== 'blackletter') {
+      return { xMM: xHeight, ascMM: 0, descMM: 0 };
+    }
+    return {
+      xMM: xNib * nibMM,
+      ascMM: ascNib * nibMM,
+      descMM: descNib * nibMM,
+    };
+  }, [guideTemplate, xHeight, xNib, ascNib, descNib, nibMM]);
 
   const stageFrame = useMemo(
     () =>
@@ -593,14 +599,6 @@ export default function Home() {
                 Textura: nib-based widths + spacing.
               </InfoTip>
             </div>
-            <button
-              type="button"
-              onMouseDown={handleStepButtonMouseDown}
-              onClick={() => setShowLetterBoxes((v) => !v)}
-              className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition select-none"
-            >
-              {showLetterBoxes ? 'Hide letter boxes' : 'Show letter boxes'}
-            </button>
           </div>
 
           <div className="overflow-x-auto">
@@ -696,23 +694,6 @@ export default function Home() {
                 </div>
 
                 <div>
-                  <label className="font-medium text-slate-700">X-height (mm)</label>
-                  <select
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    value={xHeight}
-                    onChange={(e) => setXHeight(parseFloat(e.target.value))}
-                    disabled={script !== 'Copperplate'}
-                  >
-                    {X_OPTIONS.map((v) => (
-                      <option key={v} value={v}>
-                        {v.toFixed(1)}
-                      </option>
-                    ))}
-                  </select>
-                  {script !== 'Copperplate' && <p className="mt-1 text-[11px] text-slate-400">Not used for Textura.</p>}
-                </div>
-
-                <div>
                   <label className="font-medium text-slate-700">Alignment</label>
                   <select
                     className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -725,33 +706,97 @@ export default function Home() {
                 </div>
 
                 {script === 'Copperplate' ? (
-                  <div>
-                    <label className="font-medium text-slate-700">Capitals</label>
-                    <select
-                      className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-400"
-                      value={capStyle}
-                      onChange={(e) => setCapStyle(e.target.value as 'simple' | 'flourished')}
-                      disabled={useCalibration}
-                    >
-                      <option value="simple">Simple (body widths)</option>
-                      <option value="flourished">Flourished (full widths)</option>
-                    </select>
-                    {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
-                  </div>
+                  <>
+                    <div>
+                      <label className="font-medium text-slate-700">X-height (mm)</label>
+                      <select
+                        className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={xHeight}
+                        onChange={(e) => setXHeight(parseFloat(e.target.value))}
+                      >
+                        {X_OPTIONS.map((v) => (
+                          <option key={v} value={v}>
+                            {v.toFixed(1)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="font-medium text-slate-700">Capitals</label>
+                      <select
+                        className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-400"
+                        value={capStyle}
+                        onChange={(e) => setCapStyle(e.target.value as 'simple' | 'flourished')}
+                        disabled={useCalibration}
+                      >
+                        <option value="simple">Simple (body widths)</option>
+                        <option value="flourished">Flourished (full widths)</option>
+                      </select>
+                      {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
+                    </div>
+                  </>
                 ) : (
-                  <div>
-                    <label className="font-medium text-slate-700">Nib size (mm)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0.5"
-                      className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      value={nibMM}
-                      onChange={(e) => setNibMM(clamp(parseFloat(e.target.value || '2') || 2, 0.5, 10))}
-                    />
-                    <p className="mt-1 text-[11px] text-slate-400">Textura widths are in nib units.</p>
-                  </div>
+                  <>
+                    <div>
+                      <label className="font-medium text-slate-700">Nib size (mm)</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0.5"
+                        className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={nibMM}
+                        onChange={(e) => setNibMM(clamp(parseFloat(e.target.value || '2') || 2, 0.5, 10))}
+                      />
+                      <p className="mt-1 text-[11px] text-slate-400">Textura widths are in nib units.</p>
+                    </div>
+                    <div>
+                      <label className="font-medium text-slate-700">x-height (nibs)</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="1"
+                        max="8"
+                        className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={xNib}
+                        onChange={(e) => setXNib(parseFloat(e.target.value || '5'))}
+                      />
+                    </div>
+                    <div>
+                      <label className="font-medium text-slate-700">Ascender (nibs)</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        max="8"
+                        className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={ascNib}
+                        onChange={(e) => setAscNib(parseFloat(e.target.value || '3'))}
+                      />
+                    </div>
+                    <div>
+                      <label className="font-medium text-slate-700">Descender (nibs)</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        max="8"
+                        className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={descNib}
+                        onChange={(e) => setDescNib(parseFloat(e.target.value || '2'))}
+                      />
+                    </div>
+                  </>
                 )}
+
+                <label className="inline-flex items-center gap-2 text-sm text-slate-800 sm:col-span-3">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                    checked={showLetterBoxes}
+                    onChange={(e) => setShowLetterBoxes(e.target.checked)}
+                  />
+                  Show letter bounding boxes
+                </label>
               </div>
             </div>
 
