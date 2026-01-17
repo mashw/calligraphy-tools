@@ -180,6 +180,13 @@ function normalize(v: Pt): Pt {
   return { x: v.x / mag, y: v.y / mag };
 }
 
+function tangentAt(pts: Pt[], s: number, arcLen: number): Pt {
+  const eps = 0.5;
+  const p0 = pointAt(pts, clamp(s - eps, 0, arcLen)).p;
+  const p1 = pointAt(pts, clamp(s + eps, 0, arcLen)).p;
+  return normalize({ x: p1.x - p0.x, y: p1.y - p0.y });
+}
+
 function raySegmentIntersection(rayO: Pt, rayD: Pt, a: Pt, b: Pt): number | null {
   const sx = b.x - a.x;
   const sy = b.y - a.y;
@@ -1089,52 +1096,23 @@ export default function CurvedTitlePage() {
                     if (isCopperplate && topPts.length > 1) {
                       const leftEdge = pointAt(baseline, sL);
                       const rightEdge = pointAt(baseline, sR);
-                      const slantDir = (n: Pt) => {
-                        const tangent = { x: -n.y, y: n.x };
-                        let dir = normalize({
-                          x: tangent.x * slantCos + -n.x * slantSin,
-                          y: tangent.y * slantCos + -n.y * slantSin,
+                      const slantDirAt = (s: number) => {
+                        const { n } = pointAt(baseline, s);
+                        const up = { x: -n.x, y: -n.y };
+                        const t = tangentAt(baseline, s, arcLen);
+                        return normalize({
+                          x: t.x * slantCos + up.x * slantSin,
+                          y: t.y * slantCos + up.y * slantSin,
                         });
-                        if (dir.x * tangent.x + dir.y * tangent.y < 0) {
-                          dir = normalize({
-                            x: -tangent.x * slantCos + -n.x * slantSin,
-                            y: -tangent.y * slantCos + -n.y * slantSin,
-                          });
-                        }
-                        return dir;
                       };
 
-                      const leftRay = slantDir(leftEdge.n);
-                      const rightRay = slantDir(rightEdge.n);
+                      const leftRay = slantDirAt(sL);
+                      const rightRay = slantDirAt(sR);
                       const leftHit = intersectRayWithPolyline(leftEdge.p, leftRay, topPts);
                       const rightHit = intersectRayWithPolyline(rightEdge.p, rightRay, topPts);
                       if (leftHit) topPts[0] = leftHit.point;
                       if (rightHit) topPts[topPts.length - 1] = rightHit.point;
                     }
-
-                    const mid = pointAt(baseline, sMid);
-                    const guideDir = (() => {
-                      if (!isCopperplate) return { x: -mid.n.x, y: -mid.n.y };
-                      const tangent = { x: -mid.n.y, y: mid.n.x };
-                      let dir = normalize({
-                        x: tangent.x * slantCos + -mid.n.x * slantSin,
-                        y: tangent.y * slantCos + -mid.n.y * slantSin,
-                      });
-                      if (dir.x * tangent.x + dir.y * tangent.y < 0) {
-                        dir = normalize({
-                          x: -tangent.x * slantCos + -mid.n.x * slantSin,
-                          y: -tangent.y * slantCos + -mid.n.y * slantSin,
-                        });
-                      }
-                      return dir;
-                    })();
-
-                    const guideTop = isCopperplate
-                      ? { x: mid.p.x + guideDir.x * (h + ascMM), y: mid.p.y + guideDir.y * (h + ascMM) }
-                      : { x: mid.p.x - mid.n.x * (h + ascMM), y: mid.p.y - mid.n.y * (h + ascMM) };
-                    const guideBot = isCopperplate
-                      ? { x: mid.p.x - guideDir.x * descMM, y: mid.p.y - guideDir.y * descMM }
-                      : { x: mid.p.x + mid.n.x * descMM, y: mid.p.y + mid.n.y * descMM };
 
                     const isCap = pl.ch >= 'A' && pl.ch <= 'Z';
                     const fillCol = isCap ? 'rgba(99,102,241,0.10)' : 'rgba(16,185,129,0.10)';
@@ -1149,7 +1127,6 @@ export default function CurvedTitlePage() {
 
                     return (
                       <g key={i}>
-                        <line x1={guideTop.x} y1={guideTop.y} x2={guideBot.x} y2={guideBot.y} stroke="#94a3b8" strokeWidth={swThin * 0.9} vectorEffect="non-scaling-stroke" />
                         <path
                           d={pathD}
                           fill={fillCol}
