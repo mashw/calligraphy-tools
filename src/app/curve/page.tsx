@@ -1076,9 +1076,8 @@ export default function CurvedTitlePage() {
                     const slantRad = (55 * Math.PI) / 180;
                     const slantCos = Math.cos(slantRad);
                     const slantSin = Math.sin(slantRad);
-                    const sMid = clamp(pl.sMid, 0, arcLen);
-                    const sL = clamp(sMid - pl.w / 2, 0, arcLen);
-                    const sR = clamp(sMid + pl.w / 2, 0, arcLen);
+                    const sL = clamp(pl.sMid - pl.w / 2, 0, arcLen);
+                    const sR = clamp(pl.sMid + pl.w / 2, 0, arcLen);
                     const h = pl.h;
 
                     const sampleCount = Math.max(24, Math.ceil(pl.w / 4), 2);
@@ -1088,28 +1087,34 @@ export default function CurvedTitlePage() {
                     for (let k = 0; k < sampleCount; k++) {
                       const t = sampleCount === 1 ? 0 : k / (sampleCount - 1);
                       const s = sL + (sR - sL) * t;
-                      const { p, n } = pointAt(baseline, s);
+                      const { p } = pointAt(baseline, s);
+                      const tangent = tangentAt(baseline, s, arcLen);
+                      let n = { x: -tangent.y, y: tangent.x };
+                      if (n.y < 0) n = { x: -n.x, y: -n.y };
                       bottomPts.push(p);
                       topPts.push({ x: p.x - n.x * h, y: p.y - n.y * h });
                     }
 
                     if (isCopperplate && topPts.length > 1) {
-                      const leftEdge = pointAt(baseline, sL);
-                      const rightEdge = pointAt(baseline, sR);
                       const slantDirAt = (s: number) => {
-                        const { n } = pointAt(baseline, s);
-                        const up = { x: -n.x, y: -n.y };
                         const t = tangentAt(baseline, s, arcLen);
-                        return normalize({
+                        let n = { x: -t.y, y: t.x };
+                        if (n.y < 0) n = { x: -n.x, y: -n.y };
+                        const up = { x: -n.x, y: -n.y };
+                        let dir = normalize({
                           x: t.x * slantCos + up.x * slantSin,
                           y: t.y * slantCos + up.y * slantSin,
                         });
+                        if (dir.x * t.x + dir.y * t.y < 0) {
+                          dir = { x: -dir.x, y: -dir.y };
+                        }
+                        return dir;
                       };
 
                       const leftRay = slantDirAt(sL);
                       const rightRay = slantDirAt(sR);
-                      const leftHit = intersectRayWithPolyline(leftEdge.p, leftRay, topPts);
-                      const rightHit = intersectRayWithPolyline(rightEdge.p, rightRay, topPts);
+                      const leftHit = intersectRayWithPolyline(bottomPts[0], leftRay, topPts);
+                      const rightHit = intersectRayWithPolyline(bottomPts[bottomPts.length - 1], rightRay, topPts);
                       if (leftHit) topPts[0] = leftHit.point;
                       if (rightHit) topPts[topPts.length - 1] = rightHit.point;
                     }
