@@ -174,6 +174,42 @@ function b64ToUint8(base64: string): Uint8Array {
   return bytes;
 }
 
+function normalize(v: Pt): Pt {
+  const mag = Math.hypot(v.x, v.y);
+  if (mag === 0) return { x: 0, y: 0 };
+  return { x: v.x / mag, y: v.y / mag };
+}
+
+function raySegmentIntersection(rayO: Pt, rayD: Pt, a: Pt, b: Pt): number | null {
+  const sx = b.x - a.x;
+  const sy = b.y - a.y;
+  const denom = rayD.x * sy - rayD.y * sx;
+  if (Math.abs(denom) < 1e-6) return null;
+  const ax = a.x - rayO.x;
+  const ay = a.y - rayO.y;
+  const u = (ax * sy - ay * sx) / denom;
+  const v = (ax * rayD.y - ay * rayD.x) / denom;
+  if (u >= 0 && v >= 0 && v <= 1) return u;
+  return null;
+}
+
+function intersectRayWithPolyline(rayO: Pt, rayD: Pt, polyPts: Pt[]): { u: number; point: Pt } | null {
+  if (polyPts.length < 2) return null;
+  let bestU = Infinity;
+  let hit: Pt | null = null;
+  for (let i = 0; i < polyPts.length - 1; i++) {
+    const a = polyPts[i];
+    const b = polyPts[i + 1];
+    const u = raySegmentIntersection(rayO, rayD, a, b);
+    if (u !== null && u < bestU) {
+      bestU = u;
+      hit = { x: rayO.x + rayD.x * u, y: rayO.y + rayD.y * u };
+    }
+  }
+  if (!hit || !Number.isFinite(bestU)) return null;
+  return { u: bestU, point: hit };
+}
+
 function makeSimplePdfFromJpeg(jpegDataUrl: string, pageWpt: number, pageHpt: number, imgW: number, imgH: number): Blob {
   const base64 = jpegDataUrl.split(',')[1];
   const imgBytes = b64ToUint8(base64);
@@ -254,7 +290,7 @@ export default function CurvedTitlePage() {
   const [userScaleFactor, setUserScaleFactor] = useState(1);
   const [userSpaceFactor, setUserSpaceFactor] = useState(1);
 
-  const [showBoxes, setShowBoxes] = useState(false);
+  const [showBoxes, setShowBoxes] = useState(true);
   const [showSpanFill, setShowSpanFill] = useState(true);
 
   const [rotDeg, setRotDeg] = useState(0);
@@ -1029,32 +1065,93 @@ export default function CurvedTitlePage() {
                 {/* Letter boxes: true rectangles */}
                 {showBoxes &&
                   layout.placements.map((pl, i) => {
-                    const sMid = Math.min(arcLen, Math.max(0, pl.sMid));
-                    const C = pointAt(baseline, sMid);
-                    const p = C.p;
-                    const n = C.n;
-                    const t = { x: -n.y, y: n.x };
-
-                    const halfW = pl.w / 2;
+                    const isCopperplate = script === 'Copperplate';
+                    const slantRad = (55 * Math.PI) / 180;
+                    const slantCos = Math.cos(slantRad);
+                    const slantSin = Math.sin(slantRad);
+                    const sMid = clamp(pl.sMid, 0, arcLen);
+                    const sL = clamp(sMid - pl.w / 2, 0, arcLen);
+                    const sR = clamp(sMid + pl.w / 2, 0, arcLen);
                     const h = pl.h;
 
-                    const bottomLeft = { x: p.x - t.x * halfW, y: p.y - t.y * halfW };
-                    const bottomRight = { x: p.x + t.x * halfW, y: p.y + t.y * halfW };
-                    const topLeft = { x: bottomLeft.x - n.x * h, y: bottomLeft.y - n.y * h };
-                    const topRight = { x: bottomRight.x - n.x * h, y: bottomRight.y - n.y * h };
+                    const sampleCount = Math.max(24, Math.ceil(pl.w / 4), 2);
+                    const bottomPts: Pt[] = [];
+                    const topPts: Pt[] = [];
 
-                    const guideTop = { x: p.x - n.x * (h + ascMM), y: p.y - n.y * (h + ascMM) };
-                    const guideBot = { x: p.x + n.x * descMM, y: p.y + n.y * descMM };
+                    for (let k = 0; k < sampleCount; k++) {
+                      const t = sampleCount === 1 ? 0 : k / (sampleCount - 1);
+                      const s = sL + (sR - sL) * t;
+                      const { p, n } = pointAt(baseline, s);
+                      bottomPts.push(p);
+                      topPts.push({ x: p.x - n.x * h, y: p.y - n.y * h });
+                    }
+
+                    if (isCopperplate && topPts.length > 1) {
+                      const leftEdge = pointAt(baseline, sL);
+                      const rightEdge = pointAt(baseline, sR);
+                      const slantDir = (n: Pt) => {
+                        const tangent = { x: -n.y, y: n.x };
+                        let dir = normalize({
+                          x: tangent.x * slantCos + -n.x * slantSin,
+                          y: tangent.y * slantCos + -n.y * slantSin,
+                        });
+                        if (dir.x * tangent.x + dir.y * tangent.y < 0) {
+                          dir = normalize({
+                            x: -tangent.x * slantCos + -n.x * slantSin,
+                            y: -tangent.y * slantCos + -n.y * slantSin,
+                          });
+                        }
+                        return dir;
+                      };
+
+                      const leftRay = slantDir(leftEdge.n);
+                      const rightRay = slantDir(rightEdge.n);
+                      const leftHit = intersectRayWithPolyline(leftEdge.p, leftRay, topPts);
+                      const rightHit = intersectRayWithPolyline(rightEdge.p, rightRay, topPts);
+                      if (leftHit) topPts[0] = leftHit.point;
+                      if (rightHit) topPts[topPts.length - 1] = rightHit.point;
+                    }
+
+                    const mid = pointAt(baseline, sMid);
+                    const guideDir = (() => {
+                      if (!isCopperplate) return { x: -mid.n.x, y: -mid.n.y };
+                      const tangent = { x: -mid.n.y, y: mid.n.x };
+                      let dir = normalize({
+                        x: tangent.x * slantCos + -mid.n.x * slantSin,
+                        y: tangent.y * slantCos + -mid.n.y * slantSin,
+                      });
+                      if (dir.x * tangent.x + dir.y * tangent.y < 0) {
+                        dir = normalize({
+                          x: -tangent.x * slantCos + -mid.n.x * slantSin,
+                          y: -tangent.y * slantCos + -mid.n.y * slantSin,
+                        });
+                      }
+                      return dir;
+                    })();
+
+                    const guideTop = isCopperplate
+                      ? { x: mid.p.x + guideDir.x * (h + ascMM), y: mid.p.y + guideDir.y * (h + ascMM) }
+                      : { x: mid.p.x - mid.n.x * (h + ascMM), y: mid.p.y - mid.n.y * (h + ascMM) };
+                    const guideBot = isCopperplate
+                      ? { x: mid.p.x - guideDir.x * descMM, y: mid.p.y - guideDir.y * descMM }
+                      : { x: mid.p.x + mid.n.x * descMM, y: mid.p.y + mid.n.y * descMM };
 
                     const isCap = pl.ch >= 'A' && pl.ch <= 'Z';
                     const fillCol = isCap ? 'rgba(99,102,241,0.10)' : 'rgba(16,185,129,0.10)';
                     const strokeCol = isCap ? '#6366f1' : '#10b981';
+                    const pathD =
+                      `M ${bottomPts.map(p => `${p.x},${p.y}`).join(' L ')} ` +
+                      `L ${topPts
+                        .slice()
+                        .reverse()
+                        .map(p => `${p.x},${p.y}`)
+                        .join(' L ')} Z`;
 
                     return (
                       <g key={i}>
                         <line x1={guideTop.x} y1={guideTop.y} x2={guideBot.x} y2={guideBot.y} stroke="#94a3b8" strokeWidth={swThin * 0.9} vectorEffect="non-scaling-stroke" />
                         <path
-                          d={`M ${topLeft.x},${topLeft.y} L ${topRight.x},${topRight.y} L ${bottomRight.x},${bottomRight.y} L ${bottomLeft.x},${bottomLeft.y} Z`}
+                          d={pathD}
                           fill={fillCol}
                           stroke={strokeCol}
                           strokeWidth={swThin}

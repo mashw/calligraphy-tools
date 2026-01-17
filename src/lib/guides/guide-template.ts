@@ -29,7 +29,13 @@ export const BLACKLETTER_GUIDE_DEFAULTS = {
   descNib: 2,
 };
 
-const COPPERPLATE_SLANT_DEG = 35;
+const COPPERPLATE_SLANT_DEG = 55;
+
+function normalize(v: Pt): Pt {
+  const mag = Math.hypot(v.x, v.y);
+  if (mag === 0) return { x: 0, y: 0 };
+  return { x: v.x / mag, y: v.y / mag };
+}
 
 export function blackletterGuideHeightsMM(nibMM: number) {
   return {
@@ -70,17 +76,23 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
   const step = Math.max(0.5, tickStepMM ?? 1);
   const ticks: { a: Pt; b: Pt }[] = [];
   const arcLen = lengthPoly(baseline);
-  const slantRad = (COPPERPLATE_SLANT_DEG * Math.PI) / 180;
-
   for (let s = 0; s <= arcLen; s += step) {
-    const { p, n, t } = pointAt(baseline, s);
-    const dir = {
-      x: n.x * Math.cos(slantRad) + t.x * Math.sin(slantRad),
-      y: n.y * Math.cos(slantRad) + t.y * Math.sin(slantRad),
-    };
+    const { p, n } = pointAt(baseline, s);
+    const t = { x: -n.y, y: n.x };
+    const slantRad = (COPPERPLATE_SLANT_DEG * Math.PI) / 180;
+    let dir = normalize({
+      x: t.x * Math.cos(slantRad) + -n.x * Math.sin(slantRad),
+      y: t.y * Math.cos(slantRad) + -n.y * Math.sin(slantRad),
+    });
+    if (dir.x * t.x + dir.y * t.y < 0) {
+      dir = normalize({
+        x: -t.x * Math.cos(slantRad) + -n.x * Math.sin(slantRad),
+        y: -t.y * Math.cos(slantRad) + -n.y * Math.sin(slantRad),
+      });
+    }
     ticks.push({
-      a: { x: p.x - dir.x * (xMM + ascMM), y: p.y - dir.y * (xMM + ascMM) },
-      b: { x: p.x + dir.x * descMM, y: p.y + dir.y * descMM },
+      a: { x: p.x + dir.x * descMM, y: p.y + dir.y * descMM },
+      b: { x: p.x - dir.x * (xMM + ascMM), y: p.y - dir.y * (xMM + ascMM) },
     });
   }
 
