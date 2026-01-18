@@ -187,6 +187,21 @@ function tangentAt(pts: Pt[], s: number, arcLen: number): Pt {
   return normalize({ x: p1.x - p0.x, y: p1.y - p0.y });
 }
 
+// Stable normal derived from the forward tangent (increasing arc-length).
+// Forced so "down" in SVG coordinates corresponds to +Y (n.y >= 0), which
+// prevents the guide band and letter boxes from flipping when pointAt().n is
+// discontinuous across a polyline.
+function normalDownAt(pts: Pt[], s: number, arcLen: number): Pt {
+  const t = tangentAt(pts, s, arcLen);
+  let n = { x: -t.y, y: t.x }; // perp(t)
+  if (n.y < 0) n = { x: -n.x, y: -n.y };
+  return n;
+}
+
+function dot(a: Pt, b: Pt): number {
+  return a.x * b.x + a.y * b.y;
+}
+
 function raySegmentIntersection(rayO: Pt, rayD: Pt, a: Pt, b: Pt): number | null {
   const sx = b.x - a.x;
   const sy = b.y - a.y;
@@ -578,11 +593,11 @@ export default function CurvedTitlePage() {
       const sL = Math.max(0, Math.min(arcLen, sMid - pl.w / 2));
       const sR = Math.max(0, Math.min(arcLen, sMid + pl.w / 2));
 
-      const nL = pointAt(baseline, sL).n;
-      const nR = pointAt(baseline, sR).n;
+      const nL = normalDownAt(baseline, sL, arcLen);
+      const nR = normalDownAt(baseline, sR, arcLen);
 
-      const dot = nL.x * nR.x + nL.y * nR.y;
-      const clampedDot = Math.max(-1, Math.min(1, dot));
+      const dotNR = nL.x * nR.x + nL.y * nR.y;
+      const clampedDot = Math.max(-1, Math.min(1, dotNR));
       const turnRad = Math.acos(clampedDot);
       const turnDeg = (turnRad * 180) / Math.PI;
 
@@ -630,8 +645,10 @@ export default function CurvedTitlePage() {
     const waistPts: Pt[] = [];
     const basePts: Pt[] = [];
     for (let s = span.sStart; s <= span.sEnd + 0.0001; s += ds) {
-      const { p, n } = pointAt(baseline, Math.min(arcLen, s));
-      waistPts.push({ x: p.x - n.x * xMM, y: p.y - n.y * xMM });
+      const sClamped = Math.min(arcLen, s);
+      const p = pointAt(baseline, sClamped).p;
+      const nDown = normalDownAt(baseline, sClamped, arcLen);
+      waistPts.push({ x: p.x - nDown.x * xMM, y: p.y - nDown.y * xMM });
       basePts.push({ x: p.x, y: p.y });
     }
     return { waistPts, basePts };
@@ -1087,27 +1104,42 @@ export default function CurvedTitlePage() {
                     for (let k = 0; k < sampleCount; k++) {
                       const t = sampleCount === 1 ? 0 : k / (sampleCount - 1);
                       const s = sL + (sR - sL) * t;
+<<<<<<< HEAD
                       const { p } = pointAt(baseline, s);
                       const tangent = tangentAt(baseline, s, arcLen);
                       let n = { x: -tangent.y, y: tangent.x };
                       if (n.y < 0) n = { x: -n.x, y: -n.y };
+=======
+                      const p = pointAt(baseline, s).p;
+                      const nDown = normalDownAt(baseline, s, arcLen);
+>>>>>>> 5f73bc4 (WIP: curve copperplate guides and boxes (investigation state))
                       bottomPts.push(p);
-                      topPts.push({ x: p.x - n.x * h, y: p.y - n.y * h });
+                      topPts.push({ x: p.x - nDown.x * h, y: p.y - nDown.y * h });
                     }
 
                     if (isCopperplate && topPts.length > 1) {
                       const slantDirAt = (s: number) => {
                         const t = tangentAt(baseline, s, arcLen);
+<<<<<<< HEAD
                         let n = { x: -t.y, y: t.x };
                         if (n.y < 0) n = { x: -n.x, y: -n.y };
                         const up = { x: -n.x, y: -n.y };
+=======
+                        const nDown = normalDownAt(baseline, s, arcLen);
+                        const up = { x: -nDown.x, y: -nDown.y };
+>>>>>>> 5f73bc4 (WIP: curve copperplate guides and boxes (investigation state))
                         let dir = normalize({
                           x: t.x * slantCos + up.x * slantSin,
                           y: t.y * slantCos + up.y * slantSin,
                         });
+<<<<<<< HEAD
                         if (dir.x * t.x + dir.y * t.y < 0) {
                           dir = { x: -dir.x, y: -dir.y };
                         }
+=======
+                        // Ensure it always leans forward along increasing arc-length.
+                        if (dot(dir, t) < 0) dir = { x: -dir.x, y: -dir.y };
+>>>>>>> 5f73bc4 (WIP: curve copperplate guides and boxes (investigation state))
                         return dir;
                       };
 
