@@ -415,7 +415,7 @@ export default function CurvedTitlePage() {
     return {
       xHeightMM: texturaXHeightMM,
       nibMM,
-      scale: 1,
+      scale: script === 'Fraktur' ? 1.05 : 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
@@ -1168,6 +1168,7 @@ waistPts.push({ x: Ct.p.x - Ct.n.x * h, y: Ct.p.y - Ct.n.y * h });
               <label className="font-medium text-slate-700">Script</label>
               <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={script} onChange={e => setScript(e.target.value as ScriptId)}>
                 <option value="Copperplate">Copperplate</option>
+                <option value="Fraktur">Fraktur</option>
                 <option value="TexturaQuadrata">Textura Quadrata</option>
               </select>
             </div>
