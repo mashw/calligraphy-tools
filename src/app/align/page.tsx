@@ -490,7 +490,7 @@ export default function Home() {
     return {
       xHeightMM: texturaXHeightMM,
       nibMM,
-      scale: 1,
+      scale: script === 'Fraktur' ? 1.05 : 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
@@ -689,6 +689,7 @@ export default function Home() {
                     onChange={(e) => setScript(e.target.value as ScriptId)}
                   >
                     <option value="Copperplate">Copperplate</option>
+                    <option value="Fraktur">Fraktur</option>
                     <option value="TexturaQuadrata">Textura Quadrata</option>
                   </select>
                 </div>
