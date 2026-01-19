@@ -525,7 +525,7 @@ export default function CurvedTitlePage() {
       return { placements: pass1.placements, needed: pass1.totalAdvance, overBy: overBy0 };
     }
 
-    if (script !== 'TexturaQuadrata') {
+    if (script === 'Copperplate') {
       const overBy = Math.max(0, pass1.totalAdvance - arcLen);
       return { placements: pass1.placements, needed: pass1.totalAdvance, overBy };
     }
