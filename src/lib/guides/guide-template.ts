@@ -29,7 +29,7 @@ export const BLACKLETTER_GUIDE_DEFAULTS = {
   descNib: 2,
 };
 
-const COPPERPLATE_SLANT_DEG = 35;
+const COPPERPLATE_SLANT_DEG = 55;
 
 export function blackletterGuideHeightsMM(nibMM: number) {
   return {
@@ -67,22 +67,28 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
   const baseLine = baseline;
   const descLine = offset(baseline, descMM);
 
-  const step = Math.max(0.5, tickStepMM ?? 1);
+  const step = Math.max(0.5, tickStepMM ?? 100);
   const ticks: { a: Pt; b: Pt }[] = [];
   const arcLen = lengthPoly(baseline);
-  const slantRad = (COPPERPLATE_SLANT_DEG * Math.PI) / 180;
+  const cot = 1 / Math.tan((COPPERPLATE_SLANT_DEG * Math.PI) / 180);
+  const topOff = xMM + ascMM;
+  const botOff = descMM;
 
   for (let s = 0; s <= arcLen; s += step) {
-    const { p, n, t } = pointAt(baseline, s);
-    const dir = {
-      x: n.x * Math.cos(slantRad) + t.x * Math.sin(slantRad),
-      y: n.y * Math.cos(slantRad) + t.y * Math.sin(slantRad),
-    };
+    // Top of tick occurs "later" along the curve than the bottom for forward slant
+    const sTop = Math.max(0, Math.min(arcLen, s + topOff * cot));
+    const sBot = Math.max(0, Math.min(arcLen, s - botOff * cot));
+
+    const Ct = pointAt(baseline, sTop);
+    const Cb = pointAt(baseline, sBot);
+
     ticks.push({
-      a: { x: p.x - dir.x * (xMM + ascMM), y: p.y - dir.y * (xMM + ascMM) },
-      b: { x: p.x + dir.x * descMM, y: p.y + dir.y * descMM },
+      // a = top (asc rail), b = bottom (desc rail) or vice versa doesn’t matter visually
+      a: { x: Ct.p.x - Ct.n.x * topOff, y: Ct.p.y - Ct.n.y * topOff },
+      b: { x: Cb.p.x + Cb.n.x * botOff, y: Cb.p.y + Cb.n.y * botOff },
     });
   }
+
 
   return {
     ascLine,

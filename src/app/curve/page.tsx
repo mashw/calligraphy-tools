@@ -474,7 +474,10 @@ export default function CurvedTitlePage() {
         xMM,
         ascMM,
         descMM,
-        tickStepMM: Math.max(script === 'Copperplate' ? xMM * 0.2 : nibMM, 1),
+        tickStepMM:
+        script === 'Copperplate'
+          ? Math.max(xMM * 0.9, 3)   // sparse, calm Copperplate ticks
+          : Math.max(nibMM * 0.9) // dense Blackletter ticks      
       }),
     [baseline, guideTemplate, xMM, ascMM, descMM, nibMM, script],
   );
@@ -1030,31 +1033,79 @@ export default function CurvedTitlePage() {
                 {showBoxes &&
                   layout.placements.map((pl, i) => {
                     const sMid = Math.min(arcLen, Math.max(0, pl.sMid));
-                    const C = pointAt(baseline, sMid);
-                    const p = C.p;
-                    const n = C.n;
-                    const t = { x: -n.y, y: n.x };
-
                     const halfW = pl.w / 2;
-                    const h = pl.h;
+                    const h = script === 'Copperplate' ? xHeightMM : xMM;
 
-                    const bottomLeft = { x: p.x - t.x * halfW, y: p.y - t.y * halfW };
-                    const bottomRight = { x: p.x + t.x * halfW, y: p.y + t.y * halfW };
-                    const topLeft = { x: bottomLeft.x - n.x * h, y: bottomLeft.y - n.y * h };
-                    const topRight = { x: bottomRight.x - n.x * h, y: bottomRight.y - n.y * h };
 
-                    const guideTop = { x: p.x - n.x * (h + ascMM), y: p.y - n.y * (h + ascMM) };
-                    const guideBot = { x: p.x + n.x * descMM, y: p.y + n.y * descMM };
+                    // Use left/right edge frames so the box conforms to the curve across its width
+                    const sL = Math.max(0, Math.min(arcLen, sMid - halfW));
+                    const sR = Math.max(0, Math.min(arcLen, sMid + halfW));
+
+                    const CL = pointAt(baseline, sL);
+                    const CR = pointAt(baseline, sR);
+
+                    const pL = CL.p;
+                    const pR = CR.p;
+
+                    const nL = CL.n;
+                    const nR = CR.n;
+
+                    // Copperplate: slant “uprights” forward 55° relative to local baseline
+                    const isCopper = script === 'Copperplate';
+                    const SLANT_FROM_BASELINE_DEG = 55;
+
+                    // Sample the baseline and the waist (offset by -h along normal) so the fill follows the curve.
+                    const steps = Math.max(16, Math.ceil((sR - sL) / 2)); // ~1 point per 2mm, with a sensible minimum
+
+                    const basePts: { x: number; y: number }[] = [];
+                    const waistPts: { x: number; y: number }[] = [];
+
+
+
+                    for (let k = 0; k <= steps; k++) {
+                      const u = k / steps;
+                      const s = sL + (sR - sL) * u;
+
+                      const C = pointAt(guideSet.baseLine, s)
+                      const p = C.p;
+                      const n = C.n;
+
+                      // Baseline point
+                      basePts.push({ x: p.x, y: p.y });
+
+// Copperplate slant: move the TOP sample forward along arc-length (towards next letter)
+const dx = isCopper ? (h / Math.tan((SLANT_FROM_BASELINE_DEG * Math.PI) / 180)) : 0;
+const sTop = Math.max(0, Math.min(arcLen, isCopper ? (s + dx) : s));
+
+const Ct = pointAt(guideSet.baseLine, sTop);
+
+waistPts.push({ x: Ct.p.x - Ct.n.x * h, y: Ct.p.y - Ct.n.y * h });
+
+                    }
+
+                    // Convenience endpoints if you still want them (uprights connect these)
+                    const bottomLeft = basePts[0];
+                    const bottomRight = basePts[basePts.length - 1];
+                    const topLeft = waistPts[0];
+                    const topRight = waistPts[waistPts.length - 1];
+
+
+
 
                     const isCap = pl.ch >= 'A' && pl.ch <= 'Z';
                     const fillCol = isCap ? 'rgba(99,102,241,0.10)' : 'rgba(16,185,129,0.10)';
                     const strokeCol = isCap ? '#6366f1' : '#10b981';
+                    const pathD = (() => {
+                      const top = waistPts.map((pt) => `${pt.x},${pt.y}`).join(' L ');
+                      const bot = [...basePts].reverse().map((pt) => `${pt.x},${pt.y}`).join(' L ');
+                      return `M ${top} L ${bot} Z`;
+                    })();
 
                     return (
                       <g key={i}>
-                        <line x1={guideTop.x} y1={guideTop.y} x2={guideBot.x} y2={guideBot.y} stroke="#94a3b8" strokeWidth={swThin * 0.9} vectorEffect="non-scaling-stroke" />
+
                         <path
-                          d={`M ${topLeft.x},${topLeft.y} L ${topRight.x},${topRight.y} L ${bottomRight.x},${bottomRight.y} L ${bottomLeft.x},${bottomLeft.y} Z`}
+                          d={pathD}
                           fill={fillCol}
                           stroke={strokeCol}
                           strokeWidth={swThin}
