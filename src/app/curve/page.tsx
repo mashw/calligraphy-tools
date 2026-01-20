@@ -1147,7 +1147,7 @@ waistPts.push({ x: Ct.p.x - Ct.n.x * h, y: Ct.p.y - Ct.n.y * h });
             <div className="pointer-events-none absolute right-3 bottom-2 text-[13px] text-slate-700 text-right space-y-0.5">
               {overWarn && <div className="text-[13px] text-red-600 font-medium">Title exceeds curve</div>}
               <div>
-                Curve length: {baselineLength.toFixed(1)} mm • End-to-end: {endpointsDistance.toFixed(1)} mm
+                Curve length: {baselineLength.toFixed(1)} mm · Script length: {run.totalAdvanceMM.toFixed(1)} mm
               </div>
             </div>
           </div>
