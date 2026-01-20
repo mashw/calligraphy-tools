@@ -230,13 +230,17 @@ function LinePreview(props: LinePreviewProps) {
       { x: 0, y: 0 },
       { x: Lmm, y: 0 },
     ];
-    return buildGuideSet('blackletter', {
+    const baseGuideSet = buildGuideSet('blackletter', {
       baseline,
       xMM: guideHeights.xMM,
       ascMM: guideHeights.ascMM,
       descMM: guideHeights.descMM,
       tickStepMM: Math.max(guideHeights.xMM * 0.2, 1),
     });
+    return {
+      ...baseGuideSet,
+      descLine: [],
+    };
   }, [guideTemplate, guideHeights, Lmm]);
 
   return (
@@ -366,6 +370,8 @@ export default function Home() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [userScaleFactor, setUserScaleFactor] = useState(1);
   const [userSpaceFactor, setUserSpaceFactor] = useState(1);
+
+  const isBlackletter = script !== 'Copperplate';
 
   const guideTemplateForScript = (current: ScriptId): GuideTemplateId =>
     current === 'Copperplate' ? 'copperplate' : 'blackletter';
@@ -527,9 +533,9 @@ export default function Home() {
     return {
       xMM: xNib * nibMM,
       ascMM: ascNib * nibMM,
-      descMM: descNib * nibMM,
+      descMM: isBlackletter ? 0 : descNib * nibMM,
     };
-  }, [guideTemplate, xHeight, xNib, ascNib, descNib, nibMM]);
+  }, [guideTemplate, xHeight, xNib, ascNib, descNib, nibMM, isBlackletter]);
 
   const stageFrame = useMemo(
     () =>
@@ -779,10 +785,12 @@ export default function Home() {
                         step="0.5"
                         min="0"
                         max="8"
-                        className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        value={descNib}
+                        className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-400"
+                        value={isBlackletter ? 0 : descNib}
                         onChange={(e) => setDescNib(parseFloat(e.target.value || '2'))}
+                        disabled={isBlackletter}
                       />
+                      {isBlackletter && <p className="mt-1 text-[11px] text-slate-400">Descenders are disabled for blackletter guides.</p>}
                     </div>
                   </>
                 )}
