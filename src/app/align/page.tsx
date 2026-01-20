@@ -237,10 +237,7 @@ function LinePreview(props: LinePreviewProps) {
       descMM: guideHeights.descMM,
       tickStepMM: Math.max(guideHeights.xMM * 0.2, 1),
     });
-    return {
-      ...baseGuideSet,
-      descLine: [],
-    };
+    return baseGuideSet;
   }, [guideTemplate, guideHeights, Lmm]);
 
   return (
@@ -371,10 +368,11 @@ export default function Home() {
   const [userScaleFactor, setUserScaleFactor] = useState(1);
   const [userSpaceFactor, setUserSpaceFactor] = useState(1);
 
-  const isBlackletter = script !== 'Copperplate';
+ 
 
   const guideTemplateForScript = (current: ScriptId): GuideTemplateId =>
     current === 'Copperplate' ? 'copperplate' : 'blackletter';
+
 
   const handleStepButtonMouseDown: React.MouseEventHandler<HTMLButtonElement> = (e) => {
     e.preventDefault();
@@ -526,6 +524,7 @@ export default function Home() {
   const maxWidthPx = 1100;
   const lineGap = 42;
   const guideTemplate = useMemo(() => guideTemplateForScript(script), [script]);
+  const isBlackletter = guideTemplate === 'blackletter';
   const guideHeights = useMemo(() => {
     if (guideTemplate !== 'blackletter') {
       return { xMM: xHeight, ascMM: 0, descMM: 0 };
@@ -533,7 +532,7 @@ export default function Home() {
     return {
       xMM: xNib * nibMM,
       ascMM: ascNib * nibMM,
-      descMM: isBlackletter ? 0 : descNib * nibMM,
+      descMM: 0,
     };
   }, [guideTemplate, xHeight, xNib, ascNib, descNib, nibMM, isBlackletter]);
 
