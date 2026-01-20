@@ -354,8 +354,6 @@ export default function Home() {
   // Textura-only controls
   const [nibMM, setNibMM] = useState(2);
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
-  const [ascNib, setAscNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.ascNib);
-  const [descNib, setDescNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.descNib);
 
   const [showLetterBoxes, setShowLetterBoxes] = useState(true);
   const [vw, setVw] = useState<number | null>(null);
@@ -524,17 +522,16 @@ export default function Home() {
   const maxWidthPx = 1100;
   const lineGap = 42;
   const guideTemplate = useMemo(() => guideTemplateForScript(script), [script]);
-  const isBlackletter = guideTemplate === 'blackletter';
   const guideHeights = useMemo(() => {
     if (guideTemplate !== 'blackletter') {
       return { xMM: xHeight, ascMM: 0, descMM: 0 };
     }
     return {
       xMM: xNib * nibMM,
-      ascMM: ascNib * nibMM,
       descMM: 0,
+      ascMM: 0,
     };
-  }, [guideTemplate, xHeight, xNib, ascNib, descNib, nibMM, isBlackletter]);
+  }, [guideTemplate, xHeight, xNib, nibMM]);
 
   const stageFrame = useMemo(
     () =>
@@ -764,32 +761,6 @@ export default function Home() {
                         value={xNib}
                         onChange={(e) => setXNib(parseFloat(e.target.value || '5'))}
                       />
-                    </div>
-                    <div>
-                      <label className="font-medium text-slate-700">Ascender (nibs)</label>
-                      <input
-                        type="number"
-                        step="0.5"
-                        min="0"
-                        max="8"
-                        className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        value={ascNib}
-                        onChange={(e) => setAscNib(parseFloat(e.target.value || '3'))}
-                      />
-                    </div>
-                    <div>
-                      <label className="font-medium text-slate-700">Descender (nibs)</label>
-                      <input
-                        type="number"
-                        step="0.5"
-                        min="0"
-                        max="8"
-                        className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-400"
-                        value={isBlackletter ? 0 : descNib}
-                        onChange={(e) => setDescNib(parseFloat(e.target.value || '2'))}
-                        disabled={isBlackletter}
-                      />
-                      {isBlackletter && <p className="mt-1 text-[11px] text-slate-400">Descenders are disabled for blackletter guides.</p>}
                     </div>
                   </>
                 )}
