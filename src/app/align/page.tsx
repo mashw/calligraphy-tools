@@ -750,18 +750,6 @@ export default function Home() {
                       />
                       <p className="mt-1 text-[11px] text-slate-400">Textura widths are in nib units.</p>
                     </div>
-                    <div>
-                      <label className="font-medium text-slate-700">x-height (nibs)</label>
-                      <input
-                        type="number"
-                        step="0.5"
-                        min="1"
-                        max="8"
-                        className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        value={xNib}
-                        onChange={(e) => setXNib(parseFloat(e.target.value || '5'))}
-                      />
-                    </div>
                   </>
                 )}
 
