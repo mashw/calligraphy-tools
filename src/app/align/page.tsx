@@ -274,7 +274,6 @@ function LinePreview(props: LinePreviewProps) {
                 height={boxH}
                 fill={fillColor}
                 stroke={strokeColor}
-                strokeDasharray="4 3"
                 strokeWidth={1}
                 transform={useSkew ? skewTransform : undefined}
               />
@@ -293,7 +292,6 @@ function LinePreview(props: LinePreviewProps) {
               height={boxH}
               fill={orangeFill}
               stroke={orangeStroke}
-              strokeDasharray="4 3"
               strokeWidth={1}
               transform={useSkew ? skewTransform : undefined}
             />
