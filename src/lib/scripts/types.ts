@@ -3,6 +3,7 @@ export type UnitSystem = 'nib' | 'xheight' | 'mm';
 export type ScriptContext = {
   xHeightMM: number;
   nibMM: number;
+  penAngleDeg?: 35 | 40 | 45;
 
   /**
    * Global scale for glyph widths (Copperplate uses this heavily; nib-unit scripts typically keep at 1).
@@ -51,7 +52,7 @@ export type ScriptProfile = {
    * - glyphWidthUnits returns body width in units.
    * - afterSpacingUnits returns spacing-after in units.
    */
-  unitToMm?: (ctx: { xHeightMM: number; nibMM: number }) => number;
+  unitToMm?: (ctx: ScriptContext) => number;
   glyphWidthUnits?: (ch: string, ctx: ScriptContext) => number;
   afterSpacingUnits?: (prev: string | null, ch: string, next: string | null, ctx: ScriptContext) => number;
 
