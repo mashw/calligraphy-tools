@@ -246,6 +246,7 @@ export default function CurvedTitlePage() {
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
   const [ascNib, setAscNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.ascNib);
   const [descNib, setDescNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.descNib);
+  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(35);
 
   const [useCalibration, setUseCalibration] = useState(false);
   const [calWordLowerMM, setCalWordLowerMM] = useState('');
@@ -415,11 +416,12 @@ export default function CurvedTitlePage() {
     return {
       xHeightMM: texturaXHeightMM,
       nibMM,
+      penAngleDeg,
       scale: script === 'Fraktur' ? 1.05 : 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [script, copper.ctx, texturaXHeightMM, nibMM]);
+  }, [script, copper.ctx, texturaXHeightMM, nibMM, penAngleDeg]);
 
   const run = useMemo(() => measureRun(text, SCRIPT_PROFILES[script], ctx), [text, script, ctx]);
 
@@ -1375,6 +1377,18 @@ waistPts.push({ x: Ct.p.x - Ct.n.x * h, y: Ct.p.y - Ct.n.y * h });
               <div>
                 <label className="font-medium text-slate-700">Nib size (mm)</label>
                 <input type="number" step={0.1} min={0.2} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={nibMM} onChange={e => setNibMM(parseFloat(e.target.value || '2'))} />
+              </div>
+              <div>
+                <label className="font-medium text-slate-700">Pen angle (°)</label>
+                <select
+                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  value={penAngleDeg}
+                  onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
+                >
+                  <option value={35}>35°</option>
+                  <option value={40}>40°</option>
+                  <option value={45}>45°</option>
+                </select>
               </div>
               <div>
                 <label className="font-medium text-slate-700">x-height (nibs)</label>

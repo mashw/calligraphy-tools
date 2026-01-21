@@ -354,6 +354,7 @@ export default function Home() {
   // Textura-only controls
   const [nibMM, setNibMM] = useState(2);
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
+  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(35);
 
   const [showLetterBoxes, setShowLetterBoxes] = useState(true);
   const [vw, setVw] = useState<number | null>(null);
@@ -490,11 +491,12 @@ export default function Home() {
     return {
       xHeightMM: texturaXHeightMM,
       nibMM,
+      penAngleDeg,
       scale: script === 'Fraktur' ? 1.05 : 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [script, copper.ctx, texturaXHeightMM, nibMM]);
+  }, [script, copper.ctx, texturaXHeightMM, nibMM, penAngleDeg]);
 
   const lineMetrics = useMemo<LineMetric[]>(() => {
     if (script === 'Copperplate') {
@@ -749,6 +751,19 @@ export default function Home() {
                         onChange={(e) => setNibMM(clamp(parseFloat(e.target.value || '2') || 2, 0.5, 10))}
                       />
                       <p className="mt-1 text-[11px] text-slate-400">Textura widths are in nib units.</p>
+                    </div>
+                    <div>
+                      <label className="font-medium text-slate-700">Pen angle (°)</label>
+                      <select
+                        className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={penAngleDeg}
+                        onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
+                      >
+                        <option value={35}>35°</option>
+                        <option value={40}>40°</option>
+                        <option value={45}>45°</option>
+                      </select>
+                      <p className="mt-1 text-[11px] text-slate-400">Angles apply to Textura Quadrata and Fraktur.</p>
                     </div>
                   </>
                 )}

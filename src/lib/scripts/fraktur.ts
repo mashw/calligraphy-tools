@@ -1,7 +1,7 @@
 import type { ScriptProfile } from './types';
-import { texturaUpper } from './quadrata-widths';
+import { frakturUpper } from './fraktur-widths';
 
-// Nib-unit widths for Textura Quadrata (lowercase).
+// Nib-unit widths for Fraktur (lowercase).
 // Spacing rules:
 // - inter-letter: 1 nib
 // - inter-word: 2 nibs
@@ -71,9 +71,9 @@ const isUpper = (ch: string) => ch >= 'A' && ch <= 'Z';
 
 const radians = (deg: number) => (deg * Math.PI) / 180;
 
-export const texturaQuadrataProfile: ScriptProfile = {
-  id: 'TexturaQuadrata',
-  label: 'Textura Quadrata',
+export const frakturProfile: ScriptProfile = {
+  id: 'Fraktur',
+  label: 'Fraktur',
   unitSystem: 'nib',
 
   unitToMm: (ctx) => {
@@ -91,7 +91,7 @@ export const texturaQuadrataProfile: ScriptProfile = {
     if (lc >= 'a' && lc <= 'z' && ch === lc) return lower[lc] ?? 3;
 
     // Uppercase
-    if (isUpper(ch)) return texturaUpper[ch] ?? 5;
+    if (isUpper(ch)) return frakturUpper[ch] ?? 5;
 
     // Punctuation
     if (punct[ch] != null) return punct[ch];

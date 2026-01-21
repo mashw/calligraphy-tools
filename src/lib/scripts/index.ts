@@ -1,9 +1,10 @@
 import { copperplateProfile } from './copperplate';
+import { frakturProfile } from './fraktur';
 import { texturaQuadrataProfile } from './textura-quadrata';
 
 export const SCRIPT_PROFILES = {
   Copperplate: copperplateProfile,
-  Fraktur: texturaQuadrataProfile,
+  Fraktur: frakturProfile,
   TexturaQuadrata: texturaQuadrataProfile,
 } as const;
 

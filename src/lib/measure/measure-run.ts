@@ -16,7 +16,7 @@ export function measureRun(text: string, profile: ScriptProfile, ctx: ScriptCont
   }
 
   const chars = Array.from(text);
-  const unitMM = profile.unitToMm({ xHeightMM: ctx.xHeightMM, nibMM: ctx.nibMM });
+  const unitMM = profile.unitToMm(ctx);
 
   const glyphs: MeasuredGlyph[] = [];
 
