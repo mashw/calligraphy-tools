@@ -62,7 +62,35 @@ export const frakturProfile: ScriptProfile = {
 
   afterSpacingUnits: (_prev, ch, next) => {
     if (ch === ' ') return SPACING.interWord;
-    if (next != null && next !== ' ') return SPACING.interLetter;
-    return 0;
+    if (next == null || next === ' ') return 0;
+
+    let spacing = 1.0;
+    const group1Next = new Set(['i', 'l', 'j', 'n', 'm', 'h', 'k', 'b', 't']);
+    const group5Next = new Set([
+      'i',
+      'j',
+      'm',
+      'n',
+      'p',
+      'r',
+      's',
+      't',
+      'u',
+      'v',
+      'w',
+      'x',
+      'y',
+      'z',
+    ]);
+    const group6Next = new Set(['b', 'h', 'k', 'l', 'f']);
+
+    if (ch === 'c' && group1Next.has(next)) spacing -= 1.0;
+    if (ch === 'e' && group1Next.has(next)) spacing -= 1.0;
+    if (ch === 'r' && group1Next.has(next)) spacing -= 1.0;
+    if (ch === 's' && group1Next.has(next)) spacing -= 0.5;
+    if (['c', 'e', 'r'].includes(ch) && group5Next.has(next)) spacing -= 0.5;
+    if (ch === 'f' && group6Next.has(next)) spacing += 1.5;
+
+    return spacing;
   },
 };
