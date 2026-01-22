@@ -429,7 +429,7 @@ export default function CurvedTitlePage() {
     return {
       xHeightMM: texturaXHeightMM,
       nibMM: effectiveNibMM,
-      scale: script === 'Fraktur' ? 1.05 : 1,
+      scale: 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
