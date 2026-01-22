@@ -11,6 +11,7 @@ import {
 } from '@/lib/line-widths';
 
 import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
+import { SCRIPT_DEFAULTS } from '@/lib/curve-helpers';
 import type { ScriptContext } from '@/lib/scripts/types';
 import { measureRun } from '@/lib/measure/measure-run';
 import { lineMetricFromMeasuredRun } from '@/lib/measure/measure-lines-generic';
@@ -172,7 +173,7 @@ type LinePreviewProps = {
   baselineTopY: number;
   showLetterBoxes: boolean;
   guideTemplate: GuideTemplateId;
-  guideHeights: { xMM: number; ascMM: number; descMM: number };
+  guideHeights: { xMM: number; ascMM: number; descMM: number; capMM: number };
 };
 
 function LinePreview(props: LinePreviewProps) {
@@ -254,8 +255,13 @@ function LinePreview(props: LinePreviewProps) {
           const ch = isLetter ? seg.ch : '';
           const isCap = isLetter && /[A-Z]/.test(ch);
 
-          const boxH = isLetter ? baseBoxH * (isCap ? 1.05 : 1.0) : baseBoxH;
-          const boxY = baselineY - boxH;
+          const boxH =
+          !isLetter
+            ? baseBoxH
+            : guideTemplate === 'blackletter'
+              ? (isCap ? guideHeights.capMM * pxScale : guideHeights.xMM * pxScale)
+              : baseBoxH;
+                  const boxY = baselineY - boxH;
           const bottomY = baselineY;
 
           const pivotX = segStartPx;
@@ -353,6 +359,7 @@ export default function Home() {
 
   // Textura-only controls
   const [nibMM, setNibMM] = useState(2);
+  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
 
   const [showLetterBoxes, setShowLetterBoxes] = useState(true);
@@ -482,19 +489,26 @@ export default function Home() {
     });
   }, [xHeight, capStyle, useCalibration, calWordLowerMM, calWordDoubleMM, userScaleFactor, userSpaceFactor]);
 
-  const texturaXHeightMM = xNib * nibMM;
+  const effectiveNibMM = useMemo(() => {
+    if (script === 'Copperplate') return nibMM;
+    const rad = (penAngleDeg * Math.PI) / 180;
+    return nibMM * Math.cos(rad);
+  }, [script, nibMM, penAngleDeg]);
+  
+
+  const texturaXHeightMM = xNib * effectiveNibMM;
   const scriptCtx = useMemo<ScriptContext>(() => {
     if (script === 'Copperplate') return copper.ctx;
-
-    // Textura Quadrata
+  
     return {
       xHeightMM: texturaXHeightMM,
-      nibMM,
+      nibMM: effectiveNibMM,
       scale: script === 'Fraktur' ? 1.05 : 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [script, copper.ctx, texturaXHeightMM, nibMM]);
+  }, [script, copper.ctx, texturaXHeightMM, effectiveNibMM]);
+  
 
   const lineMetrics = useMemo<LineMetric[]>(() => {
     if (script === 'Copperplate') {
@@ -524,14 +538,23 @@ export default function Home() {
   const guideTemplate = useMemo(() => guideTemplateForScript(script), [script]);
   const guideHeights = useMemo(() => {
     if (guideTemplate !== 'blackletter') {
-      return { xMM: xHeight, ascMM: 0, descMM: 0 };
+      // keep existing copperplate-ish visual behaviour
+      return { xMM: xHeight, ascMM: 0, descMM: 0, capMM: xHeight * 1.05 };
     }
+  
+    const defaults =
+      SCRIPT_DEFAULTS[script as keyof typeof SCRIPT_DEFAULTS] ?? SCRIPT_DEFAULTS.TexturaQuadrata;
+  
+    const capHeightNibs = defaults?.capHeight ?? 7;
+  
     return {
-      xMM: xNib * nibMM,
+      xMM: xNib * effectiveNibMM,
       descMM: 0,
       ascMM: 0,
+      capMM: capHeightNibs * effectiveNibMM,
     };
-  }, [guideTemplate, xHeight, xNib, nibMM]);
+  }, [guideTemplate, xHeight, xNib, effectiveNibMM, script]);
+  
 
   const stageFrame = useMemo(
     () =>
@@ -748,6 +771,22 @@ export default function Home() {
                         value={nibMM}
                         onChange={(e) => setNibMM(clamp(parseFloat(e.target.value || '2') || 2, 0.5, 10))}
                       />
+                      <div className="mt-3">
+  <label className="font-medium text-slate-700">Pen angle (°)</label>
+  <select
+    className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+    value={penAngleDeg}
+    onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
+  >
+    <option value={35}>35°</option>
+    <option value={40}>40°</option>
+    <option value={45}>45°</option>
+  </select>
+  <p className="mt-1 text-[11px] text-slate-400">
+    Converts nib units using effective downstroke width (nib × cos(angle)).
+  </p>
+</div>
+
                       <p className="mt-1 text-[11px] text-slate-400">Textura widths are in nib units.</p>
                     </div>
                   </>

@@ -225,7 +225,8 @@ function makeSimplePdfFromJpeg(jpegDataUrl: string, pageWpt: number, pageHpt: nu
 
   chunks.push(xref, trailer);
 
-  return new Blob(chunks.map(c => (typeof c === 'string' ? new TextEncoder().encode(c) : c)), { type: 'application/pdf' });
+  const blobParts: BlobPart[] = chunks.map((c) => (typeof c === 'string' ? c : c as unknown as BlobPart));
+  return new Blob(blobParts, { type: 'application/pdf' });  
 }
 
 export default function CurvedTitlePage() {
@@ -241,9 +242,10 @@ export default function CurvedTitlePage() {
 
   const [xHeightMM, setXHeightMM] = useState(6);
   const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
-
   const [nibMM, setNibMM] = useState(2);
+  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
+  
   const [ascNib, setAscNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.ascNib);
   const [descNib, setDescNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.descNib);
 
@@ -371,22 +373,34 @@ export default function CurvedTitlePage() {
   }, [raw, orientation]);
 
   // ---------- Derived sizes ----------
-  const texturaXHeightMM = xNib * nibMM;
+  const effectiveNibMM = useMemo(() => {
+    if (script === 'Copperplate') return nibMM;
+    const rad = (penAngleDeg * Math.PI) / 180;
+    return nibMM * Math.cos(rad);
+  }, [script, nibMM, penAngleDeg]);
+  
+
+  const texturaXHeightMM = xNib * effectiveNibMM;
+
+  const blackletterHeights = useMemo(
+    () => ({ xMM: texturaXHeightMM, ascMM: ascNib * effectiveNibMM, descMM: descNib * effectiveNibMM }),
+    [texturaXHeightMM, ascNib, descNib, effectiveNibMM],
+  );
+  
+  const capMM = script === 'Copperplate'
+    ? xHeightMM * 1.05
+    : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * effectiveNibMM;
+  
   const copperplateHeights = useMemo(
     () => ({ xMM: xHeightMM, ascMM: xHeightMM * 0.5, descMM: xHeightMM * 0.3 }),
     [xHeightMM],
   );
-  const blackletterHeights = useMemo(
-    () => ({ xMM: texturaXHeightMM, ascMM: ascNib * nibMM, descMM: descNib * nibMM }),
-    [texturaXHeightMM, ascNib, descNib, nibMM],
-  );
+
   const guideHeights = script === 'Copperplate' ? copperplateHeights : blackletterHeights;
   const xMM = guideHeights.xMM;
   const ascMM = guideHeights.ascMM;
   const descMM = guideHeights.descMM;
-  const capMM = script === 'Copperplate'
-    ? xHeightMM * 1.05
-    : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * nibMM;
+
 
 
   const swThin = Math.max(0.35, Math.min(0.7, Math.min(box.w, box.h) * 0.0025));
@@ -414,13 +428,13 @@ export default function CurvedTitlePage() {
     if (script === 'Copperplate') return copper.ctx;
     return {
       xHeightMM: texturaXHeightMM,
-      nibMM,
+      nibMM: effectiveNibMM,
       scale: script === 'Fraktur' ? 1.05 : 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [script, copper.ctx, texturaXHeightMM, nibMM]);
-
+    }, [script, copper.ctx, texturaXHeightMM, effectiveNibMM]);
+    
   const run = useMemo(() => measureRun(text, SCRIPT_PROFILES[script], ctx), [text, script, ctx]);
 
   // ---------- Curve geometry ----------
@@ -477,7 +491,7 @@ export default function CurvedTitlePage() {
         tickStepMM:
         script === 'Copperplate'
           ? Math.max(xMM * 0.9, 3)   // sparse, calm Copperplate ticks
-          : Math.max(nibMM * 0.9) // dense Blackletter ticks      
+          : Math.max(effectiveNibMM * 0.9) // dense Blackletter ticks      
       }),
     [baseline, guideTemplate, xMM, ascMM, descMM, nibMM, script],
   );
@@ -550,7 +564,7 @@ export default function CurvedTitlePage() {
       const MAX = 28;
       const t = Math.max(0, Math.min(1, (turnDeg - THRESH) / (MAX - THRESH)));
 
-      const baseBump = nibMM * 0.25;
+      const baseBump = effectiveNibMM * 0.25;
       const heightFactor = 0.6 + 0.4 * Math.min(1, pl.h / xMM);
       const extra = t * baseBump * heightFactor;
 
@@ -586,7 +600,7 @@ export default function CurvedTitlePage() {
 
   const spanPoly = useMemo(() => {
     if (!span) return null;
-    const ds = script === 'Copperplate' ? Math.max(0.5, xMM * 0.2) : Math.max(0.5, nibMM * 0.5);
+    const ds = script === 'Copperplate' ? Math.max(0.5, xMM * 0.2) : Math.max(0.5, effectiveNibMM * 0.5);
     const waistPts: Pt[] = [];
     const basePts: Pt[] = [];
     for (let s = span.sStart; s <= span.sEnd + 0.0001; s += ds) {
@@ -595,7 +609,7 @@ export default function CurvedTitlePage() {
       basePts.push({ x: p.x, y: p.y });
     }
     return { waistPts, basePts };
-  }, [span, baseline, arcLen, xMM, nibMM]);
+  }, [span, baseline, arcLen, xMM, effectiveNibMM]);
 
   const startPt = baseline[0];
   const endPt = baseline[baseline.length - 1];
@@ -1375,6 +1389,19 @@ waistPts.push({ x: Ct.p.x - Ct.n.x * h, y: Ct.p.y - Ct.n.y * h });
               <div>
                 <label className="font-medium text-slate-700">Nib size (mm)</label>
                 <input type="number" step={0.1} min={0.2} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={nibMM} onChange={e => setNibMM(parseFloat(e.target.value || '2'))} />
+                <div>
+  <label className="font-medium text-slate-700">Pen angle (°)</label>
+  <select
+    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+    value={penAngleDeg}
+    onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
+  >
+    <option value={35}>35°</option>
+    <option value={40}>40°</option>
+    <option value={45}>45°</option>
+  </select>
+</div>
+
               </div>
               <div>
                 <label className="font-medium text-slate-700">x-height (nibs)</label>
