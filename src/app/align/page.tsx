@@ -260,6 +260,23 @@ function LinePreview(props: LinePreviewProps) {
     <g>
       <line x1={leftEdgeX} y1={yLine} x2={rightEdgeX} y2={yLine} stroke="#e2e8f0" />
 
+      {guideTemplate === 'blackletter' && guideSet && (
+        <g transform={`translate(${xStart},${yLine}) scale(${pxScale})`}>
+          <GuideOverlay
+            guideSet={guideSet}
+            style={{
+              thin: 1,
+              bold: 2,
+              colors: {
+                thin: '#e2e8f0',
+                bold: '#111827',
+                tick: '#e2e8f0',
+              },
+            }}
+          />
+        </g>
+      )}
+
       {showLetterBoxes &&
         segments.map((seg, i2) => {
           const segStartPx = xStart + seg.startMM * pxScale;
@@ -350,7 +367,7 @@ function LinePreview(props: LinePreviewProps) {
 
 
   // Always draw the baseline stroke (matches Curve's bold guide vibe)
-  const baselineStroke = (
+      const baselineStroke = (
     <line
       x1={xStart}
       y1={yLine}
@@ -359,6 +376,7 @@ function LinePreview(props: LinePreviewProps) {
       stroke="#111827"
       strokeWidth={LINE_STROKE}
       strokeLinecap="square"
+      vectorEffect="non-scaling-stroke"
     />
   );
 
@@ -367,10 +385,28 @@ function LinePreview(props: LinePreviewProps) {
     return (
       <>
         <g transform={`translate(${xStart},${yLine}) skewX(${-SLANT_DEG})`}>
-          <line x1={0} y1={0} x2={0} y2={-tickH} stroke="#0f172a" strokeWidth={TICK_STROKE} strokeLinecap="square" />
+          <line
+            x1={0}
+            y1={0}
+            x2={0}
+            y2={-tickH}
+            stroke="#0f172a"
+            strokeWidth={TICK_STROKE}
+            strokeLinecap="square"
+            vectorEffect="non-scaling-stroke"
+          />
         </g>
         <g transform={`translate(${xEnd},${yLine}) skewX(${-SLANT_DEG})`}>
-          <line x1={0} y1={0} x2={0} y2={-tickH} stroke="#0f172a" strokeWidth={TICK_STROKE} strokeLinecap="square" />
+          <line
+            x1={0}
+            y1={0}
+            x2={0}
+            y2={-tickH}
+            stroke="#0f172a"
+            strokeWidth={TICK_STROKE}
+            strokeLinecap="square"
+            vectorEffect="non-scaling-stroke"
+          />
         </g>
         {baselineStroke}
       </>
@@ -380,30 +416,30 @@ function LinePreview(props: LinePreviewProps) {
   // Non-copper scripts: vertical ticks
   return (
     <>
-      <line x1={xStart} y1={yLine} x2={xStart} y2={yLine - tickH} stroke="#0f172a" strokeWidth={TICK_STROKE} strokeLinecap="square" />
-      <line x1={xEnd} y1={yLine} x2={xEnd} y2={yLine - tickH} stroke="#0f172a" strokeWidth={TICK_STROKE} strokeLinecap="square" />
+      <line
+        x1={xStart}
+        y1={yLine}
+        x2={xStart}
+        y2={yLine - tickH}
+        stroke="#0f172a"
+        strokeWidth={TICK_STROKE}
+        strokeLinecap="square"
+        vectorEffect="non-scaling-stroke"
+      />
+      <line
+        x1={xEnd}
+        y1={yLine}
+        x2={xEnd}
+        y2={yLine - tickH}
+        stroke="#0f172a"
+        strokeWidth={TICK_STROKE}
+        strokeLinecap="square"
+        vectorEffect="non-scaling-stroke"
+      />
       {baselineStroke}
     </>
   );
 })()}
-
-
-      {guideTemplate === 'blackletter' && guideSet && (
-        <g transform={`translate(${xStart},${yLine}) scale(${pxScale})`}>
-          <GuideOverlay
-            guideSet={guideSet}
-            style={{
-              thin: 1,
-              bold: 2,
-              colors: {
-                thin: '#e2e8f0',
-                bold: '#111827',
-                tick: '#e2e8f0',
-              },
-            }}
-          />
-        </g>
-      )}
     </g>
   );
 }
