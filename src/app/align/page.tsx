@@ -11,7 +11,7 @@ import {
 } from '@/lib/line-widths';
 
 import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
-import { SCRIPT_DEFAULTS } from '@/lib/curve-helpers';
+import { SCRIPT_DEFAULTS, lengthPoly, pointAt } from '@/lib/curve-helpers';
 import type { ScriptContext } from '@/lib/scripts/types';
 import { measureRun } from '@/lib/measure/measure-run';
 import { lineMetricFromMeasuredRun } from '@/lib/measure/measure-lines-generic';
@@ -41,6 +41,7 @@ function mm(n: number, dp = 1) {
 const snap = (v: number) => Math.round(v) + 0.5;
 const TICK_STROKE = 2;
 const LINE_STROKE = 2;
+const BOX_STROKE = 0.9; // Curve uses swThin; Align uses a fixed px stroke that looks similar
 
 /* ------------------------- Constants / UI Options ------------------------ */
 
@@ -221,10 +222,24 @@ function LinePreview(props: LinePreviewProps) {
 
   const xStart = snap(startXRaw);
   const xEnd = snap(endXRaw);
+  
 
   const spanY = baselineY - 14;
   const baseBoxH = (guideTemplate === 'blackletter' ? guideHeights.xMM : xHeight) * pxScale;
   const useSkew = guideTemplate === 'copperplate';
+
+    // Extend baseline used for box construction so Copperplate top-edge advance (dx)
+  // doesn't clamp at the end and kink the last upright edge.
+  const SLANT_FROM_BASELINE_DEG = 55;
+  const dxMax = useSkew ? (baseBoxH / Math.tan((SLANT_FROM_BASELINE_DEG * Math.PI) / 180)) : 0;
+
+  const baselinePx = [
+    { x: xStart, y: baselineY },
+    { x: xEnd + dxMax, y: baselineY },
+  ];
+  const arcLen = lengthPoly(baselinePx);
+
+
   const guideSet = useMemo(() => {
     if (guideTemplate !== 'blackletter') return null;
     const baseline = [
@@ -261,28 +276,49 @@ function LinePreview(props: LinePreviewProps) {
             : guideTemplate === 'blackletter'
               ? (isCap ? guideHeights.capMM * pxScale : guideHeights.xMM * pxScale)
               : baseBoxH;
-                  const boxY = baselineY - boxH;
-          const bottomY = baselineY;
+                       // Build a Curve-style conforming box path (in px units).
+          const sL = Math.max(0, Math.min(arcLen, seg.startMM * pxScale));
+          const sR = Math.max(0, Math.min(arcLen, seg.endMM * pxScale));
+          const span = Math.max(0.0001, sR - sL);
 
-          const pivotX = segStartPx;
-          const pivotY = bottomY;
-          const skewTransform = `translate(${pivotX},${pivotY}) skewX(${-SLANT_DEG}) translate(${-pivotX},${-pivotY})`;
+          // Copperplate: slant “uprights” forward 55° relative to baseline (Curve logic).
+          const isCopper = useSkew;
+          const dx = isCopper ? (boxH / Math.tan((SLANT_FROM_BASELINE_DEG * Math.PI) / 180)) : 0;
 
+          // px sampling: roughly one point per 6px, min 8 points.
+          const steps = Math.max(8, Math.ceil(span / 6));
+
+          const basePts: { x: number; y: number }[] = [];
+          const waistPts: { x: number; y: number }[] = [];
+
+          for (let k = 0; k <= steps; k++) {
+            const u = k / steps;
+            const s = sL + span * u;
+
+            const C = pointAt(baselinePx, s);
+            basePts.push({ x: C.p.x, y: C.p.y });
+
+            const sTop = Math.max(0, Math.min(arcLen, s + dx));
+            const Ct = pointAt(baselinePx, sTop);
+            waistPts.push({ x: Ct.p.x - Ct.n.x * boxH, y: Ct.p.y - Ct.n.y * boxH });
+          }
+
+          const top = waistPts.map((pt) => `${pt.x},${pt.y}`).join(' L ');
+          const bot = [...basePts].reverse().map((pt) => `${pt.x},${pt.y}`).join(' L ');
+          const pathD = `M ${top} L ${bot} Z`;
+     
           if (isLetter) {
             const fillColor = isCap ? 'rgba(99,102,241,0.10)' : 'rgba(16,185,129,0.10)';
             const strokeColor = isCap ? '#6366f1' : '#10b981';
 
             return (
-              <rect
+              <path
                 key={`box-${index}-${i2}`}
-                x={segStartPx}
-                y={boxY}
-                width={segWidthPx}
-                height={boxH}
+                d={pathD}
                 fill={fillColor}
                 stroke={strokeColor}
-                strokeWidth={1}
-                transform={useSkew ? skewTransform : undefined}
+                strokeWidth={BOX_STROKE}
+                vectorEffect="non-scaling-stroke"
               />
             );
           }
@@ -291,17 +327,14 @@ function LinePreview(props: LinePreviewProps) {
           const orangeStroke = `rgba(249, 115, 22, ${SPACE_BOX_STROKE_OPACITY})`;
 
           return (
-            <rect
-              key={`space-${index}-${i2}`}
-              x={segStartPx}
-              y={boxY}
-              width={segWidthPx}
-              height={boxH}
-              fill={orangeFill}
-              stroke={orangeStroke}
-              strokeWidth={1}
-              transform={useSkew ? skewTransform : undefined}
-            />
+            <path
+            key={`space-${index}-${i2}`}
+            d={pathD}
+            fill={orangeFill}
+            stroke={orangeStroke}
+            strokeWidth={BOX_STROKE}
+            vectorEffect="non-scaling-stroke"
+          />
           );
         })}
 
@@ -309,18 +342,51 @@ function LinePreview(props: LinePreviewProps) {
         {labelText}
       </text>
 
-      {useSkew && (
-        <>
-          <g transform={`translate(${xStart},${yLine}) skewX(${-SLANT_DEG})`}>
-            <line x1={0} y1={0} x2={0} y2={-baseBoxH} stroke="#0f172a" strokeWidth={TICK_STROKE} strokeLinecap="square" />
-          </g>
-          <g transform={`translate(${xEnd},${yLine}) skewX(${-SLANT_DEG})`}>
-            <line x1={0} y1={0} x2={0} y2={-baseBoxH} stroke="#0f172a" strokeWidth={TICK_STROKE} strokeLinecap="square" />
-          </g>
+      {(() => {
+  const tickH =
+  guideTemplate === 'blackletter'
+    ? (guideHeights.capMM * pxScale)
+    : baseBoxH;
 
-          <line x1={xStart} y1={yLine} x2={xEnd} y2={yLine} stroke="#111827" strokeWidth={LINE_STROKE} strokeLinecap="square" />
-        </>
-      )}
+
+  // Always draw the baseline stroke (matches Curve's bold guide vibe)
+  const baselineStroke = (
+    <line
+      x1={xStart}
+      y1={yLine}
+      x2={xEnd}
+      y2={yLine}
+      stroke="#111827"
+      strokeWidth={LINE_STROKE}
+      strokeLinecap="square"
+    />
+  );
+
+  // Copperplate: skewed ticks (existing behavior)
+  if (useSkew) {
+    return (
+      <>
+        <g transform={`translate(${xStart},${yLine}) skewX(${-SLANT_DEG})`}>
+          <line x1={0} y1={0} x2={0} y2={-tickH} stroke="#0f172a" strokeWidth={TICK_STROKE} strokeLinecap="square" />
+        </g>
+        <g transform={`translate(${xEnd},${yLine}) skewX(${-SLANT_DEG})`}>
+          <line x1={0} y1={0} x2={0} y2={-tickH} stroke="#0f172a" strokeWidth={TICK_STROKE} strokeLinecap="square" />
+        </g>
+        {baselineStroke}
+      </>
+    );
+  }
+
+  // Non-copper scripts: vertical ticks
+  return (
+    <>
+      <line x1={xStart} y1={yLine} x2={xStart} y2={yLine - tickH} stroke="#0f172a" strokeWidth={TICK_STROKE} strokeLinecap="square" />
+      <line x1={xEnd} y1={yLine} x2={xEnd} y2={yLine - tickH} stroke="#0f172a" strokeWidth={TICK_STROKE} strokeLinecap="square" />
+      {baselineStroke}
+    </>
+  );
+})()}
+
 
       {guideTemplate === 'blackletter' && guideSet && (
         <g transform={`translate(${xStart},${yLine}) scale(${pxScale})`}>
