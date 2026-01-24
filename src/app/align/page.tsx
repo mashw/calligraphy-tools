@@ -183,7 +183,7 @@ function LinePreview(props: LinePreviewProps) {
     index,
     metric,
     alignment,
-    rightAlignMode: _rightAlignMode,
+    rightAlignMode,
     xHeight,
     pxPerMM,
     leftEdgeX,
@@ -201,6 +201,14 @@ function LinePreview(props: LinePreviewProps) {
   const pxScale = pxPerMM || 5;
   const Lmm = lengthMM;
   const Lpx = Lmm * pxScale;
+  const baseBoxH = (guideTemplate === 'blackletter' ? guideHeights.xMM : xHeight) * pxScale;
+  const useSkew = guideTemplate === 'copperplate';
+
+  // Extend baseline used for box construction so Copperplate top-edge advance (dx)
+  // doesn't clamp at the end and kink the last upright edge.
+  const SLANT_FROM_BASELINE_DEG = 55;
+  const dxMax = useSkew ? (baseBoxH / Math.tan((SLANT_FROM_BASELINE_DEG * Math.PI) / 180)) : 0;
+
 
   const baselineY = baselineTopY + index * lineGap;
   const yLine = snap(baselineY);
@@ -216,24 +224,22 @@ function LinePreview(props: LinePreviewProps) {
     refX = centerX;
     labelText = `${(Lmm / 2).toFixed(1)} mm from center`;
   } else {
-    startXRaw = rightEdgeX - Lpx;
-    endXRaw = rightEdgeX;
+    const flushToWaist = useSkew && rightAlignMode === 'waist';
+    endXRaw = rightEdgeX - (flushToWaist ? dxMax : 0);
+    startXRaw = endXRaw - Lpx;
     refX = rightEdgeX;
-    labelText = `${Lmm.toFixed(1)} mm from right`;
+    const dxMaxMM = dxMax / pxScale;
+    const startFromRightMM = Lmm + (flushToWaist ? dxMaxMM : 0);
+    labelText = `${startFromRightMM.toFixed(1)} mm from right`;
+
   }
+  
 
   const xStart = snap(startXRaw);
   const xEnd = snap(endXRaw);
 
 
   const spanY = baselineY - 14;
-  const baseBoxH = (guideTemplate === 'blackletter' ? guideHeights.xMM : xHeight) * pxScale;
-  const useSkew = guideTemplate === 'copperplate';
-
-  // Extend baseline used for box construction so Copperplate top-edge advance (dx)
-  // doesn't clamp at the end and kink the last upright edge.
-  const SLANT_FROM_BASELINE_DEG = 55;
-  const dxMax = useSkew ? (baseBoxH / Math.tan((SLANT_FROM_BASELINE_DEG * Math.PI) / 180)) : 0;
 
   const baselinePx = [
     { x: xStart, y: baselineY },
@@ -302,9 +308,9 @@ function LinePreview(props: LinePreviewProps) {
         !isLetter
           ? baseBoxH
           : guideTemplate === 'blackletter'
-            ? (isCap ? guideHeights.capMM * pxScale : guideHeights.xMM * pxScale)
+            ? guideHeights.xMM * pxScale
             : baseBoxH;
-
+      
       const sL = Math.max(0, Math.min(arcLen, seg.startMM * pxScale));
       const sR = Math.max(0, Math.min(arcLen, seg.endMM * pxScale));
       const span = Math.max(0.0001, sR - sL);
@@ -373,6 +379,17 @@ function LinePreview(props: LinePreviewProps) {
       );
     })}
   </g>
+)}
+
+{/* Copperplate waistline right-align: fill the right-side wedge as "space" */}
+{useSkew && alignment === 'right' && rightAlignMode === 'waist' && (
+  <path
+    d={`M ${refX},${yLine - baseBoxH} L ${refX},${yLine} L ${xEnd},${yLine} Z`}
+    fill={`rgba(249, 115, 22, ${SPACE_BOX_FILL_OPACITY})`}
+    stroke={`rgba(249, 115, 22, ${SPACE_BOX_STROKE_OPACITY})`}
+    strokeWidth={BOX_STROKE}
+    vectorEffect="non-scaling-stroke"
+  />
 )}
 
 {/* Right-aligned Copperplate end wall (draw regardless of showLetterBoxes toggle) */}
@@ -444,20 +461,8 @@ function LinePreview(props: LinePreviewProps) {
           }
 
           // For blackletter, match the tallest box actually present on this line
-          let maxH = baseBoxH;
-
-          for (const seg of segments) {
-            if (seg.kind !== 'letter') continue;
-
-            const isCap = /[A-Z]/.test(seg.ch);
-            const h = isCap
-              ? guideHeights.capMM * pxScale
-              : guideHeights.xMM * pxScale;
-
-            if (h > maxH) maxH = h;
-          }
-
-          return maxH;
+// For blackletter, caps are not taller in Align preview.
+return guideHeights.xMM * pxScale;
         })();
 
 
@@ -467,7 +472,7 @@ function LinePreview(props: LinePreviewProps) {
           <line
             x1={xStart}
             y1={yLine}
-            x2={xEnd}
+            x2={useSkew && alignment === 'right' && rightAlignMode === 'waist' ? refX : xEnd}
             y2={yLine}
             stroke="#111827"
             strokeWidth={LINE_STROKE}
@@ -565,6 +570,7 @@ function LinePreview(props: LinePreviewProps) {
 export default function Home() {
   const [script, setScript] = useState<ScriptId>('Copperplate');
 
+
   const [linesInput, setLinesInput] = useState('');
   const [xHeight, setXHeight] = useState(6);
   const [pxPerMM, setPxPerMM] = useState(5);
@@ -573,7 +579,9 @@ export default function Home() {
 
   // Copperplate-only controls
   const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
-
+  const COPPER_SLANT_DEG = 55;
+  const copperDxMaxMM = xHeight / Math.tan((COPPER_SLANT_DEG * Math.PI) / 180);
+  
   // Textura-only controls
   const [nibMM, setNibMM] = useState(2);
   const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
@@ -1285,8 +1293,14 @@ export default function Home() {
                     <td className="p-2">{metric.text || <em>(empty)</em>}</td>
                     <td className="p-2 text-right">{mm(metric.lengthMM)}</td>
                     <td className="p-2 text-right">
-                      {mm(metric.startFromRefMM)} {alignment === 'center' ? 'from center' : 'from right edge'}
-                    </td>
+  {mm(
+    metric.startFromRefMM +
+      (script === 'Copperplate' && alignment === 'right' && rightAlignMode === 'waist'
+        ? copperDxMaxMM
+        : 0)
+  )}{' '}
+  {alignment === 'center' ? 'from center' : 'from right edge'}
+</td>
                   </tr>
                 ))}
               </tbody>
