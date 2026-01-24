@@ -165,6 +165,7 @@ type LinePreviewProps = {
   index: number;
   metric: LineMetric;
   alignment: Alignment;
+  rightAlignMode: 'waist' | 'baseline';
   xHeight: number;
   pxPerMM: number;
   leftEdgeX: number;
@@ -182,6 +183,7 @@ function LinePreview(props: LinePreviewProps) {
     index,
     metric,
     alignment,
+    rightAlignMode: _rightAlignMode,
     xHeight,
     pxPerMM,
     leftEdgeX,
@@ -567,6 +569,7 @@ export default function Home() {
   const [xHeight, setXHeight] = useState(6);
   const [pxPerMM, setPxPerMM] = useState(5);
   const [alignment, setAlignment] = useState<Alignment>('center');
+  const [rightAlignMode, setRightAlignMode] = useState<'waist' | 'baseline'>('waist');
 
   // Copperplate-only controls
   const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
@@ -604,6 +607,31 @@ export default function Home() {
       setShowAdvanced(false);
     }
   }, [script]);
+
+  useEffect(() => {
+    try {
+      const raw = typeof window !== 'undefined'
+        ? localStorage.getItem('ct_align_copperplate_right_align_mode_v1')
+        : null;
+      if (raw === 'waist' || raw === 'baseline') {
+        setRightAlignMode(raw);
+      } else {
+        setRightAlignMode('waist');
+      }
+    } catch {
+      setRightAlignMode('waist');
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('ct_align_copperplate_right_align_mode_v1', rightAlignMode);
+      }
+    } catch {
+      // ignore
+    }
+  }, [rightAlignMode]);
 
   // Load calibration for current x-height (Copperplate only)
   useEffect(() => {
@@ -874,6 +902,7 @@ export default function Home() {
                   index={idx}
                   metric={metric}
                   alignment={alignment}
+                  rightAlignMode={rightAlignMode}
                   xHeight={xHeight}
                   pxPerMM={pxPerMM}
                   leftEdgeX={stageFrame.leftEdgeX}
@@ -927,6 +956,39 @@ export default function Home() {
                     <option value="right">Right aligned</option>
                   </select>
                 </div>
+
+                {script === 'Copperplate' && alignment === 'right' && (
+                  <div className="sm:col-span-3">
+                    <label className="font-medium text-slate-700">Right align mode</label>
+                    <div className="mt-2 flex flex-col gap-2 text-sm text-slate-700">
+                      <label className="inline-flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="right-align-mode"
+                          value="waist"
+                          checked={rightAlignMode === 'waist'}
+                          onChange={() => setRightAlignMode('waist')}
+                          className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                        />
+                        Waistline (flush to wall)
+                      </label>
+                      <label className="inline-flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="right-align-mode"
+                          value="baseline"
+                          checked={rightAlignMode === 'baseline'}
+                          onChange={() => setRightAlignMode('baseline')}
+                          className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                        />
+                        Baseline (waistline may overshoot)
+                      </label>
+                    </div>
+                    <p className="mt-2 text-[11px] text-slate-400">
+                      Waistline flushes the top edge to the wall; baseline flush aligns the baseline and may let the waistline extend past it.
+                    </p>
+                  </div>
+                )}
 
                 {script === 'Copperplate' ? (
                   <>
