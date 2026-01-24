@@ -222,13 +222,13 @@ function LinePreview(props: LinePreviewProps) {
 
   const xStart = snap(startXRaw);
   const xEnd = snap(endXRaw);
-  
+
 
   const spanY = baselineY - 14;
   const baseBoxH = (guideTemplate === 'blackletter' ? guideHeights.xMM : xHeight) * pxScale;
   const useSkew = guideTemplate === 'copperplate';
 
-    // Extend baseline used for box construction so Copperplate top-edge advance (dx)
+  // Extend baseline used for box construction so Copperplate top-edge advance (dx)
   // doesn't clamp at the end and kink the last upright edge.
   const SLANT_FROM_BASELINE_DEG = 55;
   const dxMax = useSkew ? (baseBoxH / Math.tan((SLANT_FROM_BASELINE_DEG * Math.PI) / 180)) : 0;
@@ -238,6 +238,7 @@ function LinePreview(props: LinePreviewProps) {
     { x: xEnd + dxMax, y: baselineY },
   ];
   const arcLen = lengthPoly(baselinePx);
+
 
 
   const guideSet = useMemo(() => {
@@ -256,9 +257,14 @@ function LinePreview(props: LinePreviewProps) {
     return baseGuideSet;
   }, [guideTemplate, guideHeights, Lmm]);
 
+
+  let endWallX: number | null = null;
+  let endWallTopY: number | null = null;
   return (
     <g>
       <line x1={leftEdgeX} y1={yLine} x2={rightEdgeX} y2={yLine} stroke="#e2e8f0" />
+
+
 
       {guideTemplate === 'blackletter' && guideSet && (
         <g transform={`translate(${xStart},${yLine}) scale(${pxScale})`}>
@@ -266,10 +272,10 @@ function LinePreview(props: LinePreviewProps) {
             guideSet={guideSet}
             style={{
               thin: 1,
-              bold: 2,
+              bold: 1, // <-- important: no "bold" emphasis in this preview layer
               colors: {
                 thin: '#e2e8f0',
-                bold: '#111827',
+                bold: '#e2e8f0', // <-- important: prevents black line showing through box fill
                 tick: '#e2e8f0',
               },
             }}
@@ -277,169 +283,275 @@ function LinePreview(props: LinePreviewProps) {
         </g>
       )}
 
-      {showLetterBoxes &&
-        segments.map((seg, i2) => {
-          const segStartPx = xStart + seg.startMM * pxScale;
-          const segEndPx = xStart + seg.endMM * pxScale;
-          const segWidthPx = Math.max(1, segEndPx - segStartPx);
 
-          const isLetter = seg.kind === 'letter';
-          const ch = isLetter ? seg.ch : '';
-          const isCap = isLetter && /[A-Z]/.test(ch);
 
-          const boxH =
-          !isLetter
-            ? baseBoxH
-            : guideTemplate === 'blackletter'
-              ? (isCap ? guideHeights.capMM * pxScale : guideHeights.xMM * pxScale)
-              : baseBoxH;
-                       // Build a Curve-style conforming box path (in px units).
-          const sL = Math.max(0, Math.min(arcLen, seg.startMM * pxScale));
-          const sR = Math.max(0, Math.min(arcLen, seg.endMM * pxScale));
-          const span = Math.max(0.0001, sR - sL);
+{showLetterBoxes && (
+  <g>
+    {segments.map((seg, i2) => {
+      const segStartPx = xStart + seg.startMM * pxScale;
+      const segEndPx = xStart + seg.endMM * pxScale;
+      const segWidthPx = Math.max(1, segEndPx - segStartPx);
 
-          // Copperplate: slant “uprights” forward 55° relative to baseline (Curve logic).
-          const isCopper = useSkew;
-          const dx = isCopper ? (boxH / Math.tan((SLANT_FROM_BASELINE_DEG * Math.PI) / 180)) : 0;
+      const isLetter = seg.kind === 'letter';
+      const ch = isLetter ? seg.ch : '';
+      const isCap = isLetter && /[A-Z]/.test(ch);
 
-          // px sampling: roughly one point per 6px, min 8 points.
-          const steps = Math.max(8, Math.ceil(span / 6));
+      const boxH =
+        !isLetter
+          ? baseBoxH
+          : guideTemplate === 'blackletter'
+            ? (isCap ? guideHeights.capMM * pxScale : guideHeights.xMM * pxScale)
+            : baseBoxH;
 
-          const basePts: { x: number; y: number }[] = [];
-          const waistPts: { x: number; y: number }[] = [];
+      const sL = Math.max(0, Math.min(arcLen, seg.startMM * pxScale));
+      const sR = Math.max(0, Math.min(arcLen, seg.endMM * pxScale));
+      const span = Math.max(0.0001, sR - sL);
 
-          for (let k = 0; k <= steps; k++) {
-            const u = k / steps;
-            const s = sL + span * u;
+      const isCopper = useSkew;
+      const dx = isCopper ? (boxH / Math.tan((SLANT_FROM_BASELINE_DEG * Math.PI) / 180)) : 0;
 
-            const C = pointAt(baselinePx, s);
-            basePts.push({ x: C.p.x, y: C.p.y });
+      const steps = Math.max(8, Math.ceil(span / 6));
 
-            const sTop = Math.max(0, Math.min(arcLen, s + dx));
-            const Ct = pointAt(baselinePx, sTop);
-            waistPts.push({ x: Ct.p.x - Ct.n.x * boxH, y: Ct.p.y - Ct.n.y * boxH });
-          }
+      const basePts: { x: number; y: number }[] = [];
+      const waistPts: { x: number; y: number }[] = [];
 
-          const top = waistPts.map((pt) => `${pt.x},${pt.y}`).join(' L ');
-          const bot = [...basePts].reverse().map((pt) => `${pt.x},${pt.y}`).join(' L ');
-          const pathD = `M ${top} L ${bot} Z`;
-     
-          if (isLetter) {
-            const fillColor = isCap ? 'rgba(99,102,241,0.10)' : 'rgba(16,185,129,0.10)';
-            const strokeColor = isCap ? '#6366f1' : '#10b981';
+      for (let k = 0; k <= steps; k++) {
+        const u = k / steps;
+        const s = sL + span * u;
 
-            return (
-              <path
-                key={`box-${index}-${i2}`}
-                d={pathD}
-                fill={fillColor}
-                stroke={strokeColor}
-                strokeWidth={BOX_STROKE}
-                vectorEffect="non-scaling-stroke"
-              />
-            );
-          }
+        const C = pointAt(baselinePx, s);
+        basePts.push({ x: C.p.x, y: C.p.y });
 
-          const orangeFill = `rgba(249, 115, 22, ${SPACE_BOX_FILL_OPACITY})`;
-          const orangeStroke = `rgba(249, 115, 22, ${SPACE_BOX_STROKE_OPACITY})`;
+        const sTop = Math.max(0, Math.min(arcLen, s + dx));
+        const Ct = pointAt(baselinePx, sTop);
+        waistPts.push({ x: Ct.p.x - Ct.n.x * boxH, y: Ct.p.y - Ct.n.y * boxH });
+      }
 
-          return (
-            <path
-            key={`space-${index}-${i2}`}
+      // Capture right-most space segment top-right corner (for right-aligned Copperplate end wall)
+      if (useSkew && alignment === 'right' && seg.kind !== 'letter') {
+        const tr = waistPts[waistPts.length - 1];
+        if (endWallX == null || tr.x > endWallX) {
+          endWallX = tr.x;
+          endWallTopY = tr.y;
+        }
+      }
+
+      const top = waistPts.map((pt) => `${pt.x},${pt.y}`).join(' L ');
+      const bot = [...basePts].reverse().map((pt) => `${pt.x},${pt.y}`).join(' L ');
+      const pathD = `M ${top} L ${bot} Z`;
+
+      if (isLetter) {
+        const fillColor = isCap ? 'rgba(99,102,241,0.10)' : 'rgba(16,185,129,0.10)';
+        const strokeColor = isCap ? '#6366f1' : '#10b981';
+
+        return (
+          <path
+            key={`box-${index}-${i2}`}
             d={pathD}
-            fill={orangeFill}
-            stroke={orangeStroke}
+            fill={fillColor}
+            stroke={strokeColor}
             strokeWidth={BOX_STROKE}
             vectorEffect="non-scaling-stroke"
           />
-          );
-        })}
+        );
+      }
 
-      <text x={(startXRaw + refX) / 2} y={spanY - 4} textAnchor="middle" className="ct-svg-text" fill="#475569">
-        {labelText}
-      </text>
+      const orangeFill = `rgba(249, 115, 22, ${SPACE_BOX_FILL_OPACITY})`;
+      const orangeStroke = `rgba(249, 115, 22, ${SPACE_BOX_STROKE_OPACITY})`;
+
+      return (
+        <path
+          key={`space-${index}-${i2}`}
+          d={pathD}
+          fill={orangeFill}
+          stroke={orangeStroke}
+          strokeWidth={BOX_STROKE}
+          vectorEffect="non-scaling-stroke"
+        />
+      );
+    })}
+  </g>
+)}
+
+{/* Right-aligned Copperplate end wall (draw regardless of showLetterBoxes toggle) */}
+{useSkew && alignment === 'right' && (
+  <line
+    x1={refX}
+    y1={yLine - baseBoxH}
+    x2={refX}
+    y2={yLine}
+    stroke="#0f172a"
+    strokeWidth={TICK_STROKE}
+    strokeLinecap="square"
+    vectorEffect="non-scaling-stroke"
+    shapeRendering="crispEdges"
+  />
+)}
+
+
+
 
       {(() => {
-  const tickH =
-  guideTemplate === 'blackletter'
-    ? (guideHeights.capMM * pxScale)
-    : baseBoxH;
+        // Center on the vertical guide (refX), and vertically center between baseline and x-height top
+        const labelX = (xStart + xEnd) / 2;
+        const labelY = Math.max(12, yLine - baseBoxH * 0.5);
 
 
-  // Always draw the baseline stroke (matches Curve's bold guide vibe)
-      const baselineStroke = (
-    <line
-      x1={xStart}
-      y1={yLine}
-      x2={xEnd}
-      y2={yLine}
-      stroke="#111827"
-      strokeWidth={LINE_STROKE}
-      strokeLinecap="square"
-      vectorEffect="non-scaling-stroke"
-    />
-  );
+        // Rough-but-stable background sizing
+        const padX = 6;
+        const padY = 3;
+        const approxCharW = 5.6; // smaller font than ct-svg-text
+        const bgW = Math.max(80, labelText.length * approxCharW + padX * 2);
+        const bgH = 16;
 
-  // Copperplate: skewed ticks (existing behavior)
-  if (useSkew) {
-    return (
-      <>
-        <g transform={`translate(${xStart},${yLine}) skewX(${-SLANT_DEG})`}>
+        return (
+          <g>
+            <rect
+              x={labelX - bgW / 2}
+              y={labelY - bgH / 2}
+              width={bgW}
+              height={bgH}
+              rx={5}
+              ry={5}
+              fill="rgba(255,255,255,0.5)"
+              stroke="rgba(148,163,184,0.35)"
+              strokeWidth={1}
+              vectorEffect="non-scaling-stroke"
+            />
+            <text
+              x={labelX}
+              y={labelY}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              className="ct-svg-text"
+              fill="#475569"
+              style={{ fontSize: 11 }}
+            >
+              {labelText}
+            </text>
+          </g>
+        );
+      })()}
+
+
+      {(() => {
+        const tickH = (() => {
+          // Default: Copperplate or no boxes → base box height
+          if (guideTemplate !== 'blackletter' || !showLetterBoxes) {
+            return baseBoxH;
+          }
+
+          // For blackletter, match the tallest box actually present on this line
+          let maxH = baseBoxH;
+
+          for (const seg of segments) {
+            if (seg.kind !== 'letter') continue;
+
+            const isCap = /[A-Z]/.test(seg.ch);
+            const h = isCap
+              ? guideHeights.capMM * pxScale
+              : guideHeights.xMM * pxScale;
+
+            if (h > maxH) maxH = h;
+          }
+
+          return maxH;
+        })();
+
+
+
+        // Always draw the baseline stroke (matches Curve's bold guide vibe)
+        const baselineStroke = (
           <line
-            x1={0}
-            y1={0}
-            x2={0}
-            y2={-tickH}
-            stroke="#0f172a"
-            strokeWidth={TICK_STROKE}
+            x1={xStart}
+            y1={yLine}
+            x2={xEnd}
+            y2={yLine}
+            stroke="#111827"
+            strokeWidth={LINE_STROKE}
             strokeLinecap="square"
             vectorEffect="non-scaling-stroke"
+            shapeRendering="crispEdges"
           />
-        </g>
-        <g transform={`translate(${xEnd},${yLine}) skewX(${-SLANT_DEG})`}>
-          <line
-            x1={0}
-            y1={0}
-            x2={0}
-            y2={-tickH}
-            stroke="#0f172a"
-            strokeWidth={TICK_STROKE}
-            strokeLinecap="square"
-            vectorEffect="non-scaling-stroke"
-          />
-        </g>
-        {baselineStroke}
-      </>
-    );
-  }
+        );
 
-  // Non-copper scripts: vertical ticks
-  return (
-    <>
-      <line
-        x1={xStart}
-        y1={yLine}
-        x2={xStart}
-        y2={yLine - tickH}
-        stroke="#0f172a"
-        strokeWidth={TICK_STROKE}
-        strokeLinecap="square"
-        vectorEffect="non-scaling-stroke"
-      />
-      <line
-        x1={xEnd}
-        y1={yLine}
-        x2={xEnd}
-        y2={yLine - tickH}
-        stroke="#0f172a"
-        strokeWidth={TICK_STROKE}
-        strokeLinecap="square"
-        vectorEffect="non-scaling-stroke"
-      />
-      {baselineStroke}
-    </>
-  );
-})()}
+        // Copperplate: skewed ticks (existing behavior)
+        if (useSkew) {
+          return (
+            <>
+              {/* Left start tick (Copperplate: slanted) */}
+              <g transform={`translate(${xStart},${yLine}) skewX(${-SLANT_DEG})`}>
+                <line
+                  x1={0}
+                  y1={0}
+                  x2={0}
+                  y2={-tickH}
+                  stroke="#0f172a"
+                  strokeWidth={TICK_STROKE}
+                  strokeLinecap="square"
+                  vectorEffect="non-scaling-stroke"
+                  shapeRendering="crispEdges"
+                />
+              </g>
+
+              {/* Baseline (draw exactly once) */}
+              {baselineStroke}
+
+              {/* Right end marker:
+            right-align => vertical black line at xEnd
+            otherwise => slanted tick */}
+              {alignment !== 'right' && (
+                <g transform={`translate(${xEnd},${yLine}) skewX(${-SLANT_DEG})`}>
+                  <line
+                    x1={0}
+                    y1={0}
+                    x2={0}
+                    y2={-tickH}
+                    stroke="#0f172a"
+                    strokeWidth={TICK_STROKE}
+                    strokeLinecap="square"
+                    vectorEffect="non-scaling-stroke"
+                    shapeRendering="crispEdges"
+                  />
+                </g>
+              )}
+
+            </>
+          );
+        }
+
+
+
+
+        // Non-copper scripts: vertical ticks
+        return (
+          <>
+            <line
+              x1={xStart}
+              y1={yLine}
+              x2={xStart}
+              y2={yLine - tickH}
+              stroke="#0f172a"
+              strokeWidth={TICK_STROKE}
+              strokeLinecap="square"
+              vectorEffect="non-scaling-stroke"
+              shapeRendering="crispEdges"
+            />
+            <line
+              x1={xEnd}
+              y1={yLine}
+              x2={xEnd}
+              y2={yLine - tickH}
+              stroke="#0f172a"
+              strokeWidth={TICK_STROKE}
+              strokeLinecap="square"
+              vectorEffect="non-scaling-stroke"
+              shapeRendering="crispEdges"
+            />
+            {baselineStroke}
+          </>
+        );
+      })()}
     </g>
   );
 }
@@ -475,7 +587,7 @@ export default function Home() {
   const [userScaleFactor, setUserScaleFactor] = useState(1);
   const [userSpaceFactor, setUserSpaceFactor] = useState(1);
 
- 
+
 
   const guideTemplateForScript = (current: ScriptId): GuideTemplateId =>
     current === 'Copperplate' ? 'copperplate' : 'blackletter';
@@ -596,12 +708,12 @@ export default function Home() {
     const rad = (penAngleDeg * Math.PI) / 180;
     return nibMM * Math.cos(rad);
   }, [script, nibMM, penAngleDeg]);
-  
+
 
   const texturaXHeightMM = xNib * effectiveNibMM;
   const scriptCtx = useMemo<ScriptContext>(() => {
     if (script === 'Copperplate') return copper.ctx;
-  
+
     return {
       xHeightMM: texturaXHeightMM,
       nibMM: effectiveNibMM,
@@ -610,7 +722,7 @@ export default function Home() {
       capStyle: 'simple',
     };
   }, [script, copper.ctx, texturaXHeightMM, effectiveNibMM]);
-  
+
 
   const lineMetrics = useMemo<LineMetric[]>(() => {
     if (script === 'Copperplate') {
@@ -643,12 +755,12 @@ export default function Home() {
       // keep existing copperplate-ish visual behaviour
       return { xMM: xHeight, ascMM: 0, descMM: 0, capMM: xHeight * 1.05 };
     }
-  
+
     const defaults =
       SCRIPT_DEFAULTS[script as keyof typeof SCRIPT_DEFAULTS] ?? SCRIPT_DEFAULTS.TexturaQuadrata;
-  
+
     const capHeightNibs = defaults?.capHeight ?? 7;
-  
+
     return {
       xMM: xNib * effectiveNibMM,
       descMM: 0,
@@ -656,7 +768,7 @@ export default function Home() {
       capMM: capHeightNibs * effectiveNibMM,
     };
   }, [guideTemplate, xHeight, xNib, effectiveNibMM, script]);
-  
+
 
   const stageFrame = useMemo(
     () =>
@@ -736,40 +848,25 @@ export default function Home() {
               <rect x={0} y={0} width={stageFrame.widthPx} height={stageFrame.heightPx} fill="white" />
 
               {alignment === 'center' ? (
-                <>
-                  <line
-                    x1={stageFrame.centerX}
-                    y1={10}
-                    x2={stageFrame.centerX}
-                    y2={stageFrame.heightPx - 10}
-                    stroke="#94a3b8"
-                    strokeDasharray="4 4"
-                  />
-                  <text x={stageFrame.centerX + 6} y={18} className="ct-svg-text" fill="#64748b">
-                    centerline
-                  </text>
-                </>
+                <line
+                  x1={stageFrame.centerX}
+                  y1={10}
+                  x2={stageFrame.centerX}
+                  y2={stageFrame.heightPx - 10}
+                  stroke="#94a3b8"
+                  strokeDasharray="4 4"
+                />
               ) : (
-                <>
-                  <line
-                    x1={stageFrame.rightEdgeX}
-                    y1={10}
-                    x2={stageFrame.rightEdgeX}
-                    y2={stageFrame.heightPx - 10}
-                    stroke="#94a3b8"
-                    strokeDasharray="4 4"
-                  />
-                  <text
-                    x={stageFrame.rightEdgeX - 6}
-                    y={18}
-                    className="ct-svg-text"
-                    fill="#64748b"
-                    textAnchor="end"
-                  >
-                    right edge
-                  </text>
-                </>
+                <line
+                  x1={stageFrame.rightEdgeX}
+                  y1={10}
+                  x2={stageFrame.rightEdgeX}
+                  y2={stageFrame.heightPx - 10}
+                  stroke="#94a3b8"
+                  strokeDasharray="4 4"
+                />
               )}
+
 
               {lineMetrics.map((metric, idx) => (
                 <LinePreview
@@ -874,20 +971,20 @@ export default function Home() {
                         onChange={(e) => setNibMM(clamp(parseFloat(e.target.value || '2') || 2, 0.5, 10))}
                       />
                       <div className="mt-3">
-  <label className="font-medium text-slate-700">Pen angle (°)</label>
-  <select
-    className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-    value={penAngleDeg}
-    onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
-  >
-    <option value={35}>35°</option>
-    <option value={40}>40°</option>
-    <option value={45}>45°</option>
-  </select>
-  <p className="mt-1 text-[11px] text-slate-400">
-    Converts nib units using effective downstroke width (nib × cos(angle)).
-  </p>
-</div>
+                        <label className="font-medium text-slate-700">Pen angle (°)</label>
+                        <select
+                          className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          value={penAngleDeg}
+                          onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
+                        >
+                          <option value={35}>35°</option>
+                          <option value={40}>40°</option>
+                          <option value={45}>45°</option>
+                        </select>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          Converts nib units using effective downstroke width (nib × cos(angle)).
+                        </p>
+                      </div>
 
                       <p className="mt-1 text-[11px] text-slate-400">Textura widths are in nib units.</p>
                     </div>
@@ -949,11 +1046,10 @@ export default function Home() {
                   onMouseDown={handleStepButtonMouseDown}
                   onClick={() => setUseCalibration((v) => !v)}
                   className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-                ${
-                  useCalibration
-                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                    : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
-                }`}
+                ${useCalibration
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                      : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
                 >
                   <span
                     className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
