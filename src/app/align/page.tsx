@@ -42,6 +42,7 @@ const snap = (v: number) => Math.round(v) + 0.5;
 const TICK_STROKE = 2;
 const LINE_STROKE = 2;
 const BOX_STROKE = 0.9; // Curve uses swThin; Align uses a fixed px stroke that looks similar
+const DISPLAY_X_MM = 6;
 
 /* ------------------------- Constants / UI Options ------------------------ */
 
@@ -50,6 +51,7 @@ const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0
 // Per–x-height local storage key
 const CAL_STORAGE_KEY_PREFIX = 'ct_lineplanner_calibration_v2_xh_';
 const keyForXHeight = (x: number) => `${CAL_STORAGE_KEY_PREFIX}${x.toFixed(1)}`;
+const UNIFORM_PREVIEW_HEIGHT_STORAGE_KEY = 'ct_align_uniform_preview_height_v1';
 
 /* ---------------- Reusable InfoTip ---------------- */
 
@@ -167,6 +169,7 @@ type LinePreviewProps = {
   alignment: Alignment;
   rightAlignMode: 'waist' | 'baseline';
   xHeight: number;
+  uniformPreviewHeight: boolean;
   pxPerMM: number;
   leftEdgeX: number;
   rightEdgeX: number;
@@ -185,6 +188,7 @@ function LinePreview(props: LinePreviewProps) {
     alignment,
     rightAlignMode,
     xHeight,
+    uniformPreviewHeight,
     pxPerMM,
     leftEdgeX,
     rightEdgeX,
@@ -201,7 +205,7 @@ function LinePreview(props: LinePreviewProps) {
   const pxScale = pxPerMM || 5;
   const Lmm = lengthMM;
   const Lpx = Lmm * pxScale;
-  const baseBoxH = (guideTemplate === 'blackletter' ? guideHeights.xMM : xHeight) * pxScale;
+  const baseBoxH = (uniformPreviewHeight ? DISPLAY_X_MM : guideTemplate === 'blackletter' ? guideHeights.xMM : xHeight) * pxScale;
   const useSkew = guideTemplate === 'copperplate';
 
   // Extend baseline used for box construction so Copperplate top-edge advance (dx)
@@ -275,7 +279,13 @@ function LinePreview(props: LinePreviewProps) {
 
 
       {guideTemplate === 'blackletter' && guideSet && (
-        <g transform={`translate(${xStart},${yLine}) scale(${pxScale})`}>
+        <g
+          transform={`translate(${xStart},${yLine}) scale(${
+            uniformPreviewHeight && guideHeights.xMM > 0
+              ? pxScale * (DISPLAY_X_MM / guideHeights.xMM)
+              : pxScale
+          })`}
+        >
           <GuideOverlay
             guideSet={guideSet}
             style={{
@@ -307,7 +317,7 @@ function LinePreview(props: LinePreviewProps) {
       const boxH =
         !isLetter
           ? baseBoxH
-          : guideTemplate === 'blackletter'
+          : guideTemplate === 'blackletter' && !uniformPreviewHeight
             ? guideHeights.xMM * pxScale
             : baseBoxH;
       
@@ -456,7 +466,7 @@ function LinePreview(props: LinePreviewProps) {
       {(() => {
         const tickH = (() => {
           // Default: Copperplate or no boxes → base box height
-          if (guideTemplate !== 'blackletter' || !showLetterBoxes) {
+          if (uniformPreviewHeight || guideTemplate !== 'blackletter' || !showLetterBoxes) {
             return baseBoxH;
           }
 
@@ -573,6 +583,7 @@ export default function Home() {
 
   const [linesInput, setLinesInput] = useState('');
   const [xHeight, setXHeight] = useState(6);
+  const [uniformPreviewHeight, setUniformPreviewHeight] = useState(true);
   const [pxPerMM, setPxPerMM] = useState(5);
   const [alignment, setAlignment] = useState<Alignment>('center');
   const [rightAlignMode, setRightAlignMode] = useState<'waist' | 'baseline'>('waist');
@@ -630,6 +641,31 @@ export default function Home() {
       setRightAlignMode('waist');
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      const raw = typeof window !== 'undefined'
+        ? localStorage.getItem(UNIFORM_PREVIEW_HEIGHT_STORAGE_KEY)
+        : null;
+      if (raw === 'true' || raw === 'false') {
+        setUniformPreviewHeight(raw === 'true');
+      } else {
+        setUniformPreviewHeight(true);
+      }
+    } catch {
+      setUniformPreviewHeight(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(UNIFORM_PREVIEW_HEIGHT_STORAGE_KEY, String(uniformPreviewHeight));
+      }
+    } catch {
+      // ignore
+    }
+  }, [uniformPreviewHeight]);
 
   useEffect(() => {
     try {
@@ -912,6 +948,7 @@ export default function Home() {
                   alignment={alignment}
                   rightAlignMode={rightAlignMode}
                   xHeight={xHeight}
+                  uniformPreviewHeight={uniformPreviewHeight}
                   pxPerMM={pxPerMM}
                   leftEdgeX={stageFrame.leftEdgeX}
                   rightEdgeX={stageFrame.rightEdgeX}
@@ -1070,6 +1107,21 @@ export default function Home() {
                   />
                   Show letter bounding boxes
                 </label>
+
+                <div className="sm:col-span-3">
+                  <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                      checked={uniformPreviewHeight}
+                      onChange={(e) => setUniformPreviewHeight(e.target.checked)}
+                    />
+                    Uniform preview height (6mm)
+                  </label>
+                  <p className="ml-6 mt-1 text-[11px] text-slate-400">
+                    Preview only — does not affect measurements.
+                  </p>
+                </div>
               </div>
             </div>
 
