@@ -42,7 +42,7 @@ const snap = (v: number) => Math.round(v) + 0.5;
 const TICK_STROKE = 2;
 const LINE_STROKE = 2;
 const BOX_STROKE = 0.9; // Curve uses swThin; Align uses a fixed px stroke that looks similar
-const DISPLAY_X_MM = 6;
+const DISPLAY_X_MM = 6.0;
 
 /* ------------------------- Constants / UI Options ------------------------ */
 
@@ -51,7 +51,7 @@ const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0
 // Per–x-height local storage key
 const CAL_STORAGE_KEY_PREFIX = 'ct_lineplanner_calibration_v2_xh_';
 const keyForXHeight = (x: number) => `${CAL_STORAGE_KEY_PREFIX}${x.toFixed(1)}`;
-const UNIFORM_PREVIEW_HEIGHT_STORAGE_KEY = 'ct_align_uniform_preview_height_v1';
+const NORMALIZE_PREVIEW_HEIGHT_STORAGE_KEY = 'ct_align_normalize_preview_height_v1';
 
 /* ---------------- Reusable InfoTip ---------------- */
 
@@ -168,8 +168,7 @@ type LinePreviewProps = {
   metric: LineMetric;
   alignment: Alignment;
   rightAlignMode: 'waist' | 'baseline';
-  xHeight: number;
-  uniformPreviewHeight: boolean;
+  previewXHeightMM: number;
   pxPerMM: number;
   leftEdgeX: number;
   rightEdgeX: number;
@@ -178,7 +177,6 @@ type LinePreviewProps = {
   baselineTopY: number;
   showLetterBoxes: boolean;
   guideTemplate: GuideTemplateId;
-  guideHeights: { xMM: number; ascMM: number; descMM: number; capMM: number };
 };
 
 function LinePreview(props: LinePreviewProps) {
@@ -187,8 +185,7 @@ function LinePreview(props: LinePreviewProps) {
     metric,
     alignment,
     rightAlignMode,
-    xHeight,
-    uniformPreviewHeight,
+    previewXHeightMM,
     pxPerMM,
     leftEdgeX,
     rightEdgeX,
@@ -197,7 +194,6 @@ function LinePreview(props: LinePreviewProps) {
     baselineTopY,
     showLetterBoxes,
     guideTemplate,
-    guideHeights,
   } = props;
 
   const { lengthMM, segments } = metric;
@@ -205,7 +201,7 @@ function LinePreview(props: LinePreviewProps) {
   const pxScale = pxPerMM || 5;
   const Lmm = lengthMM;
   const Lpx = Lmm * pxScale;
-  const baseBoxH = (uniformPreviewHeight ? DISPLAY_X_MM : guideTemplate === 'blackletter' ? guideHeights.xMM : xHeight) * pxScale;
+  const baseBoxH = previewXHeightMM * pxScale;
   const useSkew = guideTemplate === 'copperplate';
 
   // Extend baseline used for box construction so Copperplate top-edge advance (dx)
@@ -261,13 +257,13 @@ function LinePreview(props: LinePreviewProps) {
     ];
     const baseGuideSet = buildGuideSet('blackletter', {
       baseline,
-      xMM: guideHeights.xMM,
-      ascMM: guideHeights.ascMM,
-      descMM: guideHeights.descMM,
-      tickStepMM: Math.max(guideHeights.xMM * 0.2, 1),
+      xMM: previewXHeightMM,
+      ascMM: 0,
+      descMM: 0,
+      tickStepMM: Math.max(previewXHeightMM * 0.2, 1),
     });
     return baseGuideSet;
-  }, [guideTemplate, guideHeights, Lmm]);
+  }, [guideTemplate, previewXHeightMM, Lmm]);
 
 
   let endWallX: number | null = null;
@@ -279,13 +275,7 @@ function LinePreview(props: LinePreviewProps) {
 
 
       {guideTemplate === 'blackletter' && guideSet && (
-        <g
-          transform={`translate(${xStart},${yLine}) scale(${
-            uniformPreviewHeight && guideHeights.xMM > 0
-              ? pxScale * (DISPLAY_X_MM / guideHeights.xMM)
-              : pxScale
-          })`}
-        >
+        <g transform={`translate(${xStart},${yLine}) scale(${pxScale})`}>
           <GuideOverlay
             guideSet={guideSet}
             style={{
@@ -314,12 +304,7 @@ function LinePreview(props: LinePreviewProps) {
       const ch = isLetter ? seg.ch : '';
       const isCap = isLetter && /[A-Z]/.test(ch);
 
-      const boxH =
-        !isLetter
-          ? baseBoxH
-          : guideTemplate === 'blackletter' && !uniformPreviewHeight
-            ? guideHeights.xMM * pxScale
-            : baseBoxH;
+      const boxH = baseBoxH;
       
       const sL = Math.max(0, Math.min(arcLen, seg.startMM * pxScale));
       const sR = Math.max(0, Math.min(arcLen, seg.endMM * pxScale));
@@ -464,16 +449,7 @@ function LinePreview(props: LinePreviewProps) {
 
 
       {(() => {
-        const tickH = (() => {
-          // Default: Copperplate or no boxes → base box height
-          if (uniformPreviewHeight || guideTemplate !== 'blackletter' || !showLetterBoxes) {
-            return baseBoxH;
-          }
-
-          // For blackletter, match the tallest box actually present on this line
-// For blackletter, caps are not taller in Align preview.
-return guideHeights.xMM * pxScale;
-        })();
+        const tickH = baseBoxH;
 
 
 
@@ -583,7 +559,7 @@ export default function Home() {
 
   const [linesInput, setLinesInput] = useState('');
   const [xHeight, setXHeight] = useState(6);
-  const [uniformPreviewHeight, setUniformPreviewHeight] = useState(true);
+  const [normalizePreviewHeight, setNormalizePreviewHeight] = useState(true);
   const [pxPerMM, setPxPerMM] = useState(5);
   const [alignment, setAlignment] = useState<Alignment>('center');
   const [rightAlignMode, setRightAlignMode] = useState<'waist' | 'baseline'>('waist');
@@ -645,27 +621,27 @@ export default function Home() {
   useEffect(() => {
     try {
       const raw = typeof window !== 'undefined'
-        ? localStorage.getItem(UNIFORM_PREVIEW_HEIGHT_STORAGE_KEY)
+        ? localStorage.getItem(NORMALIZE_PREVIEW_HEIGHT_STORAGE_KEY)
         : null;
       if (raw === 'true' || raw === 'false') {
-        setUniformPreviewHeight(raw === 'true');
+        setNormalizePreviewHeight(raw === 'true');
       } else {
-        setUniformPreviewHeight(true);
+        setNormalizePreviewHeight(true);
       }
     } catch {
-      setUniformPreviewHeight(true);
+      setNormalizePreviewHeight(true);
     }
   }, []);
 
   useEffect(() => {
     try {
       if (typeof window !== 'undefined') {
-        localStorage.setItem(UNIFORM_PREVIEW_HEIGHT_STORAGE_KEY, String(uniformPreviewHeight));
+        localStorage.setItem(NORMALIZE_PREVIEW_HEIGHT_STORAGE_KEY, String(normalizePreviewHeight));
       }
     } catch {
       // ignore
     }
-  }, [uniformPreviewHeight]);
+  }, [normalizePreviewHeight]);
 
   useEffect(() => {
     try {
@@ -840,6 +816,11 @@ export default function Home() {
       capMM: capHeightNibs * effectiveNibMM,
     };
   }, [guideTemplate, xHeight, xNib, effectiveNibMM, script]);
+  const previewXHeightMM = normalizePreviewHeight
+    ? DISPLAY_X_MM
+    : guideTemplate === 'blackletter'
+      ? guideHeights.xMM
+      : xHeight;
 
 
   const stageFrame = useMemo(
@@ -947,8 +928,7 @@ export default function Home() {
                   metric={metric}
                   alignment={alignment}
                   rightAlignMode={rightAlignMode}
-                  xHeight={xHeight}
-                  uniformPreviewHeight={uniformPreviewHeight}
+                  previewXHeightMM={previewXHeightMM}
                   pxPerMM={pxPerMM}
                   leftEdgeX={stageFrame.leftEdgeX}
                   rightEdgeX={stageFrame.rightEdgeX}
@@ -957,7 +937,6 @@ export default function Home() {
                   baselineTopY={stageFrame.baselineTopY}
                   showLetterBoxes={showLetterBoxes}
                   guideTemplate={guideTemplate}
-                  guideHeights={guideHeights}
                 />
               ))}
             </svg>
@@ -1113,10 +1092,10 @@ export default function Home() {
                     <input
                       type="checkbox"
                       className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                      checked={uniformPreviewHeight}
-                      onChange={(e) => setUniformPreviewHeight(e.target.checked)}
+                      checked={normalizePreviewHeight}
+                      onChange={(e) => setNormalizePreviewHeight(e.target.checked)}
                     />
-                    Uniform preview height (6mm)
+                    Normalize preview height (6mm)
                   </label>
                   <p className="ml-6 mt-1 text-[11px] text-slate-400">
                     Preview only — does not affect measurements.
