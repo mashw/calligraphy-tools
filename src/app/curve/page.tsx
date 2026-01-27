@@ -235,6 +235,15 @@ export default function CurvedTitlePage() {
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
   const [view, setView] = useState<ViewMode>('autofit');
 
+  const snapHalf = (v: number) => Math.round(v * 2) / 2;
+
+  // “next whole 0.5” in the direction of travel
+  const stepHalfFrom = (current: number, dir: 1 | -1) => {
+    const eps = 1e-9;
+    const x2 = current * 2;
+    const next2 = dir === 1 ? Math.ceil(x2 - eps) + 1 : Math.floor(x2 + eps) - 1;
+    return next2 / 2;
+  };
   const snap05 = (v: number) => Math.round(v / 0.5) * 0.5;
 
   const [script, setScript] = useState<ScriptId>('TexturaQuadrata');
@@ -244,8 +253,13 @@ export default function CurvedTitlePage() {
 
   const [xHeightMM, setXHeightMM] = useState(6);
   const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
-  const [nibMM, setNibMM] = useState(2);
-  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
+  const [nibText, setNibText] = useState('2');
+
+  const nibMM = useMemo(() => {
+    const v = parseFloat(nibText);
+    return Number.isFinite(v) ? v : 2;
+  }, [nibText]);
+    const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
 
   const [ascNib, setAscNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.ascNib);
@@ -1396,13 +1410,49 @@ export default function CurvedTitlePage() {
   step={0.5}
   min={0.2}
   className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-  value={nibMM}
+  value={nibText}
   onChange={(e) => {
-    const v = parseFloat(e.target.value);
-    if (Number.isFinite(v)) setNibMM(Math.max(0.2, v));
+    const raw = e.target.value;
+    const next = parseFloat(raw);
+    const current = parseFloat(nibText);
+
+    // Let the user type freely (including partial states like "" or "2.")
+    if (!Number.isFinite(next) || !Number.isFinite(current)) {
+      setNibText(raw);
+      return;
+    }
+
+    // If it looks like a stepper change, force “whole 0.5” stepping.
+    // (Steppers typically change by a fixed delta; typed changes can be arbitrary.)
+    const delta = next - current;
+    const looksLikeStep = Math.abs(delta) > 0 && Math.abs(delta) <= 1.0;
+
+    if (looksLikeStep) {
+      const dir: 1 | -1 = delta > 0 ? 1 : -1;
+      const stepped = stepHalfFrom(current, dir);
+      setNibText(String(Math.max(0.2, stepped)));
+    } else {
+      setNibText(raw);
+    }
+  }}
+  onKeyDown={(e) => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+
+    const current = parseFloat(nibText);
+    const safe = Number.isFinite(current) ? current : 2;
+    const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+
+    const stepped = stepHalfFrom(safe, dir);
+    setNibText(String(Math.max(0.2, stepped)));
   }}
   onBlur={() => {
-    setNibMM((v) => Math.max(0.2, Math.round(v / 0.5) * 0.5));
+    const v = parseFloat(nibText);
+    if (!Number.isFinite(v)) {
+      setNibText('2');
+      return;
+    }
+    setNibText(String(Math.max(0.2, snapHalf(v))));
   }}
 />
 

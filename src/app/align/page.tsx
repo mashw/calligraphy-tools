@@ -38,6 +38,17 @@ function mm(n: number, dp = 1) {
   return `${n.toFixed(dp)} mm`;
 }
 
+const snapHalf = (v: number) => Math.round(v * 2) / 2;
+
+// Move to the next “whole 0.5” step in a direction, from the current value.
+const stepHalfFrom = (current: number, dir: 1 | -1) => {
+  const eps = 1e-9;
+  const x2 = current * 2;
+  const next2 = dir === 1 ? Math.ceil(x2 - eps) + 1 : Math.floor(x2 + eps) - 1;
+  return next2 / 2;
+};
+
+
 const snap = (v: number) => Math.round(v) + 0.5;
 const TICK_STROKE = 2;
 const LINE_STROKE = 2;
@@ -569,10 +580,17 @@ export default function Home() {
   const COPPER_SLANT_DEG = 55;
   const copperDxMaxMM = xHeight / Math.tan((COPPER_SLANT_DEG * Math.PI) / 180);
   
-  // Textura-only controls
-  const [nibMM, setNibMM] = useState(2);
-  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
-  const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
+// Blackletter controls (Fraktur + Textura Quadrata)
+// Keep text so typing “2.” or custom values doesn’t get mangled mid-entry.
+const [nibText, setNibText] = useState('2');
+
+const nibMM = useMemo(() => {
+  const v = parseFloat(nibText);
+  return Number.isFinite(v) ? v : 2;
+}, [nibText]);
+
+const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
+const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
 
   const [showLetterBoxes, setShowLetterBoxes] = useState(true);
   const [vw, setVw] = useState<number | null>(null);
@@ -1049,13 +1067,57 @@ export default function Home() {
                     <div>
                       <label className="font-medium text-slate-700">Nib size (mm)</label>
                       <input
-                        type="number"
-                        step="0.1"
-                        min="0.5"
-                        className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        value={nibMM}
-                        onChange={(e) => setNibMM(clamp(parseFloat(e.target.value || '2') || 2, 0.5, 10))}
-                      />
+  type="number"
+  step={0.5}
+  min={0.5}
+  className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+  value={nibText}
+  onChange={(e) => {
+    const raw = e.target.value;
+
+    // Let the user type freely (including "", "2.", etc.)
+    const next = parseFloat(raw);
+    const current = parseFloat(nibText);
+    if (!Number.isFinite(next) || !Number.isFinite(current)) {
+      setNibText(raw);
+      return;
+    }
+
+    // If it looks like a stepper move, force “whole 0.5” stepping.
+    const delta = next - current;
+
+    // Steppers typically move by a relatively small delta; typed edits can be anything.
+    const looksLikeStep = Math.abs(delta) > 0 && Math.abs(delta) <= 1.0;
+
+    if (looksLikeStep) {
+      const dir: 1 | -1 = delta > 0 ? 1 : -1;
+      const stepped = stepHalfFrom(current, dir);
+      setNibText(String(clamp(stepped, 0.5, 10)));
+    } else {
+      setNibText(raw);
+    }
+  }}
+  onKeyDown={(e) => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+
+    const current = parseFloat(nibText);
+    const safe = Number.isFinite(current) ? current : 2;
+    const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+
+    const stepped = stepHalfFrom(safe, dir);
+    setNibText(String(clamp(stepped, 0.5, 10)));
+  }}
+  onBlur={() => {
+    const v = parseFloat(nibText);
+    if (!Number.isFinite(v)) {
+      setNibText('2');
+      return;
+    }
+    setNibText(String(clamp(snapHalf(v), 0.5, 10)));
+  }}
+/>
+
                       <div className="mt-3">
                         <label className="font-medium text-slate-700">Pen angle (°)</label>
                         <select
