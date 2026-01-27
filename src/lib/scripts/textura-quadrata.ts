@@ -101,6 +101,14 @@ export const texturaQuadrataProfile: ScriptProfile = {
     if (ch === ' ') return SPACING.interWord;
     if (next == null || next === ' ') return 0;
 
+    const chLc = ch.toLowerCase();
+    const nextLc = next.toLowerCase();
+    const isLetter = (s: string) => s >= 'a' && s <= 'z';
+
+    if ('dbopwvt'.includes(chLc) && isLetter(nextLc)) {
+      return 0.5;
+    }
+
     let spacing = 1.0;
     const group1Next = new Set(['i', 'l', 'j', 'n', 'm', 'h', 'k', 'b', 't']);
     const group5Next = new Set([
