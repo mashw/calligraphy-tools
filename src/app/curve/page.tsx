@@ -396,16 +396,17 @@ export default function CurvedTitlePage() {
   }, [script, nibMM, penAngleDeg]);
 
 
-  const texturaXHeightMM = xNib * effectiveNibMM;
+// Blackletter “nibs” height controls should be REAL nib widths (mm), not effective.
+const texturaXHeightMM = xNib * nibMM;
 
-  const blackletterHeights = useMemo(
-    () => ({ xMM: texturaXHeightMM, ascMM: ascNib * effectiveNibMM, descMM: descNib * effectiveNibMM }),
-    [texturaXHeightMM, ascNib, descNib, effectiveNibMM],
-  );
+const blackletterHeights = useMemo(
+  () => ({ xMM: texturaXHeightMM, ascMM: ascNib * nibMM, descMM: descNib * nibMM }),
+  [texturaXHeightMM, ascNib, descNib, nibMM],
+);
 
   const capMM = script === 'Copperplate'
     ? xHeightMM * 1.05
-    : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * effectiveNibMM;
+    : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * nibMM;
 
   const copperplateHeights = useMemo(
     () => ({ xMM: xHeightMM, ascMM: xHeightMM * 0.5, descMM: xHeightMM * 0.3 }),
