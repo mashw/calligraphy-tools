@@ -61,44 +61,28 @@ export const frakturProfile: ScriptProfile = {
   },
 
   afterSpacingUnits: (_prev, ch, next) => {
+    // Word spacing
     if (ch === ' ') return SPACING.interWord;
+  
+    // No spacing at end of word or line
     if (next == null || next === ' ') return 0;
-
+  
     const chLc = ch.toLowerCase();
-    const nextLc = next.toLowerCase();
-    const isLetter = (s: string) => s >= 'a' && s <= 'z';
-
-    if ('dbopwvt'.includes(chLc) && isLetter(nextLc)) {
-      return 0.5;
-    }
-
-    let spacing = 1.0;
-    const group1Next = new Set(['i', 'l', 'j', 'n', 'm', 'h', 'k', 'b', 't']);
-    const group5Next = new Set([
-      'i',
-      'j',
-      'm',
-      'n',
-      'p',
-      'r',
-      's',
-      't',
-      'u',
-      'v',
-      'w',
-      'x',
-      'y',
-      'z',
-    ]);
-    const group6Next = new Set(['b', 'h', 'k', 'l', 'f']);
-
-    if (ch === 'c' && group1Next.has(next)) spacing -= 1.0;
-    if (ch === 'e' && group1Next.has(next)) spacing -= 1.0;
-    if (ch === 'r' && group1Next.has(next)) spacing -= 1.0;
-    if (ch === 's' && group1Next.has(next)) spacing -= 0.5;
-    if (['c', 'e', 'r'].includes(ch) && group5Next.has(next)) spacing -= 0.5;
-    if (ch === 'f' && group6Next.has(next)) spacing += 1.5;
-
-    return spacing;
-  },
+  
+    // Default (future: user-configurable)
+    const DEFAULT_INTERLETTER = 1.0;
+  
+    // Exceptions (future: user-configurable)
+    const OPEN_LETTERS_AFTER = 0.25;   // c, e, r
+    const DENSER_LETTERS_AFTER = 0.5;  // b, d, f, k, o, p, s
+  
+    // Groups
+    const OPEN_LETTERS = new Set(['c', 'e', 'r']);
+    const DENSER_LETTERS = new Set(['b', 'd', 'f', 'k', 'o', 'p', 's']);
+  
+    if (OPEN_LETTERS.has(chLc)) return OPEN_LETTERS_AFTER;
+    if (DENSER_LETTERS.has(chLc)) return DENSER_LETTERS_AFTER;
+  
+    return DEFAULT_INTERLETTER;
+  },  
 };
