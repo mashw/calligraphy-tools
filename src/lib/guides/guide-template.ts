@@ -11,6 +11,7 @@ export type GuideSet = {
   descLine: Pt[];
   // optional perpendicular ticks/markers (each tick is a line segment)
   ticks?: { a: Pt; b: Pt }[];
+  hGuides?: Pt[][]; // NEW: curve-parallel intermediate rails
 };
 
 export type GuideTemplateId = 'copperplate' | 'blackletter';
@@ -20,7 +21,8 @@ export type GuideTemplateParams = {
   xMM: number;
   ascMM: number;
   descMM: number;
-  tickStepMM?: number;
+  tickStepMM?: number;     // used for vertical ticks
+  actualNibMM?: number;    // used for horizontal tick spacing
 };
 
 export const BLACKLETTER_GUIDE_DEFAULTS = {
@@ -40,15 +42,18 @@ export function blackletterGuideHeightsMM(nibMM: number) {
 }
 
 function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
-  const { baseline, xMM, ascMM, descMM, tickStepMM } = params;
+  const { baseline, xMM, ascMM, descMM, tickStepMM, actualNibMM } = params;
+
   const baseLine = baseline;
   const waistLine = offset(baseline, -xMM);
   const ascLine = offset(baseline, -(xMM + ascMM));
   const descLine = offset(baseline, descMM);
 
-  const step = Math.max(0.5, tickStepMM ?? 1);
+  // Existing vertical-ish ticks (along baseline normals)
+  const step = Math.max(0.0001, tickStepMM ?? 1);
   const ticks: { a: Pt; b: Pt }[] = [];
   const arcLen = lengthPoly(baseline);
+
   for (let s = 0; s <= arcLen; s += step) {
     const { p, n } = pointAt(baseline, s);
     ticks.push({
@@ -57,8 +62,34 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
     });
   }
 
-  return { ascLine, waistLine, baseLine, descLine, ticks };
+  // NEW: curve-parallel intermediate rails (offset polylines)
+  // Spaced every 1× *actual* nib width in mm (not effective nib).
+  const hGuides: Pt[][] = [];
+
+  if (actualNibMM != null && actualNibMM > 0) {
+    const topOff = -(xMM + ascMM);
+    const waistOff = -xMM;
+    const baseOff = 0;
+    const descOff = descMM;
+
+    const EPS = 1e-2; // 0.01mm tolerance
+
+    const isNearNamedOff = (d: number) =>
+      Math.abs(d - topOff) < EPS ||
+      Math.abs(d - waistOff) < EPS ||
+      Math.abs(d - baseOff) < EPS ||
+      Math.abs(d - descOff) < EPS;
+
+    // Step from descender (+) up to ascender (-)
+    for (let d = descOff; d >= topOff - EPS; d -= actualNibMM) {
+      if (isNearNamedOff(d)) continue;
+      hGuides.push(offset(baseline, d));
+    }
+  }
+
+  return { ascLine, waistLine, baseLine, descLine, ticks, hGuides };
 }
+
 
 function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
   const { baseline, xMM, ascMM, descMM, tickStepMM } = params;
@@ -88,15 +119,7 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
       b: { x: Cb.p.x + Cb.n.x * botOff, y: Cb.p.y + Cb.n.y * botOff },
     });
   }
-
-
-  return {
-    ascLine,
-    waistLine,
-    baseLine,
-    descLine,
-    ticks,
-  };
+  return { ascLine, waistLine, baseLine, descLine, ticks };
 }
 
 export function buildGuideSet(template: GuideTemplateId, params: GuideTemplateParams): GuideSet {

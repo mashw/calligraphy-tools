@@ -507,10 +507,11 @@ const blackletterHeights = useMemo(
         descMM,
         tickStepMM:
           script === 'Copperplate'
-            ? Math.max(xMM * 0.9, 3) // sparse, calm Copperplate ticks
-            : effectiveNibMM,        // exact 1× effective nib
+            ? Math.max(xMM * 0.9, 3)
+            : effectiveNibMM,
+        actualNibMM: nibMM,
       }),
-    [baseline, guideTemplate, xMM, ascMM, descMM, effectiveNibMM, script],
+    [baseline, guideTemplate, xMM, ascMM, descMM, effectiveNibMM, nibMM, script],
   );
 
   // ---------- Layout along the curve ----------

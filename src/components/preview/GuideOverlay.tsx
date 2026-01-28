@@ -19,7 +19,7 @@ type GuideOverlayProps = {
   };
   interactive?: {
     onGuidePointerDown?: (
-      e: React.PointerEvent<SVGPathElement | SVGLineElement>,
+      e: React.PointerEvent<SVGPathElement | SVGLineElement | SVGPolylineElement>,
     ) => void;
     hitStrokeWidthMM?: number;
   };
@@ -40,7 +40,8 @@ export default function GuideOverlay({
   interactive,
 }: GuideOverlayProps) {
   const colors = { ...defaultColors, ...style.colors };
-  const hitStrokeWidth = interactive?.hitStrokeWidthMM ?? Math.max(8, style.bold * 8);
+  const hitStrokeWidth =
+    interactive?.hitStrokeWidthMM ?? Math.max(8, style.bold * 8);
 
   const guidePaths = [
     { key: 'asc', pts: guideSet.ascLine, stroke: colors.thin, width: style.thin },
@@ -83,6 +84,7 @@ export default function GuideOverlay({
             stroke="rgba(0,0,0,0)"
             strokeWidth={hitStrokeWidth}
             fill="none"
+            vectorEffect="non-scaling-stroke"
             pointerEvents="stroke"
             className="cursor-move"
             onPointerDown={interactive.onGuidePointerDown}
@@ -116,6 +118,33 @@ export default function GuideOverlay({
           )}
         </g>
       ))}
+
+      {guideSet.hGuides?.map((poly, idx) => {
+        const points = poly.map((p) => `${p.x},${p.y}`).join(' ');
+        return (
+          <g key={`hguide-${idx}`}>
+            <polyline
+              points={points}
+              fill="none"
+              stroke={colors.tick}
+              strokeWidth={style.thin}
+              vectorEffect="non-scaling-stroke"
+            />
+            {interactive?.onGuidePointerDown && (
+              <polyline
+                points={points}
+                fill="none"
+                stroke="rgba(0,0,0,0)"
+                strokeWidth={hitStrokeWidth}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="stroke"
+                className="cursor-move"
+                onPointerDown={interactive.onGuidePointerDown}
+              />
+            )}
+          </g>
+        );
+      })}
     </g>
   );
 }
