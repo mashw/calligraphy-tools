@@ -223,6 +223,7 @@ export default function GuidelinesPage() {
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
   const [view, setView] = useState<ViewMode>('fullpage');
+  const midY = (a: Pt[], b: Pt[]) => (a[0].y + b[0].y) / 2;
 
   // “next whole 0.5” in the direction of travel
   const stepHalfFrom = (current: number, dir: 1 | -1) => {
@@ -231,6 +232,42 @@ export default function GuidelinesPage() {
     const next2 = dir === 1 ? Math.ceil(x2 - eps) + 1 : Math.floor(x2 + eps) - 1;
     return next2 / 2;
   };
+  // Compute a clip rectangle that tightly bounds one guide row (ascender → descender),
+  // using the guideSet’s own lines so it works for straight or curved rows.
+  const rowClipRect = (gs: any) => {
+    // X span: base line left-to-right
+    const baseXs = gs.baseLine.map((p: Pt) => p.x);
+    const xMin = Math.min(...baseXs);
+    const xMax = Math.max(...baseXs);
+    
+
+    // Y span: ascender-to-descender band
+    const ascYs = gs.ascLine.map((p: Pt) => p.y);
+    const descYs = gs.descLine.map((p: Pt) => p.y);
+    const yTop = Math.min(...ascYs);
+    const yBot = Math.max(...descYs);
+
+    // Small pad so strokes don't get clipped harshly
+    const pad = 0.2;
+
+  // Small pads so stroke edges don't get chopped
+  const padY = 0.2;
+
+  // Inset left/right so we don't show the "edge" slant guide at the row boundary.
+  // 1.0mm is conservative; adjust to 0.5–2.0mm if needed.
+  const insetX = 5.0;
+
+  const w0 = xMax - xMin;
+
+  return {
+    x: xMin + insetX,
+    y: yTop - padY,
+    w: Math.max(0, w0 - insetX * 2),
+    h: (yBot - yTop) + padY * 2,
+  };
+
+  };
+
 
   const [script, setScript] = useState<ScriptId>('TexturaQuadrata');
 
@@ -680,11 +717,21 @@ export default function GuidelinesPage() {
               onPointerUp={onPointerUp}
               onPointerLeave={onPointerUp}
             >
-              <defs>
-                <clipPath id="pageClip">
-                  <rect x={0} y={0} width={box.w} height={box.h} />
-                </clipPath>
-              </defs>
+<defs>
+  <clipPath id="pageClip">
+    <rect x={0} y={0} width={box.w} height={box.h} />
+  </clipPath>
+
+  {guideSets.map((gs, i) => {
+    const r = rowClipRect(gs);
+    return (
+      <clipPath key={`rowClip-${i}`} id={`rowClip-${i}`}>
+        <rect x={r.x} y={r.y} width={r.w} height={r.h} />
+      </clipPath>
+    );
+  })}
+</defs>
+
 
               {/* stage bg (kept only for on-screen; removed in export) */}
               <rect id="stage-bg" x={vb.minX} y={vb.minY} width={vb.vw} height={vb.vh} fill="#cbd5e1" />
@@ -694,22 +741,52 @@ export default function GuidelinesPage() {
 
               <g clipPath="url(#pageClip)">
                 {/* Guides */}
-                {guideSets.map((guideSet, index) => (
-                  <GuideOverlay
-                    key={`guide-${index}`}
-                    guideSet={guideSet}
-                    style={{
-                      thin: swThin,
-                      bold: swBold,
-                      colors: {
-                        thin: '#111827',
-                        bold: '#111827',
-                        tick: '#e2e8f0',
-                        frame: '#cbd5e1',
-                      },
-                    }}
-                  />
-                ))}
+                {guideSets.map((guideSet, index) => {
+  const x1 = guideSet.baseLine[0].x;
+  const x2 = guideSet.baseLine[guideSet.baseLine.length - 1].x;
+
+  const yMidAsc = midY(guideSet.ascLine, guideSet.waistLine);   // halfway between waist & asc
+  const yMidDesc = midY(guideSet.descLine, guideSet.baseLine);  // halfway between desc & baseline
+
+  return (
+    <g key={`guide-${index}`} clipPath={`url(#rowClip-${index})`}>
+      {/* Extra reference lines */}
+      <line
+        x1={x1}
+        x2={x2}
+        y1={yMidAsc}
+        y2={yMidAsc}
+        stroke="#111827"
+        strokeWidth={swThin}
+        vectorEffect="non-scaling-stroke"
+      />
+      <line
+        x1={x1}
+        x2={x2}
+        y1={yMidDesc}
+        y2={yMidDesc}
+        stroke="#111827"
+        strokeWidth={swThin}
+        vectorEffect="non-scaling-stroke"
+      />
+
+      <GuideOverlay
+        guideSet={guideSet}
+        style={{
+          thin: swThin,
+          bold: swBold,
+          colors: {
+            thin: '#111827',
+            bold: '#111827',
+            tick: '#e2e8f0',
+            frame: '#cbd5e1',
+          },
+        }}
+      />
+    </g>
+  );
+})}
+
               </g>
             </svg>
 
