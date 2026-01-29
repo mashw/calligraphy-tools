@@ -247,6 +247,7 @@ export default function GuidelinesPage() {
 
   const [ascNib, setAscNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.ascNib);
   const [descNib, setDescNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.descNib);
+  const [rowGapMM, setRowGapMM] = useState(0);
 
   const [useCalibration, setUseCalibration] = useState(false);
   const [calWordLowerMM, setCalWordLowerMM] = useState('');
@@ -388,17 +389,18 @@ export default function GuidelinesPage() {
   );
 
   const lineHeight = ascMM + xMM + descMM;
+  const rowStepMM = lineHeight + rowGapMM;
 
   const baselinePositions = useMemo(() => {
-    if (lineHeight <= 0) return [] as number[];
+    if (rowStepMM <= 0) return [] as number[];
     const positions: number[] = [];
     const startY = margins.top + ascMM;
     const endY = box.h - margins.bottom - descMM;
-    for (let y = startY; y <= endY + 0.0001; y += lineHeight) {
+    for (let y = startY; y <= endY + 0.0001; y += rowStepMM) {
       positions.push(y);
     }
     return positions;
-  }, [ascMM, descMM, box.h, lineHeight, margins.top, margins.bottom]);
+  }, [ascMM, descMM, box.h, margins.top, margins.bottom, rowGapMM, rowStepMM]);
 
   const guideSets = useMemo(() => {
     const left = margins.left;
@@ -713,7 +715,7 @@ export default function GuidelinesPage() {
 
             <div className="pointer-events-none absolute right-3 bottom-2 text-[13px] text-slate-700 text-right space-y-0.5">
               <div>
-                Baselines: {guideSets.length} · Line height: {lineHeight.toFixed(1)} mm
+                Baselines: {guideSets.length} · Line height: {lineHeight.toFixed(1)} mm · Row gap: {rowGapMM.toFixed(1)} mm · Row step: {rowStepMM.toFixed(1)} mm
               </div>
             </div>
           </div>
@@ -809,6 +811,17 @@ export default function GuidelinesPage() {
                     <option value="flourished">Flourished (full widths)</option>
                   </select>
                   {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
+                </div>
+                <div>
+                  <label className="font-medium text-slate-700">Row gap (mm)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                    value={rowGapMM}
+                    onChange={(e) => setRowGapMM(parseFloat(e.target.value || '0') || 0)}
+                  />
                 </div>
               </div>
 
@@ -976,6 +989,17 @@ export default function GuidelinesPage() {
               <div>
                 <label className="font-medium text-slate-700">Descender (nibs)</label>
                 <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={descNib} onChange={e => setDescNib(parseFloat(e.target.value || '2'))} />
+              </div>
+              <div>
+                <label className="font-medium text-slate-700">Row gap (mm)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  value={rowGapMM}
+                  onChange={(e) => setRowGapMM(parseFloat(e.target.value || '0') || 0)}
+                />
               </div>
             </div>
           )}
