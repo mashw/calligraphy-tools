@@ -259,7 +259,7 @@ export default function CurvedTitlePage() {
     const v = parseFloat(nibText);
     return Number.isFinite(v) ? v : 2;
   }, [nibText]);
-    const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
+  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
 
   const [ascNib, setAscNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.ascNib);
@@ -396,13 +396,13 @@ export default function CurvedTitlePage() {
   }, [script, nibMM, penAngleDeg]);
 
 
-// Blackletter “nibs” height controls should be REAL nib widths (mm), not effective.
-const texturaXHeightMM = xNib * nibMM;
+  // Blackletter “nibs” height controls should be REAL nib widths (mm), not effective.
+  const texturaXHeightMM = xNib * nibMM;
 
-const blackletterHeights = useMemo(
-  () => ({ xMM: texturaXHeightMM, ascMM: ascNib * nibMM, descMM: descNib * nibMM }),
-  [texturaXHeightMM, ascNib, descNib, nibMM],
-);
+  const blackletterHeights = useMemo(
+    () => ({ xMM: texturaXHeightMM, ascMM: ascNib * nibMM, descMM: descNib * nibMM }),
+    [texturaXHeightMM, ascNib, descNib, nibMM],
+  );
 
   const capMM = script === 'Copperplate'
     ? xHeightMM * 1.05
@@ -1018,10 +1018,10 @@ const blackletterHeights = useMemo(
                 <GuideOverlay
                   guideSet={guideSet}
                   style={{
-                    thin: swThin,
+                    thin: swBold,
                     bold: swBold,
                     colors: {
-                      thin: isCurveDragging ? '#a78bfa' : '#e2e8f0',
+                      thin: isCurveDragging ? '#7c3aed' : '#111827',
                       bold: isCurveDragging ? '#7c3aed' : '#111827',
                       tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
                       frame: '#cbd5e1',
@@ -1407,55 +1407,41 @@ const blackletterHeights = useMemo(
               <div>
                 <label className="font-medium text-slate-700">Nib size (mm)</label>
                 <input
-  type="number"
-  step={0.5}
-  min={0.2}
-  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-  value={nibText}
-  onChange={(e) => {
-    const raw = e.target.value;
-    const next = parseFloat(raw);
-    const current = parseFloat(nibText);
+                  type="number"
+                  step="any"
+                  min={0.2}
+                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  value={nibText}
+                  onWheel={(e) => {
+                    // Prevent mouse wheel from stepping this number input
+                    (e.currentTarget as HTMLInputElement).blur();
+                  }}
+                  onChange={(e) => {
+                    // Allow free typing (e.g. "3.8", "2.", "")
+                    setNibText(e.target.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                    e.preventDefault();
 
-    // Let the user type freely (including partial states like "" or "2.")
-    if (!Number.isFinite(next) || !Number.isFinite(current)) {
-      setNibText(raw);
-      return;
-    }
+                    const current = parseFloat(nibText);
+                    const safe = Number.isFinite(current) ? current : 2;
+                    const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
 
-    // If it looks like a stepper change, force “whole 0.5” stepping.
-    // (Steppers typically change by a fixed delta; typed changes can be arbitrary.)
-    const delta = next - current;
-    const looksLikeStep = Math.abs(delta) > 0 && Math.abs(delta) <= 1.0;
+                    const stepped = stepHalfFrom(safe, dir);
+                    setNibText(String(Math.max(0.2, stepped)));
+                  }}
+                  onBlur={() => {
+                    // Validate only (NO snapping)
+                    const v = parseFloat(nibText);
+                    if (!Number.isFinite(v)) {
+                      setNibText('2');
+                      return;
+                    }
+                    setNibText(String(Math.max(0.2, v)));
+                  }}
+                />
 
-    if (looksLikeStep) {
-      const dir: 1 | -1 = delta > 0 ? 1 : -1;
-      const stepped = stepHalfFrom(current, dir);
-      setNibText(String(Math.max(0.2, stepped)));
-    } else {
-      setNibText(raw);
-    }
-  }}
-  onKeyDown={(e) => {
-    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-    e.preventDefault();
-
-    const current = parseFloat(nibText);
-    const safe = Number.isFinite(current) ? current : 2;
-    const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
-
-    const stepped = stepHalfFrom(safe, dir);
-    setNibText(String(Math.max(0.2, stepped)));
-  }}
-  onBlur={() => {
-    const v = parseFloat(nibText);
-    if (!Number.isFinite(v)) {
-      setNibText('2');
-      return;
-    }
-    setNibText(String(Math.max(0.2, snapHalf(v))));
-  }}
-/>
 
                 <div>
                   <label className="font-medium text-slate-700">Pen angle (°)</label>

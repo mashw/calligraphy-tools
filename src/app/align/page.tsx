@@ -244,7 +244,7 @@ function LinePreview(props: LinePreviewProps) {
     labelText = `${startFromRightMM.toFixed(1)} mm from right`;
 
   }
-  
+
 
   const xStart = snap(startXRaw);
   const xEnd = snap(endXRaw);
@@ -304,114 +304,114 @@ function LinePreview(props: LinePreviewProps) {
 
 
 
-{showLetterBoxes && (
-  <g>
-    {segments.map((seg, i2) => {
-      const segStartPx = xStart + seg.startMM * pxScale;
-      const segEndPx = xStart + seg.endMM * pxScale;
-      const segWidthPx = Math.max(1, segEndPx - segStartPx);
+      {showLetterBoxes && (
+        <g>
+          {segments.map((seg, i2) => {
+            const segStartPx = xStart + seg.startMM * pxScale;
+            const segEndPx = xStart + seg.endMM * pxScale;
+            const segWidthPx = Math.max(1, segEndPx - segStartPx);
 
-      const isLetter = seg.kind === 'letter';
-      const ch = isLetter ? seg.ch : '';
-      const isCap = isLetter && /[A-Z]/.test(ch);
+            const isLetter = seg.kind === 'letter';
+            const ch = isLetter ? seg.ch : '';
+            const isCap = isLetter && /[A-Z]/.test(ch);
 
-      const boxH = baseBoxH;
-      
-      const sL = Math.max(0, Math.min(arcLen, seg.startMM * pxScale));
-      const sR = Math.max(0, Math.min(arcLen, seg.endMM * pxScale));
-      const span = Math.max(0.0001, sR - sL);
+            const boxH = baseBoxH;
 
-      const isCopper = useSkew;
-      const dx = isCopper ? (boxH / Math.tan((SLANT_FROM_BASELINE_DEG * Math.PI) / 180)) : 0;
+            const sL = Math.max(0, Math.min(arcLen, seg.startMM * pxScale));
+            const sR = Math.max(0, Math.min(arcLen, seg.endMM * pxScale));
+            const span = Math.max(0.0001, sR - sL);
 
-      const steps = Math.max(8, Math.ceil(span / 6));
+            const isCopper = useSkew;
+            const dx = isCopper ? (boxH / Math.tan((SLANT_FROM_BASELINE_DEG * Math.PI) / 180)) : 0;
 
-      const basePts: { x: number; y: number }[] = [];
-      const waistPts: { x: number; y: number }[] = [];
+            const steps = Math.max(8, Math.ceil(span / 6));
 
-      for (let k = 0; k <= steps; k++) {
-        const u = k / steps;
-        const s = sL + span * u;
+            const basePts: { x: number; y: number }[] = [];
+            const waistPts: { x: number; y: number }[] = [];
 
-        const C = pointAt(baselinePx, s);
-        basePts.push({ x: C.p.x, y: C.p.y });
+            for (let k = 0; k <= steps; k++) {
+              const u = k / steps;
+              const s = sL + span * u;
 
-        const sTop = Math.max(0, Math.min(arcLen, s + dx));
-        const Ct = pointAt(baselinePx, sTop);
-        waistPts.push({ x: Ct.p.x - Ct.n.x * boxH, y: Ct.p.y - Ct.n.y * boxH });
-      }
+              const C = pointAt(baselinePx, s);
+              basePts.push({ x: C.p.x, y: C.p.y });
 
-      // Capture right-most space segment top-right corner (for right-aligned Copperplate end wall)
-      if (useSkew && alignment === 'right' && seg.kind !== 'letter') {
-        const tr = waistPts[waistPts.length - 1];
-        if (endWallX == null || tr.x > endWallX) {
-          endWallX = tr.x;
-          endWallTopY = tr.y;
-        }
-      }
+              const sTop = Math.max(0, Math.min(arcLen, s + dx));
+              const Ct = pointAt(baselinePx, sTop);
+              waistPts.push({ x: Ct.p.x - Ct.n.x * boxH, y: Ct.p.y - Ct.n.y * boxH });
+            }
 
-      const top = waistPts.map((pt) => `${pt.x},${pt.y}`).join(' L ');
-      const bot = [...basePts].reverse().map((pt) => `${pt.x},${pt.y}`).join(' L ');
-      const pathD = `M ${top} L ${bot} Z`;
+            // Capture right-most space segment top-right corner (for right-aligned Copperplate end wall)
+            if (useSkew && alignment === 'right' && seg.kind !== 'letter') {
+              const tr = waistPts[waistPts.length - 1];
+              if (endWallX == null || tr.x > endWallX) {
+                endWallX = tr.x;
+                endWallTopY = tr.y;
+              }
+            }
 
-      if (isLetter) {
-        const fillColor = isCap ? 'rgba(99,102,241,0.10)' : 'rgba(16,185,129,0.10)';
-        const strokeColor = isCap ? '#6366f1' : '#10b981';
+            const top = waistPts.map((pt) => `${pt.x},${pt.y}`).join(' L ');
+            const bot = [...basePts].reverse().map((pt) => `${pt.x},${pt.y}`).join(' L ');
+            const pathD = `M ${top} L ${bot} Z`;
 
-        return (
-          <path
-            key={`box-${index}-${i2}`}
-            d={pathD}
-            fill={fillColor}
-            stroke={strokeColor}
-            strokeWidth={BOX_STROKE}
-            vectorEffect="non-scaling-stroke"
-          />
-        );
-      }
+            if (isLetter) {
+              const fillColor = isCap ? 'rgba(99,102,241,0.10)' : 'rgba(16,185,129,0.10)';
+              const strokeColor = isCap ? '#6366f1' : '#10b981';
 
-      const orangeFill = `rgba(249, 115, 22, ${SPACE_BOX_FILL_OPACITY})`;
-      const orangeStroke = `rgba(249, 115, 22, ${SPACE_BOX_STROKE_OPACITY})`;
+              return (
+                <path
+                  key={`box-${index}-${i2}`}
+                  d={pathD}
+                  fill={fillColor}
+                  stroke={strokeColor}
+                  strokeWidth={BOX_STROKE}
+                  vectorEffect="non-scaling-stroke"
+                />
+              );
+            }
 
-      return (
+            const orangeFill = `rgba(249, 115, 22, ${SPACE_BOX_FILL_OPACITY})`;
+            const orangeStroke = `rgba(249, 115, 22, ${SPACE_BOX_STROKE_OPACITY})`;
+
+            return (
+              <path
+                key={`space-${index}-${i2}`}
+                d={pathD}
+                fill={orangeFill}
+                stroke={orangeStroke}
+                strokeWidth={BOX_STROKE}
+                vectorEffect="non-scaling-stroke"
+              />
+            );
+          })}
+        </g>
+      )}
+
+      {/* Copperplate waistline right-align: fill the right-side wedge as "space" */}
+      {useSkew && alignment === 'right' && rightAlignMode === 'waist' && (
         <path
-          key={`space-${index}-${i2}`}
-          d={pathD}
-          fill={orangeFill}
-          stroke={orangeStroke}
+          d={`M ${refX},${yLine - baseBoxH} L ${refX},${yLine} L ${xEnd},${yLine} Z`}
+          fill={`rgba(249, 115, 22, ${SPACE_BOX_FILL_OPACITY})`}
+          stroke={`rgba(249, 115, 22, ${SPACE_BOX_STROKE_OPACITY})`}
           strokeWidth={BOX_STROKE}
           vectorEffect="non-scaling-stroke"
         />
-      );
-    })}
-  </g>
-)}
+      )}
 
-{/* Copperplate waistline right-align: fill the right-side wedge as "space" */}
-{useSkew && alignment === 'right' && rightAlignMode === 'waist' && (
-  <path
-    d={`M ${refX},${yLine - baseBoxH} L ${refX},${yLine} L ${xEnd},${yLine} Z`}
-    fill={`rgba(249, 115, 22, ${SPACE_BOX_FILL_OPACITY})`}
-    stroke={`rgba(249, 115, 22, ${SPACE_BOX_STROKE_OPACITY})`}
-    strokeWidth={BOX_STROKE}
-    vectorEffect="non-scaling-stroke"
-  />
-)}
-
-{/* Right-aligned Copperplate end wall (draw regardless of showLetterBoxes toggle) */}
-{useSkew && alignment === 'right' && (
-  <line
-    x1={refX}
-    y1={yLine - baseBoxH}
-    x2={refX}
-    y2={yLine}
-    stroke="#0f172a"
-    strokeWidth={TICK_STROKE}
-    strokeLinecap="square"
-    vectorEffect="non-scaling-stroke"
-    shapeRendering="crispEdges"
-  />
-)}
+      {/* Right-aligned Copperplate end wall (draw regardless of showLetterBoxes toggle) */}
+      {useSkew && alignment === 'right' && (
+        <line
+          x1={refX}
+          y1={yLine - baseBoxH}
+          x2={refX}
+          y2={yLine}
+          stroke="#0f172a"
+          strokeWidth={TICK_STROKE}
+          strokeLinecap="square"
+          vectorEffect="non-scaling-stroke"
+          shapeRendering="crispEdges"
+        />
+      )}
 
 
 
@@ -579,18 +579,18 @@ export default function Home() {
   const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
   const COPPER_SLANT_DEG = 55;
   const copperDxMaxMM = xHeight / Math.tan((COPPER_SLANT_DEG * Math.PI) / 180);
-  
-// Blackletter controls (Fraktur + Textura Quadrata)
-// Keep text so typing “2.” or custom values doesn’t get mangled mid-entry.
-const [nibText, setNibText] = useState('2');
 
-const nibMM = useMemo(() => {
-  const v = parseFloat(nibText);
-  return Number.isFinite(v) ? v : 2;
-}, [nibText]);
+  // Blackletter controls (Fraktur + Textura Quadrata)
+  // Keep text so typing “2.” or custom values doesn’t get mangled mid-entry.
+  const [nibText, setNibText] = useState('2');
 
-const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
-const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
+  const nibMM = useMemo(() => {
+    const v = parseFloat(nibText);
+    return Number.isFinite(v) ? v : 2;
+  }, [nibText]);
+
+  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
+  const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
 
   const [showLetterBoxes, setShowLetterBoxes] = useState(true);
   const [vw, setVw] = useState<number | null>(null);
@@ -1067,56 +1067,40 @@ const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
                     <div>
                       <label className="font-medium text-slate-700">Nib size (mm)</label>
                       <input
-  type="number"
-  step={0.5}
-  min={0.5}
-  className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-  value={nibText}
-  onChange={(e) => {
-    const raw = e.target.value;
+                        type="number"
+                        step="any"
+                        min={0.5}
+                        className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        value={nibText}
+                        onWheel={(e) => {
+                          // Prevent mouse wheel from stepping this number input
+                          (e.currentTarget as HTMLInputElement).blur();
+                        }}
+                        onChange={(e) => {
+                          // Allow free typing (e.g. "3.8", "2.", "")
+                          setNibText(e.target.value);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                          e.preventDefault();
 
-    // Let the user type freely (including "", "2.", etc.)
-    const next = parseFloat(raw);
-    const current = parseFloat(nibText);
-    if (!Number.isFinite(next) || !Number.isFinite(current)) {
-      setNibText(raw);
-      return;
-    }
+                          const current = parseFloat(nibText);
+                          const safe = Number.isFinite(current) ? current : 2;
+                          const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
 
-    // If it looks like a stepper move, force “whole 0.5” stepping.
-    const delta = next - current;
-
-    // Steppers typically move by a relatively small delta; typed edits can be anything.
-    const looksLikeStep = Math.abs(delta) > 0 && Math.abs(delta) <= 1.0;
-
-    if (looksLikeStep) {
-      const dir: 1 | -1 = delta > 0 ? 1 : -1;
-      const stepped = stepHalfFrom(current, dir);
-      setNibText(String(clamp(stepped, 0.5, 10)));
-    } else {
-      setNibText(raw);
-    }
-  }}
-  onKeyDown={(e) => {
-    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-    e.preventDefault();
-
-    const current = parseFloat(nibText);
-    const safe = Number.isFinite(current) ? current : 2;
-    const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
-
-    const stepped = stepHalfFrom(safe, dir);
-    setNibText(String(clamp(stepped, 0.5, 10)));
-  }}
-  onBlur={() => {
-    const v = parseFloat(nibText);
-    if (!Number.isFinite(v)) {
-      setNibText('2');
-      return;
-    }
-    setNibText(String(clamp(snapHalf(v), 0.5, 10)));
-  }}
-/>
+                          const stepped = stepHalfFrom(safe, dir);
+                          setNibText(String(clamp(stepped, 0.5, 10)));
+                        }}
+                        onBlur={() => {
+                          // Validate only (NO snapping)
+                          const v = parseFloat(nibText);
+                          if (!Number.isFinite(v)) {
+                            setNibText('2');
+                            return;
+                          }
+                          setNibText(String(clamp(v, 0.5, 10)));
+                        }}
+                      />
 
                       <div className="mt-3">
                         <label className="font-medium text-slate-700">Pen angle (°)</label>
@@ -1386,14 +1370,14 @@ const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
                     <td className="p-2">{metric.text || <em>(empty)</em>}</td>
                     <td className="p-2 text-right">{mm(metric.lengthMM)}</td>
                     <td className="p-2 text-right">
-  {mm(
-    metric.startFromRefMM +
-      (script === 'Copperplate' && alignment === 'right' && rightAlignMode === 'waist'
-        ? copperDxMaxMM
-        : 0)
-  )}{' '}
-  {alignment === 'center' ? 'from center' : 'from right edge'}
-</td>
+                      {mm(
+                        metric.startFromRefMM +
+                        (script === 'Copperplate' && alignment === 'right' && rightAlignMode === 'waist'
+                          ? copperDxMaxMM
+                          : 0)
+                      )}{' '}
+                      {alignment === 'center' ? 'from center' : 'from right edge'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
