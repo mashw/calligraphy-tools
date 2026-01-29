@@ -223,6 +223,8 @@ export default function GuidelinesPage() {
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
   const [view, setView] = useState<ViewMode>('fullpage');
+  const midY = (a: Pt[], b: Pt[]) => (a[0].y + b[0].y) / 2;
+
 
   // “next whole 0.5” in the direction of travel
   const stepHalfFrom = (current: number, dir: 1 | -1) => {
@@ -247,7 +249,7 @@ export default function GuidelinesPage() {
 
   const [ascNib, setAscNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.ascNib);
   const [descNib, setDescNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.descNib);
-  const [rowGapMM, setRowGapMM] = useState(0);
+  const [rowGapMM, setRowGapMM] = useState(6);
 
   const [useCalibration, setUseCalibration] = useState(false);
   const [calWordLowerMM, setCalWordLowerMM] = useState('');
@@ -364,7 +366,7 @@ export default function GuidelinesPage() {
   );
 
   const copperplateHeights = useMemo(
-    () => ({ xMM: xHeightMM, ascMM: xHeightMM * 0.5, descMM: xHeightMM * 0.3 }),
+    () => ({ xMM: xHeightMM, ascMM: xHeightMM * 2, descMM: xHeightMM * 2 }),
     [xHeightMM],
   );
 
@@ -380,8 +382,8 @@ export default function GuidelinesPage() {
 
   const margins = useMemo(
     () => ({
-      top: 12,
-      bottom: 12,
+      top: 15,
+      bottom: 15,
       left: 12,
       right: 12,
     }),
@@ -694,22 +696,53 @@ export default function GuidelinesPage() {
 
               <g clipPath="url(#pageClip)">
                 {/* Guides */}
-                {guideSets.map((guideSet, index) => (
-                  <GuideOverlay
-                    key={`guide-${index}`}
-                    guideSet={guideSet}
-                    style={{
-                      thin: swThin,
-                      bold: swBold,
-                      colors: {
-                        thin: '#111827',
-                        bold: '#111827',
-                        tick: '#e2e8f0',
-                        frame: '#cbd5e1',
-                      },
-                    }}
-                  />
-                ))}
+                {guideSets.map((guideSet, index) => {
+  const x1 = guideSet.baseLine[0].x;
+  const x2 = guideSet.baseLine[guideSet.baseLine.length - 1].x;
+
+  const yMidAsc = midY(guideSet.ascLine, guideSet.waistLine);   // halfway between waist & asc
+  const yMidDesc = midY(guideSet.descLine, guideSet.baseLine);  // halfway between desc & baseline
+
+  return (
+    <g key={`guide-${index}`}>
+      {/* Extra reference lines */}
+      <line
+        x1={x1}
+        x2={x2}
+        y1={yMidAsc}
+        y2={yMidAsc}
+        stroke="#111827"
+        strokeWidth={swThin}
+        vectorEffect="non-scaling-stroke"
+      />
+      <line
+        x1={x1}
+        x2={x2}
+        y1={yMidDesc}
+        y2={yMidDesc}
+        stroke="#111827"
+        strokeWidth={swThin}
+        vectorEffect="non-scaling-stroke"
+      />
+
+      {/* Existing guide overlay */}
+      <GuideOverlay
+        guideSet={guideSet}
+        style={{
+          thin: swBold,
+          bold: swBold,
+          colors: {
+            thin: '#111827',
+            bold: '#111827',
+            tick: '#e2e8f0',
+            frame: 'transparent',
+          },
+        }}
+      />
+    </g>
+  );
+})}
+
               </g>
             </svg>
 
