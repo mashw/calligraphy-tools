@@ -25,6 +25,34 @@ const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0
 const CAL_STORAGE_KEY_PREFIX = 'ct_guidelines_calibration_v2_xh_';
 const keyForXHeight = (x: number) => `${CAL_STORAGE_KEY_PREFIX}${x.toFixed(1)}`;
 
+function buildPageSlantLines(opts: {
+  boxW: number;
+  boxH: number;
+  xMin: number;
+  xMax: number;
+  angleDeg: number;
+  stepMM: number;
+}): { a: { x: number; y: number }; b: { x: number; y: number } }[] {
+  const { boxH, xMin, xMax, angleDeg, stepMM } = opts;
+
+  const rad = (angleDeg * Math.PI) / 180;
+  const dx = boxH / Math.tan(rad); // how far x moves over full page height
+
+  // start far enough left so lines cover the whole page when slanted
+  const start = xMin - Math.abs(dx) - stepMM * 2;
+  const end = xMax + Math.abs(dx) + stepMM * 2;
+
+  const lines: { a: { x: number; y: number }; b: { x: number; y: number } }[] = [];
+  for (let x = start; x <= end; x += stepMM) {
+    lines.push({
+      a: { x, y: 0 },
+      b: { x: x + dx, y: boxH },
+    });
+  }
+  return lines;
+}
+
+
 /* ---------------- Reusable InfoTip ---------------- */
 type InfoTipProps = {
   title?: string;
@@ -144,6 +172,8 @@ function stripNoExport(svg: SVGSVGElement) {
   svg.querySelectorAll('filter').forEach(f => f.remove());
 }
 
+
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -224,6 +254,18 @@ export default function GuidelinesPage() {
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
   const [view, setView] = useState<ViewMode>('fullpage');
   const midY = (a: Pt[], b: Pt[]) => (a[0].y + b[0].y) / 2;
+
+  function stripFirstAndLastTicks(guideSet: any) {
+    if (!guideSet.ticks || guideSet.ticks.length <= 2) {
+      return guideSet;
+    }
+  
+    return {
+      ...guideSet,
+      ticks: guideSet.ticks.slice(1, -1),
+    };
+  }
+  
 
 
   // “next whole 0.5” in the direction of travel
@@ -412,6 +454,7 @@ export default function GuidelinesPage() {
         { x: left, y },
         { x: box.w - right, y },
       ];
+    
       return buildGuideSet(guideTemplate, {
         baseline,
         xMM,
@@ -424,6 +467,7 @@ export default function GuidelinesPage() {
         actualNibMM: nibMM,
       });
     });
+    
   }, [baselinePositions, margins.left, margins.right, box.w, guideTemplate, xMM, ascMM, descMM, script, effectiveNibMM, nibMM]);
 
   // ---------- ViewBox (includes stage margin so paper stands out) ----------
@@ -683,10 +727,34 @@ export default function GuidelinesPage() {
               onPointerLeave={onPointerUp}
             >
               <defs>
-                <clipPath id="pageClip">
-                  <rect x={0} y={0} width={box.w} height={box.h} />
-                </clipPath>
-              </defs>
+  <clipPath id="pageClip">
+    <rect x={0} y={0} width={box.w} height={box.h} />
+  </clipPath>
+
+  {/* Copperplate: show slants only inside guideline row bands */}
+  <mask id="guidelines-row-mask">
+    <rect x={0} y={0} width={box.w} height={box.h} fill="black" />
+
+    {guideSets.map((gs, i) => {
+      const x1 = gs.baseLine[0].x;
+      const x2 = gs.baseLine[gs.baseLine.length - 1].x;
+      const yTop = gs.ascLine[0].y;
+      const yBottom = gs.descLine[0].y;
+
+      return (
+        <rect
+          key={`mask-row-${i}`}
+          x={x1}
+          y={yTop}
+          width={x2 - x1}
+          height={yBottom - yTop}
+          fill="white"
+        />
+      );
+    })}
+  </mask>
+</defs>
+
 
               {/* stage bg (kept only for on-screen; removed in export) */}
               <rect id="stage-bg" x={vb.minX} y={vb.minY} width={vb.vw} height={vb.vh} fill="#cbd5e1" />
@@ -696,6 +764,44 @@ export default function GuidelinesPage() {
 
               <g clipPath="url(#pageClip)">
                 {/* Guides */}
+                {script === 'Copperplate' && (() => {
+  const first = guideSets[0];
+  if (!first) return null;
+
+  const xMin = first.baseLine[0].x;
+  const xMax = first.baseLine[first.baseLine.length - 1].x;
+  const stepMM = Math.max(xHeightMM * 0.9, 3);
+
+  // Build full-page slants (55°) from y=0 to y=box.h
+  const rad = (55 * Math.PI) / 180;
+  const dx = -box.h / Math.tan(rad);
+
+  const start = xMin - Math.abs(dx) - stepMM * 2;
+  const end = xMax + Math.abs(dx) + stepMM * 2;
+
+  const lines: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
+  for (let x = start; x <= end; x += stepMM) {
+    lines.push({ x1: x, y1: 0, x2: x + dx, y2: box.h });
+  }
+
+  return (
+    <g mask="url(#guidelines-row-mask)">
+      {lines.map((ln, i) => (
+        <line
+          key={`page-slant-${i}`}
+          x1={ln.x1}
+          y1={ln.y1}
+          x2={ln.x2}
+          y2={ln.y2}
+          stroke="#e2e8f0"
+          strokeWidth={swThin}
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+    </g>
+  );
+})()}
+
                 {guideSets.map((guideSet, index) => {
   const x1 = guideSet.baseLine[0].x;
   const x2 = guideSet.baseLine[guideSet.baseLine.length - 1].x;
@@ -703,44 +809,49 @@ export default function GuidelinesPage() {
   const yMidAsc = midY(guideSet.ascLine, guideSet.waistLine);   // halfway between waist & asc
   const yMidDesc = midY(guideSet.descLine, guideSet.baseLine);  // halfway between desc & baseline
 
+  const yTop = guideSet.ascLine[0].y;
+  const yBottom = guideSet.descLine[0].y;
+
   return (
     <g key={`guide-${index}`}>
-      {/* Extra reference lines */}
-      <line
-        x1={x1}
-        x2={x2}
-        y1={yMidAsc}
-        y2={yMidAsc}
-        stroke="#111827"
-        strokeWidth={swThin}
-        vectorEffect="non-scaling-stroke"
-      />
-      <line
-        x1={x1}
-        x2={x2}
-        y1={yMidDesc}
-        y2={yMidDesc}
-        stroke="#111827"
-        strokeWidth={swThin}
-        vectorEffect="non-scaling-stroke"
-      />
-
-      {/* Existing guide overlay */}
-      <GuideOverlay
-        guideSet={guideSet}
-        style={{
-          thin: swBold,
-          bold: swBold,
-          colors: {
-            thin: '#111827',
-            bold: '#111827',
-            tick: '#e2e8f0',
-            frame: 'transparent',
-          },
-        }}
-      />
+ 
+ <g key={`guide-${index}`}>
+        <line
+          x1={x1}
+          x2={x2}
+          y1={yMidAsc}
+          y2={yMidAsc}
+          stroke="#111827"
+          strokeWidth={swThin}
+          vectorEffect="non-scaling-stroke"
+        />
+        <line
+          x1={x1}
+          x2={x2}
+          y1={yMidDesc}
+          y2={yMidDesc}
+          stroke="#111827"
+          strokeWidth={swThin}
+          vectorEffect="non-scaling-stroke"
+        />
+  
+        <GuideOverlay
+          guideSet={guideSet}
+          style={{
+            thin: swBold,
+            bold: swBold,
+            colors: {
+              thin: '#111827',
+              bold: '#111827',
+              tick: 'transparent',
+              frame: 'transparent',
+            },
+          }}
+        />
+      </g>
     </g>
   );
+  
 })}
 
               </g>
