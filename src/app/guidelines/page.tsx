@@ -247,7 +247,7 @@ export default function GuidelinesPage() {
 
   const [ascNib, setAscNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.ascNib);
   const [descNib, setDescNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.descNib);
-  const [rowGapMM, setRowGapMM] = useState(0);
+  const [rowGapMM, setRowGapMM] = useState(6);
 
   const [useCalibration, setUseCalibration] = useState(false);
   const [calWordLowerMM, setCalWordLowerMM] = useState('');
@@ -364,7 +364,7 @@ export default function GuidelinesPage() {
   );
 
   const copperplateHeights = useMemo(
-    () => ({ xMM: xHeightMM, ascMM: xHeightMM * 0.5, descMM: xHeightMM * 0.3 }),
+    () => ({ xMM: xHeightMM, ascMM: xHeightMM * 2, descMM: xHeightMM * 2 }),
     [xHeightMM],
   );
 
@@ -380,8 +380,8 @@ export default function GuidelinesPage() {
 
   const margins = useMemo(
     () => ({
-      top: 12,
-      bottom: 12,
+      top: 15,
+      bottom: 15,
       left: 12,
       right: 12,
     }),
