@@ -224,8 +224,6 @@ export default function GuidelinesPage() {
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
   const [view, setView] = useState<ViewMode>('fullpage');
 
-  const snapHalf = (v: number) => Math.round(v * 2) / 2;
-
   // “next whole 0.5” in the direction of travel
   const stepHalfFrom = (current: number, dir: 1 | -1) => {
     const eps = 1e-9;
@@ -397,7 +395,7 @@ export default function GuidelinesPage() {
     const startY = margins.top + ascMM;
     const endY = box.h - margins.bottom - descMM;
     for (let y = startY; y <= endY + 0.0001; y += lineHeight) {
-      positions.push(snapHalf(y));
+      positions.push(y);
     }
     return positions;
   }, [ascMM, descMM, box.h, lineHeight, margins.top, margins.bottom]);
@@ -699,7 +697,7 @@ export default function GuidelinesPage() {
                     key={`guide-${index}`}
                     guideSet={guideSet}
                     style={{
-                      thin: swBold,
+                      thin: swThin,
                       bold: swBold,
                       colors: {
                         thin: '#111827',
