@@ -504,15 +504,16 @@ export default function GuidelinesPage() {
 
   const swThin = Math.max(0.35, Math.min(0.7, Math.min(box.w, box.h) * 0.0025));
   const swBold = swThin * 1.8;
+  const swMax = Math.max(swThin, swBold);
 
   const guideTemplate = script === 'Copperplate' ? 'copperplate' : 'blackletter';
 
   const margins = useMemo(
     () => ({
       top: 15,
-      bottom: 15,
-      left: 12,
-      right: 12,
+      bottom:  15,
+      left: 10,
+      right: 10,
     }),
     [],
   );
@@ -522,14 +523,25 @@ export default function GuidelinesPage() {
 
   const baselinePositions = useMemo(() => {
     if (rowStepMM <= 0) return [] as number[];
+
+    // Top anchor: first row’s ascender line is exactly at margins.top
+    const startY = margins.top + ascMM + xMM;
+
+    // Deliberately over-generate: do NOT compute any bottom limit.
+    // We generate until the baseline is well past the bottom of the page,
+    // and rely solely on the bottom-only clip to hide whatever falls into the bottom margin.
+    const overshootEndY = box.h + lineHeight + rowStepMM;
+
+    const count = Math.max(0, Math.ceil((overshootEndY - startY) / rowStepMM));
+
     const positions: number[] = [];
-    const startY = margins.top + ascMM;
-    const endY = box.h - margins.bottom - descMM;
-    for (let y = startY; y <= endY + 0.0001; y += rowStepMM) {
-      positions.push(y);
+    for (let i = 0; i <= count; i += 1) {
+      positions.push(startY + i * rowStepMM);
     }
+
     return positions;
-  }, [ascMM, descMM, box.h, margins.top, margins.bottom, rowGapMM, rowStepMM]);
+  }, [rowStepMM, margins.top, lineHeight, box.h]);
+
 
   const guideSets = useMemo(() => {
     const left = margins.left;
@@ -816,9 +828,21 @@ export default function GuidelinesPage() {
                   <rect x={0} y={0} width={box.w} height={box.h} />
                 </clipPath>
 
+                {/* Clip guides to left/right margins and bottom margin ONLY.
+      Do NOT clip at the top so the first row is always fully visible. */}
+                <clipPath id="guidesClipBottomOnly">
+                  <rect
+                    x={margins.left}
+                    y={0}
+                    width={box.w - margins.left - margins.right}
+                    height={box.h - margins.bottom}
+                  />
+                </clipPath>
+
                 {/* Copperplate: show slants only inside guideline row bands */}
                 <GuidelinesRowMask guideSets={guideSets} box={box} />
               </defs>
+
 
 
               {/* stage bg (kept only for on-screen; removed in export) */}
@@ -827,7 +851,7 @@ export default function GuidelinesPage() {
               {/* Paper */}
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
 
-              <g clipPath="url(#pageClip)">
+              <g clipPath="url(#guidesClipBottomOnly)">
                 {/* Guides */}
                 {script === 'Copperplate' && (
                   <CopperplateSlantLines
@@ -854,16 +878,12 @@ export default function GuidelinesPage() {
                   const interpunctY = (waistY + baseY) / 2;
                   return (
                     <g key={`guide-${index}`}>
-
-
-                      <g key={`guide-${index}`}>
-                        <circle
-                          cx={interpunctX}
-                          cy={interpunctY}
-                          r={0.9}
-                          fill="#111827"
-                        />
-                        {script === 'Copperplate' && (
+                      <circle
+                        cx={interpunctX}
+                        cy={interpunctY}
+                        r={0.9}
+                        fill="#111827"
+                      />                        {script === 'Copperplate' && (
                           <>
                             {/* Extra reference lines */}
                             <line
@@ -903,9 +923,7 @@ export default function GuidelinesPage() {
                           }}
                         />
                       </g>
-                    </g>
                   );
-
                 })}
 
               </g>
