@@ -337,7 +337,7 @@ export default function GuidelinesPage() {
   // ---------- State ----------
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
-  const [view, setView] = useState<ViewMode>('fullpage');
+  const [view, setView] = useState<ViewMode>('autofit');
   const midY = (a: Pt[], b: Pt[]) => (a[0].y + b[0].y) / 2;
 
   function stripFirstAndLastTicks(guideSet: any) {
@@ -385,7 +385,7 @@ export default function GuidelinesPage() {
   const [userScaleFactor, setUserScaleFactor] = useState(1);
   const [userSpaceFactor, setUserSpaceFactor] = useState(1);
 
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(5);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
 
@@ -397,6 +397,29 @@ export default function GuidelinesPage() {
   } | null>(null);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const [previewPxH, setPreviewPxH] = useState(0);
+
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+  
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      setPreviewPxH(r.height);
+    };
+  
+    update();
+  
+    const ro = new ResizeObserver(() => update());
+    ro.observe(el);
+  
+    window.addEventListener('resize', update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+  
 
   // Full-viewport paint layer to hide any layout decorations behind this route
   useLayoutEffect(() => {
@@ -569,7 +592,23 @@ export default function GuidelinesPage() {
 
   // ---------- ViewBox (includes stage margin so paper stands out) ----------
   const vb = useMemo(() => {
-    const stagePadMM = 22;
+    const topPadPX = 30;
+
+    // Stage padding:
+    // - Full page: ~5px top/bottom (converted into mm)
+    // - Autofit: keep the nicer roomy stage pad in mm
+    const fullPagePadPX = 5;
+    const stagePadMM =
+      view === 'fullpage'
+        ? (() => {
+            // Convert px -> mm using the visible SVG height and the page height.
+            // This is "good enough" and stays stable for small margins.
+            const pxH = Math.max(1, previewPxH);
+            const mmPerPx = box.h / pxH;
+            return fullPagePadPX * mmPerPx;
+          })()
+        : 22;
+    
 
     let minX: number;
     let minY: number;
@@ -577,10 +616,11 @@ export default function GuidelinesPage() {
     let vh: number;
 
     if (view === 'fullpage' || guideSets.length === 0) {
-      vw = box.w / Math.max(1, zoom);
-      vh = box.h / Math.max(1, zoom);
-      minX = (box.w - vw) / 2;
-      minY = (box.h - vh) / 2;
+      // Fullpage should always fit the whole sheet in the preview window.
+      vw = box.w;
+      vh = box.h;
+      minX = 0;
+      minY = 0;
     } else {
       const fitPad = 8;
       const pts = guideSets.flatMap((guideSet) => [
@@ -604,16 +644,37 @@ export default function GuidelinesPage() {
       vh = Math.max(1, maxY0 - minY0) / Math.max(1, zoom);
       minX = cx - vw / 2;
       minY = cy - vh / 2;
+      // Don’t let autofit frame drift too far below the page top;
+// we want some stage visible above y=0.
+minY = Math.min(minY, stagePadMM);
     }
 
-    const minXc = minX + pan.x - stagePadMM;
-    const minYc = minY + pan.y - stagePadMM;
-    const vwc = vw + stagePadMM * 2;
-    const vhc = vh + stagePadMM * 2;
+    const baseVhMM = vh + stagePadMM * 2;
+    const mmPerPx = previewPxH > 0 ? baseVhMM / previewPxH : 0;
+    const extraTopMM = view === 'autofit' ? topPadPX * mmPerPx : 0;
+
+    
+    let minXc = minX + pan.x - stagePadMM;
+    let minYc = minY + pan.y - stagePadMM - extraTopMM;
+    let vwc = vw + stagePadMM * 2;
+    let vhc = vh + stagePadMM * 2;
+
+    // Ensure the full paper width always fits inside the viewBox in autofit.
+// If we zoom in too far (or the window is narrow), vwc can become < paper width,
+// which clips the page. Clamp to at least the paper width + stage padding.
+if (view === 'autofit') {
+  const minVwc = box.w + stagePadMM * 2;
+  if (vwc < minVwc) {
+    vwc = minVwc;
+    // Center the paper horizontally with equal stage padding on both sides.
+    // Paper spans [0..box.w], so padded span is [-pad..box.w+pad].
+    minXc = -stagePadMM + pan.x;
+  }
+}
+
 
     return { minX: minXc, minY: minYc, vw: vwc, vh: vhc, str: `${minXc} ${minYc} ${vwc} ${vhc}` };
-  }, [view, box, guideSets, zoom, pan]);
-
+  }, [view, box, guideSets, zoom, pan, previewPxH]);
   /* ---------------- Export actions ---------------- */
   const MM_TO_PT = 72 / 25.4;
 
@@ -739,7 +800,8 @@ export default function GuidelinesPage() {
   }
 
   function resetView() {
-    setZoom(1);
+    setView('autofit');
+    setZoom(1.25 ** 4); // keep your “4 levels” default for autofit
     setPan({ x: 0, y: 0 });
   }
 
@@ -815,9 +877,9 @@ export default function GuidelinesPage() {
             <svg
               ref={svgRef}
               viewBox={vb.str}
-              className={`block mx-auto w-full h-[64vh] touch-none ${isPanning ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
+              className={`block mx-auto w-full h-[50vh] touch-none ${isPanning ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
               style={{ background: '#cbd5e1' }}
-              preserveAspectRatio="xMidYMid meet"
+              preserveAspectRatio={view === 'fullpage' ? 'xMidYMid meet' : 'xMidYMin meet'}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
