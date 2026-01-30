@@ -854,9 +854,6 @@ export default function GuidelinesPage() {
   const interpunctY = (waistY + baseY) / 2;
   return (
     <g key={`guide-${index}`}>
-
- 
- <g key={`guide-${index}`}>
  <circle
   cx={interpunctX}
   cy={interpunctY}
@@ -902,7 +899,6 @@ export default function GuidelinesPage() {
             },
           }}
         />
-      </g>
     </g>
   );
   
