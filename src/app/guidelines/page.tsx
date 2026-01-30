@@ -38,7 +38,7 @@ function buildPageSlantLines(opts: {
   const { boxH, xMin, xMax, angleDeg, stepMM } = opts;
 
   const rad = (angleDeg * Math.PI) / 180;
-  const dx = boxH / Math.tan(rad); // how far x moves over full page height
+  const dx = boxH / Math.tan(rad); // x shift over full page height (sign depends on angle)
 
   // start far enough left so lines cover the whole page when slanted
   const start = xMin - Math.abs(dx) - stepMM * 2;
@@ -344,13 +344,13 @@ export default function GuidelinesPage() {
     if (!guideSet.ticks || guideSet.ticks.length <= 2) {
       return guideSet;
     }
-  
+
     return {
       ...guideSet,
       ticks: guideSet.ticks.slice(1, -1),
     };
   }
-  
+
 
 
   // “next whole 0.5” in the direction of travel
@@ -539,7 +539,7 @@ export default function GuidelinesPage() {
         { x: left, y },
         { x: box.w - right, y },
       ];
-    
+
       return buildGuideSet(guideTemplate, {
         baseline,
         xMM,
@@ -552,7 +552,7 @@ export default function GuidelinesPage() {
         actualNibMM: nibMM,
       });
     });
-    
+
   }, [baselinePositions, margins.left, margins.right, box.w, guideTemplate, xMM, ascMM, descMM, script, effectiveNibMM, nibMM]);
 
   // ---------- ViewBox (includes stage margin so paper stands out) ----------
@@ -812,13 +812,13 @@ export default function GuidelinesPage() {
               onPointerLeave={onPointerUp}
             >
               <defs>
-  <clipPath id="pageClip">
-    <rect x={0} y={0} width={box.w} height={box.h} />
-  </clipPath>
+                <clipPath id="pageClip">
+                  <rect x={0} y={0} width={box.w} height={box.h} />
+                </clipPath>
 
-  {/* Copperplate: show slants only inside guideline row bands */}
-  <GuidelinesRowMask guideSets={guideSets} box={box} />
-</defs>
+                {/* Copperplate: show slants only inside guideline row bands */}
+                <GuidelinesRowMask guideSets={guideSets} box={box} />
+              </defs>
 
 
               {/* stage bg (kept only for on-screen; removed in export) */}
@@ -839,74 +839,74 @@ export default function GuidelinesPage() {
                 )}
 
                 {guideSets.map((guideSet, index) => {
-  const x1 = guideSet.baseLine[0].x;
-  const x2 = guideSet.baseLine[guideSet.baseLine.length - 1].x;
+                  const x1 = guideSet.baseLine[0].x;
+                  const x2 = guideSet.baseLine[guideSet.baseLine.length - 1].x;
 
-  const yMidAsc = midY(guideSet.ascLine, guideSet.waistLine);   // halfway between waist & asc
-  const yMidDesc = midY(guideSet.descLine, guideSet.baseLine);  // halfway between desc & baseline
+                  const yMidAsc = midY(guideSet.ascLine, guideSet.waistLine);   // halfway between waist & asc
+                  const yMidDesc = midY(guideSet.descLine, guideSet.baseLine);  // halfway between desc & baseline
 
-  const yTop = guideSet.ascLine[0].y;
-  const yBottom = guideSet.descLine[0].y;
+                  const yTop = guideSet.ascLine[0].y;
+                  const yBottom = guideSet.descLine[0].y;
 
-  const interpunctX = x1 + 3; // 3mm inset from left edge
-  const waistY = guideSet.waistLine[0].y;
-  const baseY = guideSet.baseLine[0].y;
-  const interpunctY = (waistY + baseY) / 2;
-  return (
-    <g key={`guide-${index}`}>
+                  const interpunctX = x1 + 3; // 3mm inset from left edge
+                  const waistY = guideSet.waistLine[0].y;
+                  const baseY = guideSet.baseLine[0].y;
+                  const interpunctY = (waistY + baseY) / 2;
+                  return (
+                    <g key={`guide-${index}`}>
 
- 
- <g key={`guide-${index}`}>
- <circle
-  cx={interpunctX}
-  cy={interpunctY}
-  r={0.9}
-  fill="#111827"
-/>
- {script === 'Copperplate' && (
-  <>
-    {/* Extra reference lines */}
-    <line
-      x1={x1}
-      x2={x2}
-      y1={yMidAsc}
-      y2={yMidAsc}
-      stroke="#111827"
-      strokeWidth={swThin}
-      vectorEffect="non-scaling-stroke"
-      strokeDasharray="6 6"
-    />
-    <line
-      x1={x1}
-      x2={x2}
-      y1={yMidDesc}
-      y2={yMidDesc}
-      stroke="#111827"
-      strokeWidth={swThin}
-      vectorEffect="non-scaling-stroke"
-      strokeDasharray="6 6"
-    />
-  </>
-)}
-  
-        <GuideOverlay
-          guideSet={guideSet}
-          style={{
-            thin: swBold,
-            bold: swBold,
-            colors: {
-              thin: '#111827',
-              bold: '#111827',
-              tick: script === 'Copperplate' ? 'transparent' : '#e2e8f0',
-              frame: 'transparent',
-            },
-          }}
-        />
-      </g>
-    </g>
-  );
-  
-})}
+
+                      <g key={`guide-${index}`}>
+                        <circle
+                          cx={interpunctX}
+                          cy={interpunctY}
+                          r={0.9}
+                          fill="#111827"
+                        />
+                        {script === 'Copperplate' && (
+                          <>
+                            {/* Extra reference lines */}
+                            <line
+                              x1={x1}
+                              x2={x2}
+                              y1={yMidAsc}
+                              y2={yMidAsc}
+                              stroke="#111827"
+                              strokeWidth={swThin}
+                              vectorEffect="non-scaling-stroke"
+                              strokeDasharray="6 6"
+                            />
+                            <line
+                              x1={x1}
+                              x2={x2}
+                              y1={yMidDesc}
+                              y2={yMidDesc}
+                              stroke="#111827"
+                              strokeWidth={swThin}
+                              vectorEffect="non-scaling-stroke"
+                              strokeDasharray="6 6"
+                            />
+                          </>
+                        )}
+
+                        <GuideOverlay
+                          guideSet={guideSet}
+                          style={{
+                            thin: swBold,
+                            bold: swBold,
+                            colors: {
+                              thin: '#111827',
+                              bold: '#111827',
+                              tick: script === 'Copperplate' ? 'transparent' : '#e2e8f0',
+                              frame: 'transparent',
+                            },
+                          }}
+                        />
+                      </g>
+                    </g>
+                  );
+
+                })}
 
               </g>
             </svg>
