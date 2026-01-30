@@ -19,6 +19,8 @@ type Orientation = 'portrait' | 'landscape';
 type ViewMode = 'autofit' | 'fullpage';
 
 type Pt = { x: number; y: number };
+type Box = { w: number; h: number };
+type GuideSet = ReturnType<typeof buildGuideSet>;
 
 const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0.5);
 
@@ -50,6 +52,89 @@ function buildPageSlantLines(opts: {
     });
   }
   return lines;
+}
+
+function buildCopperplateSlantLines(guideSets: GuideSet[], box: Box, xHeightMM: number) {
+  const first = guideSets[0];
+  if (!first) return [];
+
+  const xMin = first.baseLine[0].x;
+  const xMax = first.baseLine[first.baseLine.length - 1].x;
+  const stepMM = Math.max(xHeightMM * 0.9, 3);
+
+  const lines = buildPageSlantLines({
+    boxW: box.w,
+    boxH: box.h,
+    xMin,
+    xMax,
+    angleDeg: -55,
+    stepMM,
+  });
+
+  return lines.map(line => ({
+    x1: line.a.x,
+    y1: line.a.y,
+    x2: line.b.x,
+    y2: line.b.y,
+  }));
+}
+
+function GuidelinesRowMask({ guideSets, box }: { guideSets: GuideSet[]; box: Box }) {
+  return (
+    <mask id="guidelines-row-mask">
+      <rect x={0} y={0} width={box.w} height={box.h} fill="black" />
+
+      {guideSets.map((gs, i) => {
+        const x1 = gs.baseLine[0].x;
+        const x2 = gs.baseLine[gs.baseLine.length - 1].x;
+        const yTop = gs.ascLine[0].y;
+        const yBottom = gs.descLine[0].y;
+
+        return (
+          <rect
+            key={`mask-row-${i}`}
+            x={x1}
+            y={yTop}
+            width={x2 - x1}
+            height={yBottom - yTop}
+            fill="white"
+          />
+        );
+      })}
+    </mask>
+  );
+}
+
+function CopperplateSlantLines({
+  guideSets,
+  box,
+  xHeightMM,
+  swThin,
+}: {
+  guideSets: GuideSet[];
+  box: Box;
+  xHeightMM: number;
+  swThin: number;
+}) {
+  const lines = buildCopperplateSlantLines(guideSets, box, xHeightMM);
+  if (lines.length === 0) return null;
+
+  return (
+    <g mask="url(#guidelines-row-mask)">
+      {lines.map((ln, i) => (
+        <line
+          key={`page-slant-${i}`}
+          x1={ln.x1}
+          y1={ln.y1}
+          x2={ln.x2}
+          y2={ln.y2}
+          stroke="#e2e8f0"
+          strokeWidth={swThin}
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+    </g>
+  );
 }
 
 
@@ -732,27 +817,7 @@ export default function GuidelinesPage() {
   </clipPath>
 
   {/* Copperplate: show slants only inside guideline row bands */}
-  <mask id="guidelines-row-mask">
-    <rect x={0} y={0} width={box.w} height={box.h} fill="black" />
-
-    {guideSets.map((gs, i) => {
-      const x1 = gs.baseLine[0].x;
-      const x2 = gs.baseLine[gs.baseLine.length - 1].x;
-      const yTop = gs.ascLine[0].y;
-      const yBottom = gs.descLine[0].y;
-
-      return (
-        <rect
-          key={`mask-row-${i}`}
-          x={x1}
-          y={yTop}
-          width={x2 - x1}
-          height={yBottom - yTop}
-          fill="white"
-        />
-      );
-    })}
-  </mask>
+  <GuidelinesRowMask guideSets={guideSets} box={box} />
 </defs>
 
 
@@ -764,43 +829,14 @@ export default function GuidelinesPage() {
 
               <g clipPath="url(#pageClip)">
                 {/* Guides */}
-                {script === 'Copperplate' && (() => {
-  const first = guideSets[0];
-  if (!first) return null;
-
-  const xMin = first.baseLine[0].x;
-  const xMax = first.baseLine[first.baseLine.length - 1].x;
-  const stepMM = Math.max(xHeightMM * 0.9, 3);
-
-  // Build full-page slants (55°) from y=0 to y=box.h
-  const rad = (55 * Math.PI) / 180;
-  const dx = -box.h / Math.tan(rad);
-
-  const start = xMin - Math.abs(dx) - stepMM * 2;
-  const end = xMax + Math.abs(dx) + stepMM * 2;
-
-  const lines: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
-  for (let x = start; x <= end; x += stepMM) {
-    lines.push({ x1: x, y1: 0, x2: x + dx, y2: box.h });
-  }
-
-  return (
-    <g mask="url(#guidelines-row-mask)">
-      {lines.map((ln, i) => (
-        <line
-          key={`page-slant-${i}`}
-          x1={ln.x1}
-          y1={ln.y1}
-          x2={ln.x2}
-          y2={ln.y2}
-          stroke="#e2e8f0"
-          strokeWidth={swThin}
-          vectorEffect="non-scaling-stroke"
-        />
-      ))}
-    </g>
-  );
-})()}
+                {script === 'Copperplate' && (
+                  <CopperplateSlantLines
+                    guideSets={guideSets}
+                    box={box}
+                    xHeightMM={xHeightMM}
+                    swThin={swThin}
+                  />
+                )}
 
                 {guideSets.map((guideSet, index) => {
   const x1 = guideSet.baseLine[0].x;
