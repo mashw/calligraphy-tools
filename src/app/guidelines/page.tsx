@@ -812,28 +812,46 @@ export default function GuidelinesPage() {
   const yTop = guideSet.ascLine[0].y;
   const yBottom = guideSet.descLine[0].y;
 
+  const interpunctX = x1 + 3; // 3mm inset from left edge
+  const waistY = guideSet.waistLine[0].y;
+  const baseY = guideSet.baseLine[0].y;
+  const interpunctY = (waistY + baseY) / 2;
   return (
     <g key={`guide-${index}`}>
+
  
  <g key={`guide-${index}`}>
-        <line
-          x1={x1}
-          x2={x2}
-          y1={yMidAsc}
-          y2={yMidAsc}
-          stroke="#111827"
-          strokeWidth={swThin}
-          vectorEffect="non-scaling-stroke"
-        />
-        <line
-          x1={x1}
-          x2={x2}
-          y1={yMidDesc}
-          y2={yMidDesc}
-          stroke="#111827"
-          strokeWidth={swThin}
-          vectorEffect="non-scaling-stroke"
-        />
+ <circle
+  cx={interpunctX}
+  cy={interpunctY}
+  r={0.9}
+  fill="#111827"
+/>
+ {script === 'Copperplate' && (
+  <>
+    {/* Extra reference lines */}
+    <line
+      x1={x1}
+      x2={x2}
+      y1={yMidAsc}
+      y2={yMidAsc}
+      stroke="#111827"
+      strokeWidth={swThin}
+      vectorEffect="non-scaling-stroke"
+      strokeDasharray="6 6"
+    />
+    <line
+      x1={x1}
+      x2={x2}
+      y1={yMidDesc}
+      y2={yMidDesc}
+      stroke="#111827"
+      strokeWidth={swThin}
+      vectorEffect="non-scaling-stroke"
+      strokeDasharray="6 6"
+    />
+  </>
+)}
   
         <GuideOverlay
           guideSet={guideSet}
@@ -843,7 +861,7 @@ export default function GuidelinesPage() {
             colors: {
               thin: '#111827',
               bold: '#111827',
-              tick: 'transparent',
+              tick: script === 'Copperplate' ? 'transparent' : '#e2e8f0',
               frame: 'transparent',
             },
           }}
