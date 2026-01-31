@@ -859,18 +859,38 @@ export default function GuidelinesPage() {
   }
 
   function resetView() {
-    setView('autofit');
-    setZoom(DEFAULT_AUTOFIT_ZOOM); // keep your “4 levels” default for autofit
     setPan({ x: 0, y: 0 });
+  
+    // Only force mode changes when you're in custom.
+    // Reset should not unexpectedly pull you out of fullpage.
+    if (view === 'custom') {
+      setView('autofit');
+      setZoom(DEFAULT_AUTOFIT_ZOOM); // seed for next manual zoom
+    }
   }
+  
+  
 
   function adjustZoom(direction: 'in' | 'out') {
+    // Seed from what the user is currently seeing to avoid a jump:
+    // - in autofit, the visible zoom is DEFAULT_AUTOFIT_ZOOM
+    // - in fullpage, the visible zoom is 1 (fits whole page)
+    // - in custom, the visible zoom is the zoom state
+    const currentEffectiveZoom =
+      view === 'custom'
+        ? zoom
+        : view === 'autofit'
+          ? DEFAULT_AUTOFIT_ZOOM
+          : 1;
+  
+    const next =
+      direction === 'in' ? currentEffectiveZoom * 1.25 : currentEffectiveZoom / 1.25;
+  
     setView('custom');
-    setZoom((current) => {
-      const next = direction === 'in' ? current * 1.25 : current / 1.25;
-      return clamp(next, 1, 12);
-    });
+    setZoom(clamp(next, 1, 12));
   }
+  
+  
 
   return (
     <main className="min-h-screen text-slate-900 relative">
