@@ -16,7 +16,7 @@ import GuideOverlay from '@/components/preview/GuideOverlay';
 
 type PaperId = keyof typeof PAPERS_MM;
 type Orientation = 'portrait' | 'landscape';
-type ViewMode = 'autofit' | 'fullpage';
+type ViewMode = 'autofit' | 'fullpage' | 'custom';
 
 type Pt = { x: number; y: number };
 type Box = { w: number; h: number };
@@ -429,6 +429,7 @@ export default function GuidelinesPage() {
   const [userSpaceFactor, setUserSpaceFactor] = useState(1);
 
   const [zoom, setZoom] = useState(5);
+  const DEFAULT_AUTOFIT_ZOOM = 1.25 ** 4;
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
 
@@ -649,6 +650,8 @@ export default function GuidelinesPage() {
   // ---------- ViewBox (includes stage margin so paper stands out) ----------
   const vb = useMemo(() => {
     const topPadPX = 30;
+    const fitZoom = view === 'autofit' ? DEFAULT_AUTOFIT_ZOOM : 1;
+    const zoomForView = view === 'custom' ? zoom : fitZoom;
 
     // Stage padding:
     // - Full page: ~5px top/bottom (converted into mm)
@@ -696,8 +699,8 @@ export default function GuidelinesPage() {
       const cx = (minX0 + maxX0) / 2;
       const cy = (minY0 + maxY0) / 2;
 
-      vw = Math.max(1, maxX0 - minX0) / Math.max(1, zoom);
-      vh = Math.max(1, maxY0 - minY0) / Math.max(1, zoom);
+      vw = Math.max(1, maxX0 - minX0) / Math.max(1, zoomForView);
+      vh = Math.max(1, maxY0 - minY0) / Math.max(1, zoomForView);
       minX = cx - vw / 2;
       minY = cy - vh / 2;
       // Don’t let autofit frame drift too far below the page top;
@@ -730,7 +733,7 @@ export default function GuidelinesPage() {
 
 
     return { minX: minXc, minY: minYc, vw: vwc, vh: vhc, str: `${minXc} ${minYc} ${vwc} ${vhc}` };
-  }, [view, box, guideSets, zoom, pan, previewPxH]);
+  }, [view, box, guideSets, zoom, pan, previewPxH, DEFAULT_AUTOFIT_ZOOM]);
   /* ---------------- Export actions ---------------- */
   const MM_TO_PT = 72 / 25.4;
 
@@ -856,10 +859,38 @@ export default function GuidelinesPage() {
   }
 
   function resetView() {
-    setView('autofit');
-    setZoom(1.25 ** 4); // keep your “4 levels” default for autofit
     setPan({ x: 0, y: 0 });
+  
+    // Only force mode changes when you're in custom.
+    // Reset should not unexpectedly pull you out of fullpage.
+    if (view === 'custom') {
+      setView('autofit');
+      setZoom(DEFAULT_AUTOFIT_ZOOM); // seed for next manual zoom
+    }
   }
+  
+  
+
+  function adjustZoom(direction: 'in' | 'out') {
+    // Seed from what the user is currently seeing to avoid a jump:
+    // - in autofit, the visible zoom is DEFAULT_AUTOFIT_ZOOM
+    // - in fullpage, the visible zoom is 1 (fits whole page)
+    // - in custom, the visible zoom is the zoom state
+    const currentEffectiveZoom =
+      view === 'custom'
+        ? zoom
+        : view === 'autofit'
+          ? DEFAULT_AUTOFIT_ZOOM
+          : 1;
+  
+    const next =
+      direction === 'in' ? currentEffectiveZoom * 1.25 : currentEffectiveZoom / 1.25;
+  
+    setView('custom');
+    setZoom(clamp(next, 1, 12));
+  }
+  
+  
 
   return (
     <main className="min-h-screen text-slate-900 relative">
@@ -901,15 +932,16 @@ export default function GuidelinesPage() {
                 >
                   <option value="autofit">Auto-fit guidelines</option>
                   <option value="fullpage">Full page</option>
+                  <option value="custom">Custom</option>
                 </select>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <button onMouseDown={e => e.preventDefault()} onClick={() => setZoom(z => Math.max(1, z / 1.25))} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
+              <button onMouseDown={e => e.preventDefault()} onClick={() => adjustZoom('out')} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
                 –
               </button>
-              <button onMouseDown={e => e.preventDefault()} onClick={() => setZoom(z => Math.min(12, z * 1.25))} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
+              <button onMouseDown={e => e.preventDefault()} onClick={() => adjustZoom('in')} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
                 +
               </button>
               <button onMouseDown={e => e.preventDefault()} onClick={resetView} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
