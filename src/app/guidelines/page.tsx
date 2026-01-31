@@ -430,6 +430,8 @@ export default function GuidelinesPage() {
 
   const [zoom, setZoom] = useState(5);
   const DEFAULT_AUTOFIT_ZOOM = 1.25 ** 4;
+  const AUTOFIT_BOOST = 1.25;
+  const FULLPAGE_PAD_PX = 5;
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
 
@@ -442,6 +444,7 @@ export default function GuidelinesPage() {
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [previewPxH, setPreviewPxH] = useState(0);
+  const [previewPxW, setPreviewPxW] = useState(0);
 
   useEffect(() => {
     const el = svgRef.current;
@@ -450,6 +453,7 @@ export default function GuidelinesPage() {
     const update = () => {
       const r = el.getBoundingClientRect();
       setPreviewPxH(r.height);
+      setPreviewPxW(r.width);
     };
 
     update();
@@ -647,16 +651,54 @@ export default function GuidelinesPage() {
 
   }, [baselinePositions, margins.left, margins.right, box.w, guideTemplate, xMM, ascMM, descMM, script, effectiveNibMM, nibMM]);
 
+  const guideBounds = useMemo(() => {
+    if (guideSets.length === 0) return null;
+    const fitPad = 8;
+    const pts = guideSets.flatMap((guideSet) => [
+      ...guideSet.ascLine,
+      ...guideSet.waistLine,
+      ...guideSet.baseLine,
+      ...guideSet.descLine,
+    ]);
+
+    const xs = pts.map(p => p.x);
+    const ys = pts.map(p => p.y);
+    const minX0 = Math.min(...xs) - fitPad;
+    const maxX0 = Math.max(...xs) + fitPad;
+    const minY0 = Math.min(...ys) - fitPad;
+    const maxY0 = Math.max(...ys) + fitPad;
+
+    const cx = (minX0 + maxX0) / 2;
+    const cy = (minY0 + maxY0) / 2;
+    const spanX = Math.max(1, maxX0 - minX0);
+    const spanY = Math.max(1, maxY0 - minY0);
+
+    return { minX0, maxX0, minY0, maxY0, cx, cy, spanX, spanY };
+  }, [guideSets]);
+
+  const fullPageZoom = useMemo(() => {
+    if (previewPxW <= 0 || previewPxH <= 0) return 1;
+    const usableW = Math.max(1, previewPxW - FULLPAGE_PAD_PX * 2);
+    const usableH = Math.max(1, previewPxH - FULLPAGE_PAD_PX * 2);
+    return Math.min(usableW / box.w, usableH / box.h);
+  }, [previewPxW, previewPxH, box.w, box.h, FULLPAGE_PAD_PX]);
+
+  const autofitZoom = useMemo(() => {
+    const boosted = DEFAULT_AUTOFIT_ZOOM * AUTOFIT_BOOST;
+    if (previewPxW <= 0) return boosted;
+    const widthFitZoom = Math.max(1, previewPxW - FULLPAGE_PAD_PX * 2) / Math.max(1, box.w);
+    return Math.min(boosted, widthFitZoom);
+  }, [DEFAULT_AUTOFIT_ZOOM, AUTOFIT_BOOST, previewPxW, box.w, FULLPAGE_PAD_PX]);
+
   // ---------- ViewBox (includes stage margin so paper stands out) ----------
   const vb = useMemo(() => {
     const topPadPX = 30;
-    const fitZoom = view === 'autofit' ? DEFAULT_AUTOFIT_ZOOM : 1;
+    const fitZoom = view === 'autofit' ? autofitZoom : 1;
     const zoomForView = view === 'custom' ? zoom : fitZoom;
 
     // Stage padding:
     // - Full page: ~5px top/bottom (converted into mm)
     // - Autofit: keep the nicer roomy stage pad in mm
-    const fullPagePadPX = 5;
     const stagePadMM =
       view === 'fullpage'
         ? (() => {
@@ -664,45 +706,26 @@ export default function GuidelinesPage() {
           // This is "good enough" and stays stable for small margins.
           const pxH = Math.max(1, previewPxH);
           const mmPerPx = box.h / pxH;
-          return fullPagePadPX * mmPerPx;
+          return FULLPAGE_PAD_PX * mmPerPx;
         })()
         : 22;
-
 
     let minX: number;
     let minY: number;
     let vw: number;
     let vh: number;
 
-    if (view === 'fullpage' || guideSets.length === 0) {
+    if (view === 'fullpage' || !guideBounds) {
       // Fullpage should always fit the whole sheet in the preview window.
       vw = box.w;
       vh = box.h;
       minX = 0;
       minY = 0;
     } else {
-      const fitPad = 8;
-      const pts = guideSets.flatMap((guideSet) => [
-        ...guideSet.ascLine,
-        ...guideSet.waistLine,
-        ...guideSet.baseLine,
-        ...guideSet.descLine,
-      ]);
-
-      const xs = pts.map(p => p.x);
-      const ys = pts.map(p => p.y);
-      const minX0 = Math.min(...xs) - fitPad;
-      const maxX0 = Math.max(...xs) + fitPad;
-      const minY0 = Math.min(...ys) - fitPad;
-      const maxY0 = Math.max(...ys) + fitPad;
-
-      const cx = (minX0 + maxX0) / 2;
-      const cy = (minY0 + maxY0) / 2;
-
-      vw = Math.max(1, maxX0 - minX0) / Math.max(1, zoomForView);
-      vh = Math.max(1, maxY0 - minY0) / Math.max(1, zoomForView);
-      minX = cx - vw / 2;
-      minY = cy - vh / 2;
+      vw = guideBounds.spanX / Math.max(1, zoomForView);
+      vh = guideBounds.spanY / Math.max(1, zoomForView);
+      minX = guideBounds.cx - vw / 2;
+      minY = guideBounds.cy - vh / 2;
       // Don’t let autofit frame drift too far below the page top;
       // we want some stage visible above y=0.
       minY = Math.min(minY, stagePadMM);
@@ -711,7 +734,6 @@ export default function GuidelinesPage() {
     const baseVhMM = vh + stagePadMM * 2;
     const mmPerPx = previewPxH > 0 ? baseVhMM / previewPxH : 0;
     const extraTopMM = view === 'autofit' ? topPadPX * mmPerPx : 0;
-
 
     let minXc = minX + pan.x - stagePadMM;
     let minYc = minY + pan.y - stagePadMM - extraTopMM;
@@ -731,9 +753,8 @@ export default function GuidelinesPage() {
       }
     }
 
-
     return { minX: minXc, minY: minYc, vw: vwc, vh: vhc, str: `${minXc} ${minYc} ${vwc} ${vhc}` };
-  }, [view, box, guideSets, zoom, pan, previewPxH, DEFAULT_AUTOFIT_ZOOM]);
+  }, [view, box, guideBounds, zoom, pan, previewPxH, autofitZoom, FULLPAGE_PAD_PX]);
   /* ---------------- Export actions ---------------- */
   const MM_TO_PT = 72 / 25.4;
 
@@ -865,29 +886,47 @@ export default function GuidelinesPage() {
     // Reset should not unexpectedly pull you out of fullpage.
     if (view === 'custom') {
       setView('autofit');
-      setZoom(DEFAULT_AUTOFIT_ZOOM); // seed for next manual zoom
+      setZoom(autofitZoom); // seed for next manual zoom
     }
   }
   
   
 
   function adjustZoom(direction: 'in' | 'out') {
+    const svg = svgRef.current;
+    if (!svg) return;
+
     // Seed from what the user is currently seeing to avoid a jump:
-    // - in autofit, the visible zoom is DEFAULT_AUTOFIT_ZOOM
-    // - in fullpage, the visible zoom is 1 (fits whole page)
+    // - in autofit, the visible zoom is the computed autofit zoom
+    // - in fullpage, the visible zoom is the fit-to-page zoom
     // - in custom, the visible zoom is the zoom state
     const currentEffectiveZoom =
       view === 'custom'
         ? zoom
         : view === 'autofit'
-          ? DEFAULT_AUTOFIT_ZOOM
-          : 1;
-  
-    const next =
-      direction === 'in' ? currentEffectiveZoom * 1.25 : currentEffectiveZoom / 1.25;
-  
+          ? autofitZoom
+          : fullPageZoom;
+
+    const step = 1.25;
+    const unclampedNext =
+      direction === 'in' ? currentEffectiveZoom * step : currentEffectiveZoom / step;
+    const nextZoom = clamp(unclampedNext, 1, 12);
+
+    const rect = svg.getBoundingClientRect();
+    const s0 = { x: rect.width / 2, y: rect.height / 2 };
+    const w0 = {
+      x: (s0.x - pan.x * currentEffectiveZoom) / currentEffectiveZoom,
+      y: (s0.y - pan.y * currentEffectiveZoom) / currentEffectiveZoom,
+    };
+
+    const panNext = {
+      x: (s0.x - w0.x * nextZoom) / nextZoom,
+      y: (s0.y - w0.y * nextZoom) / nextZoom,
+    };
+
     setView('custom');
-    setZoom(clamp(next, 1, 12));
+    setZoom(nextZoom);
+    setPan(panNext);
   }
   
   
