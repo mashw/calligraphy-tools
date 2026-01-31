@@ -429,8 +429,7 @@ export default function GuidelinesPage() {
   const [userSpaceFactor, setUserSpaceFactor] = useState(1);
 
   const [zoom, setZoom] = useState(5);
-  const DEFAULT_AUTOFIT_ZOOM = 1.25 ** 4;
-  const AUTOFIT_BOOST = 1.25;
+  const DEFAULT_AUTOFIT_ZOOM = 1.3 ** 4;
   const FULLPAGE_PAD_PX = 5;
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -683,17 +682,10 @@ export default function GuidelinesPage() {
     return Math.min(usableW / box.w, usableH / box.h);
   }, [previewPxW, previewPxH, box.w, box.h, FULLPAGE_PAD_PX]);
 
-  const autofitZoom = useMemo(() => {
-    const boosted = DEFAULT_AUTOFIT_ZOOM * AUTOFIT_BOOST;
-    if (previewPxW <= 0) return boosted;
-    const widthFitZoom = Math.max(1, previewPxW - FULLPAGE_PAD_PX * 2) / Math.max(1, box.w);
-    return Math.min(boosted, widthFitZoom);
-  }, [DEFAULT_AUTOFIT_ZOOM, AUTOFIT_BOOST, previewPxW, box.w, FULLPAGE_PAD_PX]);
-
   // ---------- ViewBox (includes stage margin so paper stands out) ----------
   const vb = useMemo(() => {
     const topPadPX = 30;
-    const fitZoom = view === 'autofit' ? autofitZoom : 1;
+    const fitZoom = view === 'autofit' ? DEFAULT_AUTOFIT_ZOOM : 1;
     const zoomForView = view === 'custom' ? zoom : fitZoom;
 
     // Stage padding:
@@ -721,6 +713,18 @@ export default function GuidelinesPage() {
       vh = box.h;
       minX = 0;
       minY = 0;
+    } else if (view === 'custom') {
+      const fitPad = 8;
+      const minX0 = 0 - fitPad;
+      const maxX0 = box.w + fitPad;
+      const minY0 = 0 - fitPad;
+      const maxY0 = box.h + fitPad;
+      const cx = box.w / 2;
+      const cy = box.h / 2;
+      vw = Math.max(1, maxX0 - minX0) / Math.max(1, zoomForView);
+      vh = Math.max(1, maxY0 - minY0) / Math.max(1, zoomForView);
+      minX = cx - vw / 2;
+      minY = cy - vh / 2;
     } else {
       vw = guideBounds.spanX / Math.max(1, zoomForView);
       vh = guideBounds.spanY / Math.max(1, zoomForView);
@@ -754,7 +758,7 @@ export default function GuidelinesPage() {
     }
 
     return { minX: minXc, minY: minYc, vw: vwc, vh: vhc, str: `${minXc} ${minYc} ${vwc} ${vhc}` };
-  }, [view, box, guideBounds, zoom, pan, previewPxH, autofitZoom, FULLPAGE_PAD_PX]);
+  }, [view, box, guideBounds, zoom, pan, previewPxH, DEFAULT_AUTOFIT_ZOOM, FULLPAGE_PAD_PX]);
   /* ---------------- Export actions ---------------- */
   const MM_TO_PT = 72 / 25.4;
 
@@ -886,7 +890,7 @@ export default function GuidelinesPage() {
     // Reset should not unexpectedly pull you out of fullpage.
     if (view === 'custom') {
       setView('autofit');
-      setZoom(autofitZoom); // seed for next manual zoom
+      setZoom(DEFAULT_AUTOFIT_ZOOM); // seed for next manual zoom
     }
   }
   
@@ -904,7 +908,7 @@ export default function GuidelinesPage() {
       view === 'custom'
         ? zoom
         : view === 'autofit'
-          ? autofitZoom
+          ? DEFAULT_AUTOFIT_ZOOM
           : fullPageZoom;
 
     const step = 1.25;
@@ -912,21 +916,9 @@ export default function GuidelinesPage() {
       direction === 'in' ? currentEffectiveZoom * step : currentEffectiveZoom / step;
     const nextZoom = clamp(unclampedNext, 1, 12);
 
-    const rect = svg.getBoundingClientRect();
-    const s0 = { x: rect.width / 2, y: rect.height / 2 };
-    const w0 = {
-      x: (s0.x - pan.x * currentEffectiveZoom) / currentEffectiveZoom,
-      y: (s0.y - pan.y * currentEffectiveZoom) / currentEffectiveZoom,
-    };
-
-    const panNext = {
-      x: (s0.x - w0.x * nextZoom) / nextZoom,
-      y: (s0.y - w0.y * nextZoom) / nextZoom,
-    };
-
     setView('custom');
     setZoom(nextZoom);
-    setPan(panNext);
+    setPan({ x: 0, y: 0 });
   }
   
   
