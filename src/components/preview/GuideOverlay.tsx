@@ -12,10 +12,15 @@ type GuideOverlayProps = {
     colors?: {
       thin?: string;
       bold?: string;
+      asc?: string;
+      waist?: string;
+      base?: string;
+      desc?: string;
       accent?: string;
       tick?: string;
       frame?: string;
     };
+    
   };
   interactive?: {
     onGuidePointerDown?: (
@@ -43,12 +48,14 @@ export default function GuideOverlay({
   const hitStrokeWidth =
     interactive?.hitStrokeWidthMM ?? Math.max(8, style.bold * 8);
 
-  const guidePaths = [
-    { key: 'asc', pts: guideSet.ascLine, stroke: colors.thin, width: style.thin },
-    { key: 'waist', pts: guideSet.waistLine, stroke: colors.bold, width: style.bold },
-    { key: 'base', pts: guideSet.baseLine, stroke: colors.bold, width: style.bold },
-    { key: 'desc', pts: guideSet.descLine, stroke: colors.thin, width: style.thin },
-  ];
+    const guidePaths = [
+      { key: 'asc', pts: guideSet.ascLine, stroke: colors.asc ?? colors.thin, width: style.thin },
+      { key: 'waist', pts: guideSet.waistLine, stroke: colors.waist ?? colors.bold, width: style.bold },
+      { key: 'base', pts: guideSet.baseLine, stroke: colors.base ?? colors.bold, width: style.bold },
+      { key: 'desc', pts: guideSet.descLine, stroke: colors.desc ?? colors.thin, width: style.thin },
+    ];
+    
+    
 
   return (
     <g>

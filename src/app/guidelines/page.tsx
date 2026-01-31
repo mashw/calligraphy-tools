@@ -27,6 +27,8 @@ const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0
 const CAL_STORAGE_KEY_PREFIX = 'ct_guidelines_calibration_v2_xh_';
 const keyForXHeight = (x: number) => `${CAL_STORAGE_KEY_PREFIX}${x.toFixed(1)}`;
 
+
+
 function buildPageSlantLines(opts: {
   boxW: number;
   boxH: number;
@@ -338,6 +340,15 @@ export default function GuidelinesPage() {
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
   const [view, setView] = useState<ViewMode>('autofit');
+
+  const [showBaselineIndicator, setShowBaselineIndicator] = useState(true);
+  const [baselineColor, setBaselineColor] = useState('#111827');
+  const [waistlineColor, setWaistlineColor] = useState('#111827');
+  const [xLineContrast, setXLineContrast] = useState(1);
+  const [xLineThickness, setXLineThickness] = useState(1); // multiplier
+  const [highContrastMode, setHighContrastMode] = useState(false);
+
+
   const midY = (a: Pt[], b: Pt[]) => (a[0].y + b[0].y) / 2;
 
   function stripFirstAndLastTicks(guideSet: any) {
@@ -351,6 +362,37 @@ export default function GuidelinesPage() {
     };
   }
 
+  function hexToRgba(hex: string, alpha: number) {
+    const h = hex.replace('#', '').trim();
+    const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+    if (full.length !== 6) return `rgba(0,0,0,${alpha})`;
+
+    const r = parseInt(full.slice(0, 2), 16);
+    const g = parseInt(full.slice(2, 4), 16);
+    const b = parseInt(full.slice(4, 6), 16);
+    const a = Math.max(0, Math.min(1, alpha));
+    return `rgba(${r},${g},${b},${a})`;
+  }
+
+  // Derive main four guide colors (contrast scales alpha; hue preserved)
+  const baseAlpha = Math.max(0, Math.min(1, xLineContrast));
+  const alpha = highContrastMode ? 1 : baseAlpha;
+
+  const effectiveBaselineHex = highContrastMode ? '#111827' : baselineColor;
+  const effectiveWaistHex = highContrastMode ? '#111827' : waistlineColor;
+
+  const ascColor = hexToRgba('#111827', alpha);
+  const descColor = hexToRgba('#111827', alpha);
+  const baseColor = hexToRgba(effectiveBaselineHex, alpha);
+  const waistColor = hexToRgba(effectiveWaistHex, alpha);
+
+  const xLineThicknessScale = highContrastMode ? 1.8 : xLineThickness;
+
+
+
+
+
+
 
 
   // “next whole 0.5” in the direction of travel
@@ -361,7 +403,8 @@ export default function GuidelinesPage() {
     return next2 / 2;
   };
 
-  const [script, setScript] = useState<ScriptId>('TexturaQuadrata');
+  const [script, setScript] = useState<ScriptId>('Copperplate');
+
 
   const [xHeightMM, setXHeightMM] = useState(6);
   const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
@@ -402,24 +445,24 @@ export default function GuidelinesPage() {
   useEffect(() => {
     const el = svgRef.current;
     if (!el) return;
-  
+
     const update = () => {
       const r = el.getBoundingClientRect();
       setPreviewPxH(r.height);
     };
-  
+
     update();
-  
+
     const ro = new ResizeObserver(() => update());
     ro.observe(el);
-  
+
     window.addEventListener('resize', update);
     return () => {
       ro.disconnect();
       window.removeEventListener('resize', update);
     };
   }, []);
-  
+
 
   // Full-viewport paint layer to hide any layout decorations behind this route
   useLayoutEffect(() => {
@@ -531,15 +574,28 @@ export default function GuidelinesPage() {
 
   const guideTemplate = script === 'Copperplate' ? 'copperplate' : 'blackletter';
 
+  const [marginTopMM, setMarginTopMM] = useState(15);
+  const [marginBottomMM, setMarginBottomMM] = useState(15);
+  const [marginLeftMM, setMarginLeftMM] = useState(10);
+  const [marginRightMM, setMarginRightMM] = useState(10);
+
   const margins = useMemo(
     () => ({
-      top: 15,
-      bottom:  15,
-      left: 10,
-      right: 10,
+      top: marginTopMM,
+      bottom: marginBottomMM,
+      left: marginLeftMM,
+      right: marginRightMM,
     }),
-    [],
+    [marginTopMM, marginBottomMM, marginLeftMM, marginRightMM],
   );
+
+
+
+
+
+
+
+
 
   const lineHeight = ascMM + xMM + descMM;
   const rowStepMM = lineHeight + rowGapMM;
@@ -601,14 +657,14 @@ export default function GuidelinesPage() {
     const stagePadMM =
       view === 'fullpage'
         ? (() => {
-            // Convert px -> mm using the visible SVG height and the page height.
-            // This is "good enough" and stays stable for small margins.
-            const pxH = Math.max(1, previewPxH);
-            const mmPerPx = box.h / pxH;
-            return fullPagePadPX * mmPerPx;
-          })()
+          // Convert px -> mm using the visible SVG height and the page height.
+          // This is "good enough" and stays stable for small margins.
+          const pxH = Math.max(1, previewPxH);
+          const mmPerPx = box.h / pxH;
+          return fullPagePadPX * mmPerPx;
+        })()
         : 22;
-    
+
 
     let minX: number;
     let minY: number;
@@ -645,32 +701,32 @@ export default function GuidelinesPage() {
       minX = cx - vw / 2;
       minY = cy - vh / 2;
       // Don’t let autofit frame drift too far below the page top;
-// we want some stage visible above y=0.
-minY = Math.min(minY, stagePadMM);
+      // we want some stage visible above y=0.
+      minY = Math.min(minY, stagePadMM);
     }
 
     const baseVhMM = vh + stagePadMM * 2;
     const mmPerPx = previewPxH > 0 ? baseVhMM / previewPxH : 0;
     const extraTopMM = view === 'autofit' ? topPadPX * mmPerPx : 0;
 
-    
+
     let minXc = minX + pan.x - stagePadMM;
     let minYc = minY + pan.y - stagePadMM - extraTopMM;
     let vwc = vw + stagePadMM * 2;
     let vhc = vh + stagePadMM * 2;
 
     // Ensure the full paper width always fits inside the viewBox in autofit.
-// If we zoom in too far (or the window is narrow), vwc can become < paper width,
-// which clips the page. Clamp to at least the paper width + stage padding.
-if (view === 'autofit') {
-  const minVwc = box.w + stagePadMM * 2;
-  if (vwc < minVwc) {
-    vwc = minVwc;
-    // Center the paper horizontally with equal stage padding on both sides.
-    // Paper spans [0..box.w], so padded span is [-pad..box.w+pad].
-    minXc = -stagePadMM + pan.x;
-  }
-}
+    // If we zoom in too far (or the window is narrow), vwc can become < paper width,
+    // which clips the page. Clamp to at least the paper width + stage padding.
+    if (view === 'autofit') {
+      const minVwc = box.w + stagePadMM * 2;
+      if (vwc < minVwc) {
+        vwc = minVwc;
+        // Center the paper horizontally with equal stage padding on both sides.
+        // Paper spans [0..box.w], so padded span is [-pad..box.w+pad].
+        minXc = -stagePadMM + pan.x;
+      }
+    }
 
 
     return { minX: minXc, minY: minYc, vw: vwc, vh: vhc, str: `${minXc} ${minYc} ${vwc} ${vhc}` };
@@ -940,51 +996,56 @@ if (view === 'autofit') {
                   const interpunctY = (waistY + baseY) / 2;
                   return (
                     <g key={`guide-${index}`}>
-                      <circle
-                        cx={interpunctX}
-                        cy={interpunctY}
-                        r={0.9}
-                        fill="#111827"
-                      />                        {script === 'Copperplate' && (
-                          <>
-                            {/* Extra reference lines */}
-                            <line
-                              x1={x1}
-                              x2={x2}
-                              y1={yMidAsc}
-                              y2={yMidAsc}
-                              stroke="#111827"
-                              strokeWidth={swThin}
-                              vectorEffect="non-scaling-stroke"
-                              strokeDasharray="6 6"
-                            />
-                            <line
-                              x1={x1}
-                              x2={x2}
-                              y1={yMidDesc}
-                              y2={yMidDesc}
-                              stroke="#111827"
-                              strokeWidth={swThin}
-                              vectorEffect="non-scaling-stroke"
-                              strokeDasharray="6 6"
-                            />
-                          </>
-                        )}
-
-                        <GuideOverlay
-                          guideSet={guideSet}
-                          style={{
-                            thin: swBold,
-                            bold: swBold,
-                            colors: {
-                              thin: '#111827',
-                              bold: '#111827',
-                              tick: script === 'Copperplate' ? 'transparent' : '#e2e8f0',
-                              frame: 'transparent',
-                            },
-                          }}
+                      {showBaselineIndicator && (
+                        <circle
+                          cx={interpunctX}
+                          cy={interpunctY}
+                          r={0.9}
+                          fill={baseColor}
                         />
-                      </g>
+                      )}                    {script === 'Copperplate' && (
+                        <>
+                          {/* Extra reference lines */}
+                          <line
+                            x1={x1}
+                            x2={x2}
+                            y1={yMidAsc}
+                            y2={yMidAsc}
+                            stroke="#111827"
+                            strokeWidth={swThin}
+                            vectorEffect="non-scaling-stroke"
+                            strokeDasharray="6 6"
+                          />
+                          <line
+                            x1={x1}
+                            x2={x2}
+                            y1={yMidDesc}
+                            y2={yMidDesc}
+                            stroke="#111827"
+                            strokeWidth={swThin}
+                            vectorEffect="non-scaling-stroke"
+                            strokeDasharray="6 6"
+                          />
+                        </>
+                      )}
+
+                      <GuideOverlay
+                        guideSet={guideSet}
+                        style={{
+                          thin: swBold * xLineThicknessScale,
+                          bold: swBold * xLineThicknessScale,
+                          colors: {
+                            asc: ascColor,
+                            waist: waistColor,
+                            base: baseColor,
+                            desc: descColor,
+                            tick: script === 'Copperplate' ? 'transparent' : '#e2e8f0',
+                            frame: 'transparent',
+                          },
+                        }}
+                      />
+
+                    </g>
                   );
                 })}
 
@@ -1046,6 +1107,177 @@ if (view === 'autofit') {
                 <option value="landscape">Landscape</option>
               </select>
             </div>
+
+            <div>
+              <label className="font-medium text-slate-700">Row gap (mm)</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                value={rowGapMM}
+                onChange={(e) => setRowGapMM(parseFloat(e.target.value || '0') || 0)}
+              />
+            </div>
+            <div>
+              <label className="font-medium text-slate-700">Top margin (mm)</label>
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                value={marginTopMM}
+                onChange={(e) => setMarginTopMM(parseFloat(e.target.value || '0') || 0)}
+              />
+            </div>
+
+            <div>
+              <label className="font-medium text-slate-700">Bottom margin (mm)</label>
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                value={marginBottomMM}
+                onChange={(e) => setMarginBottomMM(parseFloat(e.target.value || '0') || 0)}
+              />
+            </div>
+
+            <div>
+              <label className="font-medium text-slate-700">Left margin (mm)</label>
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                value={marginLeftMM}
+                onChange={(e) => setMarginLeftMM(parseFloat(e.target.value || '0') || 0)}
+              />
+            </div>
+
+            <div>
+              <label className="font-medium text-slate-700">Right margin (mm)</label>
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                value={marginRightMM}
+                onChange={(e) => setMarginRightMM(parseFloat(e.target.value || '0') || 0)}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium text-slate-700">Baseline indicator</div>
+                  <p className="text-xs text-slate-500">Toggles the interpunct circle marker.</p>
+                </div>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setShowBaselineIndicator(v => !v)}
+                  className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+        ${showBaselineIndicator ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+                >
+                  <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition ${showBaselineIndicator ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
+                    <span className="h-3 w-3 rounded-full bg-white shadow" />
+                  </span>
+                  {showBaselineIndicator ? 'On' : 'Off'}
+                </button>
+              </div>
+            </div>
+            <div className="sm:col-span-2">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium text-slate-700">High contrast mode</div>
+                  <p className="text-xs text-slate-500">Forces main four lines to thick black for maximum visibility.</p>
+                </div>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setHighContrastMode(v => !v)}
+                  className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+        ${highContrastMode ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+                >
+                  <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition ${highContrastMode ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
+                    <span className="h-3 w-3 rounded-full bg-white shadow" />
+                  </span>
+                  {highContrastMode ? 'On' : 'Off'}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="font-medium text-slate-700">Baseline color</label>
+              <input
+                type="color"
+                className="mt-1 w-full h-10 p-1 rounded-lg border border-slate-300 bg-white"
+                value={baselineColor}
+                onChange={(e) => {
+                  setBaselineColor(e.target.value);
+                  setHighContrastMode(false);
+                }}
+              />
+            </div>
+
+            <div>
+              <label className="font-medium text-slate-700">Waistline color</label>
+              <input
+                type="color"
+                className="mt-1 w-full h-10 p-1 rounded-lg border border-slate-300 bg-white"
+                value={waistlineColor}
+                onChange={(e) => {
+                  setWaistlineColor(e.target.value);
+                  setHighContrastMode(false);
+                }}
+              />
+            </div>
+            <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* X-line contrast */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="font-medium text-slate-700">X-line contrast</label>
+                  <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : xLineContrast) * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  className="mt-2 w-full"
+                  value={highContrastMode ? 1 : xLineContrast}
+                  onChange={(e) => setXLineContrast(parseFloat(e.target.value))}
+                  disabled={highContrastMode}
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  Affects only ascender, waistline, baseline, descender. Contrast scales alpha; hue is preserved.
+                </p>
+              </div>
+
+              {/* X-line thickness */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="font-medium text-slate-700">X-line thickness</label>
+                  <span className="text-xs text-slate-500">{(highContrastMode ? 1.8 : xLineThickness).toFixed(2)}×</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.6"
+                  max="2.5"
+                  step="0.05"
+                  className="mt-2 w-full"
+                  value={highContrastMode ? 1.8 : xLineThickness}
+                  onChange={(e) => setXLineThickness(parseFloat(e.target.value))}
+                  disabled={highContrastMode}
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  Multiplies the stroke thickness of the main four X-lines.
+                </p>
+              </div>
+            </div>
+
+
+
           </div>
         </div>
 
@@ -1089,17 +1321,6 @@ if (view === 'autofit') {
                     <option value="flourished">Flourished (full widths)</option>
                   </select>
                   {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
-                </div>
-                <div>
-                  <label className="font-medium text-slate-700">Row gap (mm)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                    value={rowGapMM}
-                    onChange={(e) => setRowGapMM(parseFloat(e.target.value || '0') || 0)}
-                  />
                 </div>
               </div>
 
