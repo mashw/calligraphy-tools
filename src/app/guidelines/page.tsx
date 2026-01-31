@@ -1070,16 +1070,7 @@ export default function GuidelinesPage() {
             <InfoTip side="right">Guidelines are spaced by x-height + ascender + descender.</InfoTip>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
-            <div>
-              <label className="font-medium text-slate-700">Script</label>
-              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={script} onChange={e => setScript(e.target.value as ScriptId)}>
-                <option value="Copperplate">Copperplate</option>
-                <option value="Fraktur">Fraktur</option>
-                <option value="TexturaQuadrata">Textura Quadrata</option>
-              </select>
-            </div>
-
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-3">
             <div>
               <label className="font-medium text-slate-700">Paper size</label>
               <select
@@ -1119,6 +1110,9 @@ export default function GuidelinesPage() {
                 onChange={(e) => setRowGapMM(parseFloat(e.target.value || '0') || 0)}
               />
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
             <div>
               <label className="font-medium text-slate-700">Top margin (mm)</label>
               <input
@@ -1276,8 +1270,6 @@ export default function GuidelinesPage() {
               </div>
             </div>
 
-
-
           </div>
         </div>
 
@@ -1292,8 +1284,17 @@ export default function GuidelinesPage() {
             </InfoTip>
           </div>
 
+          <div className="mt-3">
+            <label className="font-medium text-slate-700">Script</label>
+            <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={script} onChange={e => setScript(e.target.value as ScriptId)}>
+              <option value="Copperplate">Copperplate</option>
+              <option value="Fraktur">Fraktur</option>
+              <option value="TexturaQuadrata">Textura Quadrata</option>
+            </select>
+          </div>
+
           {script === 'Copperplate' ? (
-            <div className="mt-3 space-y-4">
+            <div className="mt-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="font-medium text-slate-700">X-height (mm)</label>
