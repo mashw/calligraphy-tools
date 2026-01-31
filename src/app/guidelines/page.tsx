@@ -16,7 +16,7 @@ import GuideOverlay from '@/components/preview/GuideOverlay';
 
 type PaperId = keyof typeof PAPERS_MM;
 type Orientation = 'portrait' | 'landscape';
-type ViewMode = 'autofit' | 'fullpage';
+type ViewMode = 'autofit' | 'fullpage' | 'custom';
 
 type Pt = { x: number; y: number };
 type Box = { w: number; h: number };
@@ -429,6 +429,7 @@ export default function GuidelinesPage() {
   const [userSpaceFactor, setUserSpaceFactor] = useState(1);
 
   const [zoom, setZoom] = useState(5);
+  const DEFAULT_AUTOFIT_ZOOM = 1.25 ** 4;
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
 
@@ -649,6 +650,8 @@ export default function GuidelinesPage() {
   // ---------- ViewBox (includes stage margin so paper stands out) ----------
   const vb = useMemo(() => {
     const topPadPX = 30;
+    const fitZoom = view === 'autofit' ? DEFAULT_AUTOFIT_ZOOM : 1;
+    const zoomForView = view === 'custom' ? zoom : fitZoom;
 
     // Stage padding:
     // - Full page: ~5px top/bottom (converted into mm)
@@ -696,8 +699,8 @@ export default function GuidelinesPage() {
       const cx = (minX0 + maxX0) / 2;
       const cy = (minY0 + maxY0) / 2;
 
-      vw = Math.max(1, maxX0 - minX0) / Math.max(1, zoom);
-      vh = Math.max(1, maxY0 - minY0) / Math.max(1, zoom);
+      vw = Math.max(1, maxX0 - minX0) / Math.max(1, zoomForView);
+      vh = Math.max(1, maxY0 - minY0) / Math.max(1, zoomForView);
       minX = cx - vw / 2;
       minY = cy - vh / 2;
       // Don’t let autofit frame drift too far below the page top;
@@ -730,7 +733,7 @@ export default function GuidelinesPage() {
 
 
     return { minX: minXc, minY: minYc, vw: vwc, vh: vhc, str: `${minXc} ${minYc} ${vwc} ${vhc}` };
-  }, [view, box, guideSets, zoom, pan, previewPxH]);
+  }, [view, box, guideSets, zoom, pan, previewPxH, DEFAULT_AUTOFIT_ZOOM]);
   /* ---------------- Export actions ---------------- */
   const MM_TO_PT = 72 / 25.4;
 
@@ -857,8 +860,16 @@ export default function GuidelinesPage() {
 
   function resetView() {
     setView('autofit');
-    setZoom(1.25 ** 4); // keep your “4 levels” default for autofit
+    setZoom(DEFAULT_AUTOFIT_ZOOM); // keep your “4 levels” default for autofit
     setPan({ x: 0, y: 0 });
+  }
+
+  function adjustZoom(direction: 'in' | 'out') {
+    setView('custom');
+    setZoom((current) => {
+      const next = direction === 'in' ? current * 1.25 : current / 1.25;
+      return clamp(next, 1, 12);
+    });
   }
 
   return (
@@ -901,15 +912,16 @@ export default function GuidelinesPage() {
                 >
                   <option value="autofit">Auto-fit guidelines</option>
                   <option value="fullpage">Full page</option>
+                  <option value="custom">Custom</option>
                 </select>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <button onMouseDown={e => e.preventDefault()} onClick={() => setZoom(z => Math.max(1, z / 1.25))} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
+              <button onMouseDown={e => e.preventDefault()} onClick={() => adjustZoom('out')} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
                 –
               </button>
-              <button onMouseDown={e => e.preventDefault()} onClick={() => setZoom(z => Math.min(12, z * 1.25))} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
+              <button onMouseDown={e => e.preventDefault()} onClick={() => adjustZoom('in')} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
                 +
               </button>
               <button onMouseDown={e => e.preventDefault()} onClick={resetView} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
@@ -1070,17 +1082,8 @@ export default function GuidelinesPage() {
             <InfoTip side="right">Guidelines are spaced by x-height + ascender + descender.</InfoTip>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
-            <div>
-              <label className="font-medium text-slate-700">Script</label>
-              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={script} onChange={e => setScript(e.target.value as ScriptId)}>
-                <option value="Copperplate">Copperplate</option>
-                <option value="Fraktur">Fraktur</option>
-                <option value="TexturaQuadrata">Textura Quadrata</option>
-              </select>
-            </div>
-
-            <div>
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="col-span-2 sm:col-span-1">
               <label className="font-medium text-slate-700">Paper size</label>
               <select
                 className="mt-1 w-full p-2 rounded-lg border border-slate-300"
@@ -1119,6 +1122,9 @@ export default function GuidelinesPage() {
                 onChange={(e) => setRowGapMM(parseFloat(e.target.value || '0') || 0)}
               />
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 mt-4">
             <div>
               <label className="font-medium text-slate-700">Top margin (mm)</label>
               <input
@@ -1232,7 +1238,7 @@ export default function GuidelinesPage() {
                 }}
               />
             </div>
-            <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2 grid grid-cols-2 gap-4">
               {/* X-line contrast */}
               <div>
                 <div className="flex items-center justify-between">
@@ -1276,8 +1282,6 @@ export default function GuidelinesPage() {
               </div>
             </div>
 
-
-
           </div>
         </div>
 
@@ -1292,8 +1296,17 @@ export default function GuidelinesPage() {
             </InfoTip>
           </div>
 
+          <div className="mt-3">
+            <label className="font-medium text-slate-700">Script</label>
+            <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={script} onChange={e => setScript(e.target.value as ScriptId)}>
+              <option value="Copperplate">Copperplate</option>
+              <option value="Fraktur">Fraktur</option>
+              <option value="TexturaQuadrata">Textura Quadrata</option>
+            </select>
+          </div>
+
           {script === 'Copperplate' ? (
-            <div className="mt-3 space-y-4">
+            <div className="mt-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="font-medium text-slate-700">X-height (mm)</label>
