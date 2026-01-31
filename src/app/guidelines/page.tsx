@@ -1070,8 +1070,8 @@ export default function GuidelinesPage() {
             <InfoTip side="right">Guidelines are spaced by x-height + ascender + descender.</InfoTip>
           </div>
 
-          <div className="mt-3 space-y-4">
-            <div>
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="col-span-2 sm:col-span-1">
               <label className="font-medium text-slate-700">Paper size</label>
               <select
                 className="mt-1 w-full p-2 rounded-lg border border-slate-300"
@@ -1091,26 +1091,24 @@ export default function GuidelinesPage() {
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="font-medium text-slate-700">Orientation</label>
-                <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={orientation} onChange={e => setOrientation(e.target.value as Orientation)}>
-                  <option value="portrait">Portrait</option>
-                  <option value="landscape">Landscape</option>
-                </select>
-              </div>
+            <div>
+              <label className="font-medium text-slate-700">Orientation</label>
+              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={orientation} onChange={e => setOrientation(e.target.value as Orientation)}>
+                <option value="portrait">Portrait</option>
+                <option value="landscape">Landscape</option>
+              </select>
+            </div>
 
-              <div>
-                <label className="font-medium text-slate-700">Row gap (mm)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                  value={rowGapMM}
-                  onChange={(e) => setRowGapMM(parseFloat(e.target.value || '0') || 0)}
-                />
-              </div>
+            <div>
+              <label className="font-medium text-slate-700">Row gap (mm)</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                value={rowGapMM}
+                onChange={(e) => setRowGapMM(parseFloat(e.target.value || '0') || 0)}
+              />
             </div>
           </div>
 
