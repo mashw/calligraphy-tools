@@ -428,7 +428,11 @@ export default function GuidelinesPage() {
   const [userScaleFactor, setUserScaleFactor] = useState(1);
   const [userSpaceFactor, setUserSpaceFactor] = useState(1);
 
-  const [zoom, setZoom] = useState(5);
+  const [isNarrow, setIsNarrow] = useState(() => (typeof window !== 'undefined'
+    ? window.matchMedia('(max-width: 640px)').matches
+    : false));
+  const DEFAULT_ZOOM = isNarrow ? 5 : 4;
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const DEFAULT_AUTOFIT_ZOOM = 1.4;
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -442,6 +446,25 @@ export default function GuidelinesPage() {
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [previewPxH, setPreviewPxH] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 640px)');
+    const update = () => setIsNarrow(mq.matches);
+    update();
+    if (mq.addEventListener) {
+      mq.addEventListener('change', update);
+    } else {
+      mq.addListener(update);
+    }
+    return () => {
+      if (mq.removeEventListener) {
+        mq.removeEventListener('change', update);
+      } else {
+        mq.removeListener(update);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const el = svgRef.current;
@@ -647,8 +670,7 @@ export default function GuidelinesPage() {
 
   }, [baselinePositions, margins.left, margins.right, box.w, guideTemplate, xMM, ascMM, descMM, script, effectiveNibMM, nibMM]);
 
-  // ---------- ViewBox (includes stage margin so paper stands out) ----------
-  const vb = useMemo(() => {
+  const computeBaseView = () => {
     const topPadPX = 30;
     const fitZoom = view === 'autofit' ? DEFAULT_AUTOFIT_ZOOM : 1;
     const zoomForView = view === 'custom' ? zoom : fitZoom;
@@ -712,6 +734,19 @@ export default function GuidelinesPage() {
     const mmPerPx = previewPxH > 0 ? baseVhMM / previewPxH : 0;
     const extraTopMM = view === 'autofit' ? topPadPX * mmPerPx : 0;
 
+    return {
+      minX,
+      minY,
+      vw,
+      vh,
+      stagePadMM,
+      extraTopMM,
+    };
+  };
+
+  // ---------- ViewBox (includes stage margin so paper stands out) ----------
+  const vb = useMemo(() => {
+    const { minX, minY, vw, vh, stagePadMM, extraTopMM } = computeBaseView();
 
     let minXc = minX + pan.x - stagePadMM;
     let minYc = minY + pan.y - stagePadMM - extraTopMM;
@@ -730,7 +765,6 @@ export default function GuidelinesPage() {
         minXc = -stagePadMM + pan.x;
       }
     }
-
 
     return { minX: minXc, minY: minYc, vw: vwc, vh: vhc, str: `${minXc} ${minYc} ${vwc} ${vhc}` };
   }, [view, box, guideSets, zoom, pan, previewPxH, DEFAULT_AUTOFIT_ZOOM]);
@@ -859,16 +893,18 @@ export default function GuidelinesPage() {
   }
 
   function resetView() {
+    setView('autofit');
+    setZoom(DEFAULT_ZOOM);
     setPan({ x: 0, y: 0 });
-  
-    // Only force mode changes when you're in custom.
-    // Reset should not unexpectedly pull you out of fullpage.
-    if (view === 'custom') {
-      setView('autofit');
-      setZoom(DEFAULT_AUTOFIT_ZOOM); // seed for next manual zoom
-    }
   }
   
+  function goToTop() {
+    const { minY, stagePadMM, extraTopMM } = computeBaseView();
+    void stagePadMM;
+    void extraTopMM;
+    setPan((p) => ({ ...p, y: -minY }));
+  }
+
   
 
   function adjustZoom(direction: 'in' | 'out') {
@@ -947,6 +983,9 @@ export default function GuidelinesPage() {
               <button onMouseDown={e => e.preventDefault()} onClick={resetView} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
                 Reset view
               </button>
+              <button onMouseDown={e => e.preventDefault()} onClick={goToTop} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
+                Top
+              </button>
 
               <button onMouseDown={e => e.preventDefault()} onClick={downloadSVG} className="ml-2 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white">
                 SVG
@@ -965,7 +1004,7 @@ export default function GuidelinesPage() {
             <svg
               ref={svgRef}
               viewBox={vb.str}
-              className={`block mx-auto w-full h-[50vh] touch-none ${isPanning ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
+              className={`block mx-auto w-full h-[38vh] sm:h-[44vh] md:h-[50vh] touch-none ${isPanning ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
               style={{ background: '#cbd5e1' }}
               preserveAspectRatio={view === 'fullpage' ? 'xMidYMid meet' : 'xMidYMin meet'}
               onPointerDown={onPointerDown}
@@ -1192,72 +1231,78 @@ export default function GuidelinesPage() {
                 onChange={(e) => setMarginRightMM(parseFloat(e.target.value || '0') || 0)}
               />
             </div>
-            <div className="sm:col-span-2 grid grid-cols-2 gap-4">
-  {/* Baseline indicator */}
-  <div className="flex items-center justify-between gap-3">
-    <div>
-      <div className="text-sm font-medium text-slate-700">Baseline indicator</div>
-      <p className="text-xs text-slate-500">Toggles the interpunct circle marker.</p>
-    </div>
-    <button
-      type="button"
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={() => setShowBaselineIndicator(v => !v)}
-      className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-        ${showBaselineIndicator ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-    >
-      <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition ${showBaselineIndicator ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
-        <span className="h-3 w-3 rounded-full bg-white shadow" />
-      </span>
-      {showBaselineIndicator ? 'On' : 'Off'}
-    </button>
-  </div>
+            <div className="col-span-2">
+              <div className="grid grid-cols-2 gap-4">
+                {/* Baseline indicator */}
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium text-slate-700">Baseline indicator</div>
+                    <p className="text-xs text-slate-500">Toggles the interpunct circle marker.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setShowBaselineIndicator(v => !v)}
+                    className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+                      ${showBaselineIndicator ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition ${showBaselineIndicator ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
+                      <span className="h-3 w-3 rounded-full bg-white shadow" />
+                    </span>
+                    {showBaselineIndicator ? 'On' : 'Off'}
+                  </button>
+                </div>
 
-  {/* High contrast mode */}
-  <div className="flex items-center justify-between gap-3">
-    <div>
-      <div className="text-sm font-medium text-slate-700">High contrast mode</div>
-      <p className="text-xs text-slate-500">Forces main four lines to thick black for maximum visibility.</p>
-    </div>
-    <button
-      type="button"
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={() => setHighContrastMode(v => !v)}
-      className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-        ${highContrastMode ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-    >
-      <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition ${highContrastMode ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
-        <span className="h-3 w-3 rounded-full bg-white shadow" />
-      </span>
-      {highContrastMode ? 'On' : 'Off'}
-    </button>
-  </div>
-</div>
-
-            <div>
-              <label className="font-medium text-slate-700">Baseline color</label>
-              <input
-                type="color"
-                className="mt-1 w-full h-10 p-1 rounded-lg border border-slate-300 bg-white"
-                value={baselineColor}
-                onChange={(e) => {
-                  setBaselineColor(e.target.value);
-                  setHighContrastMode(false);
-                }}
-              />
+                {/* High contrast mode */}
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium text-slate-700">High contrast mode</div>
+                    <p className="text-xs text-slate-500">Forces main four lines to thick black for maximum visibility.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setHighContrastMode(v => !v)}
+                    className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+                      ${highContrastMode ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition ${highContrastMode ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
+                      <span className="h-3 w-3 rounded-full bg-white shadow" />
+                    </span>
+                    {highContrastMode ? 'On' : 'Off'}
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label className="font-medium text-slate-700">Waistline color</label>
-              <input
-                type="color"
-                className="mt-1 w-full h-10 p-1 rounded-lg border border-slate-300 bg-white"
-                value={waistlineColor}
-                onChange={(e) => {
-                  setWaistlineColor(e.target.value);
-                  setHighContrastMode(false);
-                }}
-              />
+            <div className="col-span-2">
+              <div className="grid grid-cols-2 gap-4 items-start">
+                <div>
+                  <label className="font-medium text-slate-700">Baseline color</label>
+                  <input
+                    type="color"
+                    className="mt-1 w-full h-10 p-1 rounded-lg border border-slate-300 bg-white"
+                    value={baselineColor}
+                    onChange={(e) => {
+                      setBaselineColor(e.target.value);
+                      setHighContrastMode(false);
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label className="font-medium text-slate-700">Waistline color</label>
+                  <input
+                    type="color"
+                    className="mt-1 w-full h-10 p-1 rounded-lg border border-slate-300 bg-white"
+                    value={waistlineColor}
+                    onChange={(e) => {
+                      setWaistlineColor(e.target.value);
+                      setHighContrastMode(false);
+                    }}
+                  />
+                </div>
+              </div>
             </div>
             <div className="sm:col-span-2 grid grid-cols-2 gap-4">
               {/* X-line contrast */}
