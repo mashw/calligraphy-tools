@@ -429,7 +429,7 @@ export default function GuidelinesPage() {
   const [userSpaceFactor, setUserSpaceFactor] = useState(1);
 
   const [zoom, setZoom] = useState(5);
-  const DEFAULT_AUTOFIT_ZOOM = 1.25 ** 4;
+  const DEFAULT_AUTOFIT_ZOOM = 1.4;
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
 
@@ -650,8 +650,6 @@ export default function GuidelinesPage() {
   // ---------- ViewBox (includes stage margin so paper stands out) ----------
   const vb = useMemo(() => {
     const topPadPX = 30;
-    const fitZoom = view === 'autofit' ? DEFAULT_AUTOFIT_ZOOM : 1;
-    const zoomForView = view === 'custom' ? zoom : fitZoom;
 
     // Stage padding:
     // - Full page: ~5px top/bottom (converted into mm)
@@ -674,7 +672,12 @@ export default function GuidelinesPage() {
     let vw: number;
     let vh: number;
 
-    if (view === 'fullpage' || guideSets.length === 0) {
+    if (view === 'custom') {
+      vw = box.w / Math.max(1, zoom);
+      vh = box.h / Math.max(1, zoom);
+      minX = (box.w - vw) / 2;
+      minY = (box.h - vh) / 2;
+    } else if (view === 'fullpage' || guideSets.length === 0) {
       // Fullpage should always fit the whole sheet in the preview window.
       vw = box.w;
       vh = box.h;
@@ -699,8 +702,8 @@ export default function GuidelinesPage() {
       const cx = (minX0 + maxX0) / 2;
       const cy = (minY0 + maxY0) / 2;
 
-      vw = Math.max(1, maxX0 - minX0) / Math.max(1, zoomForView);
-      vh = Math.max(1, maxY0 - minY0) / Math.max(1, zoomForView);
+      vw = Math.max(1, maxX0 - minX0) / Math.max(1, DEFAULT_AUTOFIT_ZOOM);
+      vh = Math.max(1, maxY0 - minY0) / Math.max(1, DEFAULT_AUTOFIT_ZOOM);
       minX = cx - vw / 2;
       minY = cy - vh / 2;
       // Don’t let autofit frame drift too far below the page top;
@@ -872,22 +875,30 @@ export default function GuidelinesPage() {
   
 
   function adjustZoom(direction: 'in' | 'out') {
+    const centerX = vb.minX + vb.vw / 2;
+    const centerY = vb.minY + vb.vh / 2;
+
     // Seed from what the user is currently seeing to avoid a jump:
     // - in autofit, the visible zoom is DEFAULT_AUTOFIT_ZOOM
-    // - in fullpage, the visible zoom is 1 (fits whole page)
+    // - in fullpage, derive the visible zoom from the current viewBox
     // - in custom, the visible zoom is the zoom state
     const currentEffectiveZoom =
       view === 'custom'
         ? zoom
         : view === 'autofit'
           ? DEFAULT_AUTOFIT_ZOOM
-          : 1;
+          : (() => {
+            const stagePadMM = Math.max(0, (vb.vw - box.w) / 2);
+            const baseVw = vb.vw - stagePadMM * 2;
+            return box.w / Math.max(1, baseVw);
+          })();
   
     const next =
       direction === 'in' ? currentEffectiveZoom * 1.25 : currentEffectiveZoom / 1.25;
   
     setView('custom');
     setZoom(clamp(next, 1, 12));
+    setPan({ x: centerX - box.w / 2, y: centerY - box.h / 2 });
   }
   
   
