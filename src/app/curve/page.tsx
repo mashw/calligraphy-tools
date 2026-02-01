@@ -278,7 +278,11 @@ export default function CurvedTitlePage() {
   const [rotDeg, setRotDeg] = useState(0);
   const [scalePct, setScalePct] = useState(100);
 
-  const [zoom, setZoom] = useState(1);
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches,
+  );
+  const DEFAULT_ZOOM = isNarrow ? 1.25 : 1;
+  const [zoom, setZoom] = useState(() => DEFAULT_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
 
   const [savedViewBeforeCurveDrag, setSavedViewBeforeCurveDrag] = useState<ViewMode | null>(null);
@@ -330,6 +334,24 @@ export default function CurvedTitlePage() {
       setShowAdvanced(false);
     }
   }, [script]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(max-width: 640px)');
+    const handler = (event: MediaQueryListEvent) => setIsNarrow(event.matches);
+    if ('addEventListener' in media) {
+      media.addEventListener('change', handler);
+    } else {
+      media.addListener(handler);
+    }
+    return () => {
+      if ('removeEventListener' in media) {
+        media.removeEventListener('change', handler);
+      } else {
+        media.removeListener(handler);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (script !== 'Copperplate') return;
@@ -861,7 +883,7 @@ export default function CurvedTitlePage() {
   }
 
   function resetView() {
-    setZoom(1);
+    setZoom(DEFAULT_ZOOM);
     setPan({ x: 0, y: 0 });
   }
 
@@ -993,7 +1015,7 @@ export default function CurvedTitlePage() {
             <svg
               ref={svgRef}
               viewBox={vb.str}
-              className={`block mx-auto w-full h-[64vh] touch-none ${isCurveDragging ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
+              className={`block mx-auto w-full h-[38vh] sm:h-[44vh] md:h-[50vh] touch-none ${isCurveDragging ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
               style={{ background: '#cbd5e1' }}
               preserveAspectRatio="xMidYMid meet"
               onPointerDown={onPointerDown}
