@@ -428,8 +428,12 @@ export default function GuidelinesPage() {
   const [userScaleFactor, setUserScaleFactor] = useState(1);
   const [userSpaceFactor, setUserSpaceFactor] = useState(1);
 
-  const [zoom, setZoom] = useState(5);
-  const DEFAULT_AUTOFIT_ZOOM = 1.4;
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches,
+  );
+  const DEFAULT_ZOOM = isNarrow ? 5 : 4;
+  const [zoom, setZoom] = useState(() => DEFAULT_ZOOM);
+  const DEFAULT_AUTOFIT_ZOOM = 4;
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
 
@@ -461,6 +465,24 @@ export default function GuidelinesPage() {
     return () => {
       ro.disconnect();
       window.removeEventListener('resize', update);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(max-width: 640px)');
+    const handler = (event: MediaQueryListEvent) => setIsNarrow(event.matches);
+    if ('addEventListener' in media) {
+      media.addEventListener('change', handler);
+    } else {
+      media.addListener(handler);
+    }
+    return () => {
+      if ('removeEventListener' in media) {
+        media.removeEventListener('change', handler);
+      } else {
+        media.removeListener(handler);
+      }
     };
   }, []);
 
@@ -648,7 +670,7 @@ export default function GuidelinesPage() {
   }, [baselinePositions, margins.left, margins.right, box.w, guideTemplate, xMM, ascMM, descMM, script, effectiveNibMM, nibMM]);
 
   // ---------- ViewBox (includes stage margin so paper stands out) ----------
-  const vb = useMemo(() => {
+  const computeBaseView = () => {
     const topPadPX = 30;
 
     // Stage padding:
@@ -714,6 +736,12 @@ export default function GuidelinesPage() {
     const baseVhMM = vh + stagePadMM * 2;
     const mmPerPx = previewPxH > 0 ? baseVhMM / previewPxH : 0;
     const extraTopMM = view === 'autofit' ? topPadPX * mmPerPx : 0;
+
+    return { minX, minY, vw, vh, stagePadMM, extraTopMM };
+  };
+
+  const vb = useMemo(() => {
+    const { minX, minY, vw, vh, stagePadMM, extraTopMM } = computeBaseView();
 
 
     let minXc = minX + pan.x - stagePadMM;
@@ -862,16 +890,16 @@ export default function GuidelinesPage() {
   }
 
   function resetView() {
+    setView('autofit');
+    setZoom(DEFAULT_ZOOM);
     setPan({ x: 0, y: 0 });
-  
-    // Only force mode changes when you're in custom.
-    // Reset should not unexpectedly pull you out of fullpage.
-    if (view === 'custom') {
-      setView('autofit');
-      setZoom(DEFAULT_AUTOFIT_ZOOM); // seed for next manual zoom
-    }
   }
   
+  function goToTop() {
+    const { minY } = computeBaseView();
+    setPan((prev) => ({ ...prev, y: -minY }));
+  }
+
   
 
   function adjustZoom(direction: 'in' | 'out') {
@@ -958,6 +986,9 @@ export default function GuidelinesPage() {
               <button onMouseDown={e => e.preventDefault()} onClick={resetView} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
                 Reset view
               </button>
+              <button onMouseDown={e => e.preventDefault()} onClick={goToTop} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
+                Top
+              </button>
 
               <button onMouseDown={e => e.preventDefault()} onClick={downloadSVG} className="ml-2 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white">
                 SVG
@@ -976,7 +1007,7 @@ export default function GuidelinesPage() {
             <svg
               ref={svgRef}
               viewBox={vb.str}
-              className={`block mx-auto w-full h-[50vh] touch-none ${isPanning ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
+              className={`block mx-auto w-full h-[38vh] sm:h-[44vh] md:h-[50vh] touch-none ${isPanning ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
               style={{ background: '#cbd5e1' }}
               preserveAspectRatio={view === 'fullpage' ? 'xMidYMid meet' : 'xMidYMin meet'}
               onPointerDown={onPointerDown}
