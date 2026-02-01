@@ -340,6 +340,8 @@ export default function GuidelinesPage() {
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
   const [view, setView] = useState<ViewMode>('autofit');
+  const [customOrigin, setCustomOrigin] = useState<'autofit' | 'fullpage'>('autofit');
+
 
   const [showBaselineIndicator, setShowBaselineIndicator] = useState(true);
   const [baselineColor, setBaselineColor] = useState('#111827');
@@ -433,7 +435,7 @@ export default function GuidelinesPage() {
     : false));
   const DEFAULT_ZOOM = isNarrow ? 5 : 4;
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
-  const DEFAULT_AUTOFIT_ZOOM = 1.4;
+  const DEFAULT_AUTOFIT_ZOOM = 4;
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
 
@@ -672,23 +674,28 @@ export default function GuidelinesPage() {
 
   const computeBaseView = () => {
     const topPadPX = 30;
+  
+    // When in custom, keep the “feel” of where custom zoom originated.
+    // This prevents the first zoom press from fullpage changing padding/anchor abruptly.
+    const padMode: 'autofit' | 'fullpage' =
+      view === 'custom' ? customOrigin : (view === 'fullpage' ? 'fullpage' : 'autofit');
+  
     const fitZoom = view === 'autofit' ? DEFAULT_AUTOFIT_ZOOM : 1;
     const zoomForView = view === 'custom' ? zoom : fitZoom;
-
+  
     // Stage padding:
     // - Full page: ~5px top/bottom (converted into mm)
-    // - Autofit: keep the nicer roomy stage pad in mm
+    // - Autofit/custom-from-autofit: roomy stage pad in mm
     const fullPagePadPX = 5;
     const stagePadMM =
-      view === 'fullpage'
+      padMode === 'fullpage'
         ? (() => {
-          // Convert px -> mm using the visible SVG height and the page height.
-          // This is "good enough" and stays stable for small margins.
           const pxH = Math.max(1, previewPxH);
           const mmPerPx = box.h / pxH;
           return fullPagePadPX * mmPerPx;
         })()
         : 22;
+  
 
 
     let minX: number;
@@ -696,12 +703,21 @@ export default function GuidelinesPage() {
     let vw: number;
     let vh: number;
 
-    if (view === 'fullpage' || guideSets.length === 0) {
-      // Fullpage should always fit the whole sheet in the preview window.
-      vw = box.w;
-      vh = box.h;
-      minX = 0;
-      minY = 0;
+    if (padMode === 'fullpage' || guideSets.length === 0) {
+      // Fullpage-style framing:
+      // - In actual fullpage view: always show the whole sheet.
+      // - In custom-from-fullpage: same framing but allow zoom to shrink the view.
+      if (view === 'custom') {
+        vw = box.w / Math.max(1, zoomForView);
+        vh = box.h / Math.max(1, zoomForView);
+        minX = (box.w - vw) / 2;
+        minY = (box.h - vh) / 2;
+      } else {
+        vw = box.w;
+        vh = box.h;
+        minX = 0;
+        minY = 0;
+      }
     } else {
       const fitPad = 8;
       const pts = guideSets.flatMap((guideSet) => [
@@ -732,7 +748,7 @@ export default function GuidelinesPage() {
 
     const baseVhMM = vh + stagePadMM * 2;
     const mmPerPx = previewPxH > 0 ? baseVhMM / previewPxH : 0;
-    const extraTopMM = view === 'autofit' ? topPadPX * mmPerPx : 0;
+    const extraTopMM = padMode === 'autofit' ? topPadPX * mmPerPx : 0;
 
     return {
       minX,
@@ -899,19 +915,70 @@ export default function GuidelinesPage() {
   }
   
   function goToTop() {
-    const { minY, stagePadMM, extraTopMM } = computeBaseView();
-    void stagePadMM;
-    void extraTopMM;
-    setPan((p) => ({ ...p, y: -minY }));
+    // Goal: match the SAME grey gap you see after "Reset view".
+    // Reset view => view='autofit', zoom=DEFAULT_ZOOM, pan={0,0}.
+    // We'll compute the autofit extraTopMM using DEFAULT_ZOOM framing (not current view).
+  
+    // Current base view (for solving pan in the current mode)
+    const cur = computeBaseView();
+  
+    // Compute what extraTopMM would be under resetView() conditions.
+    // These constants must match computeBaseView():
+    const topPadPX = 30;
+    const stagePadMM_Auto = 22;
+  
+    // Under reset view, zoomForView = DEFAULT_AUTOFIT_ZOOM (=4), and stage pad is 22mm.
+    // We only need vh to convert px->mm for the top gap.
+    // We'll approximate vh_reset as the current vh if we're already autofit+DEFAULT_AUTOFIT_ZOOM,
+    // otherwise recompute it from the guide bounds at zoom = DEFAULT_AUTOFIT_ZOOM.
+    let vh_reset = cur.vh;
+  
+    // Recompute vh_reset from the guide bounds using zoom = DEFAULT_AUTOFIT_ZOOM (4).
+    // This mirrors the autofit branch in computeBaseView but only for vh.
+    if (guideSets.length > 0) {
+      const fitPad = 8;
+      const pts = guideSets.flatMap((guideSet) => [
+        ...guideSet.ascLine,
+        ...guideSet.waistLine,
+        ...guideSet.baseLine,
+        ...guideSet.descLine,
+      ]);
+  
+      const ys = pts.map((p) => p.y);
+      const minY0 = Math.min(...ys) - fitPad;
+      const maxY0 = Math.max(...ys) + fitPad;
+  
+      const vh0 = Math.max(1, maxY0 - minY0);
+      vh_reset = vh0 / Math.max(1, DEFAULT_AUTOFIT_ZOOM);
+    }
+  
+    const baseVhMM_reset = vh_reset + stagePadMM_Auto * 2;
+    const mmPerPx_reset = previewPxH > 0 ? baseVhMM_reset / previewPxH : 0;
+    const extraTopMM_reset = topPadPX * mmPerPx_reset;
+  
+    // After reset view, the viewBox minY is effectively: -extraTopMM_reset (because minY gets clamped to stagePad).
+    // So our target for the current viewBox is: minYc_target = -extraTopMM_reset.
+    const minYc_target = -extraTopMM_reset;
+  
+    // Current vb formula: minYc = cur.minY + pan.y - cur.stagePadMM - cur.extraTopMM
+    // Solve for pan.y:
+    // pan.y = minYc_target + cur.stagePadMM + cur.extraTopMM - cur.minY
+    setPan((p) => ({
+      ...p,
+      y: minYc_target + cur.stagePadMM + cur.extraTopMM - cur.minY,
+    }));
   }
+  
+  
 
   
 
   function adjustZoom(direction: 'in' | 'out') {
-    // Seed from what the user is currently seeing to avoid a jump:
-    // - in autofit, the visible zoom is DEFAULT_AUTOFIT_ZOOM
-    // - in fullpage, the visible zoom is 1 (fits whole page)
-    // - in custom, the visible zoom is the zoom state
+    // Only set the origin WHEN LEAVING a non-custom mode.
+    // If we're already in custom, keep the existing origin.
+    if (view === 'fullpage') setCustomOrigin('fullpage');
+    if (view === 'autofit') setCustomOrigin('autofit');
+  
     const currentEffectiveZoom =
       view === 'custom'
         ? zoom
@@ -920,11 +987,14 @@ export default function GuidelinesPage() {
           : 1;
   
     const next =
-      direction === 'in' ? currentEffectiveZoom * 1.25 : currentEffectiveZoom / 1.25;
+      direction === 'in'
+        ? currentEffectiveZoom * 1.25
+        : currentEffectiveZoom / 1.25;
   
     setView('custom');
     setZoom(clamp(next, 1, 12));
   }
+  
   
   
 
@@ -1006,7 +1076,7 @@ export default function GuidelinesPage() {
               viewBox={vb.str}
               className={`block mx-auto w-full h-[38vh] sm:h-[44vh] md:h-[50vh] touch-none ${isPanning ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
               style={{ background: '#cbd5e1' }}
-              preserveAspectRatio={view === 'fullpage' ? 'xMidYMid meet' : 'xMidYMin meet'}
+              preserveAspectRatio={(view === 'fullpage' || (view === 'custom' && customOrigin === 'fullpage')) ? 'xMidYMid meet' : 'xMidYMin meet'}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
@@ -1232,78 +1302,38 @@ export default function GuidelinesPage() {
               />
             </div>
             <div className="col-span-2">
-              <div className="grid grid-cols-2 gap-4">
-                {/* Baseline indicator */}
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium text-slate-700">Baseline indicator</div>
-                    <p className="text-xs text-slate-500">Toggles the interpunct circle marker.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => setShowBaselineIndicator(v => !v)}
-                    className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-                      ${showBaselineIndicator ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition ${showBaselineIndicator ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
-                      <span className="h-3 w-3 rounded-full bg-white shadow" />
-                    </span>
-                    {showBaselineIndicator ? 'On' : 'Off'}
-                  </button>
-                </div>
+  <div className="grid grid-cols-2 gap-4 items-center">
+    {/* Baseline color */}
+    <label className="flex items-center justify-between gap-3">
+      <span className="font-medium text-slate-700">Baseline color</span>
+      <input
+        type="color"
+        className="h-10 w-10 p-0 rounded-md border border-slate-300 bg-white"
+        value={baselineColor}
+        onChange={(e) => {
+          setBaselineColor(e.target.value);
+          setHighContrastMode(false);
+        }}
+      />
+    </label>
 
-                {/* High contrast mode */}
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium text-slate-700">High contrast mode</div>
-                    <p className="text-xs text-slate-500">Forces main four lines to thick black for maximum visibility.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => setHighContrastMode(v => !v)}
-                    className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-                      ${highContrastMode ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition ${highContrastMode ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
-                      <span className="h-3 w-3 rounded-full bg-white shadow" />
-                    </span>
-                    {highContrastMode ? 'On' : 'Off'}
-                  </button>
-                </div>
-              </div>
-            </div>
+    {/* Waistline color */}
+    <label className="flex items-center justify-between gap-3">
+      <span className="font-medium text-slate-700">Waistline color</span>
+      <input
+        type="color"
+        className="h-10 w-10 p-0 rounded-md border border-slate-300 bg-white"
+        value={waistlineColor}
+        onChange={(e) => {
+          setWaistlineColor(e.target.value);
+          setHighContrastMode(false);
+        }}
+      />
+    </label>
+  </div>
+</div>
 
-            <div className="col-span-2">
-              <div className="grid grid-cols-2 gap-4 items-start">
-                <div>
-                  <label className="font-medium text-slate-700">Baseline color</label>
-                  <input
-                    type="color"
-                    className="mt-1 w-full h-10 p-1 rounded-lg border border-slate-300 bg-white"
-                    value={baselineColor}
-                    onChange={(e) => {
-                      setBaselineColor(e.target.value);
-                      setHighContrastMode(false);
-                    }}
-                  />
-                </div>
 
-                <div>
-                  <label className="font-medium text-slate-700">Waistline color</label>
-                  <input
-                    type="color"
-                    className="mt-1 w-full h-10 p-1 rounded-lg border border-slate-300 bg-white"
-                    value={waistlineColor}
-                    onChange={(e) => {
-                      setWaistlineColor(e.target.value);
-                      setHighContrastMode(false);
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
             <div className="sm:col-span-2 grid grid-cols-2 gap-4">
               {/* X-line contrast */}
               <div>
