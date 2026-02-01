@@ -433,7 +433,7 @@ export default function GuidelinesPage() {
     : false));
   const DEFAULT_ZOOM = isNarrow ? 5 : 4;
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
-  const DEFAULT_AUTOFIT_ZOOM = 1.4;
+  const [customOrigin, setCustomOrigin] = useState<'autofit' | 'fullpage'>('autofit');
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
 
@@ -452,17 +452,9 @@ export default function GuidelinesPage() {
     const mq = window.matchMedia('(max-width: 640px)');
     const update = () => setIsNarrow(mq.matches);
     update();
-    if (mq.addEventListener) {
-      mq.addEventListener('change', update);
-    } else {
-      mq.addListener(update);
-    }
+    mq.addEventListener('change', update);
     return () => {
-      if (mq.removeEventListener) {
-        mq.removeEventListener('change', update);
-      } else {
-        mq.removeListener(update);
-      }
+      mq.removeEventListener('change', update);
     };
   }, []);
 
@@ -672,15 +664,15 @@ export default function GuidelinesPage() {
 
   const computeBaseView = () => {
     const topPadPX = 30;
-    const fitZoom = view === 'autofit' ? DEFAULT_AUTOFIT_ZOOM : 1;
-    const zoomForView = view === 'custom' ? zoom : fitZoom;
+    const zoomForView = view === 'fullpage' ? 1 : zoom;
+    const padMode = view === 'custom' ? customOrigin : view;
 
     // Stage padding:
     // - Full page: ~5px top/bottom (converted into mm)
     // - Autofit: keep the nicer roomy stage pad in mm
     const fullPagePadPX = 5;
     const stagePadMM =
-      view === 'fullpage'
+      padMode === 'fullpage'
         ? (() => {
           // Convert px -> mm using the visible SVG height and the page height.
           // This is "good enough" and stays stable for small margins.
@@ -744,6 +736,8 @@ export default function GuidelinesPage() {
     };
   };
 
+  const padMode = view === 'custom' ? customOrigin : view;
+
   // ---------- ViewBox (includes stage margin so paper stands out) ----------
   const vb = useMemo(() => {
     const { minX, minY, vw, vh, stagePadMM, extraTopMM } = computeBaseView();
@@ -767,7 +761,7 @@ export default function GuidelinesPage() {
     }
 
     return { minX: minXc, minY: minYc, vw: vwc, vh: vhc, str: `${minXc} ${minYc} ${vwc} ${vhc}` };
-  }, [view, box, guideSets, zoom, pan, previewPxH, DEFAULT_AUTOFIT_ZOOM]);
+  }, [view, box, guideSets, zoom, pan, previewPxH, customOrigin]);
   /* ---------------- Export actions ---------------- */
   const MM_TO_PT = 72 / 25.4;
 
@@ -896,32 +890,27 @@ export default function GuidelinesPage() {
     setView('autofit');
     setZoom(DEFAULT_ZOOM);
     setPan({ x: 0, y: 0 });
+    setCustomOrigin('autofit');
   }
   
   function goToTop() {
     const { minY, stagePadMM, extraTopMM } = computeBaseView();
-    void stagePadMM;
-    void extraTopMM;
-    setPan((p) => ({ ...p, y: -minY }));
+    const gapMM = view === 'autofit' ? extraTopMM : stagePadMM;
+    setPan((p) => ({ ...p, y: stagePadMM + extraTopMM - minY - gapMM }));
   }
 
   
 
   function adjustZoom(direction: 'in' | 'out') {
     // Seed from what the user is currently seeing to avoid a jump:
-    // - in autofit, the visible zoom is DEFAULT_AUTOFIT_ZOOM
     // - in fullpage, the visible zoom is 1 (fits whole page)
-    // - in custom, the visible zoom is the zoom state
-    const currentEffectiveZoom =
-      view === 'custom'
-        ? zoom
-        : view === 'autofit'
-          ? DEFAULT_AUTOFIT_ZOOM
-          : 1;
+    // - in autofit/custom, the visible zoom is the zoom state
+    const currentEffectiveZoom = view === 'fullpage' ? 1 : zoom;
   
     const next =
       direction === 'in' ? currentEffectiveZoom * 1.25 : currentEffectiveZoom / 1.25;
   
+    setCustomOrigin(view === 'fullpage' ? 'fullpage' : 'autofit');
     setView('custom');
     setZoom(clamp(next, 1, 12));
   }
@@ -962,7 +951,11 @@ export default function GuidelinesPage() {
                   className="p-1.5 text-sm rounded-lg border border-slate-300"
                   value={view}
                   onChange={e => {
-                    setView(e.target.value as ViewMode);
+                    const nextView = e.target.value as ViewMode;
+                    if (nextView === 'custom') {
+                      setCustomOrigin(view === 'fullpage' ? 'fullpage' : 'autofit');
+                    }
+                    setView(nextView);
                     setPan({ x: 0, y: 0 });
                   }}
                 >
@@ -1006,7 +999,7 @@ export default function GuidelinesPage() {
               viewBox={vb.str}
               className={`block mx-auto w-full h-[38vh] sm:h-[44vh] md:h-[50vh] touch-none ${isPanning ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
               style={{ background: '#cbd5e1' }}
-              preserveAspectRatio={view === 'fullpage' ? 'xMidYMid meet' : 'xMidYMin meet'}
+              preserveAspectRatio={padMode === 'fullpage' ? 'xMidYMid meet' : 'xMidYMin meet'}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
