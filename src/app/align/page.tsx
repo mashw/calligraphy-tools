@@ -912,7 +912,7 @@ export default function Home() {
           <div className="overflow-x-auto">
             <svg
               viewBox={`0 0 ${stageFrame.widthPx} ${stageFrame.heightPx}`}
-              className="block mx-auto w-full h-auto"
+              className="block mx-auto w-full h-[38vh] sm:h-[44vh] md:h-[50vh]"
               preserveAspectRatio="xMidYMid meet"
               shapeRendering="crispEdges"
             >
