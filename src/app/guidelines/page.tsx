@@ -343,12 +343,13 @@ export default function GuidelinesPage() {
   const [customOrigin, setCustomOrigin] = useState<'autofit' | 'fullpage'>('autofit');
 
 
-  const [showBaselineIndicator, setShowBaselineIndicator] = useState(true);
+  const [showBaselineIndicator, setShowBaselineIndicator] = useState(false);
   const [baselineColor, setBaselineColor] = useState('#111827');
   const [waistlineColor, setWaistlineColor] = useState('#111827');
   const [xLineContrast, setXLineContrast] = useState(1);
   const [xLineThickness, setXLineThickness] = useState(1); // multiplier
   const [highContrastMode, setHighContrastMode] = useState(false);
+  const [showCenterLine, setShowCenterLine] = useState(false);
 
 
   const midY = (a: Pt[], b: Pt[]) => (a[0].y + b[0].y) / 2;
@@ -1121,6 +1122,18 @@ export default function GuidelinesPage() {
                   />
                 )}
 
+                {showCenterLine && (
+                  <line
+                    x1={box.w / 2}
+                    x2={box.w / 2}
+                    y1={margins.top}
+                    y2={box.h - margins.bottom}
+                    stroke="#000"
+                    strokeWidth={highContrastMode ? swBold : swThin}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
+
                 {guideSets.map((guideSet, index) => {
                   const x1 = guideSet.baseLine[0].x;
                   const x2 = guideSet.baseLine[guideSet.baseLine.length - 1].x;
@@ -1399,6 +1412,77 @@ export default function GuidelinesPage() {
               <option value="Fraktur">Fraktur</option>
               <option value="TexturaQuadrata">Textura Quadrata</option>
             </select>
+          </div>
+
+          <div className="sm:col-span-2 grid grid-cols-3 gap-4">
+            {/* Baseline indicator */}
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium text-slate-700">Baseline indicator</div>
+                <p className="text-xs text-slate-500">Toggles the interpunct circle marker.</p>
+              </div>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setShowBaselineIndicator(v => !v)}
+                className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+        ${showBaselineIndicator
+          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+          : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+              >
+                <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
+        ${showBaselineIndicator ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
+                  <span className="h-3 w-3 rounded-full bg-white shadow" />
+                </span>
+                {showBaselineIndicator ? 'On' : 'Off'}
+              </button>
+            </div>
+
+            {/* High contrast mode */}
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium text-slate-700">High contrast mode</div>
+                <p className="text-xs text-slate-500">Forces main four lines to thick black for maximum visibility.</p>
+              </div>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setHighContrastMode(v => !v)}
+                className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+        ${highContrastMode
+          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+          : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+              >
+                <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
+        ${highContrastMode ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
+                  <span className="h-3 w-3 rounded-full bg-white shadow" />
+                </span>
+                {highContrastMode ? 'On' : 'Off'}
+              </button>
+            </div>
+
+            {/* Center line */}
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium text-slate-700">Center line</div>
+                <p className="text-xs text-slate-500">Draws a vertical line down the page center across rows.</p>
+              </div>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setShowCenterLine(v => !v)}
+                className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+        ${showCenterLine
+          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+          : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+              >
+                <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
+        ${showCenterLine ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
+                  <span className="h-3 w-3 rounded-full bg-white shadow" />
+                </span>
+                {showCenterLine ? 'On' : 'Off'}
+              </button>
+            </div>
           </div>
 
           {script === 'Copperplate' ? (
