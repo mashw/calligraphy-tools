@@ -998,6 +998,7 @@ export default function GuidelinesPage() {
   
   
   
+  const centerX = margins.left + (box.w - margins.left - margins.right) / 2;
 
   return (
     <main className="min-h-screen text-slate-900 relative">
@@ -1122,17 +1123,19 @@ export default function GuidelinesPage() {
                   />
                 )}
 
-                {showCenterLine && (
-                  <line
-                    x1={box.w / 2}
-                    x2={box.w / 2}
-                    y1={margins.top}
-                    y2={box.h - margins.bottom}
-                    stroke="#000"
-                    strokeWidth={highContrastMode ? swBold : swThin}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                )}
+
+
+{showCenterLine && (
+  <line
+  x1={centerX}
+  x2={centerX}
+    y1={margins.top}
+    y2={box.h - margins.bottom}
+    stroke="#000"
+    strokeWidth={highContrastMode ? swBold : swThin}
+    vectorEffect="non-scaling-stroke"
+  />
+)}
 
                 {guideSets.map((guideSet, index) => {
                   const x1 = guideSet.baseLine[0].x;
