@@ -1336,9 +1336,9 @@ export default function GuidelinesPage() {
                   </button>
                 </div>
 
-                {/* Contrast */}
+                {/* High-contrast */}
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-slate-700">Contrast</div>
+                  <div className="text-sm font-medium text-slate-700">High-contrast</div>
                   <button
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
@@ -1424,8 +1424,10 @@ export default function GuidelinesPage() {
                   step="0.01"
                   className="mt-2 w-full"
                   value={highContrastMode ? 1 : xLineContrast}
-                  onChange={(e) => setXLineContrast(parseFloat(e.target.value))}
-                  disabled={highContrastMode}
+                  onChange={(e) => {
+                    setXLineContrast(parseFloat(e.target.value));
+                    setHighContrastMode(false);
+                  }}
                 />
                 <p className="mt-1 text-xs text-slate-500">
                   Affects only ascender, waistline, baseline, descender. Contrast scales alpha; hue is preserved.
@@ -1445,8 +1447,10 @@ export default function GuidelinesPage() {
                   step="0.05"
                   className="mt-2 w-full"
                   value={highContrastMode ? 1.8 : xLineThickness}
-                  onChange={(e) => setXLineThickness(parseFloat(e.target.value))}
-                  disabled={highContrastMode}
+                  onChange={(e) => {
+                    setXLineThickness(parseFloat(e.target.value));
+                    setHighContrastMode(false);
+                  }}
                 />
                 <p className="mt-1 text-xs text-slate-500">
                   Multiplies the stroke thickness of the main four X-lines.
