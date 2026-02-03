@@ -29,7 +29,7 @@ type PaperId = keyof typeof PAPERS_MM;
 type CurvePresetId = 'simpleArch' | 'highArch' | 'shallowArch' | 'compoundArch' | 'zanerian';
 type Orientation = 'portrait' | 'landscape';
 type AlignMode = 'start' | 'center' | 'end';
-type ViewMode = 'autofit' | 'fullpage';
+type ViewMode = 'autofit' | 'fullpage' | 'custom';
 
 const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0.5);
 
@@ -234,6 +234,7 @@ export default function CurvedTitlePage() {
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
   const [view, setView] = useState<ViewMode>('autofit');
+  const [customOrigin, setCustomOrigin] = useState<'autofit' | 'fullpage'>('autofit');
 
   const snapHalf = (v: number) => Math.round(v * 2) / 2;
 
@@ -278,7 +279,12 @@ export default function CurvedTitlePage() {
   const [rotDeg, setRotDeg] = useState(0);
   const [scalePct, setScalePct] = useState(100);
 
-  const [zoom, setZoom] = useState(1);
+  const [isNarrow, setIsNarrow] = useState(() => (typeof window !== 'undefined'
+    ? window.matchMedia('(max-width: 640px)').matches
+    : false));
+  const DEFAULT_ZOOM = isNarrow ? 5 : 4;
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
+  const DEFAULT_AUTOFIT_ZOOM = 4;
   const [pan, setPan] = useState({ x: 0, y: 0 });
 
   const [savedViewBeforeCurveDrag, setSavedViewBeforeCurveDrag] = useState<ViewMode | null>(null);
@@ -298,6 +304,7 @@ export default function CurvedTitlePage() {
   } | null>(null);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const [previewPxH, setPreviewPxH] = useState(0);
 
   // Sticky centering: snap + hysteresis
   const snapStateRef = useRef<{ snapped: boolean }>({ snapped: true });
@@ -321,6 +328,46 @@ export default function CurvedTitlePage() {
     return () => {
       html.style.backgroundImage = prevHtmlBg;
       body.style.backgroundImage = prevBodyBg;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 640px)');
+    const update = () => setIsNarrow(mq.matches);
+    update();
+    if (mq.addEventListener) {
+      mq.addEventListener('change', update);
+    } else {
+      mq.addListener(update);
+    }
+    return () => {
+      if (mq.removeEventListener) {
+        mq.removeEventListener('change', update);
+      } else {
+        mq.removeListener(update);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      setPreviewPxH(r.height);
+    };
+
+    update();
+
+    const ro = new ResizeObserver(() => update());
+    ro.observe(el);
+
+    window.addEventListener('resize', update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
     };
   }, []);
 
@@ -653,22 +700,41 @@ export default function CurvedTitlePage() {
   const radiusToStart = Math.hypot(pageCenter.x - startPt.x, pageCenter.y - startPt.y);
   const overWarn = layout.overBy > 0;
 
-  // ---------- ViewBox (includes stage margin so paper stands out) ----------
-  const vb = useMemo(() => {
-    const stagePadMM = 22;
+  const computeBaseView = () => {
+    const topPadPX = 30;
+    const padMode: 'autofit' | 'fullpage' =
+      view === 'custom' ? customOrigin : (view === 'fullpage' ? 'fullpage' : 'autofit');
+
+    const fitZoom = view === 'autofit' ? DEFAULT_AUTOFIT_ZOOM : 1;
+    const zoomForView = view === 'custom' ? zoom : fitZoom;
+
+    const fullPagePadPX = 5;
+    const stagePadMM =
+      padMode === 'fullpage'
+        ? (() => {
+          const pxH = Math.max(1, previewPxH);
+          const mmPerPx = box.h / pxH;
+          return fullPagePadPX * mmPerPx;
+        })()
+        : 22;
 
     let minX: number;
     let minY: number;
     let vw: number;
     let vh: number;
 
-    if (view === 'fullpage' || view === 'autofit') {
-      // Frame the page (not the curve). This prevents curve scale/rotation
-      // from feeling like zooming the camera.
-      vw = box.w / Math.max(1, zoom);
-      vh = box.h / Math.max(1, zoom);
-      minX = (box.w - vw) / 2;
-      minY = (box.h - vh) / 2;
+    if (padMode === 'fullpage') {
+      if (view === 'custom') {
+        vw = box.w / Math.max(1, zoomForView);
+        vh = box.h / Math.max(1, zoomForView);
+        minX = (box.w - vw) / 2;
+        minY = (box.h - vh) / 2;
+      } else {
+        vw = box.w;
+        vh = box.h;
+        minX = 0;
+        minY = 0;
+      }
     } else {
       const fitPad = 8;
       const pts = [
@@ -687,19 +753,46 @@ export default function CurvedTitlePage() {
       const cx = (minX0 + maxX0) / 2;
       const cy = (minY0 + maxY0) / 2;
 
-      vw = Math.max(1, maxX0 - minX0) / Math.max(1, zoom);
-      vh = Math.max(1, maxY0 - minY0) / Math.max(1, zoom);
+      vw = Math.max(1, maxX0 - minX0) / Math.max(1, zoomForView);
+      vh = Math.max(1, maxY0 - minY0) / Math.max(1, zoomForView);
       minX = cx - vw / 2;
       minY = cy - vh / 2;
+      minY = Math.min(minY, stagePadMM);
     }
 
-    const minXc = minX + pan.x - stagePadMM;
-    const minYc = minY + pan.y - stagePadMM;
-    const vwc = vw + stagePadMM * 2;
-    const vhc = vh + stagePadMM * 2;
+    const baseVhMM = vh + stagePadMM * 2;
+    const mmPerPx = previewPxH > 0 ? baseVhMM / previewPxH : 0;
+    const extraTopMM = padMode === 'autofit' ? topPadPX * mmPerPx : 0;
+
+    return {
+      minX,
+      minY,
+      vw,
+      vh,
+      stagePadMM,
+      extraTopMM,
+    };
+  };
+
+  // ---------- ViewBox (includes stage margin so paper stands out) ----------
+  const vb = useMemo(() => {
+    const { minX, minY, vw, vh, stagePadMM, extraTopMM } = computeBaseView();
+
+    let minXc = minX + pan.x - stagePadMM;
+    let minYc = minY + pan.y - stagePadMM - extraTopMM;
+    let vwc = vw + stagePadMM * 2;
+    let vhc = vh + stagePadMM * 2;
+
+    if (view === 'autofit') {
+      const minVwc = box.w + stagePadMM * 2;
+      if (vwc < minVwc) {
+        vwc = minVwc;
+        minXc = -stagePadMM + pan.x;
+      }
+    }
 
     return { minX: minXc, minY: minYc, vw: vwc, vh: vhc, str: `${minXc} ${minYc} ${vwc} ${vhc}` };
-  }, [view, box, zoom, pan]);
+  }, [view, box, guideSet, zoom, pan, previewPxH, DEFAULT_AUTOFIT_ZOOM, customOrigin]);
 
 
   /* ---------------- Export actions ---------------- */
@@ -880,8 +973,33 @@ export default function CurvedTitlePage() {
   }
 
   function resetView() {
-    setZoom(1);
+    setView('autofit');
+    setZoom(DEFAULT_ZOOM);
     setPan({ x: 0, y: 0 });
+  }
+
+  function reframeView() {
+    setPan({ x: 0, y: 0 });
+  }
+
+  function adjustZoom(direction: 'in' | 'out') {
+    if (view === 'fullpage') setCustomOrigin('fullpage');
+    if (view === 'autofit') setCustomOrigin('autofit');
+
+    const currentEffectiveZoom =
+      view === 'custom'
+        ? zoom
+        : view === 'autofit'
+          ? DEFAULT_AUTOFIT_ZOOM
+          : 1;
+
+    const next =
+      direction === 'in'
+        ? currentEffectiveZoom * 1.25
+        : currentEffectiveZoom / 1.25;
+
+    setView('custom');
+    setZoom(clamp(next, 1, 12));
   }
 
   function resetGuidePlacement() {
@@ -974,19 +1092,23 @@ export default function CurvedTitlePage() {
                 >
                   <option value="autofit">Auto-fit curve</option>
                   <option value="fullpage">Full page / envelope</option>
+                  <option value="custom">Custom</option>
                 </select>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <button onMouseDown={e => e.preventDefault()} onClick={() => setZoom(z => Math.max(1, z / 1.25))} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
+              <button onMouseDown={e => e.preventDefault()} onClick={() => adjustZoom('out')} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
                 –
               </button>
-              <button onMouseDown={e => e.preventDefault()} onClick={() => setZoom(z => Math.min(12, z * 1.25))} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
+              <button onMouseDown={e => e.preventDefault()} onClick={() => adjustZoom('in')} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
                 +
               </button>
               <button onMouseDown={e => e.preventDefault()} onClick={resetView} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
                 Reset view
+              </button>
+              <button onMouseDown={e => e.preventDefault()} onClick={reframeView} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
+                Reframe
               </button>
               <button onMouseDown={e => e.preventDefault()} onClick={resetGuidePlacement} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white">
                 Reset guide placement
@@ -1014,7 +1136,7 @@ export default function CurvedTitlePage() {
               viewBox={vb.str}
               className={`block mx-auto w-full h-[64vh] touch-none ${isCurveDragging ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
               style={{ background: '#cbd5e1' }}
-              preserveAspectRatio="xMidYMid meet"
+              preserveAspectRatio={(view === 'fullpage' || (view === 'custom' && customOrigin === 'fullpage')) ? 'xMidYMid meet' : 'xMidYMin meet'}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
