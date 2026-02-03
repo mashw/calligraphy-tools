@@ -1098,34 +1098,33 @@ export default function CurvedTitlePage() {
 
 
 
-        <div className="mb-4">
-          {/* Desktop toolbar (single row) */}
-          <div className="hidden md:flex md:items-center md:gap-3 md:flex-nowrap">
-            {/* Left cluster: Preview + view */}
-            <div className="flex items-center gap-3 flex-nowrap">
+        <div className="max-w-[1120px] mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+            <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-slate-800">Preview</h3>
                 <InfoTip side="right">
                   Drag anywhere to pan. Zoom with ±. Drag any guideline to move the curve guide (sticky centering on X).
                 </InfoTip>
               </div>
-
-              <select
-                className="p-1.5 text-sm rounded-lg border border-slate-300"
-                value={view}
-                onChange={e => {
-                  setView(e.target.value as ViewMode);
-                  setPan({ x: 0, y: 0 });
-                }}
-              >
-                <option value="autofit">Auto-fit curve</option>
-                <option value="fullpage">Full page / envelope</option>
-                <option value="custom">Custom</option>
-              </select>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">View:</span>
+                <select
+                  className="p-1.5 text-sm rounded-lg border border-slate-300"
+                  value={view}
+                  onChange={e => {
+                    setView(e.target.value as ViewMode);
+                    setPan({ x: 0, y: 0 });
+                  }}
+                >
+                  <option value="autofit">Auto-fit curve</option>
+                  <option value="fullpage">Full page / envelope</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
             </div>
 
-            {/* Middle: zoom + actions */}
-            <div className="flex items-center gap-2 flex-nowrap">
+            <div className="flex items-center gap-2">
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => adjustZoom('out')}
@@ -1133,7 +1132,6 @@ export default function CurvedTitlePage() {
               >
                 –
               </button>
-
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => adjustZoom('in')}
@@ -1141,7 +1139,6 @@ export default function CurvedTitlePage() {
               >
                 +
               </button>
-
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={reframeView}
@@ -1149,7 +1146,6 @@ export default function CurvedTitlePage() {
               >
                 Reset view
               </button>
-
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={resetGuidePlacement}
@@ -1157,7 +1153,6 @@ export default function CurvedTitlePage() {
               >
                 Center guide
               </button>
-
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={centerCurveHorizontally}
@@ -1165,18 +1160,14 @@ export default function CurvedTitlePage() {
               >
                 Center horizontally
               </button>
-            </div>
 
-            {/* Right: exports */}
-            <div className="ml-auto flex items-center gap-2 flex-nowrap">
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={downloadSVG}
-                className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
+                className="ml-2 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
               >
                 SVG
               </button>
-
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={downloadPDF}
@@ -1184,7 +1175,6 @@ export default function CurvedTitlePage() {
               >
                 PDF
               </button>
-
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={printToScale}
@@ -1194,108 +1184,6 @@ export default function CurvedTitlePage() {
               </button>
             </div>
           </div>
-
-          {/* Mobile toolbar (exactly two rows) */}
-          <div className="md:hidden flex flex-col gap-2">
-            {/* Row 1: Preview + view + zoom */}
-            <div className="flex items-center gap-2 flex-nowrap">
-              <div className="flex items-center gap-2 flex-nowrap">
-                <h3 className="font-semibold text-slate-800">Preview</h3>
-                <InfoTip side="right">
-                  Drag anywhere to pan. Zoom with ±. Drag any guideline to move the curve guide (sticky centering on X).
-                </InfoTip>
-              </div>
-
-              <select
-                className="p-1.5 text-sm rounded-lg border border-slate-300"
-                value={view}
-                onChange={e => {
-                  setView(e.target.value as ViewMode);
-                  setPan({ x: 0, y: 0 });
-                }}
-              >
-                <option value="autofit">Auto-fit curve</option>
-                <option value="fullpage">Full page / envelope</option>
-                <option value="custom">Custom</option>
-              </select>
-
-              <button
-                onMouseDown={e => e.preventDefault()}
-                onClick={() => adjustZoom('out')}
-                className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
-              >
-                –
-              </button>
-
-              <button
-                onMouseDown={e => e.preventDefault()}
-                onClick={() => adjustZoom('in')}
-                className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
-              >
-                +
-              </button>
-            </div>
-
-            {/* Row 2: actions left, exports right */}
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={reframeView}
-                  className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
-                >
-                  Reset view
-                </button>
-
-                <button
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={resetGuidePlacement}
-                  className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
-                >
-                  Center guide
-                </button>
-
-                <button
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={centerCurveHorizontally}
-                  className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
-                >
-                  Center horizontally
-                </button>
-              </div>
-
-              <div className="ml-auto flex items-center gap-2 flex-nowrap">
-                <button
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={downloadSVG}
-                  className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
-                >
-                  SVG
-                </button>
-
-                <button
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={downloadPDF}
-                  className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
-                >
-                  PDF
-                </button>
-
-                <button
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={printToScale}
-                  className="px-3 py-1.5 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500"
-                >
-                  Print
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-
-
-
 
 
         {/* Darker stage behind paper */}
@@ -1493,16 +1381,17 @@ export default function CurvedTitlePage() {
             </div>
           </div>
         </div>
+      </div>
     </section>
 
-      {/* Controls */ }
-  <section className="px-6 py-5 max-w-[1120px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
-    {/* Step 1 */}
-    <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
-      <div className="flex items-center gap-2">
-        <h2 className="text-lg font-semibold text-slate-800">Step 1 — Basics</h2>
-        <InfoTip side="right">Curve guide movement snaps to horizontal centre unless you pull far enough to release.</InfoTip>
-      </div>
+      {/* Controls */}
+      <section className="px-6 py-5 max-w-[1120px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Step 1 */}
+        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-slate-800">Step 1 — Basics</h2>
+            <InfoTip side="right">Curve guide movement snaps to horizontal centre unless you pull far enough to release.</InfoTip>
+          </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
         <div>
