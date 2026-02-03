@@ -1151,7 +1151,7 @@ export default function CurvedTitlePage() {
                 onClick={resetGuidePlacement}
                 className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
               >
-                Center guide
+                Reset guide
               </button>
               <button
                 onMouseDown={e => e.preventDefault()}
