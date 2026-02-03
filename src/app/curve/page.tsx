@@ -1099,7 +1099,7 @@ export default function CurvedTitlePage() {
 
 
         <div className="max-w-[1120px] mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+          <div className="flex flex-wrap items-start gap-3 mb-2">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-slate-800">Preview</h3>
@@ -1124,39 +1124,39 @@ export default function CurvedTitlePage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 ml-auto">
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => adjustZoom('out')}
-                className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
               >
                 –
               </button>
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => adjustZoom('in')}
-                className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
               >
                 +
               </button>
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={reframeView}
-                className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
               >
                 Reset view
               </button>
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={resetGuidePlacement}
-                className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
               >
                 Center guide
               </button>
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={centerCurveHorizontally}
-                className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
               >
                 Center horizontally
               </button>
@@ -1164,21 +1164,21 @@ export default function CurvedTitlePage() {
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={downloadSVG}
-                className="ml-2 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 ml-2 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
               >
                 SVG
               </button>
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={downloadPDF}
-                className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
               >
                 PDF
               </button>
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={printToScale}
-                className="px-3 py-1.5 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500"
+                className="shrink-0 px-3 py-1.5 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500"
               >
                 Print
               </button>
@@ -1191,7 +1191,7 @@ export default function CurvedTitlePage() {
           <svg
             ref={svgRef}
             viewBox={vb.str}
-            className={`block mx-auto w-full h-[64vh] touch-none ${isCurveDragging ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
+            className={`block mx-auto w-full h-[38vh] sm:h-[44vh] md:h-[50vh] touch-none ${isCurveDragging ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
             style={{ background: '#cbd5e1' }}
             preserveAspectRatio={(view === 'fullpage' || (view === 'custom' && customOrigin === 'fullpage')) ? 'xMidYMid meet' : 'xMidYMin meet'}
             onPointerDown={onPointerDown}
