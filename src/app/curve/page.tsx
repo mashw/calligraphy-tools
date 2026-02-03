@@ -974,14 +974,14 @@ export default function CurvedTitlePage() {
     }
   }
 
-  function resetView() {
-    setView('autofit');
-    setZoom(DEFAULT_ZOOM);
+  function applyViewPreset(nextView: ViewMode) {
+    setView(nextView);
     setPan({ x: 0, y: 0 });
   }
 
-  function reframeView() {
-    setPan({ x: 0, y: 0 });
+  function resetView() {
+    applyViewPreset('autofit');
+    setZoom(DEFAULT_ZOOM);
   }
 
   function adjustZoom(direction: 'in' | 'out') {
@@ -1113,8 +1113,7 @@ export default function CurvedTitlePage() {
                   className="p-1.5 text-sm rounded-lg border border-slate-300"
                   value={view}
                   onChange={e => {
-                    setView(e.target.value as ViewMode);
-                    setPan({ x: 0, y: 0 });
+                    applyViewPreset(e.target.value as ViewMode);
                   }}
                 >
                   <option value="autofit">Auto-fit curve</option>
@@ -1141,7 +1140,7 @@ export default function CurvedTitlePage() {
               </button>
               <button
                 onMouseDown={e => e.preventDefault()}
-                onClick={reframeView}
+                onClick={() => applyViewPreset('autofit')}
                 className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
               >
                 Reset view
