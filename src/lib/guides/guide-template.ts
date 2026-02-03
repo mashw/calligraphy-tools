@@ -22,8 +22,10 @@ export type GuideTemplateParams = {
   ascMM: number;
   descMM: number;
   tickStepMM?: number;     // used for vertical ticks
+  tickAnchorS?: number;    // phase anchor along baseline arc-length (mm)
   actualNibMM?: number;    // used for horizontal tick spacing
 };
+
 
 export const BLACKLETTER_GUIDE_DEFAULTS = {
   xNib: 5,
@@ -42,25 +44,35 @@ export function blackletterGuideHeightsMM(nibMM: number) {
 }
 
 function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
-  const { baseline, xMM, ascMM, descMM, tickStepMM, actualNibMM } = params;
-
+  const { baseline, xMM, ascMM, descMM, tickStepMM, tickAnchorS, actualNibMM } = params;
   const baseLine = baseline;
   const waistLine = offset(baseline, -xMM);
   const ascLine = offset(baseline, -(xMM + ascMM));
   const descLine = offset(baseline, descMM);
 
-  // Existing vertical-ish ticks (along baseline normals)
   const step = Math.max(0.0001, tickStepMM ?? 1);
   const ticks: { a: Pt; b: Pt }[] = [];
   const arcLen = lengthPoly(baseline);
 
-  for (let s = 0; s <= arcLen; s += step) {
-    const { p, n } = pointAt(baseline, s);
+  // Phase anchor: we will generate ticks at s = anchor + k * step
+  // so there is always a tick exactly at the anchor value.
+  const anchor = Number.isFinite(tickAnchorS as number) ? (tickAnchorS as number) : 0;
+
+  const kMin = Math.floor((0 - anchor) / step);
+  const kMax = Math.ceil((arcLen - anchor) / step);
+
+  for (let k = kMin; k <= kMax; k += 1) {
+    const s = anchor + k * step;
+    const sClamped = Math.max(0, Math.min(arcLen, s));
+    const { p, n } = pointAt(baseline, sClamped);
+
     ticks.push({
       a: { x: p.x - n.x * (xMM + ascMM), y: p.y - n.y * (xMM + ascMM) },
       b: { x: p.x + n.x * descMM, y: p.y + n.y * descMM },
     });
   }
+
+
 
   // NEW: curve-parallel intermediate rails (offset polylines)
   // Spaced every 1× *actual* nib width in mm (not effective nib).
@@ -92,7 +104,8 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
 
 
 function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
-  const { baseline, xMM, ascMM, descMM, tickStepMM } = params;
+  const { baseline, xMM, ascMM, descMM, tickStepMM, tickAnchorS } = params;
+
   const ascLine = offset(baseline, -(xMM + ascMM));
   const waistLine = offset(baseline, -xMM);
   const baseLine = baseline;
@@ -105,20 +118,30 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
   const topOff = xMM + ascMM;
   const botOff = descMM;
 
-  for (let s = 0; s <= arcLen; s += step) {
+  // Phase anchor: ticks at s = anchor + k * step, guaranteeing a tick at anchor.
+  const anchor = Number.isFinite(tickAnchorS as number) ? (tickAnchorS as number) : 0;
+
+  const kMin = Math.floor((0 - anchor) / step);
+  const kMax = Math.ceil((arcLen - anchor) / step);
+
+  for (let k = kMin; k <= kMax; k += 1) {
+    const s = anchor + k * step;
+    const sClamped = Math.max(0, Math.min(arcLen, s));
+
     // Top of tick occurs "later" along the curve than the bottom for forward slant
-    const sTop = Math.max(0, Math.min(arcLen, s + topOff * cot));
-    const sBot = Math.max(0, Math.min(arcLen, s - botOff * cot));
+    const sTop = Math.max(0, Math.min(arcLen, sClamped + topOff * cot));
+    const sBot = Math.max(0, Math.min(arcLen, sClamped - botOff * cot));
 
     const Ct = pointAt(baseline, sTop);
     const Cb = pointAt(baseline, sBot);
 
     ticks.push({
-      // a = top (asc rail), b = bottom (desc rail) or vice versa doesn’t matter visually
       a: { x: Ct.p.x - Ct.n.x * topOff, y: Ct.p.y - Ct.n.y * topOff },
       b: { x: Cb.p.x + Cb.n.x * botOff, y: Cb.p.y + Cb.n.y * botOff },
     });
   }
+
+
   return { ascLine, waistLine, baseLine, descLine, ticks };
 }
 

@@ -496,23 +496,20 @@ export default function CurvedTitlePage() {
   const translatePoly = (poly: Pt[], dx: number, dy: number) => poly.map(p => ({ x: p.x + dx, y: p.y + dy }));
 
   const baseline = useMemo(() => translatePoly(baselineBase, curveOffset.x, curveOffset.y), [baselineBase, curveOffset]);
+  
   const arcLen = useMemo(() => lengthPoly(baseline), [baseline]);
   const guideTemplate = script === 'Copperplate' ? 'copperplate' : 'blackletter';
-  const guideSet = useMemo(
+
+  const tickStepMM = useMemo(
     () =>
-      buildGuideSet(guideTemplate, {
-        baseline,
-        xMM,
-        ascMM,
-        descMM,
-        tickStepMM:
-          script === 'Copperplate'
-            ? Math.max(xMM * 0.9, 3)
-            : effectiveNibMM,
-        actualNibMM: nibMM,
-      }),
-    [baseline, guideTemplate, xMM, ascMM, descMM, effectiveNibMM, nibMM, script],
+      script === 'Copperplate'
+        ? Math.max(xMM * 0.9, 3)
+        : effectiveNibMM,
+    [script, xMM, effectiveNibMM],
   );
+
+
+
 
   // ---------- Layout along the curve ----------
   type Place = { ch: string; w: number; h: number; sMid: number };
@@ -615,6 +612,25 @@ export default function CurvedTitlePage() {
     const sEnd = Math.min(arcLen, last.sMid + last.w / 2);
     return { sStart, sEnd };
   }, [layout, arcLen]);
+  
+  const guideSet = useMemo(
+    () =>
+      buildGuideSet(guideTemplate, {
+        baseline,
+        xMM,
+        ascMM,
+        descMM,
+        tickStepMM,
+        tickAnchorS: span ? span.sStart : undefined,
+        actualNibMM: nibMM,
+      }),
+    [baseline, guideTemplate, xMM, ascMM, descMM, tickStepMM, nibMM, span],
+  );
+
+
+
+  
+  
 
   const spanPoly = useMemo(() => {
     if (!span) return null;
@@ -646,7 +662,9 @@ export default function CurvedTitlePage() {
     let vw: number;
     let vh: number;
 
-    if (view === 'fullpage') {
+    if (view === 'fullpage' || view === 'autofit') {
+      // Frame the page (not the curve). This prevents curve scale/rotation
+      // from feeling like zooming the camera.
       vw = box.w / Math.max(1, zoom);
       vh = box.h / Math.max(1, zoom);
       minX = (box.w - vw) / 2;
@@ -681,7 +699,8 @@ export default function CurvedTitlePage() {
     const vhc = vh + stagePadMM * 2;
 
     return { minX: minXc, minY: minYc, vw: vwc, vh: vhc, str: `${minXc} ${minYc} ${vwc} ${vhc}` };
-  }, [view, box, guideSet, zoom, pan]);
+  }, [view, box, zoom, pan]);
+
 
   /* ---------------- Export actions ---------------- */
   const MM_TO_PT = 72 / 25.4;
