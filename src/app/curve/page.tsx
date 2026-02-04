@@ -702,13 +702,32 @@ export default function CurvedTitlePage() {
   const radiusToStart = Math.hypot(pageCenter.x - startPt.x, pageCenter.y - startPt.y);
   const overWarn = layout.overBy > 0;
 
-  const computeBaseView = () => {
+  const getGuideCenter = () => {
+    const pts = [
+      ...guideSet.ascLine,
+      ...guideSet.waistLine,
+      ...guideSet.baseLine,
+      ...guideSet.descLine,
+    ];
+    const xs = pts.map(p => p.x);
+    const ys = pts.map(p => p.y);
+    return {
+      cx: (Math.min(...xs) + Math.max(...xs)) / 2,
+      cy: (Math.min(...ys) + Math.max(...ys)) / 2,
+    };
+  };
+
+  const computeBaseViewFor = (
+    viewArg: ViewMode,
+    zoomArg: number,
+    originArg: 'autofit' | 'fullpage',
+  ) => {
     const topPadPX = 30;
     const padMode: 'autofit' | 'fullpage' =
-      view === 'custom' ? customOrigin : (view === 'fullpage' ? 'fullpage' : 'autofit');
+      viewArg === 'custom' ? originArg : (viewArg === 'fullpage' ? 'fullpage' : 'autofit');
 
-    const fitZoom = view === 'autofit' ? DEFAULT_AUTOFIT_ZOOM : 1;
-    const zoomForView = view === 'custom' ? zoom : fitZoom;
+    const fitZoom = viewArg === 'autofit' ? DEFAULT_AUTOFIT_ZOOM : 1;
+    const zoomForView = viewArg === 'custom' ? zoomArg : fitZoom;
 
     const fullPagePadPX = 5;
     const stagePadMM =
@@ -726,7 +745,7 @@ export default function CurvedTitlePage() {
     let vh: number;
 
     if (padMode === 'fullpage') {
-      if (view === 'custom') {
+      if (viewArg === 'custom') {
         vw = box.w / Math.max(1, zoomForView);
         vh = box.h / Math.max(1, zoomForView);
         minX = (box.w - vw) / 2;
@@ -775,6 +794,8 @@ export default function CurvedTitlePage() {
       extraTopMM,
     };
   };
+
+  const computeBaseView = () => computeBaseViewFor(view, zoom, customOrigin);
 
   // ---------- ViewBox (includes stage margin so paper stands out) ----------
   const vb = useMemo(() => {
@@ -985,8 +1006,9 @@ export default function CurvedTitlePage() {
   }
 
   function adjustZoom(direction: 'in' | 'out') {
-    if (view === 'fullpage') setCustomOrigin('fullpage');
-    if (view === 'autofit') setCustomOrigin('autofit');
+    const nextOrigin =
+      view === 'fullpage' ? 'fullpage' : (view === 'autofit' ? 'autofit' : customOrigin);
+    setCustomOrigin(nextOrigin);
 
     const currentEffectiveZoom =
       view === 'custom'
@@ -995,58 +1017,74 @@ export default function CurvedTitlePage() {
           ? DEFAULT_AUTOFIT_ZOOM
           : 1;
 
-          const step = view === 'autofit' ? 1.10 : 1.25;
+    const step = view === 'autofit' ? 1.10 : 1.25;
 
-          const next =
-            direction === 'in'
-              ? currentEffectiveZoom * step
-              : currentEffectiveZoom / step;
-          
+    const nextZoom =
+      direction === 'in'
+        ? currentEffectiveZoom * step
+        : currentEffectiveZoom / step;
+
+    const { cx, cy } = getGuideCenter();
+    const { minX, minY, vw, vh, stagePadMM, extraTopMM } = computeBaseViewFor(
+      'custom',
+      nextZoom,
+      nextOrigin,
+    );
+    const vwc = vw + stagePadMM * 2;
+    const vhc = vh + stagePadMM * 2;
+
+    const panX = (cx - vwc / 2) - (minX - stagePadMM);
+    const panY = (cy - vhc / 2) - (minY - stagePadMM - extraTopMM);
+
+    setView('custom');
+    setZoom(nextZoom);
+    setPan({ x: panX, y: panY });
+  }
 
 
-function defaultGuideOffset() {
-  // Use the current guideSet (which is built from baseline including curveOffset)
-  // but compute the offset as if we were centered on X and at y=0.
-  // We do that by measuring current guide center and shifting it to a target Y.
-  const pts = [
-    ...guideSet.ascLine,
-    ...guideSet.waistLine,
-    ...guideSet.baseLine,
-    ...guideSet.descLine,
-  ];
+  function defaultGuideOffset() {
+    // Use the current guideSet (which is built from baseline including curveOffset)
+    // but compute the offset as if we were centered on X and at y=0.
+    // We do that by measuring current guide center and shifting it to a target Y.
+    const pts = [
+      ...guideSet.ascLine,
+      ...guideSet.waistLine,
+      ...guideSet.baseLine,
+      ...guideSet.descLine,
+    ];
 
-  const ys = pts.map(p => p.y);
-  const guideCy = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const ys = pts.map(p => p.y);
+    const guideCy = (Math.min(...ys) + Math.max(...ys)) / 2;
 
-  // Closer to top than before. Tune if needed.
-  const targetCy = box.h * 0.22;
+    // Closer to top than before. Tune if needed.
+    const targetCy = box.h * 0.22;
 
-  // Because guideSet already includes the current curveOffset,
-  // return the delta needed from the current y.
-  return targetCy - guideCy;
-}
+    // Because guideSet already includes the current curveOffset,
+    // return the delta needed from the current y.
+    return targetCy - guideCy;
+  }
 
-function resetGuidePlacement() {
-  // Same placement as initial load: centered X, and guide center nearer the top.
-  const pts = [
-    ...guideSet.ascLine,
-    ...guideSet.waistLine,
-    ...guideSet.baseLine,
-    ...guideSet.descLine,
-  ];
-  const ys = pts.map(p => p.y);
-  const guideCy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  function resetGuidePlacement() {
+    // Same placement as initial load: centered X, and guide center nearer the top.
+    const pts = [
+      ...guideSet.ascLine,
+      ...guideSet.waistLine,
+      ...guideSet.baseLine,
+      ...guideSet.descLine,
+    ];
+    const ys = pts.map(p => p.y);
+    const guideCy = (Math.min(...ys) + Math.max(...ys)) / 2;
 
-  const targetCy = box.h * 0.22;
-  const dy = targetCy - guideCy;
+    const targetCy = box.h * 0.22;
+    const dy = targetCy - guideCy;
 
-  snapStateRef.current.snapped = true;
+    snapStateRef.current.snapped = true;
 
-  setCurveOffset(prev => ({
-    x: centerDx,
-    y: prev.y + dy,
-  }));
-}
+    setCurveOffset(prev => ({
+      x: centerDx,
+      y: prev.y + dy,
+    }));
+  }
 
 
 
