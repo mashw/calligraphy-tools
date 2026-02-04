@@ -1190,7 +1190,7 @@ const targetCy = box.h * 0.22;
 
         <div className="max-w-[1120px] mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4">
           <div className="flex flex-wrap items-start gap-3 mb-2">
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
               <div className="flex items-center gap-2">
                 {!isNarrow && <h3 className="font-semibold text-slate-800">Preview</h3>}
                 <InfoTip side="right">
@@ -1198,7 +1198,7 @@ const targetCy = box.h * 0.22;
                 </InfoTip>
               </div>
               <div className="flex items-center gap-2 flex-nowrap">
-                <span className="text-xs text-slate-500">View:</span>
+                {!isNarrow && <span className="text-xs text-slate-500">View:</span>}
                 <select
                   className="p-1.5 text-sm rounded-lg border border-slate-300"
                   value={view}
@@ -1227,7 +1227,7 @@ const targetCy = box.h * 0.22;
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 ml-auto">
+            <div className="flex items-center gap-2 w-full justify-start overflow-x-auto flex-nowrap sm:overflow-visible sm:flex-wrap sm:w-auto sm:ml-auto">
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => applyViewPreset('autofit')}
@@ -1247,20 +1247,20 @@ const targetCy = box.h * 0.22;
                 onClick={centerCurveHorizontally}
                 className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
-                Center horizontally
+                {isNarrow ? 'Center guide' : 'Center horizontally'}
               </button>
 
               <div className="relative inline-flex shrink-0 ml-2">
                 <button
                   onMouseDown={e => e.preventDefault()}
                   onClick={downloadSelected}
-                  className="px-3 py-1.5 text-sm rounded-l-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                  className="shrink-0 px-3 py-1.5 text-sm rounded-l-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
                 >
                   Download
                 </button>
                 <details ref={downloadDetailsRef} className="relative">
                   <summary
-                    className="list-none [&::-webkit-details-marker]:hidden px-2 py-1.5 text-sm rounded-r-lg border border-l-0 border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition cursor-pointer"
+                    className="shrink-0 list-none [&::-webkit-details-marker]:hidden px-2 py-1.5 text-sm rounded-r-lg border border-l-0 border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition cursor-pointer"
                     aria-label="Choose download format"
                   >
                     ▾
