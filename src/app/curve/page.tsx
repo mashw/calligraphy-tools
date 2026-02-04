@@ -235,6 +235,7 @@ export default function CurvedTitlePage() {
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
   const [view, setView] = useState<ViewMode>('autofit');
   const [customOrigin, setCustomOrigin] = useState<'autofit' | 'fullpage'>('autofit');
+  const [downloadFormat, setDownloadFormat] = useState<'pdf' | 'svg'>('pdf');
 
   const snapHalf = (v: number) => Math.round(v * 2) / 2;
 
@@ -305,6 +306,7 @@ export default function CurvedTitlePage() {
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [previewPxH, setPreviewPxH] = useState(0);
+  const downloadDetailsRef = useRef<HTMLDetailsElement | null>(null);
 
   // Sticky centering: snap + hysteresis
   const snapStateRef = useRef<{ snapped: boolean }>({ snapped: true });
@@ -878,6 +880,14 @@ export default function CurvedTitlePage() {
     downloadBlob(pdfBlob, 'curved-title.pdf');
   }
 
+  function downloadSelected() {
+    if (downloadFormat === 'pdf') {
+      downloadPDF();
+    } else {
+      downloadSVG();
+    }
+  }
+
   function printToScale() {
     const svg = svgRef.current;
     if (!svg) return;
@@ -1180,14 +1190,14 @@ const targetCy = box.h * 0.22;
 
         <div className="max-w-[1120px] mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4">
           <div className="flex flex-wrap items-start gap-3 mb-2">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-slate-800">Preview</h3>
+                {!isNarrow && <h3 className="font-semibold text-slate-800">Preview</h3>}
                 <InfoTip side="right">
                   Drag anywhere to pan. Zoom with ±. Drag any guideline to move the curve guide (sticky centering on X).
                 </InfoTip>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-nowrap">
                 <span className="text-xs text-slate-500">View:</span>
                 <select
                   className="p-1.5 text-sm rounded-lg border border-slate-300"
@@ -1200,24 +1210,24 @@ const targetCy = box.h * 0.22;
                   <option value="fullpage">Full page / envelope</option>
                   <option value="custom">Custom</option>
                 </select>
+                <button
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => adjustZoom('out')}
+                  className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                >
+                  –
+                </button>
+                <button
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => adjustZoom('in')}
+                  className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                >
+                  +
+                </button>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 ml-auto">
-              <button
-                onMouseDown={e => e.preventDefault()}
-                onClick={() => adjustZoom('out')}
-                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
-              >
-                –
-              </button>
-              <button
-                onMouseDown={e => e.preventDefault()}
-                onClick={() => adjustZoom('in')}
-                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
-              >
-                +
-              </button>
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => applyViewPreset('autofit')}
@@ -1240,20 +1250,45 @@ const targetCy = box.h * 0.22;
                 Center horizontally
               </button>
 
-              <button
-                onMouseDown={e => e.preventDefault()}
-                onClick={downloadSVG}
-                className="shrink-0 ml-2 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
-              >
-                SVG
-              </button>
-              <button
-                onMouseDown={e => e.preventDefault()}
-                onClick={downloadPDF}
-                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
-              >
-                PDF
-              </button>
+              <div className="relative inline-flex shrink-0 ml-2">
+                <button
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={downloadSelected}
+                  className="px-3 py-1.5 text-sm rounded-l-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                >
+                  Download
+                </button>
+                <details ref={downloadDetailsRef} className="relative">
+                  <summary
+                    className="list-none [&::-webkit-details-marker]:hidden px-2 py-1.5 text-sm rounded-r-lg border border-l-0 border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition cursor-pointer"
+                    aria-label="Choose download format"
+                  >
+                    ▾
+                  </summary>
+                  <div className="absolute right-0 mt-1 w-32 rounded-lg border border-slate-200 bg-white shadow-lg ring-1 ring-black/5 p-1 z-20">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDownloadFormat('pdf');
+                        downloadDetailsRef.current?.removeAttribute('open');
+                      }}
+                      className="w-full text-left px-3 py-1.5 text-sm rounded-md hover:bg-slate-50"
+                    >
+                      PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDownloadFormat('svg');
+                        downloadDetailsRef.current?.removeAttribute('open');
+                      }}
+                      className="w-full text-left px-3 py-1.5 text-sm rounded-md hover:bg-slate-50"
+                    >
+                      SVG
+                    </button>
+                  </div>
+                </details>
+              </div>
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={printToScale}
