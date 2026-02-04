@@ -995,19 +995,60 @@ export default function CurvedTitlePage() {
           ? DEFAULT_AUTOFIT_ZOOM
           : 1;
 
-    const next =
-      direction === 'in'
-        ? currentEffectiveZoom * 1.25
-        : currentEffectiveZoom / 1.25;
+          const step = view === 'autofit' ? 1.10 : 1.25;
 
-    setView('custom');
-    setZoom(clamp(next, 1, 12));
-  }
+          const next =
+            direction === 'in'
+              ? currentEffectiveZoom * step
+              : currentEffectiveZoom / step;
+          
 
-  function resetGuidePlacement() {
-    snapStateRef.current.snapped = true;
-    setCurveOffset({ x: centerDx, y: 0 });
-  }
+
+function defaultGuideOffset() {
+  // Use the current guideSet (which is built from baseline including curveOffset)
+  // but compute the offset as if we were centered on X and at y=0.
+  // We do that by measuring current guide center and shifting it to a target Y.
+  const pts = [
+    ...guideSet.ascLine,
+    ...guideSet.waistLine,
+    ...guideSet.baseLine,
+    ...guideSet.descLine,
+  ];
+
+  const ys = pts.map(p => p.y);
+  const guideCy = (Math.min(...ys) + Math.max(...ys)) / 2;
+
+  // Closer to top than before. Tune if needed.
+  const targetCy = box.h * 0.22;
+
+  // Because guideSet already includes the current curveOffset,
+  // return the delta needed from the current y.
+  return targetCy - guideCy;
+}
+
+function resetGuidePlacement() {
+  // Same placement as initial load: centered X, and guide center nearer the top.
+  const pts = [
+    ...guideSet.ascLine,
+    ...guideSet.waistLine,
+    ...guideSet.baseLine,
+    ...guideSet.descLine,
+  ];
+  const ys = pts.map(p => p.y);
+  const guideCy = (Math.min(...ys) + Math.max(...ys)) / 2;
+
+  const targetCy = box.h * 0.22;
+  const dy = targetCy - guideCy;
+
+  snapStateRef.current.snapped = true;
+
+  setCurveOffset(prev => ({
+    x: centerDx,
+    y: prev.y + dy,
+  }));
+}
+
+
 
   function centerCurveHorizontally() {
     snapStateRef.current.snapped = true;
@@ -1061,8 +1102,9 @@ export default function CurvedTitlePage() {
     const ys = pts.map(p => p.y);
     const guideCy = (Math.min(...ys) + Math.max(...ys)) / 2;
 
-    // Target: about 30% down the page (tune to match your screenshot)
-    const targetCy = box.h * 0.30;
+// Target: closer to the top (tune to match screenshot)
+const targetCy = box.h * 0.22;
+
 
     snapStateRef.current.snapped = true;
 
