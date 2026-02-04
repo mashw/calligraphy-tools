@@ -1207,35 +1207,35 @@ const targetCy = box.h * 0.22;
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => adjustZoom('out')}
-                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
                 –
               </button>
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => adjustZoom('in')}
-                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
                 +
               </button>
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => applyViewPreset('autofit')}
-                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
                 Reset view
               </button>
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={resetGuidePlacement}
-                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
                 Reset guide
               </button>
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={centerCurveHorizontally}
-                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
                 Center horizontally
               </button>
@@ -1243,21 +1243,21 @@ const targetCy = box.h * 0.22;
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={downloadSVG}
-                className="shrink-0 ml-2 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 ml-2 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
                 SVG
               </button>
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={downloadPDF}
-                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
                 PDF
               </button>
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={printToScale}
-                className="shrink-0 px-3 py-1.5 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500"
+                className="shrink-0 px-3 py-1.5 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
                 Print
               </button>
