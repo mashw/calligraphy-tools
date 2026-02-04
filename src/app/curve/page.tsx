@@ -1234,13 +1234,13 @@ const targetCy = box.h * 0.22;
                     <button
                       onMouseDown={e => e.preventDefault()}
                       onClick={downloadSelected}
-                      className="shrink-0 px-3 py-1.5 text-sm rounded-l-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                      className={`shrink-0 min-w-0 max-w-full rounded-l-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition ${isNarrow ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'}`}
                     >
                       Download
                     </button>
                     <details ref={downloadDetailsRef} className="relative">
                       <summary
-                        className="shrink-0 list-none [&::-webkit-details-marker]:hidden px-2 py-1.5 text-sm rounded-r-lg border border-l-0 border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition cursor-pointer"
+                        className={`shrink-0 min-w-0 max-w-full list-none [&::-webkit-details-marker]:hidden rounded-r-lg border border-l-0 border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition cursor-pointer ${isNarrow ? 'px-1.5 py-1 text-xs' : 'px-2 py-1.5 text-sm'}`}
                         aria-label="Choose download format"
                       >
                         ▾
@@ -1272,7 +1272,7 @@ const targetCy = box.h * 0.22;
                   <button
                     onMouseDown={e => e.preventDefault()}
                     onClick={printToScale}
-                    className="shrink-0 px-3 py-1.5 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                    className={`shrink-0 min-w-0 max-w-full rounded-lg text-white bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition ${isNarrow ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'}`}
                   >
                     Print
                   </button>
@@ -1282,21 +1282,21 @@ const targetCy = box.h * 0.22;
                   <button
                     onMouseDown={e => e.preventDefault()}
                     onClick={() => applyViewPreset('autofit')}
-                    className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                    className={`shrink-0 min-w-0 max-w-full rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition ${isNarrow ? 'px-1.5 py-1 text-xs' : 'px-2 py-1 text-sm'}`}
                   >
                     Reset view
                   </button>
                   <button
                     onMouseDown={e => e.preventDefault()}
                     onClick={resetGuidePlacement}
-                    className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                    className={`shrink-0 min-w-0 max-w-full rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition ${isNarrow ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'}`}
                   >
                     Reset guide
                   </button>
                   <button
                     onMouseDown={e => e.preventDefault()}
                     onClick={centerCurveHorizontally}
-                    className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                    className={`shrink-0 min-w-0 max-w-full rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition ${isNarrow ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'}`}
                   >
                     {isNarrow ? 'Center guide' : 'Center horizontally'}
                   </button>
@@ -1305,13 +1305,13 @@ const targetCy = box.h * 0.22;
                     <button
                       onMouseDown={e => e.preventDefault()}
                       onClick={downloadSelected}
-                      className="shrink-0 px-3 py-1.5 text-sm rounded-l-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                      className={`shrink-0 min-w-0 max-w-full rounded-l-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition ${isNarrow ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'}`}
                     >
                       Download
                     </button>
                     <details ref={downloadDetailsRef} className="relative">
                       <summary
-                        className="shrink-0 list-none [&::-webkit-details-marker]:hidden px-2 py-1.5 text-sm rounded-r-lg border border-l-0 border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition cursor-pointer"
+                        className={`shrink-0 min-w-0 max-w-full list-none [&::-webkit-details-marker]:hidden rounded-r-lg border border-l-0 border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition cursor-pointer ${isNarrow ? 'px-1.5 py-1 text-xs' : 'px-2 py-1.5 text-sm'}`}
                         aria-label="Choose download format"
                       >
                         ▾
@@ -1343,7 +1343,7 @@ const targetCy = box.h * 0.22;
                   <button
                     onMouseDown={e => e.preventDefault()}
                     onClick={printToScale}
-                    className="shrink-0 px-3 py-1.5 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                    className={`shrink-0 min-w-0 max-w-full rounded-lg text-white bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition ${isNarrow ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'}`}
                   >
                     Print
                   </button>
@@ -1356,21 +1356,21 @@ const targetCy = box.h * 0.22;
                 <button
                   onMouseDown={e => e.preventDefault()}
                   onClick={() => applyViewPreset('autofit')}
-                  className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                  className={`shrink-0 min-w-0 max-w-full rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition ${isNarrow ? 'px-1.5 py-1 text-xs' : 'px-2 py-1 text-sm'}`}
                 >
                   Reset view
                 </button>
                 <button
                   onMouseDown={e => e.preventDefault()}
                   onClick={resetGuidePlacement}
-                  className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                  className={`shrink-0 min-w-0 max-w-full rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition ${isNarrow ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'}`}
                 >
                   Reset guide
                 </button>
                 <button
                   onMouseDown={e => e.preventDefault()}
                   onClick={centerCurveHorizontally}
-                  className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                  className={`shrink-0 min-w-0 max-w-full rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition ${isNarrow ? 'px-2 py-1 text-xs' : 'px-3 py-1.5 text-sm'}`}
                 >
                   {isNarrow ? 'Center guide' : 'Center horizontally'}
                 </button>
