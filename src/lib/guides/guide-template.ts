@@ -75,14 +75,17 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
 
 
   // NEW: curve-parallel intermediate rails (offset polylines)
-  // Spaced every 1× *actual* nib width in mm (not effective nib).
+  // Spaced in REAL nib units, with half-nib placement rules per band:
+  // - descender: half (if any) lives at the BOTTOM
+  // - x-height:  half (if any) lives at the TOP
+  // - ascender:  half (if any) lives at the TOP
   const hGuides: Pt[][] = [];
 
   if (actualNibMM != null && actualNibMM > 0) {
-    const topOff = -(xMM + ascMM);
-    const waistOff = -xMM;
-    const baseOff = 0;
-    const descOff = descMM;
+    const topOff = -(xMM + ascMM); // ascLine offset from baseline
+    const waistOff = -xMM;         // waistLine offset from baseline
+    const baseOff = 0;             // baseLine offset from baseline
+    const descOff = descMM;        // descLine offset from baseline
 
     const EPS = 1e-2; // 0.01mm tolerance
 
@@ -92,12 +95,60 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
       Math.abs(d - baseOff) < EPS ||
       Math.abs(d - descOff) < EPS;
 
-    // Step from descender (+) up to ascender (-)
-    for (let d = descOff; d >= topOff - EPS; d -= actualNibMM) {
-      if (isNearNamedOff(d)) continue;
-      hGuides.push(offset(baseline, d));
-    }
+    // Coerce to nearest half-nib count to avoid float noise (sliders are 0.5 steps).
+    const toHalfNibs = (mm: number) => Math.round((mm / actualNibMM) * 2) / 2;
+
+    type HalfPlacement = 'top' | 'bottom';
+
+    // Returns internal boundary offsets measured DOWN from the band's TOP edge, in mm.
+    const internalOffsetsFromTopMM = (bandMM: number, placement: HalfPlacement): number[] => {
+      const n = toHalfNibs(bandMM);
+      const whole = Math.floor(n + 1e-9);
+      const hasHalf = Math.abs(n - (whole + 0.5)) < 1e-9;
+
+      const out: number[] = [];
+
+      if (!hasHalf) {
+        // Whole nibs: boundaries at 1,2,...,whole-1 nibs from top
+        for (let i = 1; i < whole; i += 1) out.push(i * actualNibMM);
+        return out;
+      }
+
+      if (placement === 'top') {
+        // Half nib at TOP: boundaries at 0.5, 1.5, 2.5, ... (whole entries)
+        for (let i = 0; i < whole; i += 1) out.push((0.5 + i) * actualNibMM);
+        return out;
+      }
+
+      // placement === 'bottom'
+      // Half nib at BOTTOM: boundaries at 1,2,3,...,whole nibs from top
+      // (the last segment is the 0.5 remainder at the bottom)
+      for (let i = 1; i <= whole; i += 1) out.push(i * actualNibMM);
+      return out;
+    };
+
+    const pushBand = (bandTopOff: number, bandMM: number, placement: HalfPlacement) => {
+      const offs = internalOffsetsFromTopMM(bandMM, placement);
+      for (const dTop of offs) {
+        const d = bandTopOff + dTop; // convert band-local offset to baseline-relative offset
+        // Keep inside the band (avoid named lines and avoid floating edge collisions)
+        if (d <= bandTopOff + EPS) continue;
+        if (d >= bandTopOff + bandMM - EPS) continue;
+        if (isNearNamedOff(d)) continue;
+        hGuides.push(offset(baseline, d));
+      }
+    };
+
+    // Ascender band: ascLine -> waistLine (half at TOP)
+    pushBand(topOff, ascMM, 'top');
+
+    // X-height band: waistLine -> baseLine (half at TOP)
+    pushBand(waistOff, xMM, 'top');
+
+    // Descender band: baseLine -> descLine (half at BOTTOM)
+    pushBand(baseOff, descMM, 'bottom');
   }
+
 
   return { ascLine, waistLine, baseLine, descLine, ticks, hGuides };
 }
