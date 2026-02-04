@@ -974,14 +974,14 @@ export default function CurvedTitlePage() {
     }
   }
 
-  function resetView() {
-    setView('autofit');
-    setZoom(DEFAULT_ZOOM);
+  function applyViewPreset(nextView: ViewMode) {
+    setView(nextView);
     setPan({ x: 0, y: 0 });
   }
 
-  function reframeView() {
-    setPan({ x: 0, y: 0 });
+  function resetView() {
+    applyViewPreset('autofit');
+    setZoom(DEFAULT_ZOOM);
   }
 
   function adjustZoom(direction: 'in' | 'out') {
@@ -995,19 +995,60 @@ export default function CurvedTitlePage() {
           ? DEFAULT_AUTOFIT_ZOOM
           : 1;
 
-    const next =
-      direction === 'in'
-        ? currentEffectiveZoom * 1.25
-        : currentEffectiveZoom / 1.25;
+          const step = view === 'autofit' ? 1.10 : 1.25;
 
-    setView('custom');
-    setZoom(clamp(next, 1, 12));
-  }
+          const next =
+            direction === 'in'
+              ? currentEffectiveZoom * step
+              : currentEffectiveZoom / step;
+          
 
-  function resetGuidePlacement() {
-    snapStateRef.current.snapped = true;
-    setCurveOffset({ x: centerDx, y: 0 });
-  }
+
+function defaultGuideOffset() {
+  // Use the current guideSet (which is built from baseline including curveOffset)
+  // but compute the offset as if we were centered on X and at y=0.
+  // We do that by measuring current guide center and shifting it to a target Y.
+  const pts = [
+    ...guideSet.ascLine,
+    ...guideSet.waistLine,
+    ...guideSet.baseLine,
+    ...guideSet.descLine,
+  ];
+
+  const ys = pts.map(p => p.y);
+  const guideCy = (Math.min(...ys) + Math.max(...ys)) / 2;
+
+  // Closer to top than before. Tune if needed.
+  const targetCy = box.h * 0.22;
+
+  // Because guideSet already includes the current curveOffset,
+  // return the delta needed from the current y.
+  return targetCy - guideCy;
+}
+
+function resetGuidePlacement() {
+  // Same placement as initial load: centered X, and guide center nearer the top.
+  const pts = [
+    ...guideSet.ascLine,
+    ...guideSet.waistLine,
+    ...guideSet.baseLine,
+    ...guideSet.descLine,
+  ];
+  const ys = pts.map(p => p.y);
+  const guideCy = (Math.min(...ys) + Math.max(...ys)) / 2;
+
+  const targetCy = box.h * 0.22;
+  const dy = targetCy - guideCy;
+
+  snapStateRef.current.snapped = true;
+
+  setCurveOffset(prev => ({
+    x: centerDx,
+    y: prev.y + dy,
+  }));
+}
+
+
 
   function centerCurveHorizontally() {
     snapStateRef.current.snapped = true;
@@ -1061,8 +1102,9 @@ export default function CurvedTitlePage() {
     const ys = pts.map(p => p.y);
     const guideCy = (Math.min(...ys) + Math.max(...ys)) / 2;
 
-    // Target: about 30% down the page (tune to match your screenshot)
-    const targetCy = box.h * 0.30;
+// Target: closer to the top (tune to match screenshot)
+const targetCy = box.h * 0.22;
+
 
     snapStateRef.current.snapped = true;
 
@@ -1098,204 +1140,91 @@ export default function CurvedTitlePage() {
 
 
 
-        <div className="mb-4">
-          {/* Desktop toolbar (single row) */}
-          <div className="hidden md:flex md:items-center md:gap-3 md:flex-nowrap">
-            {/* Left cluster: Preview + view */}
-            <div className="flex items-center gap-3 flex-nowrap">
+        <div className="max-w-[1120px] mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4">
+          <div className="flex flex-wrap items-start gap-3 mb-2">
+            <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-slate-800">Preview</h3>
                 <InfoTip side="right">
                   Drag anywhere to pan. Zoom with ±. Drag any guideline to move the curve guide (sticky centering on X).
                 </InfoTip>
               </div>
-
-              <select
-                className="p-1.5 text-sm rounded-lg border border-slate-300"
-                value={view}
-                onChange={e => {
-                  setView(e.target.value as ViewMode);
-                  setPan({ x: 0, y: 0 });
-                }}
-              >
-                <option value="autofit">Auto-fit curve</option>
-                <option value="fullpage">Full page / envelope</option>
-                <option value="custom">Custom</option>
-              </select>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">View:</span>
+                <select
+                  className="p-1.5 text-sm rounded-lg border border-slate-300"
+                  value={view}
+                  onChange={e => {
+                    applyViewPreset(e.target.value as ViewMode);
+                  }}
+                >
+                  <option value="autofit">Auto-fit curve</option>
+                  <option value="fullpage">Full page / envelope</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
             </div>
 
-            {/* Middle: zoom + actions */}
-            <div className="flex items-center gap-2 flex-nowrap">
+            <div className="flex flex-wrap items-center gap-2 ml-auto">
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => adjustZoom('out')}
-                className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
               >
                 –
               </button>
-
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={() => adjustZoom('in')}
-                className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
               >
                 +
               </button>
-
               <button
                 onMouseDown={e => e.preventDefault()}
-                onClick={reframeView}
-                className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
+                onClick={() => applyViewPreset('autofit')}
+                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
               >
                 Reset view
               </button>
-
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={resetGuidePlacement}
-                className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
               >
-                Center guide
+                Reset guide
               </button>
-
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={centerCurveHorizontally}
-                className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
               >
                 Center horizontally
               </button>
-            </div>
 
-            {/* Right: exports */}
-            <div className="ml-auto flex items-center gap-2 flex-nowrap">
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={downloadSVG}
-                className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 ml-2 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
               >
                 SVG
               </button>
-
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={downloadPDF}
-                className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
+                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
               >
                 PDF
               </button>
-
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={printToScale}
-                className="px-3 py-1.5 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500"
+                className="shrink-0 px-3 py-1.5 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500"
               >
                 Print
               </button>
             </div>
           </div>
-
-          {/* Mobile toolbar (exactly two rows) */}
-          <div className="md:hidden flex flex-col gap-2">
-            {/* Row 1: Preview + view + zoom */}
-            <div className="flex items-center gap-2 flex-nowrap">
-              <div className="flex items-center gap-2 flex-nowrap">
-                <h3 className="font-semibold text-slate-800">Preview</h3>
-                <InfoTip side="right">
-                  Drag anywhere to pan. Zoom with ±. Drag any guideline to move the curve guide (sticky centering on X).
-                </InfoTip>
-              </div>
-
-              <select
-                className="p-1.5 text-sm rounded-lg border border-slate-300"
-                value={view}
-                onChange={e => {
-                  setView(e.target.value as ViewMode);
-                  setPan({ x: 0, y: 0 });
-                }}
-              >
-                <option value="autofit">Auto-fit curve</option>
-                <option value="fullpage">Full page / envelope</option>
-                <option value="custom">Custom</option>
-              </select>
-
-              <button
-                onMouseDown={e => e.preventDefault()}
-                onClick={() => adjustZoom('out')}
-                className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
-              >
-                –
-              </button>
-
-              <button
-                onMouseDown={e => e.preventDefault()}
-                onClick={() => adjustZoom('in')}
-                className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
-              >
-                +
-              </button>
-            </div>
-
-            {/* Row 2: actions left, exports right */}
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={reframeView}
-                  className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white"
-                >
-                  Reset view
-                </button>
-
-                <button
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={resetGuidePlacement}
-                  className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
-                >
-                  Center guide
-                </button>
-
-                <button
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={centerCurveHorizontally}
-                  className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
-                >
-                  Center horizontally
-                </button>
-              </div>
-
-              <div className="ml-auto flex items-center gap-2 flex-nowrap">
-                <button
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={downloadSVG}
-                  className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
-                >
-                  SVG
-                </button>
-
-                <button
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={downloadPDF}
-                  className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white"
-                >
-                  PDF
-                </button>
-
-                <button
-                  onMouseDown={e => e.preventDefault()}
-                  onClick={printToScale}
-                  className="px-3 py-1.5 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500"
-                >
-                  Print
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-
-
-
 
 
         {/* Darker stage behind paper */}
@@ -1303,7 +1232,7 @@ export default function CurvedTitlePage() {
           <svg
             ref={svgRef}
             viewBox={vb.str}
-            className={`block mx-auto w-full h-[64vh] touch-none ${isCurveDragging ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
+            className={`block mx-auto w-full h-[38vh] sm:h-[44vh] md:h-[50vh] touch-none ${isCurveDragging ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
             style={{ background: '#cbd5e1' }}
             preserveAspectRatio={(view === 'fullpage' || (view === 'custom' && customOrigin === 'fullpage')) ? 'xMidYMid meet' : 'xMidYMin meet'}
             onPointerDown={onPointerDown}
@@ -1493,16 +1422,17 @@ export default function CurvedTitlePage() {
             </div>
           </div>
         </div>
+      </div>
     </section>
 
-      {/* Controls */ }
-  <section className="px-6 py-5 max-w-[1120px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
-    {/* Step 1 */}
-    <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
-      <div className="flex items-center gap-2">
-        <h2 className="text-lg font-semibold text-slate-800">Step 1 — Basics</h2>
-        <InfoTip side="right">Curve guide movement snaps to horizontal centre unless you pull far enough to release.</InfoTip>
-      </div>
+      {/* Controls */}
+      <section className="px-6 py-5 max-w-[1120px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Step 1 */}
+        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-slate-800">Step 1 — Basics</h2>
+            <InfoTip side="right">Curve guide movement snaps to horizontal centre unless you pull far enough to release.</InfoTip>
+          </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
         <div>
