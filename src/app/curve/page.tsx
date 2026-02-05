@@ -30,6 +30,7 @@ type CurvePresetId = 'simpleArch' | 'highArch' | 'shallowArch' | 'compoundArch' 
 type Orientation = 'portrait' | 'landscape';
 type AlignMode = 'start' | 'center' | 'end';
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
+type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 
 const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0.5);
 
@@ -255,6 +256,10 @@ export default function CurvedTitlePage() {
   const [xHeightMM, setXHeightMM] = useState(6);
   const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
   const [nibText, setNibText] = useState('2');
+  const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>('2:1:2');
+  const [copperplateDescUnits, setCopperplateDescUnits] = useState(2);
+  const [copperplateXUnits, setCopperplateXUnits] = useState(1);
+  const [copperplateAscUnits, setCopperplateAscUnits] = useState(2);
 
   const nibMM = useMemo(() => {
     const v = parseFloat(nibText);
@@ -457,10 +462,30 @@ export default function CurvedTitlePage() {
     ? xHeightMM * 1.05
     : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * nibMM;
 
-  const copperplateHeights = useMemo(
-    () => ({ xMM: xHeightMM, ascMM: xHeightMM * 0.5, descMM: xHeightMM * 0.3 }),
-    [xHeightMM],
-  );
+  const copperplateHeights = useMemo(() => {
+    const presetUnits = {
+      '2:1:2': { desc: 2, x: 1, asc: 2 },
+      '3:2:3': { desc: 3, x: 2, asc: 3 },
+      '1:1:1': { desc: 1, x: 1, asc: 1 },
+      custom: {
+        desc: copperplateDescUnits,
+        x: copperplateXUnits,
+        asc: copperplateAscUnits,
+      },
+    };
+
+    const { desc, x, asc } = presetUnits[copperplateRatioPreset];
+    const safeX = x > 0 ? x : 1;
+    const descMM = xHeightMM * (desc / safeX);
+    const ascMM = xHeightMM * (asc / safeX);
+    return { xMM: xHeightMM, ascMM, descMM };
+  }, [
+    xHeightMM,
+    copperplateRatioPreset,
+    copperplateDescUnits,
+    copperplateXUnits,
+    copperplateAscUnits,
+  ]);
 
   const guideHeights = script === 'Copperplate' ? copperplateHeights : blackletterHeights;
   const xMM = guideHeights.xMM;
@@ -1579,6 +1604,59 @@ const targetCy = box.h * 0.22;
               {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
             </div>
           </div>
+
+          <div>
+            <label className="font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
+            <select
+              className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+              value={copperplateRatioPreset}
+              onChange={(e) => setCopperplateRatioPreset(e.target.value as CopperplateRatioPreset)}
+            >
+              <option value="2:1:2">2 : 1 : 2 (default)</option>
+              <option value="3:2:3">3 : 2 : 3</option>
+              <option value="1:1:1">1 : 1 : 1</option>
+              <option value="custom">Custom…</option>
+            </select>
+            <p className="mt-1 text-[11px] text-slate-400">Ascender/descender scale from x-height.</p>
+          </div>
+
+          {copperplateRatioPreset === 'custom' && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="font-medium text-slate-700">Desc units</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.1"
+                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  value={copperplateDescUnits}
+                  onChange={(e) => setCopperplateDescUnits(parseFloat(e.target.value || '0'))}
+                />
+              </div>
+              <div>
+                <label className="font-medium text-slate-700">X units</label>
+                <input
+                  type="number"
+                  min={0.1}
+                  step="0.1"
+                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  value={copperplateXUnits}
+                  onChange={(e) => setCopperplateXUnits(parseFloat(e.target.value || '1'))}
+                />
+              </div>
+              <div>
+                <label className="font-medium text-slate-700">Asc units</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.1"
+                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  value={copperplateAscUnits}
+                  onChange={(e) => setCopperplateAscUnits(parseFloat(e.target.value || '0'))}
+                />
+              </div>
+            </div>
+          )}
 
           <div className="border-t border-slate-200 pt-3">
             <div className="flex items-center justify-between gap-3">
