@@ -257,6 +257,9 @@ export default function CurvedTitlePage() {
   const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
   const [nibText, setNibText] = useState('2');
   const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>('2:1:2');
+  const [copperplateDescUnitsText, setCopperplateDescUnitsText] = useState('2');
+  const [copperplateXUnitsText, setCopperplateXUnitsText] = useState('1');
+  const [copperplateAscUnitsText, setCopperplateAscUnitsText] = useState('2');
   const [copperplateDescUnits, setCopperplateDescUnits] = useState(2);
   const [copperplateXUnits, setCopperplateXUnits] = useState(1);
   const [copperplateAscUnits, setCopperplateAscUnits] = useState(2);
@@ -463,15 +466,17 @@ export default function CurvedTitlePage() {
     : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * nibMM;
 
   const copperplateHeights = useMemo(() => {
+    if (copperplateRatioPreset === 'custom') {
+      const xMM = xHeightMM * copperplateXUnits;
+      const ascMM = xHeightMM * copperplateAscUnits;
+      const descMM = xHeightMM * copperplateDescUnits;
+      return { xMM, ascMM, descMM };
+    }
+
     const presetUnits = {
       '2:1:2': { desc: 2, x: 1, asc: 2 },
       '3:2:3': { desc: 3, x: 2, asc: 3 },
       '1:1:1': { desc: 1, x: 1, asc: 1 },
-      custom: {
-        desc: copperplateDescUnits,
-        x: copperplateXUnits,
-        asc: copperplateAscUnits,
-      },
     };
 
     const { desc, x, asc } = presetUnits[copperplateRatioPreset];
@@ -479,13 +484,7 @@ export default function CurvedTitlePage() {
     const descMM = xHeightMM * (desc / safeX);
     const ascMM = xHeightMM * (asc / safeX);
     return { xMM: xHeightMM, ascMM, descMM };
-  }, [
-    xHeightMM,
-    copperplateRatioPreset,
-    copperplateDescUnits,
-    copperplateXUnits,
-    copperplateAscUnits,
-  ]);
+  }, [xHeightMM, copperplateRatioPreset, copperplateDescUnits, copperplateXUnits, copperplateAscUnits]);
 
   const guideHeights = script === 'Copperplate' ? copperplateHeights : blackletterHeights;
   const xMM = guideHeights.xMM;
@@ -1629,8 +1628,41 @@ const targetCy = box.h * 0.22;
                   min={0}
                   step="0.1"
                   className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                  value={copperplateDescUnits}
-                  onChange={(e) => setCopperplateDescUnits(parseFloat(e.target.value || '0'))}
+                  value={copperplateDescUnitsText}
+                  onWheel={(e) => {
+                    (e.currentTarget as HTMLInputElement).blur();
+                  }}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setCopperplateDescUnitsText(next);
+                    const parsed = parseFloat(next);
+                    if (Number.isFinite(parsed)) {
+                      setCopperplateDescUnits(Math.max(0, parsed));
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                    e.preventDefault();
+
+                    const current = parseFloat(copperplateDescUnitsText);
+                    const safe = Number.isFinite(current) ? current : copperplateDescUnits;
+                    const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+
+                    const stepped = stepHalfFrom(safe, dir);
+                    const next = Math.max(0, stepped);
+                    setCopperplateDescUnitsText(String(next));
+                    setCopperplateDescUnits(next);
+                  }}
+                  onBlur={() => {
+                    const v = parseFloat(copperplateDescUnitsText);
+                    if (!Number.isFinite(v)) {
+                      setCopperplateDescUnitsText(String(copperplateDescUnits));
+                      return;
+                    }
+                    const next = Math.max(0, v);
+                    setCopperplateDescUnitsText(String(next));
+                    setCopperplateDescUnits(next);
+                  }}
                 />
               </div>
               <div>
@@ -1640,8 +1672,41 @@ const targetCy = box.h * 0.22;
                   min={0.1}
                   step="0.1"
                   className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                  value={copperplateXUnits}
-                  onChange={(e) => setCopperplateXUnits(parseFloat(e.target.value || '1'))}
+                  value={copperplateXUnitsText}
+                  onWheel={(e) => {
+                    (e.currentTarget as HTMLInputElement).blur();
+                  }}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setCopperplateXUnitsText(next);
+                    const parsed = parseFloat(next);
+                    if (Number.isFinite(parsed)) {
+                      setCopperplateXUnits(Math.max(0.1, parsed));
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                    e.preventDefault();
+
+                    const current = parseFloat(copperplateXUnitsText);
+                    const safe = Number.isFinite(current) ? current : copperplateXUnits;
+                    const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+
+                    const stepped = stepHalfFrom(safe, dir);
+                    const next = Math.max(0.1, stepped);
+                    setCopperplateXUnitsText(String(next));
+                    setCopperplateXUnits(next);
+                  }}
+                  onBlur={() => {
+                    const v = parseFloat(copperplateXUnitsText);
+                    if (!Number.isFinite(v)) {
+                      setCopperplateXUnitsText(String(copperplateXUnits));
+                      return;
+                    }
+                    const next = Math.max(0.1, v);
+                    setCopperplateXUnitsText(String(next));
+                    setCopperplateXUnits(next);
+                  }}
                 />
               </div>
               <div>
@@ -1651,8 +1716,41 @@ const targetCy = box.h * 0.22;
                   min={0}
                   step="0.1"
                   className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                  value={copperplateAscUnits}
-                  onChange={(e) => setCopperplateAscUnits(parseFloat(e.target.value || '0'))}
+                  value={copperplateAscUnitsText}
+                  onWheel={(e) => {
+                    (e.currentTarget as HTMLInputElement).blur();
+                  }}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setCopperplateAscUnitsText(next);
+                    const parsed = parseFloat(next);
+                    if (Number.isFinite(parsed)) {
+                      setCopperplateAscUnits(Math.max(0, parsed));
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                    e.preventDefault();
+
+                    const current = parseFloat(copperplateAscUnitsText);
+                    const safe = Number.isFinite(current) ? current : copperplateAscUnits;
+                    const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+
+                    const stepped = stepHalfFrom(safe, dir);
+                    const next = Math.max(0, stepped);
+                    setCopperplateAscUnitsText(String(next));
+                    setCopperplateAscUnits(next);
+                  }}
+                  onBlur={() => {
+                    const v = parseFloat(copperplateAscUnitsText);
+                    if (!Number.isFinite(v)) {
+                      setCopperplateAscUnitsText(String(copperplateAscUnits));
+                      return;
+                    }
+                    const next = Math.max(0, v);
+                    setCopperplateAscUnitsText(String(next));
+                    setCopperplateAscUnits(next);
+                  }}
                 />
               </div>
             </div>
