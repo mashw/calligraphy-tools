@@ -1626,7 +1626,7 @@ const targetCy = box.h * 0.22;
                 <input
                   type="number"
                   min={0}
-                  step="0.1"
+                  step="0.5"
                   className="mt-1 w-full p-2 rounded-lg border border-slate-300"
                   value={copperplateDescUnitsText}
                   onWheel={(e) => {
@@ -1669,8 +1669,8 @@ const targetCy = box.h * 0.22;
                 <label className="font-medium text-slate-700">X units</label>
                 <input
                   type="number"
-                  min={0.1}
-                  step="0.1"
+                  min={0.5}
+                  step="0.5"
                   className="mt-1 w-full p-2 rounded-lg border border-slate-300"
                   value={copperplateXUnitsText}
                   onWheel={(e) => {
@@ -1693,7 +1693,7 @@ const targetCy = box.h * 0.22;
                     const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
 
                     const stepped = stepHalfFrom(safe, dir);
-                    const next = Math.max(0.1, stepped);
+                    const next = Math.max(0.5, stepped);
                     setCopperplateXUnitsText(String(next));
                     setCopperplateXUnits(next);
                   }}
@@ -1703,7 +1703,7 @@ const targetCy = box.h * 0.22;
                       setCopperplateXUnitsText(String(copperplateXUnits));
                       return;
                     }
-                    const next = Math.max(0.1, v);
+                    const next = Math.max(0.5, v);
                     setCopperplateXUnitsText(String(next));
                     setCopperplateXUnits(next);
                   }}
@@ -1714,7 +1714,7 @@ const targetCy = box.h * 0.22;
                 <input
                   type="number"
                   min={0}
-                  step="0.1"
+                  step="0.5"
                   className="mt-1 w-full p-2 rounded-lg border border-slate-300"
                   value={copperplateAscUnitsText}
                   onWheel={(e) => {
