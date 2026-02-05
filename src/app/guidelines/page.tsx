@@ -17,6 +17,7 @@ import GuideOverlay from '@/components/preview/GuideOverlay';
 type PaperId = keyof typeof PAPERS_MM;
 type Orientation = 'portrait' | 'landscape';
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
+type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 
 type Pt = { x: number; y: number };
 type Box = { w: number; h: number };
@@ -412,6 +413,13 @@ export default function GuidelinesPage() {
   const [xHeightMM, setXHeightMM] = useState(6);
   const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
   const [nibText, setNibText] = useState('2');
+  const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>('2:1:2');
+  const [copperplateDescUnitsText, setCopperplateDescUnitsText] = useState('2');
+  const [copperplateXUnitsText, setCopperplateXUnitsText] = useState('1');
+  const [copperplateAscUnitsText, setCopperplateAscUnitsText] = useState('2');
+  const [copperplateDescUnits, setCopperplateDescUnits] = useState(2);
+  const [copperplateXUnits, setCopperplateXUnits] = useState(1);
+  const [copperplateAscUnits, setCopperplateAscUnits] = useState(2);
 
   const nibMM = useMemo(() => {
     const v = parseFloat(nibText);
@@ -585,10 +593,26 @@ export default function GuidelinesPage() {
     [texturaXHeightMM, ascNib, descNib, nibMM],
   );
 
-  const copperplateHeights = useMemo(
-    () => ({ xMM: xHeightMM, ascMM: xHeightMM * 2, descMM: xHeightMM * 2 }),
-    [xHeightMM],
-  );
+  const copperplateHeights = useMemo(() => {
+    if (copperplateRatioPreset === 'custom') {
+      const xMM = xHeightMM * copperplateXUnits;
+      const ascMM = xHeightMM * copperplateAscUnits;
+      const descMM = xHeightMM * copperplateDescUnits;
+      return { xMM, ascMM, descMM };
+    }
+
+    const presetUnits = {
+      '2:1:2': { desc: 2, x: 1, asc: 2 },
+      '3:2:3': { desc: 3, x: 2, asc: 3 },
+      '1:1:1': { desc: 1, x: 1, asc: 1 },
+    };
+
+    const { desc, x, asc } = presetUnits[copperplateRatioPreset];
+    const safeX = x > 0 ? x : 1;
+    const descMM = xHeightMM * (desc / safeX);
+    const ascMM = xHeightMM * (asc / safeX);
+    return { xMM: xHeightMM, ascMM, descMM };
+  }, [xHeightMM, copperplateRatioPreset, copperplateDescUnits, copperplateXUnits, copperplateAscUnits]);
 
   const guideHeights = script === 'Copperplate' ? copperplateHeights : blackletterHeights;
   const xMM = guideHeights.xMM;
@@ -1515,6 +1539,158 @@ export default function GuidelinesPage() {
                   {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
                 </div>
               </div>
+
+              <div>
+                <label className="font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
+                <select
+                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  value={copperplateRatioPreset}
+                  onChange={(e) => setCopperplateRatioPreset(e.target.value as CopperplateRatioPreset)}
+                >
+                  <option value="2:1:2">2 : 1 : 2 (default)</option>
+                  <option value="3:2:3">3 : 2 : 3</option>
+                  <option value="1:1:1">1 : 1 : 1</option>
+                  <option value="custom">Custom…</option>
+                </select>
+                <p className="mt-1 text-[11px] text-slate-400">Ascender/descender scale from x-height.</p>
+              </div>
+
+              {copperplateRatioPreset === 'custom' && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="font-medium text-slate-700">Desc units</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.5"
+                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                      value={copperplateDescUnitsText}
+                      onWheel={(e) => {
+                        (e.currentTarget as HTMLInputElement).blur();
+                      }}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setCopperplateDescUnitsText(next);
+                        const parsed = parseFloat(next);
+                        if (Number.isFinite(parsed)) {
+                          setCopperplateDescUnits(Math.max(0, parsed));
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                        e.preventDefault();
+
+                        const current = parseFloat(copperplateDescUnitsText);
+                        const safe = Number.isFinite(current) ? current : copperplateDescUnits;
+                        const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+
+                        const stepped = stepHalfFrom(safe, dir);
+                        const next = Math.max(0, stepped);
+                        setCopperplateDescUnitsText(String(next));
+                        setCopperplateDescUnits(next);
+                      }}
+                      onBlur={() => {
+                        const v = parseFloat(copperplateDescUnitsText);
+                        if (!Number.isFinite(v)) {
+                          setCopperplateDescUnitsText(String(copperplateDescUnits));
+                          return;
+                        }
+                        const next = Math.max(0, v);
+                        setCopperplateDescUnitsText(String(next));
+                        setCopperplateDescUnits(next);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="font-medium text-slate-700">X units</label>
+                    <input
+                      type="number"
+                      min={0.5}
+                      step="0.5"
+                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                      value={copperplateXUnitsText}
+                      onWheel={(e) => {
+                        (e.currentTarget as HTMLInputElement).blur();
+                      }}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setCopperplateXUnitsText(next);
+                        const parsed = parseFloat(next);
+                        if (Number.isFinite(parsed)) {
+                          setCopperplateXUnits(Math.max(0.1, parsed));
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                        e.preventDefault();
+
+                        const current = parseFloat(copperplateXUnitsText);
+                        const safe = Number.isFinite(current) ? current : copperplateXUnits;
+                        const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+
+                        const stepped = stepHalfFrom(safe, dir);
+                        const next = Math.max(0.5, stepped);
+                        setCopperplateXUnitsText(String(next));
+                        setCopperplateXUnits(next);
+                      }}
+                      onBlur={() => {
+                        const v = parseFloat(copperplateXUnitsText);
+                        if (!Number.isFinite(v)) {
+                          setCopperplateXUnitsText(String(copperplateXUnits));
+                          return;
+                        }
+                        const next = Math.max(0.5, v);
+                        setCopperplateXUnitsText(String(next));
+                        setCopperplateXUnits(next);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="font-medium text-slate-700">Asc units</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.5"
+                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                      value={copperplateAscUnitsText}
+                      onWheel={(e) => {
+                        (e.currentTarget as HTMLInputElement).blur();
+                      }}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setCopperplateAscUnitsText(next);
+                        const parsed = parseFloat(next);
+                        if (Number.isFinite(parsed)) {
+                          setCopperplateAscUnits(Math.max(0, parsed));
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                        e.preventDefault();
+
+                        const current = parseFloat(copperplateAscUnitsText);
+                        const safe = Number.isFinite(current) ? current : copperplateAscUnits;
+                        const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+
+                        const stepped = stepHalfFrom(safe, dir);
+                        const next = Math.max(0, stepped);
+                        setCopperplateAscUnitsText(String(next));
+                        setCopperplateAscUnits(next);
+                      }}
+                      onBlur={() => {
+                        const v = parseFloat(copperplateAscUnitsText);
+                        if (!Number.isFinite(v)) {
+                          setCopperplateAscUnitsText(String(copperplateAscUnits));
+                          return;
+                        }
+                        const next = Math.max(0, v);
+                        setCopperplateAscUnitsText(String(next));
+                        setCopperplateAscUnits(next);
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="border-t border-slate-200 pt-3">
                 <div className="flex items-center justify-between gap-3">
