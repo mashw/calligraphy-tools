@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 
 import { pathD } from '@/lib/curve-helpers';
 import type { GuideSet } from '@/lib/guides/guide-template';
@@ -55,10 +55,30 @@ export default function GuideOverlay({
       { key: 'desc', pts: guideSet.descLine, stroke: colors.desc ?? colors.thin, width: style.thin },
     ];
     
+    const bandClipId = useId();
+
+    const bandClipD = (() => {
+      const asc = guideSet.ascLine;
+      const desc = guideSet.descLine;
+      if (!asc?.length || !desc?.length) return '';
+  
+      const a = asc.map(p => `${p.x},${p.y}`).join(' L ');
+      const d = [...desc].reverse().map(p => `${p.x},${p.y}`).join(' L ');
+      return `M ${a} L ${d} Z`;
+    })();
+  
     
 
   return (
     <g>
+            {bandClipD && (
+        <defs>
+          <clipPath id={bandClipId} clipPathUnits="userSpaceOnUse">
+            <path d={bandClipD} />
+          </clipPath>
+        </defs>
+      )}
+
       {box && (
         <rect
           x={0}
@@ -98,33 +118,63 @@ export default function GuideOverlay({
           />
         ))}
 
-      {guideSet.ticks?.map((tick, idx) => (
-        <g key={`tick-${idx}`}>
-          <line
-            x1={tick.a.x}
-            y1={tick.a.y}
-            x2={tick.b.x}
-            y2={tick.b.y}
-            stroke={colors.tick}
-            strokeWidth={style.thin}
-            vectorEffect="non-scaling-stroke"
-          />
-          {interactive?.onGuidePointerDown && (
+<g clipPath={bandClipD ? `url(#${bandClipId})` : undefined}>
+        {guideSet.ticks?.map((tick, idx) => (
+          <g key={`tick-${idx}`}>
             <line
               x1={tick.a.x}
               y1={tick.a.y}
               x2={tick.b.x}
               y2={tick.b.y}
-              stroke="rgba(0,0,0,0)"
-              strokeWidth={hitStrokeWidth}
+              stroke={colors.tick}
+              strokeWidth={style.thin}
               vectorEffect="non-scaling-stroke"
-              pointerEvents="stroke"
-              className="cursor-move"
-              onPointerDown={interactive.onGuidePointerDown}
             />
-          )}
-        </g>
-      ))}
+            {interactive?.onGuidePointerDown && (
+              <line
+                x1={tick.a.x}
+                y1={tick.a.y}
+                x2={tick.b.x}
+                y2={tick.b.y}
+                stroke="rgba(0,0,0,0)"
+                strokeWidth={hitStrokeWidth}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="stroke"
+                className="cursor-move"
+                onPointerDown={interactive.onGuidePointerDown}
+              />
+            )}
+          </g>
+        ))}
+
+        {guideSet.hGuides?.map((poly, idx) => {
+          const points = poly.map((p) => `${p.x},${p.y}`).join(' ');
+          return (
+            <g key={`hguide-${idx}`}>
+              <polyline
+                points={points}
+                fill="none"
+                stroke={colors.tick}
+                strokeWidth={style.thin}
+                vectorEffect="non-scaling-stroke"
+              />
+              {interactive?.onGuidePointerDown && (
+                <polyline
+                  points={points}
+                  fill="none"
+                  stroke="rgba(0,0,0,0)"
+                  strokeWidth={hitStrokeWidth}
+                  vectorEffect="non-scaling-stroke"
+                  pointerEvents="stroke"
+                  className="cursor-move"
+                  onPointerDown={interactive.onGuidePointerDown}
+                />
+              )}
+            </g>
+          );
+        })}
+      </g>
+
 
       {guideSet.hGuides?.map((poly, idx) => {
         const points = poly.map((p) => `${p.x},${p.y}`).join(' ');

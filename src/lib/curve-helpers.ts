@@ -70,6 +70,55 @@ export const SCRIPT_DEFAULTS: Record<
   Fraktur: { asc: 3, desc: 3, xNibDefault: 5, capHeight: 8 },
 };
 
+// Like pointAt(), but allows s < 0 and s > total by extrapolating
+// using the first/last segment tangent + normal.
+export function pointAtExtended(
+  pts: Pt[],
+  s: number,
+): { p: Pt; n: Pt; t: Pt; idx: number } {
+  if (pts.length === 0) {
+    return { p: { x: 0, y: 0 }, n: { x: 0, y: -1 }, t: { x: 1, y: 0 }, idx: 0 };
+  }
+  if (pts.length === 1) {
+    return { p: pts[0], n: { x: 0, y: -1 }, t: { x: 1, y: 0 }, idx: 0 };
+  }
+
+  const total = lengthPoly(pts);
+
+  // Inside range: use the existing, accurate implementation.
+  if (s >= 0 && s <= total) {
+    return pointAt(pts, s);
+  }
+
+  // Extrapolate before start using first segment.
+  if (s < 0) {
+    const a = pts[0];
+    const b = pts[1];
+    const t = tangent(a, b);
+    const n = { x: -t.y, y: t.x };
+    return {
+      p: { x: a.x + t.x * s, y: a.y + t.y * s }, // s is negative here
+      n,
+      t,
+      idx: 0,
+    };
+  }
+
+  // Extrapolate past end using last segment.
+  const a = pts[pts.length - 2];
+  const b = pts[pts.length - 1];
+  const t = tangent(a, b);
+  const n = { x: -t.y, y: t.x };
+  const d = s - total;
+  return {
+    p: { x: b.x + t.x * d, y: b.y + t.y * d },
+    n,
+    t,
+    idx: pts.length - 2,
+  };
+}
+
+
 /* ---------------- Geometry utils ---------------- */
 
 function dist(a: Pt, b: Pt): number {
@@ -138,7 +187,7 @@ export function pointAt(
       t: { x: 1, y: 0 },
       idx: 0,
     };
-  }
+  }  
 
   const total = lengthPoly(pts);
   const target = Math.max(0, Math.min(total, s));

@@ -1,4 +1,5 @@
-import { lengthPoly, offset, pointAt } from '@/lib/curve-helpers';
+import { lengthPoly, offset, pointAt, pointAtExtended } from '@/lib/curve-helpers';
+
 
 // mm-space points (same convention as curve tool)
 export type Pt = { x: number; y: number };
@@ -172,25 +173,33 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
   // Phase anchor: ticks at s = anchor + k * step, guaranteeing a tick at anchor.
   const anchor = Number.isFinite(tickAnchorS as number) ? (tickAnchorS as number) : 0;
 
-  const kMin = Math.floor((0 - anchor) / step);
-  const kMax = Math.ceil((arcLen - anchor) / step);
+// We must NOT clamp the slants to [0, arcLen], otherwise the first/last ticks
+// become "special" and look broken at the ends.
+// Instead: over-generate beyond both ends and sample with pointAtExtended.
 
-  for (let k = kMin; k <= kMax; k += 1) {
-    const s = anchor + k * step;
-    const sClamped = Math.max(0, Math.min(arcLen, s));
+const slantPad = Math.max(topOff * cot, botOff * cot);
+const uMin = -slantPad - step * 2;
+const uMax = arcLen + slantPad + step * 2;
 
-    // Top of tick occurs "later" along the curve than the bottom for forward slant
-    const sTop = Math.max(0, Math.min(arcLen, sClamped + topOff * cot));
-    const sBot = Math.max(0, Math.min(arcLen, sClamped - botOff * cot));
+const kMin = Math.floor((uMin - anchor) / step);
+const kMax = Math.ceil((uMax - anchor) / step);
 
-    const Ct = pointAt(baseline, sTop);
-    const Cb = pointAt(baseline, sBot);
+for (let k = kMin; k <= kMax; k += 1) {
+  const s = anchor + k * step;
 
-    ticks.push({
-      a: { x: Ct.p.x - Ct.n.x * topOff, y: Ct.p.y - Ct.n.y * topOff },
-      b: { x: Cb.p.x + Cb.n.x * botOff, y: Cb.p.y + Cb.n.y * botOff },
-    });
-  }
+  // Top of tick occurs "later" along the curve than the bottom for forward slant
+  const sTop = s + topOff * cot;
+  const sBot = s - botOff * cot;
+
+  const Ct = pointAtExtended(baseline, sTop);
+  const Cb = pointAtExtended(baseline, sBot);
+
+  ticks.push({
+    a: { x: Ct.p.x - Ct.n.x * topOff, y: Ct.p.y - Ct.n.y * topOff },
+    b: { x: Cb.p.x + Cb.n.x * botOff, y: Cb.p.y + Cb.n.y * botOff },
+  });
+}
+
 
 
   return { ascLine, waistLine, baseLine, descLine, ticks };
