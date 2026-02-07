@@ -175,6 +175,61 @@ function b64ToUint8(base64: string): Uint8Array {
   return bytes;
 }
 
+function flipCubicVertically(c: PtCubic, boxH: number): PtCubic {
+  const flipPt = (p: Pt): Pt => ({ x: p.x, y: boxH - p.y });
+
+  const out: PtCubic = {
+    ...c,
+    p0: flipPt(c.p0),
+    p1: flipPt(c.p1),
+    p2: flipPt(c.p2),
+    p3: flipPt(c.p3),
+  };
+
+  const extra = (c as PtCubic)._extraSegs;
+  if (extra && extra.length) {
+    (out as PtCubic)._extraSegs = extra.map(seg => {
+      // seg is [x0,y0,x1,y1,x2,y2,x3,y3]
+      const s = seg.slice() as number[];
+      s[1] = boxH - s[1];
+      s[3] = boxH - s[3];
+      s[5] = boxH - s[5];
+      s[7] = boxH - s[7];
+      return s as any;
+    });
+  }
+
+  return out;
+}
+
+function translateCubic(c: PtCubic, dx: number, dy: number): PtCubic {
+  const t = (p: Pt): Pt => ({ x: p.x + dx, y: p.y + dy });
+
+  const out: PtCubic = {
+    ...c,
+    p0: t(c.p0),
+    p1: t(c.p1),
+    p2: t(c.p2),
+    p3: t(c.p3),
+  };
+
+  const extra = (c as PtCubic)._extraSegs;
+  if (extra && extra.length) {
+    (out as PtCubic)._extraSegs = extra.map(seg => {
+      const s = seg.slice() as number[];
+      s[0] += dx; s[1] += dy;
+      s[2] += dx; s[3] += dy;
+      s[4] += dx; s[5] += dy;
+      s[6] += dx; s[7] += dy;
+      return s as any;
+    });
+  }
+
+  return out;
+}
+
+
+
 function makeSimplePdfFromJpeg(jpegDataUrl: string, pageWpt: number, pageHpt: number, imgW: number, imgH: number): Blob {
   const base64 = jpegDataUrl.split(',')[1];
   const imgBytes = b64ToUint8(base64);
@@ -250,6 +305,7 @@ export default function CurvedTitlePage() {
 
   const [script, setScript] = useState<ScriptId>('TexturaQuadrata');
   const [curve, setCurve] = useState<CurvePresetId>('simpleArch');
+  const [flipCurve, setFlipCurve] = useState(false);
   const [align, setAlign] = useState<AlignMode>('center');
   const [text, setText] = useState('Merry Christmas');
 
@@ -528,12 +584,28 @@ export default function CurvedTitlePage() {
   const run = useMemo(() => measureRun(text, SCRIPT_PROFILES[script], ctx), [text, script, ctx]);
 
   // ---------- Curve geometry ----------
-  const cubicRaw = useMemo<PtCubic>(() => buildPreset(curve, box), [curve, box]);
+  const cubicRaw = useMemo<PtCubic>(() => {
+    const base = buildPreset(curve, box);
+    if (!flipCurve) return base;
+
+    const flipped = flipCubicVertically(base, box.h);
+
+    // Keep the same vertical anchor as the unflipped curve,
+    // so the default placement doesn't jump when flipping.
+    // Anchor choice: midpoint of endpoints (p0/p3).
+    const baseAnchorY = (base.p0.y + base.p3.y) / 2;
+    const flippedAnchorY = (flipped.p0.y + flipped.p3.y) / 2;
+    const dy = baseAnchorY - flippedAnchorY;
+
+    return translateCubic(flipped, 0, dy);
+  }, [curve, box, flipCurve]);
+
 
   const cubic: PtCubic = useMemo(
     () => transformCubic(cubicRaw, box.w / 2, box.h / 2, scalePct / 100, rotDeg),
     [cubicRaw, box, scalePct, rotDeg],
   );
+
 
   const baselineBase = useMemo<Pt[]>(() => {
     const extra = (cubic as PtCubic)._extraSegs;
@@ -1164,8 +1236,8 @@ export default function CurvedTitlePage() {
     const ys = pts.map(p => p.y);
     const guideCy = (Math.min(...ys) + Math.max(...ys)) / 2;
 
-// Target: closer to the top (tune to match screenshot)
-const targetCy = box.h * 0.22;
+    // Target: closer to the top (tune to match screenshot)
+    const targetCy = box.h * 0.22;
 
 
     snapStateRef.current.snapped = true;
@@ -1289,203 +1361,203 @@ const targetCy = box.h * 0.22;
           </div>
 
 
-        {/* Darker stage behind paper */}
-        <div className="relative overflow-x-auto rounded-xl border border-slate-200 bg-slate-300">
-          <svg
-            ref={svgRef}
-            viewBox={vb.str}
-            className={`block mx-auto w-full h-[38vh] sm:h-[44vh] md:h-[50vh] touch-none ${isCurveDragging ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
-            style={{ background: '#cbd5e1' }}
-            preserveAspectRatio={(view === 'fullpage' || (view === 'custom' && customOrigin === 'fullpage')) ? 'xMidYMid meet' : 'xMidYMin meet'}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerLeave={onPointerUp}
-          >
-            <defs>
-              <clipPath id="pageClip">
-                <rect x={0} y={0} width={box.w} height={box.h} />
-              </clipPath>
-            </defs>
+          {/* Darker stage behind paper */}
+          <div className="relative overflow-x-auto rounded-xl border border-slate-200 bg-slate-300">
+            <svg
+              ref={svgRef}
+              viewBox={vb.str}
+              className={`block mx-auto w-full h-[38vh] sm:h-[44vh] md:h-[50vh] touch-none ${isCurveDragging ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
+              style={{ background: '#cbd5e1' }}
+              preserveAspectRatio={(view === 'fullpage' || (view === 'custom' && customOrigin === 'fullpage')) ? 'xMidYMid meet' : 'xMidYMin meet'}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerLeave={onPointerUp}
+            >
+              <defs>
+                <clipPath id="pageClip">
+                  <rect x={0} y={0} width={box.w} height={box.h} />
+                </clipPath>
+              </defs>
 
-            {/* stage bg (kept only for on-screen; removed in export) */}
-            <rect id="stage-bg" x={vb.minX} y={vb.minY} width={vb.vw} height={vb.vh} fill="#cbd5e1" />
+              {/* stage bg (kept only for on-screen; removed in export) */}
+              <rect id="stage-bg" x={vb.minX} y={vb.minY} width={vb.vw} height={vb.vh} fill="#cbd5e1" />
 
-            {/* Paper */}
-            <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
+              {/* Paper */}
+              <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
 
-            <g clipPath="url(#pageClip)">
-              {/* Guides */}
-              <GuideOverlay
-                guideSet={guideSet}
-                style={{
-                  thin: swBold,
-                  bold: swBold,
-                  colors: {
-                    thin: isCurveDragging ? '#7c3aed' : '#111827',
-                    bold: isCurveDragging ? '#7c3aed' : '#111827',
-                    tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
-                    frame: '#cbd5e1',
-                  },
-                }}
-                interactive={{
-                  onGuidePointerDown,
-                  hitStrokeWidthMM: Math.max(8, swBold * 8),
-                }}
-              />
+              <g clipPath="url(#pageClip)">
+                {/* Guides */}
+                <GuideOverlay
+                  guideSet={guideSet}
+                  style={{
+                    thin: swBold,
+                    bold: swBold,
+                    colors: {
+                      thin: isCurveDragging ? '#7c3aed' : '#111827',
+                      bold: isCurveDragging ? '#7c3aed' : '#111827',
+                      tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
+                      frame: '#cbd5e1',
+                    },
+                  }}
+                  interactive={{
+                    onGuidePointerDown,
+                    hitStrokeWidthMM: Math.max(8, swBold * 8),
+                  }}
+                />
 
-              {showSpanFill && spanPoly && (
-                <>
-                  <path
-                    d={`M ${spanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${spanPoly.basePts
-                      .slice()
-                      .reverse()
-                      .map(p => `${p.x},${p.y}`)
-                      .join(' L ')} Z`}
-                    fill="rgba(148,163,184,0.18)"
-                    stroke={isCurveDragging ? '#7c3aed' : 'rgba(100,116,139,0.55)'}
-                    strokeWidth={swThin}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                  <path
-                    d={`M ${spanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${spanPoly.basePts
-                      .slice()
-                      .reverse()
-                      .map(p => `${p.x},${p.y}`)
-                      .join(' L ')} Z`}
-                    fill="rgba(0,0,0,0.0001)"
-                    stroke="none"
-                    pointerEvents="fill"
-                    className="cursor-move"
-                    onPointerDown={onGuidePointerDown}
-                  />
-                </>
-              )}
+                {showSpanFill && spanPoly && (
+                  <>
+                    <path
+                      d={`M ${spanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${spanPoly.basePts
+                        .slice()
+                        .reverse()
+                        .map(p => `${p.x},${p.y}`)
+                        .join(' L ')} Z`}
+                      fill="rgba(148,163,184,0.18)"
+                      stroke={isCurveDragging ? '#7c3aed' : 'rgba(100,116,139,0.55)'}
+                      strokeWidth={swThin}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <path
+                      d={`M ${spanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${spanPoly.basePts
+                        .slice()
+                        .reverse()
+                        .map(p => `${p.x},${p.y}`)
+                        .join(' L ')} Z`}
+                      fill="rgba(0,0,0,0.0001)"
+                      stroke="none"
+                      pointerEvents="fill"
+                      className="cursor-move"
+                      onPointerDown={onGuidePointerDown}
+                    />
+                  </>
+                )}
 
-              {/* Letter boxes: true rectangles */}
-              {showBoxes &&
-                layout.placements.map((pl, i) => {
-                  const sMid = Math.min(arcLen, Math.max(0, pl.sMid));
-                  const halfW = pl.w / 2;
-                  const h = script === 'Copperplate' ? xHeightMM : xMM;
-
-
-                  // Use left/right edge frames so the box conforms to the curve across its width
-                  const sL = Math.max(0, Math.min(arcLen, sMid - halfW));
-                  const sR = Math.max(0, Math.min(arcLen, sMid + halfW));
-
-                  const CL = pointAt(baseline, sL);
-                  const CR = pointAt(baseline, sR);
-
-                  const pL = CL.p;
-                  const pR = CR.p;
-
-                  const nL = CL.n;
-                  const nR = CR.n;
-
-                  // Copperplate: slant “uprights” forward 55° relative to local baseline
-                  const isCopper = script === 'Copperplate';
-                  const SLANT_FROM_BASELINE_DEG = 55;
-
-                  // Sample the baseline and the waist (offset by -h along normal) so the fill follows the curve.
-                  const steps = Math.max(16, Math.ceil((sR - sL) / 2)); // ~1 point per 2mm, with a sensible minimum
-
-                  const basePts: { x: number; y: number }[] = [];
-                  const waistPts: { x: number; y: number }[] = [];
+                {/* Letter boxes: true rectangles */}
+                {showBoxes &&
+                  layout.placements.map((pl, i) => {
+                    const sMid = Math.min(arcLen, Math.max(0, pl.sMid));
+                    const halfW = pl.w / 2;
+                    const h = script === 'Copperplate' ? xHeightMM : xMM;
 
 
+                    // Use left/right edge frames so the box conforms to the curve across its width
+                    const sL = Math.max(0, Math.min(arcLen, sMid - halfW));
+                    const sR = Math.max(0, Math.min(arcLen, sMid + halfW));
 
-                  for (let k = 0; k <= steps; k++) {
-                    const u = k / steps;
-                    const s = sL + (sR - sL) * u;
+                    const CL = pointAt(baseline, sL);
+                    const CR = pointAt(baseline, sR);
 
-                    const C = pointAt(guideSet.baseLine, s)
-                    const p = C.p;
-                    const n = C.n;
+                    const pL = CL.p;
+                    const pR = CR.p;
 
-                    // Baseline point
-                    basePts.push({ x: p.x, y: p.y });
+                    const nL = CL.n;
+                    const nR = CR.n;
 
-                    // Copperplate slant: move the TOP sample forward along arc-length (towards next letter)
-                    const dx = isCopper ? (h / Math.tan((SLANT_FROM_BASELINE_DEG * Math.PI) / 180)) : 0;
-                    const sTop = Math.max(0, Math.min(arcLen, isCopper ? (s + dx) : s));
+                    // Copperplate: slant “uprights” forward 55° relative to local baseline
+                    const isCopper = script === 'Copperplate';
+                    const SLANT_FROM_BASELINE_DEG = 55;
 
-                    const Ct = pointAt(guideSet.baseLine, sTop);
+                    // Sample the baseline and the waist (offset by -h along normal) so the fill follows the curve.
+                    const steps = Math.max(16, Math.ceil((sR - sL) / 2)); // ~1 point per 2mm, with a sensible minimum
 
-                    waistPts.push({ x: Ct.p.x - Ct.n.x * h, y: Ct.p.y - Ct.n.y * h });
-
-                  }
-
-                  // Convenience endpoints if you still want them (uprights connect these)
-                  const bottomLeft = basePts[0];
-                  const bottomRight = basePts[basePts.length - 1];
-                  const topLeft = waistPts[0];
-                  const topRight = waistPts[waistPts.length - 1];
+                    const basePts: { x: number; y: number }[] = [];
+                    const waistPts: { x: number; y: number }[] = [];
 
 
 
+                    for (let k = 0; k <= steps; k++) {
+                      const u = k / steps;
+                      const s = sL + (sR - sL) * u;
 
-                  const isCap = pl.ch >= 'A' && pl.ch <= 'Z';
-                  const fillCol = isCap ? 'rgba(99,102,241,0.10)' : 'rgba(16,185,129,0.10)';
-                  const strokeCol = isCap ? '#6366f1' : '#10b981';
-                  const pathD = (() => {
-                    const top = waistPts.map((pt) => `${pt.x},${pt.y}`).join(' L ');
-                    const bot = [...basePts].reverse().map((pt) => `${pt.x},${pt.y}`).join(' L ');
-                    return `M ${top} L ${bot} Z`;
-                  })();
+                      const C = pointAt(guideSet.baseLine, s)
+                      const p = C.p;
+                      const n = C.n;
 
-                  return (
-                    <g key={i}>
+                      // Baseline point
+                      basePts.push({ x: p.x, y: p.y });
 
-                      <path
-                        d={pathD}
-                        fill={fillCol}
-                        stroke={strokeCol}
-                        strokeWidth={swThin}
-                        vectorEffect="non-scaling-stroke"
-                      />
-                    </g>
-                  );
-                })}
+                      // Copperplate slant: move the TOP sample forward along arc-length (towards next letter)
+                      const dx = isCopper ? (h / Math.tan((SLANT_FROM_BASELINE_DEG * Math.PI) / 180)) : 0;
+                      const sTop = Math.max(0, Math.min(arcLen, isCopper ? (s + dx) : s));
 
-              {/* Endpoints */}
-              <circle cx={startPt.x} cy={startPt.y} r={1} fill="#0ea5e9" />
-              <circle cx={endPt.x} cy={endPt.y} r={1} fill="#0ea5e9" />
+                      const Ct = pointAt(guideSet.baseLine, sTop);
 
-              {/* GREEN CENTER INDICATOR:
+                      waistPts.push({ x: Ct.p.x - Ct.n.x * h, y: Ct.p.y - Ct.n.y * h });
+
+                    }
+
+                    // Convenience endpoints if you still want them (uprights connect these)
+                    const bottomLeft = basePts[0];
+                    const bottomRight = basePts[basePts.length - 1];
+                    const topLeft = waistPts[0];
+                    const topRight = waistPts[waistPts.length - 1];
+
+
+
+
+                    const isCap = pl.ch >= 'A' && pl.ch <= 'Z';
+                    const fillCol = isCap ? 'rgba(99,102,241,0.10)' : 'rgba(16,185,129,0.10)';
+                    const strokeCol = isCap ? '#6366f1' : '#10b981';
+                    const pathD = (() => {
+                      const top = waistPts.map((pt) => `${pt.x},${pt.y}`).join(' L ');
+                      const bot = [...basePts].reverse().map((pt) => `${pt.x},${pt.y}`).join(' L ');
+                      return `M ${top} L ${bot} Z`;
+                    })();
+
+                    return (
+                      <g key={i}>
+
+                        <path
+                          d={pathD}
+                          fill={fillCol}
+                          stroke={strokeCol}
+                          strokeWidth={swThin}
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      </g>
+                    );
+                  })}
+
+                {/* Endpoints */}
+                <circle cx={startPt.x} cy={startPt.y} r={1} fill="#0ea5e9" />
+                <circle cx={endPt.x} cy={endPt.y} r={1} fill="#0ea5e9" />
+
+                {/* GREEN CENTER INDICATOR:
                     - Visible whenever horizontally centered (even if moved)
                     - NOT exported/printed
                 */}
-              {isCenteredHorizontally && (
-                <g data-no-export="true">
-                  <circle cx={box.w / 2} cy={box.h / 2} r={1.1} fill="#22c55e" />
-                  <line
-                    x1={pageCenter.x}
-                    y1={pageCenter.y}
-                    x2={startPt.x}
-                    y2={startPt.y}
-                    stroke="#94a3b8"
-                    strokeDasharray="4 3"
-                    strokeWidth={swThin}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                  <text x={pageCenter.x} y={pageCenter.y + 6} textAnchor="middle" fontSize={fs(3)} fill="#64748b">
-                    Centre → start {radiusToStart.toFixed(1)} mm
-                  </text>
-                </g>
-              )}
-            </g>
-          </svg>
+                {isCenteredHorizontally && (
+                  <g data-no-export="true">
+                    <circle cx={box.w / 2} cy={box.h / 2} r={1.1} fill="#22c55e" />
+                    <line
+                      x1={pageCenter.x}
+                      y1={pageCenter.y}
+                      x2={startPt.x}
+                      y2={startPt.y}
+                      stroke="#94a3b8"
+                      strokeDasharray="4 3"
+                      strokeWidth={swThin}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <text x={pageCenter.x} y={pageCenter.y + 6} textAnchor="middle" fontSize={fs(3)} fill="#64748b">
+                      Centre → start {radiusToStart.toFixed(1)} mm
+                    </text>
+                  </g>
+                )}
+              </g>
+            </svg>
 
-          <div className="pointer-events-none absolute right-3 bottom-2 text-[13px] text-slate-700 text-right space-y-0.5">
-            {overWarn && <div className="text-[13px] text-red-600 font-medium">Title exceeds curve</div>}
-            <div>
-              Curve length: {baselineLength.toFixed(1)} mm · Script length: {run.totalAdvanceMM.toFixed(1)} mm
+            <div className="pointer-events-none absolute right-3 bottom-2 text-[13px] text-slate-700 text-right space-y-0.5">
+              {overWarn && <div className="text-[13px] text-red-600 font-medium">Title exceeds curve</div>}
+              <div>
+                Curve length: {baselineLength.toFixed(1)} mm · Script length: {run.totalAdvanceMM.toFixed(1)} mm
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
       {/* Controls */}
       <section className="px-6 py-5 max-w-[1120px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1496,475 +1568,518 @@ const targetCy = box.h * 0.22;
             <InfoTip side="right">Curve guide movement snaps to horizontal centre unless you pull far enough to release.</InfoTip>
           </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
-        <div>
-          <label className="font-medium text-slate-700">Script</label>
-          <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={script} onChange={e => setScript(e.target.value as ScriptId)}>
-            <option value="Copperplate">Copperplate</option>
-            <option value="Fraktur">Fraktur</option>
-            <option value="TexturaQuadrata">Textura Quadrata</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="font-medium text-slate-700">Curve</label>
-          <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={curve} onChange={e => setCurve(e.target.value as CurvePresetId)}>
-            <option value="simpleArch">Simple Arch</option>
-            <option value="highArch">High Arch</option>
-            <option value="shallowArch">Shallow Arch</option>
-            <option value="compoundArch">Compound Arch</option>
-            <option value="zanerian">Zanerian Resolution</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="font-medium text-slate-700">Paper size</label>
-          <select
-            className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-            value={paper}
-            onChange={e => {
-              const id = e.target.value as PaperId;
-              setPaper(id);
-              setOrientation(PAPERS_MM[id].defaultOrientation);
-              setPan({ x: 0, y: 0 });
-            }}
-          >
-            {Object.entries(PAPERS_MM).map(([id, p]) => (
-              <option key={id} value={id}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="font-medium text-slate-700">Orientation</label>
-          <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={orientation} onChange={e => setOrientation(e.target.value as Orientation)}>
-            <option value="portrait">Portrait</option>
-            <option value="landscape">Landscape</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="font-medium text-slate-700">Text alignment</label>
-          <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
-            <option value="start">Start</option>
-            <option value="center">Centered</option>
-            <option value="end">End</option>
-          </select>
-        </div>
-
-        <div className="sm:col-span-2">
-          <label className="font-medium text-slate-700">Title text</label>
-          <input className="mt-1 w-full p-3 rounded-lg border border-slate-300 text-base" value={text} onChange={e => setText(e.target.value)} />
-        </div>
-      </div>
-    </div>
-
-    {/* Step 2 */}
-    <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
-      <div className="flex items-center gap-2">
-        <h2 className="text-lg font-semibold text-slate-800">Step 2 — Heights & Guides</h2>
-        <InfoTip side="right">
-          {script === 'Copperplate'
-            ? 'Copperplate uses x-height (mm) with optional calibration for lowercase scale and spacing.'
-            : 'Heights are nibs × nib size (mm).'}
-        </InfoTip>
-      </div>
-
-      {script === 'Copperplate' ? (
-        <div className="mt-3 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
             <div>
-              <label className="font-medium text-slate-700">X-height (mm)</label>
+              <label className="font-medium text-slate-700">Script</label>
+              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={script} onChange={e => setScript(e.target.value as ScriptId)}>
+                <option value="Copperplate">Copperplate</option>
+                <option value="Fraktur">Fraktur</option>
+                <option value="TexturaQuadrata">Textura Quadrata</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="font-medium text-slate-700">Curve</label>
+              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={curve} onChange={e => setCurve(e.target.value as CurvePresetId)}>
+                <option value="simpleArch">Simple Arch</option>
+                <option value="highArch">High Arch</option>
+                <option value="shallowArch">Shallow Arch</option>
+                <option value="compoundArch">Compound Arch</option>
+                <option value="zanerian">Zanerian Resolution</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="font-medium text-slate-700">Paper size</label>
               <select
                 className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                value={xHeightMM}
-                onChange={(e) => setXHeightMM(parseFloat(e.target.value))}
+                value={paper}
+                onChange={e => {
+                  const id = e.target.value as PaperId;
+                  setPaper(id);
+                  setOrientation(PAPERS_MM[id].defaultOrientation);
+                  setPan({ x: 0, y: 0 });
+                }}
               >
-                {X_OPTIONS.map((v) => (
-                  <option key={v} value={v}>
-                    {v.toFixed(1)}
+                {Object.entries(PAPERS_MM).map(([id, p]) => (
+                  <option key={id} value={id}>
+                    {p.label}
                   </option>
                 ))}
               </select>
             </div>
+
             <div>
-              <label className="font-medium text-slate-700">Capitals</label>
-              <select
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
-                value={capStyle}
-                onChange={(e) => setCapStyle(e.target.value as 'simple' | 'flourished')}
-                disabled={useCalibration}
-              >
-                <option value="simple">Simple (body widths)</option>
-                <option value="flourished">Flourished (full widths)</option>
+              <label className="font-medium text-slate-700">Orientation</label>
+              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={orientation} onChange={e => setOrientation(e.target.value as Orientation)}>
+                <option value="portrait">Portrait</option>
+                <option value="landscape">Landscape</option>
               </select>
-              {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
+            </div>
+
+            <div>
+              <label className="font-medium text-slate-700">Text alignment</label>
+              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
+                <option value="start">Start</option>
+                <option value="center">Centered</option>
+                <option value="end">End</option>
+              </select>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="font-medium text-slate-700">Title text</label>
+              <input className="mt-1 w-full p-3 rounded-lg border border-slate-300 text-base" value={text} onChange={e => setText(e.target.value)} />
             </div>
           </div>
+        </div>
 
-          <div>
-            <label className="font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
-            <select
-              className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-              value={copperplateRatioPreset}
-              onChange={(e) => setCopperplateRatioPreset(e.target.value as CopperplateRatioPreset)}
-            >
-              <option value="2:1:2">2 : 1 : 2 (default)</option>
-              <option value="3:2:3">3 : 2 : 3</option>
-              <option value="1:1:1">1 : 1 : 1</option>
-              <option value="custom">Custom…</option>
-            </select>
-            <p className="mt-1 text-[11px] text-slate-400">Ascender/descender scale from x-height.</p>
+        {/* Step 2 */}
+        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-slate-800">Step 2 — Script Options</h2>
+            <InfoTip side="right">
+              {script === 'Copperplate'
+                ? 'Copperplate uses x-height (mm) with optional calibration for lowercase scale and spacing.'
+                : 'Heights are nibs × nib size (mm).'}
+            </InfoTip>
           </div>
 
-          {copperplateRatioPreset === 'custom' && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {script === 'Copperplate' ? (
+            <div className="mt-3 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="font-medium text-slate-700">X-height (mm)</label>
+                  <select
+                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                    value={xHeightMM}
+                    onChange={(e) => setXHeightMM(parseFloat(e.target.value))}
+                  >
+                    {X_OPTIONS.map((v) => (
+                      <option key={v} value={v}>
+                        {v.toFixed(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+
+
+                  <label className="font-medium text-slate-700">Capitals</label>
+                  <select
+                    className="mt-1 w-full p-2 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                    value={capStyle}
+                    onChange={(e) => setCapStyle(e.target.value as 'simple' | 'flourished')}
+                    disabled={useCalibration}
+                  >
+                    <option value="simple">Simple (body widths)</option>
+                    <option value="flourished">Flourished (full widths)</option>
+                  </select>
+                  {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
+                </div>
+              </div>
+
               <div>
-                <label className="font-medium text-slate-700">Desc units</label>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.5"
+                <label className="font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
+                <select
                   className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                  value={copperplateDescUnitsText}
-                  onWheel={(e) => {
-                    (e.currentTarget as HTMLInputElement).blur();
-                  }}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    setCopperplateDescUnitsText(next);
-                    const parsed = parseFloat(next);
-                    if (Number.isFinite(parsed)) {
-                      setCopperplateDescUnits(Math.max(0, parsed));
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-                    e.preventDefault();
-
-                    const current = parseFloat(copperplateDescUnitsText);
-                    const safe = Number.isFinite(current) ? current : copperplateDescUnits;
-                    const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
-
-                    const stepped = stepHalfFrom(safe, dir);
-                    const next = Math.max(0, stepped);
-                    setCopperplateDescUnitsText(String(next));
-                    setCopperplateDescUnits(next);
-                  }}
-                  onBlur={() => {
-                    const v = parseFloat(copperplateDescUnitsText);
-                    if (!Number.isFinite(v)) {
-                      setCopperplateDescUnitsText(String(copperplateDescUnits));
-                      return;
-                    }
-                    const next = Math.max(0, v);
-                    setCopperplateDescUnitsText(String(next));
-                    setCopperplateDescUnits(next);
-                  }}
-                />
+                  value={copperplateRatioPreset}
+                  onChange={(e) => setCopperplateRatioPreset(e.target.value as CopperplateRatioPreset)}
+                >
+                  <option value="2:1:2">2 : 1 : 2 (default)</option>
+                  <option value="3:2:3">3 : 2 : 3</option>
+                  <option value="1:1:1">1 : 1 : 1</option>
+                  <option value="custom">Custom…</option>
+                </select>
+                <p className="mt-1 text-[11px] text-slate-400">Ascender/descender scale from x-height.</p>
               </div>
-              <div>
-                <label className="font-medium text-slate-700">X units</label>
-                <input
-                  type="number"
-                  min={0.5}
-                  step="0.5"
-                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                  value={copperplateXUnitsText}
-                  onWheel={(e) => {
-                    (e.currentTarget as HTMLInputElement).blur();
-                  }}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    setCopperplateXUnitsText(next);
-                    const parsed = parseFloat(next);
-                    if (Number.isFinite(parsed)) {
-                      setCopperplateXUnits(Math.max(0.1, parsed));
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-                    e.preventDefault();
 
-                    const current = parseFloat(copperplateXUnitsText);
-                    const safe = Number.isFinite(current) ? current : copperplateXUnits;
-                    const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+              <div className="mt-4 flex items-center gap-4">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                    checked={showBoxes}
+                    onChange={e => setShowBoxes(e.target.checked)}
+                  />
+                  Show letter bounding boxes
+                </label>
 
-                    const stepped = stepHalfFrom(safe, dir);
-                    const next = Math.max(0.5, stepped);
-                    setCopperplateXUnitsText(String(next));
-                    setCopperplateXUnits(next);
-                  }}
-                  onBlur={() => {
-                    const v = parseFloat(copperplateXUnitsText);
-                    if (!Number.isFinite(v)) {
-                      setCopperplateXUnitsText(String(copperplateXUnits));
-                      return;
-                    }
-                    const next = Math.max(0.5, v);
-                    setCopperplateXUnitsText(String(next));
-                    setCopperplateXUnits(next);
-                  }}
-                />
+                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                    checked={showSpanFill}
+                    onChange={e => setShowSpanFill(e.target.checked)}
+                  />
+                  Show title span fill
+                </label>
               </div>
-              <div>
-                <label className="font-medium text-slate-700">Asc units</label>
-                <input
-                  type="number"
-                  min={0}
-                  step="0.5"
-                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                  value={copperplateAscUnitsText}
-                  onWheel={(e) => {
-                    (e.currentTarget as HTMLInputElement).blur();
-                  }}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    setCopperplateAscUnitsText(next);
-                    const parsed = parseFloat(next);
-                    if (Number.isFinite(parsed)) {
-                      setCopperplateAscUnits(Math.max(0, parsed));
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-                    e.preventDefault();
+              <hr className="mt-4 mb-3 border-t border-slate-200" />
+              <div className="mt-2 flex items-center gap-4">
+  <div className="flex-1">
+    <div className="text-sm font-medium text-slate-700">Calibration (optional)</div>
+    <p className="text-xs text-slate-500">
+      Stored per x-height. Adjusts lowercase scale + spacing.
+    </p>
+  </div>
 
-                    const current = parseFloat(copperplateAscUnitsText);
-                    const safe = Number.isFinite(current) ? current : copperplateAscUnits;
-                    const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+  <button
+    type="button"
+    onMouseDown={(e) => e.preventDefault()}
+    onClick={() =>
+      setUseCalibration((v) => {
+        const next = !v;
+        if (!next) setShowAdvanced(false);
+        return next;
+      })
+    }
+    className={`shrink-0 inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+      ${useCalibration
+        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+        : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+  >
+    <span
+      className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
+        ${useCalibration ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}
+    >
+      <span className="h-3 w-3 rounded-full bg-white shadow" />
+    </span>
+    {useCalibration ? 'Calibration: On' : 'Calibration: Off'}
+  </button>
+</div>
 
-                    const stepped = stepHalfFrom(safe, dir);
-                    const next = Math.max(0, stepped);
-                    setCopperplateAscUnitsText(String(next));
-                    setCopperplateAscUnits(next);
-                  }}
-                  onBlur={() => {
-                    const v = parseFloat(copperplateAscUnitsText);
-                    if (!Number.isFinite(v)) {
-                      setCopperplateAscUnitsText(String(copperplateAscUnits));
-                      return;
-                    }
-                    const next = Math.max(0, v);
-                    setCopperplateAscUnitsText(String(next));
-                    setCopperplateAscUnits(next);
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="border-t border-slate-200 pt-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-medium text-slate-700">Calibration (optional)</div>
-                <p className="text-xs text-slate-500">Stored per x-height. Adjusts lowercase scale + spacing.</p>
-              </div>
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setUseCalibration((v) => !v)}
-                className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-                      ${useCalibration ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-              >
-                <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition ${useCalibration ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
-                  <span className="h-3 w-3 rounded-full bg-white shadow" />
-                </span>
-                {useCalibration ? 'Calibration: On' : 'Calibration: Off'}
-              </button>
-            </div>
-
-            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-mono text-indigo-500">{CAL_WORD}</span>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  className="w-full p-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50"
-                  placeholder="Lowercase word (mm)"
-                  value={calWordLowerMM}
-                  onChange={(e) => setCalWordLowerMM(e.target.value)}
-                  disabled={!useCalibration}
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-mono text-indigo-500">{CAL_WORD_DOUBLE}</span>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  className="w-full p-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50"
-                  placeholder="Double word (mm)"
-                  value={calWordDoubleMM}
-                  onChange={(e) => setCalWordDoubleMM(e.target.value)}
-                  disabled={!useCalibration}
-                />
-              </div>
-            </div>
-
-            <div className="mt-3">
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setShowAdvanced((v) => !v)}
-                className="flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-indigo-600 select-none"
-                disabled={!useCalibration}
-              >
-                <span className={`inline-block transform transition-transform ${showAdvanced && useCalibration ? 'rotate-90' : 'rotate-0'}`}>▶</span>
-                <span>Advanced tweaks</span>
-                {!useCalibration && <span className="ml-1 text-[10px] text-slate-400">(enable calibration to adjust)</span>}
-              </button>
-
-              {showAdvanced && useCalibration && (
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-slate-700">Overall scale</span>
-                      <span className="font-mono text-slate-500">×{userScaleFactor.toFixed(2)}</span>
+              {useCalibration && (
+                <div className="border-t border-slate-200 pt-3">
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-mono text-indigo-500">{CAL_WORD}</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        className="w-full p-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Lowercase word (mm)"
+                        value={calWordLowerMM}
+                        onChange={(e) => setCalWordLowerMM(e.target.value)}
+                      />
                     </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-mono text-indigo-500">{CAL_WORD_DOUBLE}</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        className="w-full p-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Double word (mm)"
+                        value={calWordDoubleMM}
+                        onChange={(e) => setCalWordDoubleMM(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setShowAdvanced((v) => !v)}
+                      className="flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-indigo-600 select-none"
+                    >
+                      <span className={`inline-block transform transition-transform ${showAdvanced ? 'rotate-90' : 'rotate-0'}`}>▶</span>
+                      <span>Advanced tweaks</span>
+                    </button>
+
+                    {showAdvanced && (
+                      <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-slate-700">Overall scale</span>
+                            <span className="font-mono text-slate-500">×{userScaleFactor.toFixed(2)}</span>
+                          </div>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.7"
+                            max="1.3"
+                            className="w-full p-2 rounded-lg border border-slate-300 text-sm"
+                            value={userScaleFactor}
+                            onChange={(e) => setUserScaleFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.7, 1.3))}
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-slate-700">Spacing factor</span>
+                            <span className="font-mono text-slate-500">×{userSpaceFactor.toFixed(2)}</span>
+                          </div>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.5"
+                            max="1.5"
+                            className="w-full p-2 rounded-lg border border-slate-300 text-sm"
+                            value={userSpaceFactor}
+                            onChange={(e) => setUserSpaceFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.5, 1.5))}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+
+
+              {copperplateRatioPreset === 'custom' && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="font-medium text-slate-700">Desc units</label>
                     <input
                       type="number"
-                      step="0.01"
-                      min="0.7"
-                      max="1.3"
-                      className="w-full p-2 rounded-lg border border-slate-300 text-sm"
-                      value={userScaleFactor}
-                      onChange={(e) => setUserScaleFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.7, 1.3))}
+                      min={0}
+                      step="0.5"
+                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                      value={copperplateDescUnitsText}
+                      onWheel={(e) => {
+                        (e.currentTarget as HTMLInputElement).blur();
+                      }}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setCopperplateDescUnitsText(next);
+                        const parsed = parseFloat(next);
+                        if (Number.isFinite(parsed)) {
+                          setCopperplateDescUnits(Math.max(0, parsed));
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                        e.preventDefault();
+
+                        const current = parseFloat(copperplateDescUnitsText);
+                        const safe = Number.isFinite(current) ? current : copperplateDescUnits;
+                        const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+
+                        const stepped = stepHalfFrom(safe, dir);
+                        const next = Math.max(0, stepped);
+                        setCopperplateDescUnitsText(String(next));
+                        setCopperplateDescUnits(next);
+                      }}
+                      onBlur={() => {
+                        const v = parseFloat(copperplateDescUnitsText);
+                        if (!Number.isFinite(v)) {
+                          setCopperplateDescUnitsText(String(copperplateDescUnits));
+                          return;
+                        }
+                        const next = Math.max(0, v);
+                        setCopperplateDescUnitsText(String(next));
+                        setCopperplateDescUnits(next);
+                      }}
                     />
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-slate-700">Spacing factor</span>
-                      <span className="font-mono text-slate-500">×{userSpaceFactor.toFixed(2)}</span>
-                    </div>
+                  <div>
+                    <label className="font-medium text-slate-700">X units</label>
                     <input
                       type="number"
-                      step="0.01"
-                      min="0.5"
-                      max="1.5"
-                      className="w-full p-2 rounded-lg border border-slate-300 text-sm"
-                      value={userSpaceFactor}
-                      onChange={(e) => setUserSpaceFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.5, 1.5))}
+                      min={0.5}
+                      step="0.5"
+                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                      value={copperplateXUnitsText}
+                      onWheel={(e) => {
+                        (e.currentTarget as HTMLInputElement).blur();
+                      }}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setCopperplateXUnitsText(next);
+                        const parsed = parseFloat(next);
+                        if (Number.isFinite(parsed)) {
+                          setCopperplateXUnits(Math.max(0.1, parsed));
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                        e.preventDefault();
+
+                        const current = parseFloat(copperplateXUnitsText);
+                        const safe = Number.isFinite(current) ? current : copperplateXUnits;
+                        const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+
+                        const stepped = stepHalfFrom(safe, dir);
+                        const next = Math.max(0.5, stepped);
+                        setCopperplateXUnitsText(String(next));
+                        setCopperplateXUnits(next);
+                      }}
+                      onBlur={() => {
+                        const v = parseFloat(copperplateXUnitsText);
+                        if (!Number.isFinite(v)) {
+                          setCopperplateXUnitsText(String(copperplateXUnits));
+                          return;
+                        }
+                        const next = Math.max(0.5, v);
+                        setCopperplateXUnitsText(String(next));
+                        setCopperplateXUnits(next);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="font-medium text-slate-700">Asc units</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.5"
+                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                      value={copperplateAscUnitsText}
+                      onWheel={(e) => {
+                        (e.currentTarget as HTMLInputElement).blur();
+                      }}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setCopperplateAscUnitsText(next);
+                        const parsed = parseFloat(next);
+                        if (Number.isFinite(parsed)) {
+                          setCopperplateAscUnits(Math.max(0, parsed));
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                        e.preventDefault();
+
+                        const current = parseFloat(copperplateAscUnitsText);
+                        const safe = Number.isFinite(current) ? current : copperplateAscUnits;
+                        const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+
+                        const stepped = stepHalfFrom(safe, dir);
+                        const next = Math.max(0, stepped);
+                        setCopperplateAscUnitsText(String(next));
+                        setCopperplateAscUnits(next);
+                      }}
+                      onBlur={() => {
+                        const v = parseFloat(copperplateAscUnitsText);
+                        if (!Number.isFinite(v)) {
+                          setCopperplateAscUnitsText(String(copperplateAscUnits));
+                          return;
+                        }
+                        const next = Math.max(0, v);
+                        setCopperplateAscUnitsText(String(next));
+                        setCopperplateAscUnits(next);
+                      }}
                     />
                   </div>
                 </div>
               )}
+
+
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              <div>
+                <label className="font-medium text-slate-700">Nib size (mm)</label>
+                <input
+                  type="number"
+                  step="any"
+                  min={0.2}
+                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  value={nibText}
+                  onWheel={(e) => {
+                    // Prevent mouse wheel from stepping this number input
+                    (e.currentTarget as HTMLInputElement).blur();
+                  }}
+                  onChange={(e) => {
+                    // Allow free typing (e.g. "3.8", "2.", "")
+                    setNibText(e.target.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                    e.preventDefault();
+
+                    const current = parseFloat(nibText);
+                    const safe = Number.isFinite(current) ? current : 2;
+                    const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+
+                    const stepped = stepHalfFrom(safe, dir);
+                    setNibText(String(Math.max(0.2, stepped)));
+                  }}
+                  onBlur={() => {
+                    // Validate only (NO snapping)
+                    const v = parseFloat(nibText);
+                    if (!Number.isFinite(v)) {
+                      setNibText('2');
+                      return;
+                    }
+                    setNibText(String(Math.max(0.2, v)));
+                  }}
+                />
+
+
+                <div>
+                  <label className="font-medium text-slate-700">Pen angle (°)</label>
+                  <select
+                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                    value={penAngleDeg}
+                    onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
+                  >
+                    <option value={35}>35°</option>
+                    <option value={40}>40°</option>
+                    <option value={45}>45°</option>
+                  </select>
+                </div>
+
+              </div>
+              <div>
+                <label className="font-medium text-slate-700">x-height (nibs)</label>
+                <input type="number" step={0.5} min={1} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={xNib} onChange={e => setXNib(parseFloat(e.target.value || '5'))} />
+              </div>
+              <div>
+                <label className="font-medium text-slate-700">Ascender (nibs)</label>
+                <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={ascNib} onChange={e => setAscNib(parseFloat(e.target.value || '3'))} />
+              </div>
+              <div>
+                <label className="font-medium text-slate-700">Descender (nibs)</label>
+                <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={descNib} onChange={e => setDescNib(parseFloat(e.target.value || '2'))} />
+              </div>
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-4 mt-3">
-          <div>
-            <label className="font-medium text-slate-700">Nib size (mm)</label>
-            <input
-              type="number"
-              step="any"
-              min={0.2}
-              className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-              value={nibText}
-              onWheel={(e) => {
-                // Prevent mouse wheel from stepping this number input
-                (e.currentTarget as HTMLInputElement).blur();
-              }}
-              onChange={(e) => {
-                // Allow free typing (e.g. "3.8", "2.", "")
-                setNibText(e.target.value);
-              }}
-              onKeyDown={(e) => {
-                if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-                e.preventDefault();
 
-                const current = parseFloat(nibText);
-                const safe = Number.isFinite(current) ? current : 2;
-                const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
 
-                const stepped = stepHalfFrom(safe, dir);
-                setNibText(String(Math.max(0.2, stepped)));
-              }}
-              onBlur={() => {
-                // Validate only (NO snapping)
-                const v = parseFloat(nibText);
-                if (!Number.isFinite(v)) {
-                  setNibText('2');
-                  return;
-                }
-                setNibText(String(Math.max(0.2, v)));
-              }}
-            />
+        {/* Step 3 */}
+        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-slate-800">Step 3 — Curve & Guides</h2>
+            <InfoTip side="right">Rotate and scale the curve.</InfoTip>
+          </div>
 
+          <div className="grid grid-cols-1 gap-4 mt-3 select-none">
+            <div>
+              <label className="font-medium text-slate-700">Rotation (°)</label>
+              <input type="range" min={-30} max={30} step={1} value={rotDeg} onChange={e => setRotDeg(parseInt(e.target.value, 10))} className="w-full" />
+              <div className="text-xs text-slate-500 mt-1">{rotDeg}°</div>
+            </div>
 
             <div>
-              <label className="font-medium text-slate-700">Pen angle (°)</label>
-              <select
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                value={penAngleDeg}
-                onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
-              >
-                <option value={35}>35°</option>
-                <option value={40}>40°</option>
-                <option value={45}>45°</option>
-              </select>
+              <label className="font-medium text-slate-700">Scale (%)</label>
+              <input type="range" min={60} max={140} step={1} value={scalePct} onChange={e => setScalePct(parseInt(e.target.value, 10))} className="w-full" />
+              <div className="text-xs text-slate-500 mt-1">{scalePct}%</div>
             </div>
 
+            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                checked={flipCurve}
+                onChange={e => setFlipCurve(e.target.checked)}
+              />
+              Flip curve
+            </label>
           </div>
-          <div>
-            <label className="font-medium text-slate-700">x-height (nibs)</label>
-            <input type="number" step={0.5} min={1} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={xNib} onChange={e => setXNib(parseFloat(e.target.value || '5'))} />
-          </div>
-          <div>
-            <label className="font-medium text-slate-700">Ascender (nibs)</label>
-            <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={ascNib} onChange={e => setAscNib(parseFloat(e.target.value || '3'))} />
-          </div>
-          <div>
-            <label className="font-medium text-slate-700">Descender (nibs)</label>
-            <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={descNib} onChange={e => setDescNib(parseFloat(e.target.value || '2'))} />
+
+
+          <div className="mt-4">
+            <button onMouseDown={e => e.preventDefault()} onClick={resetTransform} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
+              Reset rotation &amp; scale
+            </button>
           </div>
         </div>
-      )}
-
-      <div className="mt-4 space-y-4">
-        <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-          <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-indigo-600" checked={showBoxes} onChange={e => setShowBoxes(e.target.checked)} />
-          Show letter bounding boxes
-        </label>
-        <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-          <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-indigo-600" checked={showSpanFill} onChange={e => setShowSpanFill(e.target.checked)} />
-          Show title span fill
-        </label>
-      </div>
-    </div>
-
-    {/* Step 3 */}
-    <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
-      <div className="flex items-center gap-2">
-        <h2 className="text-lg font-semibold text-slate-800">Step 3 — Curve Transform</h2>
-        <InfoTip side="right">Rotate and scale the curve.</InfoTip>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 mt-3 select-none">
-        <div>
-          <label className="font-medium text-slate-700">Rotation (°)</label>
-          <input type="range" min={-30} max={30} step={1} value={rotDeg} onChange={e => setRotDeg(parseInt(e.target.value, 10))} className="w-full" />
-          <div className="text-xs text-slate-500 mt-1">{rotDeg}°</div>
-        </div>
-
-        <div>
-          <label className="font-medium text-slate-700">Scale (%)</label>
-          <input type="range" min={60} max={140} step={1} value={scalePct} onChange={e => setScalePct(parseInt(e.target.value, 10))} className="w-full" />
-          <div className="text-xs text-slate-500 mt-1">{scalePct}%</div>
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <button onMouseDown={e => e.preventDefault()} onClick={resetTransform} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
-          Reset rotation &amp; scale
-        </button>
-      </div>
-    </div>
-  </section>
-    </main >
+      </section>
+    </main>
   );
 }
