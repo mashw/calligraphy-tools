@@ -183,15 +183,10 @@ export default function GuideOverlay({
         {markerData && (() => {
           const { x, y, size } = markerData;
           const theta = (nibAngleDeg * Math.PI) / 180;
-          const tan = Math.tan(theta);
-          let points = '';
-          if (tan <= 1) {
-            const yHit = y + size * (1 - tan);
-            points = `${x},${y} ${x + size},${y} ${x + size},${yHit} ${x},${y + size}`;
-          } else {
-            const xHit = x + size / tan;
-            points = `${x},${y} ${xHit},${y} ${x},${y + size}`;
-          }
+          const chipH = size * 3;
+          const chipW = chipH / Math.tan(theta);
+          const chipWClamped = Math.min(chipW, chipH * 6);
+          const points = `${x},${y} ${x + chipWClamped},${y} ${x},${y + chipH}`;
           return (
             <polygon
               points={points}
