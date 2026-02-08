@@ -156,6 +156,53 @@ function stripNoExport(svg: SVGSVGElement) {
   svg.querySelectorAll('filter').forEach(f => f.remove());
 }
 
+function bakeExportStrokes(source: SVGSVGElement, clone: SVGSVGElement, boxW: number) {
+  const rect = source.getBoundingClientRect();
+  if (!rect.width) return;
+  const pxPerMM = rect.width / boxW;
+  const sourceEls = Array.from(source.querySelectorAll<SVGElement>('*'));
+  const cloneEls = Array.from(clone.querySelectorAll<SVGElement>('*'));
+
+  sourceEls.forEach((el, idx) => {
+    const cloneEl = cloneEls[idx];
+    if (!cloneEl) return;
+    const style = window.getComputedStyle(el);
+    const strokeWidthPx = parseFloat(style.strokeWidth || '0');
+    const hasStroke = (style.stroke && style.stroke !== 'none') || strokeWidthPx > 0;
+    if (!hasStroke) {
+      cloneEl.removeAttribute('vector-effect');
+      return;
+    }
+
+    if (style.stroke && style.stroke !== 'none') {
+      cloneEl.setAttribute('stroke', style.stroke);
+    }
+    if (!Number.isNaN(strokeWidthPx)) {
+      cloneEl.setAttribute('stroke-width', String(strokeWidthPx / pxPerMM));
+    }
+    const dasharray = style.strokeDasharray;
+    if (dasharray && dasharray !== 'none') {
+      const baked = dasharray
+        .split(/[\s,]+/)
+        .filter(Boolean)
+        .map(entry => {
+          const num = parseFloat(entry);
+          return Number.isNaN(num) ? entry : String(num / pxPerMM);
+        })
+        .join(' ');
+      cloneEl.setAttribute('stroke-dasharray', baked);
+    } else if (dasharray === 'none') {
+      cloneEl.removeAttribute('stroke-dasharray');
+    }
+    if (style.strokeLinecap) cloneEl.setAttribute('stroke-linecap', style.strokeLinecap);
+    if (style.strokeLinejoin) cloneEl.setAttribute('stroke-linejoin', style.strokeLinejoin);
+    if (style.strokeMiterlimit) cloneEl.setAttribute('stroke-miterlimit', style.strokeMiterlimit);
+    if (style.strokeOpacity) cloneEl.setAttribute('stroke-opacity', style.strokeOpacity);
+
+    cloneEl.removeAttribute('vector-effect');
+  });
+}
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -928,6 +975,7 @@ export default function CurvedTitlePage() {
     clone.setAttribute('width', `${box.w}mm`);
     clone.setAttribute('height', `${box.h}mm`);
 
+    bakeExportStrokes(svg, clone, box.w);
     stripNoExport(clone);
 
     const blob = new Blob([clone.outerHTML], { type: 'image/svg+xml;charset=utf-8' });
@@ -945,9 +993,10 @@ export default function CurvedTitlePage() {
     const clone = svg.cloneNode(true) as SVGSVGElement;
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
     clone.setAttribute('viewBox', `0 0 ${box.w} ${box.h}`);
-    clone.setAttribute('width', String(box.w));
-    clone.setAttribute('height', String(box.h));
+    clone.setAttribute('width', String(wpx));
+    clone.setAttribute('height', String(hpx));
 
+    bakeExportStrokes(svg, clone, box.w);
     stripNoExport(clone);
 
     const xml = new XMLSerializer().serializeToString(clone);
