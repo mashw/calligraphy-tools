@@ -1924,6 +1924,17 @@ export default function GuidelinesPage() {
                   </select>
                 </div>
 
+                <div>
+                  <label className="font-medium text-slate-700">Row gap (mm)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                    value={rowGapMM}
+                    onChange={(e) => setRowGapMM(parseFloat(e.target.value || '0') || 0)}
+                  />
+                </div>
               </div>
               <div>
                 <label className="font-medium text-slate-700">x-height (nibs)</label>
@@ -1936,17 +1947,6 @@ export default function GuidelinesPage() {
               <div>
                 <label className="font-medium text-slate-700">Descender (nibs)</label>
                 <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={descNib} onChange={e => setDescNib(parseFloat(e.target.value || '2'))} />
-              </div>
-              <div>
-                <label className="font-medium text-slate-700">Row gap (mm)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                  value={rowGapMM}
-                  onChange={(e) => setRowGapMM(parseFloat(e.target.value || '0') || 0)}
-                />
               </div>
             </div>
           )}
