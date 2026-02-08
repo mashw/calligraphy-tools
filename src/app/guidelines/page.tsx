@@ -462,6 +462,16 @@ export default function GuidelinesPage() {
     return `rgba(${r},${g},${b},${a})`;
   }
 
+  function lerpGridColor(t: number) {
+    const clamped = Math.max(0, Math.min(1, t));
+    const from = { r: 226, g: 232, b: 240 }; // #e2e8f0
+    const to = { r: 0, g: 0, b: 0 };
+    const r = Math.round(from.r + (to.r - from.r) * clamped);
+    const g = Math.round(from.g + (to.g - from.g) * clamped);
+    const b = Math.round(from.b + (to.b - from.b) * clamped);
+    return `rgb(${r},${g},${b})`;
+  }
+
   // Derive main four guide colors (contrast scales alpha; hue preserved)
   const baseAlpha = Math.max(0, Math.min(1, xLineContrast));
   const alpha = highContrastMode ? 1 : baseAlpha;
@@ -475,10 +485,11 @@ export default function GuidelinesPage() {
   const waistColor = hexToRgba(effectiveWaistHex, alpha);
 
   const xLineThicknessScale = highContrastMode ? 1.8 : xLineThickness;
-  const gridBaseAlpha = Math.max(0, Math.min(1, gridContrast));
-  const gridAlpha = highContrastMode ? 1 : gridBaseAlpha;
-  const gridColor = hexToRgba('#e2e8f0', gridAlpha);
-  const gridThicknessScale = highContrastMode ? 1.8 : gridThickness;
+  const gridBaseContrast = Math.max(0, Math.min(1, gridContrast));
+  const gridEffectiveContrast = highContrastMode ? 1 : gridBaseContrast;
+  const gridColor = lerpGridColor(gridEffectiveContrast);
+  const gridMaxScale = 1.4;
+  const gridThicknessScale = Math.min(highContrastMode ? gridMaxScale : gridThickness, gridMaxScale);
 
 
 
@@ -1638,7 +1649,7 @@ export default function GuidelinesPage() {
                   <input
                     type="range"
                     min="0.6"
-                    max="2.5"
+                    max="1.4"
                     step="0.05"
                     className="mt-2 w-full"
                     value={gridThickness}
