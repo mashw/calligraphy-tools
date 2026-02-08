@@ -1582,47 +1582,45 @@ export default function GuidelinesPage() {
             </InfoTip>
           </div>
 
-          <div className="mt-3">
-            <label className="font-medium text-slate-700">Script</label>
-            <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={script} onChange={e => setScript(e.target.value as ScriptId)}>
-              <option value="Copperplate">Copperplate</option>
-              <option value="Fraktur">Fraktur</option>
-              <option value="TexturaQuadrata">Textura Quadrata</option>
-            </select>
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="font-medium text-slate-700">Script</label>
+              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={script} onChange={e => setScript(e.target.value as ScriptId)}>
+                <option value="Copperplate">Copperplate</option>
+                <option value="Fraktur">Fraktur</option>
+                <option value="TexturaQuadrata">Textura Quadrata</option>
+              </select>
+            </div>
+            <div>
+              <label className="font-medium text-slate-700">{script === 'Copperplate' ? 'X-height (mm)' : 'x-height (nibs)'}</label>
+              {script === 'Copperplate' ? (
+                <select
+                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  value={xHeightMM}
+                  onChange={(e) => setXHeightMM(parseFloat(e.target.value))}
+                >
+                  {X_OPTIONS.map((v) => (
+                    <option key={v} value={v}>
+                      {v.toFixed(1)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="number"
+                  step={0.5}
+                  min={1}
+                  max={8}
+                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  value={xNib}
+                  onChange={e => setXNib(parseFloat(e.target.value || '5'))}
+                />
+              )}
+            </div>
           </div>
 
           {script === 'Copperplate' ? (
             <div className="mt-4 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="font-medium text-slate-700">X-height (mm)</label>
-                  <select
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                    value={xHeightMM}
-                    onChange={(e) => setXHeightMM(parseFloat(e.target.value))}
-                  >
-                    {X_OPTIONS.map((v) => (
-                      <option key={v} value={v}>
-                        {v.toFixed(1)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="font-medium text-slate-700">Capitals</label>
-                  <select
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
-                    value={capStyle}
-                    onChange={(e) => setCapStyle(e.target.value as 'simple' | 'flourished')}
-                    disabled={useCalibration}
-                  >
-                    <option value="simple">Simple (body widths)</option>
-                    <option value="flourished">Flourished (full widths)</option>
-                  </select>
-                  {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
-                </div>
-              </div>
-
               <div>
                 <label className="font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
                 <select
@@ -1876,97 +1874,78 @@ export default function GuidelinesPage() {
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4 mt-3">
-              <div>
-                <label className="font-medium text-slate-700">Nib size (mm)</label>
-                <input
-                  type="number"
-                  step="any"
-                  min={0.2}
-                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                  value={nibText}
-                  onWheel={(e) => {
-                    // Prevent mouse wheel from stepping this number input
-                    (e.currentTarget as HTMLInputElement).blur();
-                  }}
-                  onChange={(e) => {
-                    // Allow free typing (e.g. "3.8", "2.", "")
-                    setNibText(e.target.value);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-                    e.preventDefault();
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-medium text-slate-700">Nib size (mm)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    min={0.2}
+                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                    value={nibText}
+                    onWheel={(e) => {
+                      // Prevent mouse wheel from stepping this number input
+                      (e.currentTarget as HTMLInputElement).blur();
+                    }}
+                    onChange={(e) => {
+                      // Allow free typing (e.g. "3.8", "2.", "")
+                      setNibText(e.target.value);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                      e.preventDefault();
 
-                    const current = parseFloat(nibText);
-                    const safe = Number.isFinite(current) ? current : 2;
-                    const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+                      const current = parseFloat(nibText);
+                      const safe = Number.isFinite(current) ? current : 2;
+                      const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
 
-                    const stepped = stepHalfFrom(safe, dir);
-                    setNibText(String(Math.max(0.2, stepped)));
-                  }}
-                  onBlur={() => {
-                    // Validate only (NO snapping)
-                    const v = parseFloat(nibText);
-                    if (!Number.isFinite(v)) {
-                      setNibText('2');
-                      return;
-                    }
-                    setNibText(String(Math.max(0.2, v)));
-                  }}
-                />
+                      const stepped = stepHalfFrom(safe, dir);
+                      setNibText(String(Math.max(0.2, stepped)));
+                    }}
+                    onBlur={() => {
+                      // Validate only (NO snapping)
+                      const v = parseFloat(nibText);
+                      if (!Number.isFinite(v)) {
+                        setNibText('2');
+                        return;
+                      }
+                      setNibText(String(Math.max(0.2, v)));
+                    }}
+                  />
+                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                  <div className="min-w-0">
-                    <label className="font-medium text-slate-700">Pen angle (°)</label>
-                    <select
-                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                      value={penAngleDeg}
-                      onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
-                    >
-                      <option value={35}>35°</option>
-                      <option value={40}>40°</option>
-                      <option value={45}>45°</option>
-                    </select>
-                  </div>
-
+                <div>
+                  <label className="font-medium text-slate-700">Pen angle (°)</label>
+                  <select
+                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                    value={penAngleDeg}
+                    onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
+                  >
+                    <option value={35}>35°</option>
+                    <option value={40}>40°</option>
+                    <option value={45}>45°</option>
+                  </select>
                   {showGridControls && (
-                    <div className="min-w-0">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-sm font-medium text-slate-700">Angle guide</div>
-                        <button
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => setShowNibAngleGuide((v) => !v)}
-                          className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <div className="text-sm font-medium text-slate-700">Angle guide</div>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => setShowNibAngleGuide((v) => !v)}
+                        className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
         ${showNibAngleGuide
           ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
           : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-                        >
-                          <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
+                      >
+                        <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
         ${showNibAngleGuide ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
-                            <span className="h-3 w-3 rounded-full bg-white shadow" />
-                          </span>
-                          {showNibAngleGuide ? 'On' : 'Off'}
-                        </button>
-                      </div>
+                          <span className="h-3 w-3 rounded-full bg-white shadow" />
+                        </span>
+                        {showNibAngleGuide ? 'On' : 'Off'}
+                      </button>
                     </div>
                   )}
-
-                  <div className="min-w-0">
-                    <label className="font-medium text-slate-700">Row gap (mm)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                      value={rowGapMM}
-                      onChange={(e) => setRowGapMM(parseFloat(e.target.value || '0') || 0)}
-                    />
-                  </div>
                 </div>
-              </div>
-              <div>
-                <label className="font-medium text-slate-700">x-height (nibs)</label>
-                <input type="number" step={0.5} min={1} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={xNib} onChange={e => setXNib(parseFloat(e.target.value || '5'))} />
               </div>
               <div>
                 <label className="font-medium text-slate-700">Ascender (nibs)</label>
