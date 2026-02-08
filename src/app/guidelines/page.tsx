@@ -1911,29 +1911,31 @@ export default function GuidelinesPage() {
                   }}
                 />
 
-                <div>
-                  <label className="font-medium text-slate-700">Pen angle (°)</label>
-                  <select
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                    value={penAngleDeg}
-                    onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
-                  >
-                    <option value={35}>35°</option>
-                    <option value={40}>40°</option>
-                    <option value={45}>45°</option>
-                  </select>
-                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-medium text-slate-700">Pen angle (°)</label>
+                    <select
+                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                      value={penAngleDeg}
+                      onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
+                    >
+                      <option value={35}>35°</option>
+                      <option value={40}>40°</option>
+                      <option value={45}>45°</option>
+                    </select>
+                  </div>
 
-                <div>
-                  <label className="font-medium text-slate-700">Row gap (mm)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                    value={rowGapMM}
-                    onChange={(e) => setRowGapMM(parseFloat(e.target.value || '0') || 0)}
-                  />
+                  <div>
+                    <label className="font-medium text-slate-700">Row gap (mm)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                      value={rowGapMM}
+                      onChange={(e) => setRowGapMM(parseFloat(e.target.value || '0') || 0)}
+                    />
+                  </div>
                 </div>
               </div>
               <div>
