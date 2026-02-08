@@ -431,7 +431,7 @@ export default function GuidelinesPage() {
   const [waistlineColor, setWaistlineColor] = useState('#111827');
   const [xLineContrast, setXLineContrast] = useState(1);
   const [xLineThickness, setXLineThickness] = useState(1); // multiplier
-  const [gridContrast, setGridContrast] = useState(1);
+  const [gridContrast, setGridContrast] = useState(0.5);
   const [gridThickness, setGridThickness] = useState(1);
   const [highContrastMode, setHighContrastMode] = useState(false);
   const [showCenterLine, setShowCenterLine] = useState(false);
@@ -486,8 +486,9 @@ export default function GuidelinesPage() {
 
   const xLineThicknessScale = highContrastMode ? 1.8 : xLineThickness;
   const gridBaseContrast = Math.max(0, Math.min(1, gridContrast));
-  const gridEffectiveContrast = highContrastMode ? 1 : gridBaseContrast;
-  const gridColor = lerpGridColor(gridEffectiveContrast);
+  const gridBaseline = 0.5;
+  const gridT = Math.max(0, (gridBaseContrast - gridBaseline) / (1 - gridBaseline));
+  const gridColor = lerpGridColor(gridT);
   const gridMaxScale = 1.4;
   const gridThicknessScale = Math.min(highContrastMode ? gridMaxScale : gridThickness, gridMaxScale);
 
@@ -508,6 +509,7 @@ export default function GuidelinesPage() {
 
   const [script, setScript] = useState<ScriptId>('Copperplate');
   const showGridControls = script === 'Fraktur' || script === 'TexturaQuadrata';
+  const gridContrastBeforeHigh = useRef<number | null>(null);
 
 
   const [xHeightMM, setXHeightMM] = useState(6);
@@ -1479,7 +1481,19 @@ export default function GuidelinesPage() {
                   <button
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => setHighContrastMode(v => !v)}
+                    onClick={() => {
+                      setHighContrastMode((prev) => {
+                        const next = !prev;
+                        if (next) {
+                          gridContrastBeforeHigh.current = gridContrast;
+                          setGridContrast(0.75);
+                        } else {
+                          setGridContrast(gridContrastBeforeHigh.current ?? 0.5);
+                          gridContrastBeforeHigh.current = null;
+                        }
+                        return next;
+                      });
+                    }}
                     className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
         ${highContrastMode
           ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
