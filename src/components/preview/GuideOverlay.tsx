@@ -101,8 +101,6 @@ export default function GuideOverlay({
     return { x, y: topY, size };
   })();
 
-  const markerClipId = useId();
-
   return (
     <g>
       {bandClipD && (
@@ -110,11 +108,6 @@ export default function GuideOverlay({
           <clipPath id={bandClipId} clipPathUnits="userSpaceOnUse">
             <path d={bandClipD} />
           </clipPath>
-          {markerData && (
-            <clipPath id={markerClipId} clipPathUnits="userSpaceOnUse">
-              <rect x={markerData.x} y={markerData.y} width={markerData.size} height={markerData.size} />
-            </clipPath>
-          )}
         </defs>
       )}
 
@@ -187,26 +180,25 @@ export default function GuideOverlay({
           );
         })}
 
-        {markerData && (
-          <>
-            <rect
-              x={markerData.x}
-              y={markerData.y}
-              width={markerData.size}
-              height={markerData.size}
+        {markerData && (() => {
+          const { x, y, size } = markerData;
+          const theta = (nibAngleDeg * Math.PI) / 180;
+          const tan = Math.tan(theta);
+          let points = '';
+          if (tan <= 1) {
+            const yHit = y + size * (1 - tan);
+            points = `${x},${y} ${x + size},${y} ${x + size},${yHit} ${x},${y + size}`;
+          } else {
+            const xHit = x + size / tan;
+            points = `${x},${y} ${xHit},${y} ${x},${y + size}`;
+          }
+          return (
+            <polygon
+              points={points}
               fill="#000"
             />
-            <line
-              x1={markerData.x + markerData.size / 2 - Math.cos((nibAngleDeg * Math.PI) / 180) * (markerData.size * Math.SQRT2 / 2)}
-              y1={markerData.y + markerData.size / 2 - Math.sin((nibAngleDeg * Math.PI) / 180) * (markerData.size * Math.SQRT2 / 2)}
-              x2={markerData.x + markerData.size / 2 + Math.cos((nibAngleDeg * Math.PI) / 180) * (markerData.size * Math.SQRT2 / 2)}
-              y2={markerData.y + markerData.size / 2 + Math.sin((nibAngleDeg * Math.PI) / 180) * (markerData.size * Math.SQRT2 / 2)}
-              stroke="#f8fafc"
-              strokeWidth={Math.max(0.2, style.thin * 0.5)}
-              clipPath={`url(#${markerClipId})`}
-            />
-          </>
-        )}
+          );
+        })()}
       </g>
 
       {guidePaths.map(({ key, pts, stroke, width }) => (
