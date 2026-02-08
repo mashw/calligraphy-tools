@@ -22,6 +22,8 @@ type GuideOverlayProps = {
     };
     grid?: {
       thin: number;
+      showHorizontal?: boolean;
+      showVertical?: boolean;
       colors?: {
         tick?: string;
       };
@@ -52,6 +54,8 @@ export default function GuideOverlay({
   const colors = { ...defaultColors, ...style.colors };
   const gridThin = style.grid?.thin;
   const gridColors = style.grid?.colors ?? {};
+  const showGridHorizontal = style.grid?.showHorizontal ?? true;
+  const showGridVertical = style.grid?.showVertical ?? true;
   const hitStrokeWidth =
     interactive?.hitStrokeWidthMM ?? Math.max(8, style.bold * 8);
 
@@ -98,7 +102,7 @@ export default function GuideOverlay({
       )}
 
       <g clipPath={bandClipD ? `url(#${bandClipId})` : undefined}>
-        {guideSet.ticks?.map((tick, idx) => (
+        {showGridVertical && guideSet.ticks?.map((tick, idx) => (
           <g key={`tick-${idx}`}>
             <line
               x1={tick.a.x}
@@ -126,7 +130,7 @@ export default function GuideOverlay({
           </g>
         ))}
 
-        {guideSet.hGuides?.map((poly, idx) => {
+        {showGridHorizontal && guideSet.hGuides?.map((poly, idx) => {
           const points = poly.map((p) => `${p.x},${p.y}`).join(' ');
           return (
             <g key={`hguide-${idx}`}>

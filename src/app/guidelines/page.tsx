@@ -433,6 +433,8 @@ export default function GuidelinesPage() {
   const [xLineThickness, setXLineThickness] = useState(1); // multiplier
   const [gridContrast, setGridContrast] = useState(0.5);
   const [gridThickness, setGridThickness] = useState(1);
+  const [showGridHorizontal, setShowGridHorizontal] = useState(true);
+  const [showGridVertical, setShowGridVertical] = useState(true);
   const [highContrastMode, setHighContrastMode] = useState(false);
   const [showCenterLine, setShowCenterLine] = useState(false);
 
@@ -1333,6 +1335,8 @@ export default function GuidelinesPage() {
                               colors: {
                                 tick: gridColor,
                               },
+                              showHorizontal: showGridHorizontal,
+                              showVertical: showGridVertical,
                             }
                             : undefined,
                         }}
@@ -1582,102 +1586,6 @@ export default function GuidelinesPage() {
               <option value="Fraktur">Fraktur</option>
               <option value="TexturaQuadrata">Textura Quadrata</option>
             </select>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            {/* X-line contrast */}
-            <div>
-              <div className="flex items-center justify-between">
-                <label className="font-medium text-slate-700">X-line contrast</label>
-                <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : xLineContrast) * 100)}%</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                className="mt-2 w-full"
-                value={highContrastMode ? 1 : xLineContrast}
-                onChange={(e) => {
-                  setXLineContrast(parseFloat(e.target.value));
-                  setHighContrastMode(false);
-                }}
-              />
-              <p className="mt-1 text-xs text-slate-500">
-                Affects only ascender, waistline, baseline, descender. Contrast scales alpha; hue is preserved.
-              </p>
-            </div>
-
-            {/* X-line thickness */}
-            <div>
-              <div className="flex items-center justify-between">
-                <label className="font-medium text-slate-700">X-line thickness</label>
-                <span className="text-xs text-slate-500">{(highContrastMode ? 1.8 : xLineThickness).toFixed(2)}×</span>
-              </div>
-              <input
-                type="range"
-                min="0.6"
-                max="2.5"
-                step="0.05"
-                className="mt-2 w-full"
-                value={highContrastMode ? 1.8 : xLineThickness}
-                onChange={(e) => {
-                  setXLineThickness(parseFloat(e.target.value));
-                  setHighContrastMode(false);
-                }}
-              />
-              <p className="mt-1 text-xs text-slate-500">
-                Multiplies the stroke thickness of the main four X-lines.
-              </p>
-            </div>
-
-            {showGridControls && (
-              <>
-                <div>
-                  <div className="flex items-center justify-between">
-                    <label className="font-medium text-slate-700">Grid contrast</label>
-                    <span className="text-xs text-slate-500">{Math.round(gridContrast * 100)}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    className="mt-2 w-full"
-                    value={gridContrast}
-                    onChange={(e) => {
-                      setGridContrast(parseFloat(e.target.value));
-                      setHighContrastMode(false);
-                    }}
-                  />
-                  <p className="mt-1 text-xs text-slate-500">
-                    Controls the contrast of the square grid only.
-                  </p>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between">
-                    <label className="font-medium text-slate-700">Grid thickness</label>
-                    <span className="text-xs text-slate-500">{gridThickness.toFixed(2)}×</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.6"
-                    max="1.4"
-                    step="0.05"
-                    className="mt-2 w-full"
-                    value={gridThickness}
-                    onChange={(e) => {
-                      setGridThickness(parseFloat(e.target.value));
-                      setHighContrastMode(false);
-                    }}
-                  />
-                  <p className="mt-1 text-xs text-slate-500">
-                    Multiplies the square grid stroke thickness.
-                  </p>
-                </div>
-              </>
-            )}
           </div>
 
           {script === 'Copperplate' ? (
@@ -2039,6 +1947,146 @@ export default function GuidelinesPage() {
                   value={rowGapMM}
                   onChange={(e) => setRowGapMM(parseFloat(e.target.value || '0') || 0)}
                 />
+              </div>
+            </div>
+          )}
+
+          <div className="my-3 border-t border-slate-200/70" />
+
+          <div className="grid grid-cols-2 gap-4">
+            {/* X-line contrast */}
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="font-medium text-slate-700">X-line contrast</label>
+                <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : xLineContrast) * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                className="mt-2 w-full"
+                value={highContrastMode ? 1 : xLineContrast}
+                onChange={(e) => {
+                  setXLineContrast(parseFloat(e.target.value));
+                  setHighContrastMode(false);
+                }}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Affects only ascender, waistline, baseline, descender. Contrast scales alpha; hue is preserved.
+              </p>
+            </div>
+
+            {/* X-line thickness */}
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="font-medium text-slate-700">X-line thickness</label>
+                <span className="text-xs text-slate-500">{(highContrastMode ? 1.8 : xLineThickness).toFixed(2)}×</span>
+              </div>
+              <input
+                type="range"
+                min="0.6"
+                max="2.5"
+                step="0.05"
+                className="mt-2 w-full"
+                value={highContrastMode ? 1.8 : xLineThickness}
+                onChange={(e) => {
+                  setXLineThickness(parseFloat(e.target.value));
+                  setHighContrastMode(false);
+                }}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Multiplies the stroke thickness of the main four X-lines.
+              </p>
+            </div>
+
+            {showGridControls && (
+              <>
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="font-medium text-slate-700">Grid contrast</label>
+                    <span className="text-xs text-slate-500">{Math.round(gridContrast * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    className="mt-2 w-full"
+                    value={gridContrast}
+                    onChange={(e) => {
+                      setGridContrast(parseFloat(e.target.value));
+                      setHighContrastMode(false);
+                    }}
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    Controls the contrast of the square grid only.
+                  </p>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="font-medium text-slate-700">Grid thickness</label>
+                    <span className="text-xs text-slate-500">{gridThickness.toFixed(2)}×</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.6"
+                    max="1.4"
+                    step="0.05"
+                    className="mt-2 w-full"
+                    value={gridThickness}
+                    onChange={(e) => {
+                      setGridThickness(parseFloat(e.target.value));
+                      setHighContrastMode(false);
+                    }}
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    Multiplies the square grid stroke thickness.
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+
+          {showGridControls && (
+            <div className="mt-3 grid grid-cols-2 gap-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-medium text-slate-700">Horizontal grid lines</div>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setShowGridHorizontal((v) => !v)}
+                  className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+        ${showGridHorizontal
+          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+          : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+                >
+                  <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
+        ${showGridHorizontal ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
+                    <span className="h-3 w-3 rounded-full bg-white shadow" />
+                  </span>
+                  {showGridHorizontal ? 'On' : 'Off'}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-medium text-slate-700">Vertical grid lines</div>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setShowGridVertical((v) => !v)}
+                  className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+        ${showGridVertical
+          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+          : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+                >
+                  <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
+        ${showGridVertical ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
+                    <span className="h-3 w-3 rounded-full bg-white shadow" />
+                  </span>
+                  {showGridVertical ? 'On' : 'Off'}
+                </button>
               </div>
             </div>
           )}
