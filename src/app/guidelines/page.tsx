@@ -431,6 +431,8 @@ export default function GuidelinesPage() {
   const [waistlineColor, setWaistlineColor] = useState('#111827');
   const [xLineContrast, setXLineContrast] = useState(1);
   const [xLineThickness, setXLineThickness] = useState(1); // multiplier
+  const [gridContrast, setGridContrast] = useState(1);
+  const [gridThickness, setGridThickness] = useState(1);
   const [highContrastMode, setHighContrastMode] = useState(false);
   const [showCenterLine, setShowCenterLine] = useState(false);
 
@@ -473,6 +475,10 @@ export default function GuidelinesPage() {
   const waistColor = hexToRgba(effectiveWaistHex, alpha);
 
   const xLineThicknessScale = highContrastMode ? 1.8 : xLineThickness;
+  const gridBaseAlpha = Math.max(0, Math.min(1, gridContrast));
+  const gridAlpha = highContrastMode ? 1 : gridBaseAlpha;
+  const gridColor = hexToRgba('#e2e8f0', gridAlpha);
+  const gridThicknessScale = highContrastMode ? 1.8 : gridThickness;
 
 
 
@@ -490,6 +496,7 @@ export default function GuidelinesPage() {
   };
 
   const [script, setScript] = useState<ScriptId>('Copperplate');
+  const showGridControls = script === 'Fraktur' || script === 'TexturaQuadrata';
 
 
   const [xHeightMM, setXHeightMM] = useState(6);
@@ -1307,6 +1314,14 @@ export default function GuidelinesPage() {
                             tick: script === 'Copperplate' ? 'transparent' : '#e2e8f0',
                             frame: 'transparent',
                           },
+                          grid: showGridControls
+                            ? {
+                              thin: swBold * gridThicknessScale,
+                              colors: {
+                                tick: gridColor,
+                              },
+                            }
+                            : undefined,
                         }}
                       />
 
@@ -1521,54 +1536,6 @@ export default function GuidelinesPage() {
 </div>
 
 
-            <div className="sm:col-span-2 grid grid-cols-2 gap-4">
-              {/* X-line contrast */}
-              <div>
-                <div className="flex items-center justify-between">
-                  <label className="font-medium text-slate-700">X-line contrast</label>
-                  <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : xLineContrast) * 100)}%</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  className="mt-2 w-full"
-                  value={highContrastMode ? 1 : xLineContrast}
-                  onChange={(e) => {
-                    setXLineContrast(parseFloat(e.target.value));
-                    setHighContrastMode(false);
-                  }}
-                />
-                <p className="mt-1 text-xs text-slate-500">
-                  Affects only ascender, waistline, baseline, descender. Contrast scales alpha; hue is preserved.
-                </p>
-              </div>
-
-              {/* X-line thickness */}
-              <div>
-                <div className="flex items-center justify-between">
-                  <label className="font-medium text-slate-700">X-line thickness</label>
-                  <span className="text-xs text-slate-500">{(highContrastMode ? 1.8 : xLineThickness).toFixed(2)}×</span>
-                </div>
-                <input
-                  type="range"
-                  min="0.6"
-                  max="2.5"
-                  step="0.05"
-                  className="mt-2 w-full"
-                  value={highContrastMode ? 1.8 : xLineThickness}
-                  onChange={(e) => {
-                    setXLineThickness(parseFloat(e.target.value));
-                    setHighContrastMode(false);
-                  }}
-                />
-                <p className="mt-1 text-xs text-slate-500">
-                  Multiplies the stroke thickness of the main four X-lines.
-                </p>
-              </div>
-            </div>
-
           </div>
         </div>
 
@@ -1590,6 +1557,102 @@ export default function GuidelinesPage() {
               <option value="Fraktur">Fraktur</option>
               <option value="TexturaQuadrata">Textura Quadrata</option>
             </select>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            {/* X-line contrast */}
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="font-medium text-slate-700">X-line contrast</label>
+                <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : xLineContrast) * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                className="mt-2 w-full"
+                value={highContrastMode ? 1 : xLineContrast}
+                onChange={(e) => {
+                  setXLineContrast(parseFloat(e.target.value));
+                  setHighContrastMode(false);
+                }}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Affects only ascender, waistline, baseline, descender. Contrast scales alpha; hue is preserved.
+              </p>
+            </div>
+
+            {/* X-line thickness */}
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="font-medium text-slate-700">X-line thickness</label>
+                <span className="text-xs text-slate-500">{(highContrastMode ? 1.8 : xLineThickness).toFixed(2)}×</span>
+              </div>
+              <input
+                type="range"
+                min="0.6"
+                max="2.5"
+                step="0.05"
+                className="mt-2 w-full"
+                value={highContrastMode ? 1.8 : xLineThickness}
+                onChange={(e) => {
+                  setXLineThickness(parseFloat(e.target.value));
+                  setHighContrastMode(false);
+                }}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Multiplies the stroke thickness of the main four X-lines.
+              </p>
+            </div>
+
+            {showGridControls && (
+              <>
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="font-medium text-slate-700">Grid contrast</label>
+                    <span className="text-xs text-slate-500">{Math.round(gridContrast * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    className="mt-2 w-full"
+                    value={gridContrast}
+                    onChange={(e) => {
+                      setGridContrast(parseFloat(e.target.value));
+                      setHighContrastMode(false);
+                    }}
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    Controls the contrast of the square grid only.
+                  </p>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="font-medium text-slate-700">Grid thickness</label>
+                    <span className="text-xs text-slate-500">{gridThickness.toFixed(2)}×</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.6"
+                    max="2.5"
+                    step="0.05"
+                    className="mt-2 w-full"
+                    value={gridThickness}
+                    onChange={(e) => {
+                      setGridThickness(parseFloat(e.target.value));
+                      setHighContrastMode(false);
+                    }}
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    Multiplies the square grid stroke thickness.
+                  </p>
+                </div>
+              </>
+            )}
           </div>
 
           {script === 'Copperplate' ? (
