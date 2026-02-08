@@ -24,6 +24,8 @@ type GuideOverlayProps = {
       thin: number;
       showHorizontal?: boolean;
       showVertical?: boolean;
+      showNibAngleGuide?: boolean;
+      nibAngleDeg?: number;
       colors?: {
         tick?: string;
       };
@@ -56,6 +58,8 @@ export default function GuideOverlay({
   const gridColors = style.grid?.colors ?? {};
   const showGridHorizontal = style.grid?.showHorizontal ?? true;
   const showGridVertical = style.grid?.showVertical ?? true;
+  const showNibAngleGuide = style.grid?.showNibAngleGuide ?? false;
+  const nibAngleDeg = style.grid?.nibAngleDeg ?? 0;
   const hitStrokeWidth =
     interactive?.hitStrokeWidthMM ?? Math.max(8, style.bold * 8);
 
@@ -78,6 +82,27 @@ export default function GuideOverlay({
     return `M ${a} L ${d} Z`;
   })();
 
+  const markerData = (() => {
+    if (!showNibAngleGuide) return null;
+    if (!guideSet.hGuides?.length || !guideSet.ascLine?.length || !guideSet.waistLine?.length) return null;
+    const topY = guideSet.ascLine[0].y;
+    const waistY = guideSet.waistLine[0].y;
+    const minY = Math.min(topY, waistY);
+    const maxY = Math.max(topY, waistY);
+    const candidates = guideSet.hGuides
+      .map(poly => poly[0]?.y)
+      .filter((y): y is number => typeof y === 'number' && y > minY && y < maxY)
+      .sort((a, b) => Math.abs(a - topY) - Math.abs(b - topY));
+    if (!candidates.length) return null;
+    const firstAscY = candidates[0];
+    const size = 0.5 * Math.abs(topY - firstAscY);
+    if (size <= 0) return null;
+    const x = guideSet.ascLine[0].x;
+    return { x, y: topY, size };
+  })();
+
+  const markerClipId = useId();
+
   return (
     <g>
       {bandClipD && (
@@ -85,6 +110,11 @@ export default function GuideOverlay({
           <clipPath id={bandClipId} clipPathUnits="userSpaceOnUse">
             <path d={bandClipD} />
           </clipPath>
+          {markerData && (
+            <clipPath id={markerClipId} clipPathUnits="userSpaceOnUse">
+              <rect x={markerData.x} y={markerData.y} width={markerData.size} height={markerData.size} />
+            </clipPath>
+          )}
         </defs>
       )}
 
@@ -156,6 +186,27 @@ export default function GuideOverlay({
             </g>
           );
         })}
+
+        {markerData && (
+          <>
+            <rect
+              x={markerData.x}
+              y={markerData.y}
+              width={markerData.size}
+              height={markerData.size}
+              fill="#000"
+            />
+            <line
+              x1={markerData.x + markerData.size / 2 - Math.cos((nibAngleDeg * Math.PI) / 180) * (markerData.size * Math.SQRT2 / 2)}
+              y1={markerData.y + markerData.size / 2 - Math.sin((nibAngleDeg * Math.PI) / 180) * (markerData.size * Math.SQRT2 / 2)}
+              x2={markerData.x + markerData.size / 2 + Math.cos((nibAngleDeg * Math.PI) / 180) * (markerData.size * Math.SQRT2 / 2)}
+              y2={markerData.y + markerData.size / 2 + Math.sin((nibAngleDeg * Math.PI) / 180) * (markerData.size * Math.SQRT2 / 2)}
+              stroke="#f8fafc"
+              strokeWidth={Math.max(0.2, style.thin * 0.5)}
+              clipPath={`url(#${markerClipId})`}
+            />
+          </>
+        )}
       </g>
 
       {guidePaths.map(({ key, pts, stroke, width }) => (

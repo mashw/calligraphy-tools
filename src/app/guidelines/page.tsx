@@ -435,6 +435,7 @@ export default function GuidelinesPage() {
   const [gridThickness, setGridThickness] = useState(1);
   const [showGridHorizontal, setShowGridHorizontal] = useState(true);
   const [showGridVertical, setShowGridVertical] = useState(true);
+  const [showNibAngleGuide, setShowNibAngleGuide] = useState(true);
   const [highContrastMode, setHighContrastMode] = useState(false);
   const [showCenterLine, setShowCenterLine] = useState(false);
 
@@ -1337,6 +1338,8 @@ export default function GuidelinesPage() {
                               },
                               showHorizontal: showGridHorizontal,
                               showVertical: showGridVertical,
+                              showNibAngleGuide,
+                              nibAngleDeg: penAngleDeg,
                             }
                             : undefined,
                         }}
@@ -1911,7 +1914,7 @@ export default function GuidelinesPage() {
                   }}
                 />
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className="font-medium text-slate-700">Pen angle (°)</label>
                     <select
@@ -1924,6 +1927,27 @@ export default function GuidelinesPage() {
                       <option value={45}>45°</option>
                     </select>
                   </div>
+
+                  {showGridControls && (
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-medium text-slate-700">Nib angle guide</div>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => setShowNibAngleGuide((v) => !v)}
+                        className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+        ${showNibAngleGuide
+          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+          : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+                      >
+                        <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
+        ${showNibAngleGuide ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
+                          <span className="h-3 w-3 rounded-full bg-white shadow" />
+                        </span>
+                        {showNibAngleGuide ? 'On' : 'Off'}
+                      </button>
+                    </div>
+                  )}
 
                   <div>
                     <label className="font-medium text-slate-700">Row gap (mm)</label>
