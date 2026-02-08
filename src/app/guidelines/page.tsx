@@ -326,59 +326,96 @@ function b64ToUint8(base64: string): Uint8Array {
   return bytes;
 }
 
-function makeSimplePdfFromJpeg(jpegDataUrl: string, pageWpt: number, pageHpt: number, imgW: number, imgH: number): Blob {
+function makeSimplePdfFromJpeg(
+  jpegDataUrl: string,
+  pageWpt: number,
+  pageHpt: number,
+  imgW: number,
+  imgH: number
+): Blob {
   const base64 = jpegDataUrl.split(',')[1];
   const imgBytes = b64ToUint8(base64);
 
   const EOL = '\n';
   const header = '%PDF-1.4' + EOL;
 
-  const catalog = '1 0 obj' + EOL + '<< /Type /Catalog /Pages 2 0 R >>' + EOL + 'endobj' + EOL;
-  const pages = '2 0 obj' + EOL + '<< /Type /Pages /Count 1 /Kids [3 0 R] >>' + EOL + 'endobj' + EOL;
-
-  const page =
+  const obj1 = `1 0 obj${EOL}<< /Type /Catalog /Pages 2 0 R >>${EOL}endobj${EOL}`;
+  const obj2 = `2 0 obj${EOL}<< /Type /Pages /Count 1 /Kids [3 0 R] >>${EOL}endobj${EOL}`;
+  const obj3 =
     `3 0 obj${EOL}` +
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWpt} ${pageHpt}] /Resources << /XObject << /Im0 4 0 R >> /ProcSet [/PDF /ImageC] >> /Contents 5 0 R >>${EOL}` +
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWpt} ${pageHpt}] ` +
+    `/Resources << /XObject << /Im0 4 0 R >> /ProcSet [/PDF /ImageC] >> /Contents 5 0 R >>${EOL}` +
     `endobj${EOL}`;
 
   const contentStream = `q ${pageWpt} 0 0 ${pageHpt} 0 0 cm /Im0 Do Q`;
-
-  const contents =
+  const obj5 =
     `5 0 obj${EOL}` +
     `<< /Length ${contentStream.length} >>${EOL}` +
-    `stream${EOL}${contentStream}${EOL}endstream${EOL}endobj${EOL}`;
+    `stream${EOL}${contentStream}${EOL}endstream${EOL}` +
+    `endobj${EOL}`;
 
-  const imgDict =
+  const obj4Head =
     `4 0 obj${EOL}` +
-    `<< /Type /XObject /Subtype /Image /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Width ${imgW} /Height ${imgH} /Length ${imgBytes.byteLength} >>${EOL}` +
+    `<< /Type /XObject /Subtype /Image /ColorSpace /DeviceRGB /BitsPerComponent 8 ` +
+    `/Filter /DCTDecode /Width ${imgW} /Height ${imgH} /Length ${imgBytes.byteLength} >>${EOL}` +
     `stream${EOL}`;
-  const imgEnd = `${EOL}endstream${EOL}endobj${EOL}`;
+  const obj4Tail = `${EOL}endstream${EOL}endobj${EOL}`;
 
   const chunks: (string | Uint8Array)[] = [header];
-  let offsetAcc = header.length;
-  const xrefOffsets: number[] = [];
 
-  const push = (s: string | Uint8Array) => {
+  const xref: number[] = [];
+  let offset = header.length;
+
+  const pushStr = (s: string) => {
     chunks.push(s);
-    offsetAcc += typeof s === 'string' ? s.length : s.byteLength;
+    offset += s.length;
+  };
+  const pushBytes = (b: Uint8Array) => {
+    chunks.push(b);
+    offset += b.byteLength;
   };
 
-  for (const part of [catalog, pages, page, imgDict, imgBytes, imgEnd, contents]) {
-    xrefOffsets.push(offsetAcc);
-    push(part);
+  // obj 1
+  xref.push(offset);
+  pushStr(obj1);
+
+  // obj 2
+  xref.push(offset);
+  pushStr(obj2);
+
+  // obj 3
+  xref.push(offset);
+  pushStr(obj3);
+
+  // obj 4 (record xref ONCE, at the start of "4 0 obj")
+  xref.push(offset);
+  pushStr(obj4Head);
+  pushBytes(imgBytes);
+  pushStr(obj4Tail);
+
+  // obj 5
+  xref.push(offset);
+  pushStr(obj5);
+
+  const xrefStart = offset;
+  let xrefTable =
+    `xref${EOL}` +
+    `0 ${xref.length + 1}${EOL}` +
+    `0000000000 65535 f ${EOL}`;
+  for (const off of xref) {
+    xrefTable += `${off.toString().padStart(10, '0')} 00000 n ${EOL}`;
   }
 
-  const xrefStart = offsetAcc;
-  let xref = 'xref' + EOL + `0 ${xrefOffsets.length + 1}` + EOL + '0000000000 65535 f ' + EOL;
-  for (const off of xrefOffsets) xref += off.toString().padStart(10, '0') + ' 00000 n ' + EOL;
-
   const trailer =
-    'trailer' + EOL + `<< /Size ${xrefOffsets.length + 1} /Root 1 0 R >>` + EOL + 'startxref' + EOL + xrefStart + EOL + '%EOF';
+    `trailer${EOL}` +
+    `<< /Size ${xref.length + 1} /Root 1 0 R >>${EOL}` +
+    `startxref${EOL}` +
+    `${xrefStart}${EOL}` +
+    `%%EOF`;
 
-  chunks.push(xref, trailer);
+  chunks.push(xrefTable, trailer);
 
-  const blobParts: BlobPart[] = chunks.map((c) => (typeof c === 'string' ? c : c as unknown as BlobPart));
-  return new Blob(blobParts, { type: 'application/pdf' });
+  return new Blob(chunks as unknown as BlobPart[], { type: 'application/pdf' });
 }
 
 export default function GuidelinesPage() {
