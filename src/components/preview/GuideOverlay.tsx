@@ -154,33 +154,6 @@ export default function GuideOverlay({
         })}
       </g>
 
-      {guideSet.hGuides?.map((poly, idx) => {
-        const points = poly.map((p) => `${p.x},${p.y}`).join(' ');
-        return (
-          <g key={`hguide-${idx}`}>
-            <polyline
-              points={points}
-              fill="none"
-              stroke={gridColors.tick ?? colors.tick}
-              strokeWidth={gridThin ?? style.thin}
-              vectorEffect="non-scaling-stroke"
-            />
-            {interactive?.onGuidePointerDown && (
-              <polyline
-                points={points}
-                fill="none"
-                stroke="rgba(0,0,0,0)"
-                strokeWidth={hitStrokeWidth}
-                vectorEffect="non-scaling-stroke"
-                pointerEvents="stroke"
-                className="cursor-move"
-                onPointerDown={interactive.onGuidePointerDown}
-              />
-            )}
-          </g>
-        );
-      })}
-
       {guidePaths.map(({ key, pts, stroke, width }) => (
         <path
           key={key}
