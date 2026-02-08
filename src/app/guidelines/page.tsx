@@ -1874,7 +1874,7 @@ export default function GuidelinesPage() {
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4 mt-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                 <div>
                   <label className="font-medium text-slate-700">Nib size (mm)</label>
                   <input
@@ -1924,7 +1924,7 @@ export default function GuidelinesPage() {
                     <option value={35}>35°</option>
                     <option value={40}>40°</option>
                     <option value={45}>45°</option>
-                  </select>
+                    </select>
                   {showGridControls && (
                     <div className="mt-2 flex items-center justify-between gap-3">
                       <div className="text-sm font-medium text-slate-700">Angle guide</div>
@@ -1947,13 +1947,15 @@ export default function GuidelinesPage() {
                   )}
                 </div>
               </div>
-              <div>
-                <label className="font-medium text-slate-700">Ascender (nibs)</label>
-                <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={ascNib} onChange={e => setAscNib(parseFloat(e.target.value || '3'))} />
-              </div>
-              <div>
-                <label className="font-medium text-slate-700">Descender (nibs)</label>
-                <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={descNib} onChange={e => setDescNib(parseFloat(e.target.value || '2'))} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-medium text-slate-700">Ascender (nibs)</label>
+                  <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={ascNib} onChange={e => setAscNib(parseFloat(e.target.value || '3'))} />
+                </div>
+                <div>
+                  <label className="font-medium text-slate-700">Descender (nibs)</label>
+                  <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={descNib} onChange={e => setDescNib(parseFloat(e.target.value || '2'))} />
+                </div>
               </div>
             </div>
           )}
