@@ -440,6 +440,11 @@ export default function GuidelinesPage() {
   const [slantSpacingMM, setSlantSpacingMM] = useState(10);
   const [slantLineContrast, setSlantLineContrast] = useState(0.3);
   const [slantAngleText, setSlantAngleText] = useState('55');
+  const [enableSlant2, setEnableSlant2] = useState(false);
+  const [slantAngle2, setSlantAngle2] = useState(() => {
+    const v = parseInt(slantAngleText, 10);
+    return Number.isFinite(v) ? v : 55;
+  });
 
 const slantAngleDeg = useMemo(() => {
   const v = parseInt(slantAngleText, 10);
@@ -1223,16 +1228,28 @@ const slantAngleDeg = useMemo(() => {
               <g clipPath="url(#guidesClipBottomOnly)">
                 {/* Guides */}
                 {script === 'Copperplate' && (
-                  <CopperplateSlantLines
-  guideSets={guideSets}
-  box={box}
-  slantSpacingMM={slantSpacingMM}
-  slantAngleDeg={slantAngleDeg}
-  slantLineContrast={slantLineContrast}
-  highContrastMode={highContrastMode}
-  swThin={swThin}
-/>
-
+                  <>
+                    <CopperplateSlantLines
+                      guideSets={guideSets}
+                      box={box}
+                      slantSpacingMM={slantSpacingMM}
+                      slantAngleDeg={slantAngleDeg}
+                      slantLineContrast={slantLineContrast}
+                      highContrastMode={highContrastMode}
+                      swThin={swThin}
+                    />
+                    {enableSlant2 && (
+                      <CopperplateSlantLines
+                        guideSets={guideSets}
+                        box={box}
+                        slantSpacingMM={slantSpacingMM}
+                        slantAngleDeg={slantAngle2}
+                        slantLineContrast={slantLineContrast}
+                        highContrastMode={highContrastMode}
+                        swThin={swThin}
+                      />
+                    )}
+                  </>
                 )}
 
 
@@ -2014,6 +2031,74 @@ const slantAngleDeg = useMemo(() => {
 
 {script === 'Copperplate' && (
   <>
+    {/* Slant angle */}
+    <div className="col-span-2">
+      <div className="flex items-center justify-between">
+        <label className="font-medium text-slate-700">Slant angle</label>
+        <span className="text-xs text-slate-500">
+          {slantAngleDeg}°
+        </span>
+      </div>
+      <div className="mt-2 flex flex-wrap items-end gap-3">
+        <input
+          type="number"
+          step={1}
+          min={0}
+          max={90}
+          className="w-full sm:flex-1 p-2 rounded-lg border border-slate-300"
+          value={slantAngleText}
+          onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+          onChange={(e) => setSlantAngleText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+            e.preventDefault();
+
+            const current = parseInt(slantAngleText, 10);
+            const safe = Number.isFinite(current) ? current : 55;
+            const dir = e.key === 'ArrowUp' ? 1 : -1;
+            setSlantAngleText(String(safe + dir));
+          }}
+          onBlur={() => {
+            const v = parseInt(slantAngleText, 10);
+            if (!Number.isFinite(v)) {
+              setSlantAngleText('55');
+              return;
+            }
+            setSlantAngleText(String(Math.min(90, Math.max(0, v))));
+          }}
+        />
+
+        <label className="inline-flex items-center gap-2 text-sm text-slate-700 select-none">
+          <input
+            type="checkbox"
+            checked={enableSlant2}
+            onChange={(e) => setEnableSlant2(e.target.checked)}
+          />
+          Slant 2
+        </label>
+
+        {enableSlant2 && (
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <span>Angle 2</span>
+            <input
+              type="number"
+              step={1}
+              min={0}
+              max={90}
+              className="w-24 p-2 rounded-lg border border-slate-300"
+              value={slantAngle2}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                setSlantAngle2(Number.isFinite(v) ? v : 55);
+              }}
+              onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+              onBlur={() => setSlantAngle2((v) => Math.min(90, Math.max(0, v)))}
+            />
+          </label>
+        )}
+      </div>
+    </div>
+
     {/* Slant spacing */}
     <div>
       <div className="flex items-center justify-between">
@@ -2053,44 +2138,6 @@ const slantAngleDeg = useMemo(() => {
           setHighContrastMode(false);
         }}
       />
-    </div>
-
-    {/* Slant angle */}
-    <div className="col-span-2">
-      <div className="flex items-center justify-between">
-        <label className="font-medium text-slate-700">Slant angle</label>
-        <span className="text-xs text-slate-500">
-          {slantAngleDeg}°
-        </span>
-      </div>
-      <input
-  type="number"
-  step={1}
-  min={0}
-  max={90}
-  className="mt-2 w-full p-2 rounded-lg border border-slate-300"
-  value={slantAngleText}
-  onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-  onChange={(e) => setSlantAngleText(e.target.value)}
-  onKeyDown={(e) => {
-    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-    e.preventDefault();
-
-    const current = parseInt(slantAngleText, 10);
-    const safe = Number.isFinite(current) ? current : 55;
-    const dir = e.key === 'ArrowUp' ? 1 : -1;
-    setSlantAngleText(String(safe + dir));
-  }}
-  onBlur={() => {
-    const v = parseInt(slantAngleText, 10);
-    if (!Number.isFinite(v)) {
-      setSlantAngleText('55');
-      return;
-    }
-    setSlantAngleText(String(Math.min(90, Math.max(0, v))));
-  }}
-/>
-
     </div>
   </>
 )}
