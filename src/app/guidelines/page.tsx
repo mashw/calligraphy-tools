@@ -2048,65 +2048,70 @@ const slantAngleDeg = useMemo(() => {
 
     {/* Slant angle */}
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <label className="font-medium text-slate-700">Slant angle</label>
-        <span className="text-xs text-slate-500">
-          {slantAngleDeg}°
-        </span>
-      </div>
-      <input
-        type="number"
-        step={1}
-        min={0}
-        max={90}
-        className="mt-2 w-full p-2 rounded-lg border border-slate-300"
-        value={slantAngleText}
-        onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-        onChange={(e) => setSlantAngleText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-          e.preventDefault();
+        <div className="relative w-24">
+          <input
+            type="number"
+            step={1}
+            min={0}
+            max={90}
+            className="w-full p-2 pr-8 rounded-lg border border-slate-300"
+            value={slantAngleText}
+            onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+            onChange={(e) => setSlantAngleText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+              e.preventDefault();
 
-          const current = parseInt(slantAngleText, 10);
-          const safe = Number.isFinite(current) ? current : 55;
-          const dir = e.key === 'ArrowUp' ? 1 : -1;
-          setSlantAngleText(String(safe + dir));
-        }}
-        onBlur={() => {
-          const v = parseInt(slantAngleText, 10);
-          if (!Number.isFinite(v)) {
-            setSlantAngleText('55');
-            return;
-          }
-          setSlantAngleText(String(Math.min(90, Math.max(0, v))));
-        }}
-      />
+              const current = parseInt(slantAngleText, 10);
+              const safe = Number.isFinite(current) ? current : 55;
+              const dir = e.key === 'ArrowUp' ? 1 : -1;
+              setSlantAngleText(String(safe + dir));
+            }}
+            onBlur={() => {
+              const v = parseInt(slantAngleText, 10);
+              if (!Number.isFinite(v)) {
+                setSlantAngleText('55');
+                return;
+              }
+              setSlantAngleText(String(Math.min(90, Math.max(0, v))));
+            }}
+          />
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">°</span>
+        </div>
+      </div>
     </div>
 
     <div>
-      <div className="flex items-center gap-2">
-        <label className="font-medium text-slate-700">Slant 2</label>
-        <input
-          type="checkbox"
-          checked={enableSlant2}
-          onChange={(e) => setEnableSlant2(e.target.checked)}
-        />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <label className="font-medium text-slate-700">Slant 2</label>
+          <input
+            type="checkbox"
+            checked={enableSlant2}
+            onChange={(e) => setEnableSlant2(e.target.checked)}
+          />
+        </div>
+        <div className="relative w-24">
+          <input
+            type="number"
+            step={1}
+            min={0}
+            max={90}
+            className={`w-full p-2 pr-8 rounded-lg border border-slate-300 ${enableSlant2 ? '' : 'bg-slate-50 opacity-60 cursor-not-allowed'}`}
+            value={slantAngle2}
+            disabled={!enableSlant2}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              setSlantAngle2(Number.isFinite(v) ? v : 55);
+            }}
+            onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+            onBlur={() => setSlantAngle2((v) => Math.min(90, Math.max(0, v)))}
+          />
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">°</span>
+        </div>
       </div>
-      <input
-        type="number"
-        step={1}
-        min={0}
-        max={90}
-        className={`mt-2 w-full p-2 rounded-lg border border-slate-300 ${enableSlant2 ? '' : 'bg-slate-50 opacity-60 cursor-not-allowed'}`}
-        value={slantAngle2}
-        disabled={!enableSlant2}
-        onChange={(e) => {
-          const v = parseInt(e.target.value, 10);
-          setSlantAngle2(Number.isFinite(v) ? v : 55);
-        }}
-        onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-        onBlur={() => setSlantAngle2((v) => Math.min(90, Math.max(0, v)))}
-      />
     </div>
 
     {/* Slant spacing */}
