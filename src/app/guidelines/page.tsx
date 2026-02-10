@@ -440,6 +440,11 @@ export default function GuidelinesPage() {
   const [slantSpacingMM, setSlantSpacingMM] = useState(10);
   const [slantLineContrast, setSlantLineContrast] = useState(0.3);
   const [slantAngleText, setSlantAngleText] = useState('55');
+  const [enableSlant2, setEnableSlant2] = useState(false);
+  const [slantAngle2, setSlantAngle2] = useState(() => {
+    const v = parseInt(slantAngleText, 10);
+    return Number.isFinite(v) ? v : 55;
+  });
 
 const slantAngleDeg = useMemo(() => {
   const v = parseInt(slantAngleText, 10);
@@ -1223,16 +1228,28 @@ const slantAngleDeg = useMemo(() => {
               <g clipPath="url(#guidesClipBottomOnly)">
                 {/* Guides */}
                 {script === 'Copperplate' && (
-                  <CopperplateSlantLines
-  guideSets={guideSets}
-  box={box}
-  slantSpacingMM={slantSpacingMM}
-  slantAngleDeg={slantAngleDeg}
-  slantLineContrast={slantLineContrast}
-  highContrastMode={highContrastMode}
-  swThin={swThin}
-/>
-
+                  <>
+                    <CopperplateSlantLines
+                      guideSets={guideSets}
+                      box={box}
+                      slantSpacingMM={slantSpacingMM}
+                      slantAngleDeg={slantAngleDeg}
+                      slantLineContrast={slantLineContrast}
+                      highContrastMode={highContrastMode}
+                      swThin={swThin}
+                    />
+                    {enableSlant2 && (
+                      <CopperplateSlantLines
+                        guideSets={guideSets}
+                        box={box}
+                        slantSpacingMM={slantSpacingMM}
+                        slantAngleDeg={slantAngle2}
+                        slantLineContrast={slantLineContrast}
+                        highContrastMode={highContrastMode}
+                        swThin={swThin}
+                      />
+                    )}
+                  </>
                 )}
 
 
@@ -1556,6 +1573,50 @@ const slantAngleDeg = useMemo(() => {
                   />
                 </label>
               </div>
+            </div>
+
+            {/* X-line contrast */}
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="font-medium text-slate-700">X-line contrast</label>
+                <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : xLineContrast) * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                className="mt-2 w-full"
+                value={highContrastMode ? 1 : xLineContrast}
+                onChange={(e) => {
+                  setXLineContrast(parseFloat(e.target.value));
+                  setHighContrastMode(false);
+                }}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Affects only ascender, waistline, baseline, descender. Contrast scales alpha; hue is preserved.
+              </p>
+            </div>
+
+            {/* X-line thickness */}
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="font-medium text-slate-700">X-line thickness</label>
+                <span className="text-xs text-slate-500">{(highContrastMode ? 1.8 : xLineThickness).toFixed(2)}×</span>
+              </div>
+              <input
+                type="range"
+                min="0.6"
+                max="2.5"
+                step="0.05"
+                className="mt-2 w-full"
+                value={highContrastMode ? 1.8 : xLineThickness}
+                onChange={(e) => {
+                  setXLineThickness(parseFloat(e.target.value));
+                  setHighContrastMode(false);
+                }}
+              />
+              <p className="mt-1 text-xs text-slate-500">Multiplies the stroke thickness of the main four X-lines.</p>
             </div>
 
 
@@ -1921,50 +1982,6 @@ const slantAngleDeg = useMemo(() => {
 
           {/* Sliders (unchanged) */}
           <div className="grid grid-cols-2 max-[520px]:grid-cols-1 gap-4">
-            {/* X-line contrast */}
-            <div>
-              <div className="flex items-center justify-between">
-                <label className="font-medium text-slate-700">X-line contrast</label>
-                <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : xLineContrast) * 100)}%</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                className="mt-2 w-full"
-                value={highContrastMode ? 1 : xLineContrast}
-                onChange={(e) => {
-                  setXLineContrast(parseFloat(e.target.value));
-                  setHighContrastMode(false);
-                }}
-              />
-              <p className="mt-1 text-xs text-slate-500">
-                Affects only ascender, waistline, baseline, descender. Contrast scales alpha; hue is preserved.
-              </p>
-            </div>
-
-            {/* X-line thickness */}
-            <div>
-              <div className="flex items-center justify-between">
-                <label className="font-medium text-slate-700">X-line thickness</label>
-                <span className="text-xs text-slate-500">{(highContrastMode ? 1.8 : xLineThickness).toFixed(2)}×</span>
-              </div>
-              <input
-                type="range"
-                min="0.6"
-                max="2.5"
-                step="0.05"
-                className="mt-2 w-full"
-                value={highContrastMode ? 1.8 : xLineThickness}
-                onChange={(e) => {
-                  setXLineThickness(parseFloat(e.target.value));
-                  setHighContrastMode(false);
-                }}
-              />
-              <p className="mt-1 text-xs text-slate-500">Multiplies the stroke thickness of the main four X-lines.</p>
-            </div>
-
             {script === 'Copperplate' && (
               <>
                 {/* 1st asc/desc dash spacing */}
@@ -2014,6 +2031,74 @@ const slantAngleDeg = useMemo(() => {
 
 {script === 'Copperplate' && (
   <>
+    {/* Slant angle */}
+    <div className="col-span-2">
+      <div className="flex items-center justify-between">
+        <label className="font-medium text-slate-700">Slant angle</label>
+        <span className="text-xs text-slate-500">
+          {slantAngleDeg}°
+        </span>
+      </div>
+      <div className="mt-2 flex flex-wrap items-end gap-3">
+        <input
+          type="number"
+          step={1}
+          min={0}
+          max={90}
+          className="w-full sm:flex-1 p-2 rounded-lg border border-slate-300"
+          value={slantAngleText}
+          onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+          onChange={(e) => setSlantAngleText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+            e.preventDefault();
+
+            const current = parseInt(slantAngleText, 10);
+            const safe = Number.isFinite(current) ? current : 55;
+            const dir = e.key === 'ArrowUp' ? 1 : -1;
+            setSlantAngleText(String(safe + dir));
+          }}
+          onBlur={() => {
+            const v = parseInt(slantAngleText, 10);
+            if (!Number.isFinite(v)) {
+              setSlantAngleText('55');
+              return;
+            }
+            setSlantAngleText(String(Math.min(90, Math.max(0, v))));
+          }}
+        />
+
+        <label className="inline-flex items-center gap-2 text-sm text-slate-700 select-none">
+          <input
+            type="checkbox"
+            checked={enableSlant2}
+            onChange={(e) => setEnableSlant2(e.target.checked)}
+          />
+          Slant 2
+        </label>
+
+        {enableSlant2 && (
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <span>Angle 2</span>
+            <input
+              type="number"
+              step={1}
+              min={0}
+              max={90}
+              className="w-24 p-2 rounded-lg border border-slate-300"
+              value={slantAngle2}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                setSlantAngle2(Number.isFinite(v) ? v : 55);
+              }}
+              onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+              onBlur={() => setSlantAngle2((v) => Math.min(90, Math.max(0, v)))}
+            />
+          </label>
+        )}
+      </div>
+    </div>
+
     {/* Slant spacing */}
     <div>
       <div className="flex items-center justify-between">
@@ -2053,44 +2138,6 @@ const slantAngleDeg = useMemo(() => {
           setHighContrastMode(false);
         }}
       />
-    </div>
-
-    {/* Slant angle */}
-    <div className="col-span-2">
-      <div className="flex items-center justify-between">
-        <label className="font-medium text-slate-700">Slant angle</label>
-        <span className="text-xs text-slate-500">
-          {slantAngleDeg}°
-        </span>
-      </div>
-      <input
-  type="number"
-  step={1}
-  min={0}
-  max={90}
-  className="mt-2 w-full p-2 rounded-lg border border-slate-300"
-  value={slantAngleText}
-  onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-  onChange={(e) => setSlantAngleText(e.target.value)}
-  onKeyDown={(e) => {
-    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-    e.preventDefault();
-
-    const current = parseInt(slantAngleText, 10);
-    const safe = Number.isFinite(current) ? current : 55;
-    const dir = e.key === 'ArrowUp' ? 1 : -1;
-    setSlantAngleText(String(safe + dir));
-  }}
-  onBlur={() => {
-    const v = parseInt(slantAngleText, 10);
-    if (!Number.isFinite(v)) {
-      setSlantAngleText('55');
-      return;
-    }
-    setSlantAngleText(String(Math.min(90, Math.max(0, v))));
-  }}
-/>
-
     </div>
   </>
 )}
