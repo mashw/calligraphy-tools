@@ -435,6 +435,7 @@ export default function GuidelinesPage() {
   const [gridThickness, setGridThickness] = useState(1);
   const [showGridHorizontal, setShowGridHorizontal] = useState(true);
   const [showGridVertical, setShowGridVertical] = useState(true);
+  const [gridWidthMode, setGridWidthMode] = useState<'effective' | 'actual'>('effective');
   const [showNibAngleGuide, setShowNibAngleGuide] = useState(true);
   const [highContrastMode, setHighContrastMode] = useState(false);
   const [showCenterLine, setShowCenterLine] = useState(false);
@@ -786,7 +787,13 @@ export default function GuidelinesPage() {
         { x: left, y },
         { x: box.w - right, y },
       ];
-
+    
+      // ADD THIS (right here)
+      const gridUnitMM =
+        gridWidthMode === 'actual'
+          ? nibMM
+          : effectiveNibMM;
+    
       return buildGuideSet(guideTemplate, {
         baseline,
         xMM,
@@ -795,24 +802,24 @@ export default function GuidelinesPage() {
         tickStepMM:
           script === 'Copperplate'
             ? Math.max(xMM * 0.9, 3)
-            : effectiveNibMM,
+            : gridUnitMM, // CHANGE THIS from effectiveNibMM
         actualNibMM: nibMM,
       });
     });
 
-  }, [baselinePositions, margins.left, margins.right, box.w, guideTemplate, xMM, ascMM, descMM, script, effectiveNibMM, nibMM]);
+  }, [baselinePositions, margins.left, margins.right, box.w, guideTemplate, xMM, ascMM, descMM, script, effectiveNibMM, nibMM, gridWidthMode]);
 
   const computeBaseView = () => {
     const topPadPX = 30;
-  
+
     // When in custom, keep the “feel” of where custom zoom originated.
     // This prevents the first zoom press from fullpage changing padding/anchor abruptly.
     const padMode: 'autofit' | 'fullpage' =
       view === 'custom' ? customOrigin : (view === 'fullpage' ? 'fullpage' : 'autofit');
-  
+
     const fitZoom = view === 'autofit' ? DEFAULT_AUTOFIT_ZOOM : 1;
     const zoomForView = view === 'custom' ? zoom : fitZoom;
-  
+
     // Stage padding:
     // - Full page: ~5px top/bottom (converted into mm)
     // - Autofit/custom-from-autofit: roomy stage pad in mm
@@ -825,7 +832,7 @@ export default function GuidelinesPage() {
           return fullPagePadPX * mmPerPx;
         })()
         : 22;
-  
+
 
 
     let minX: number;
@@ -1045,26 +1052,26 @@ export default function GuidelinesPage() {
     setZoom(DEFAULT_ZOOM);
     setPan({ x: 0, y: 0 });
   }
-  
+
   function goToTop() {
     // Goal: match the SAME grey gap you see after "Reset view".
     // Reset view => view='autofit', zoom=DEFAULT_ZOOM, pan={0,0}.
     // We'll compute the autofit extraTopMM using DEFAULT_ZOOM framing (not current view).
-  
+
     // Current base view (for solving pan in the current mode)
     const cur = computeBaseView();
-  
+
     // Compute what extraTopMM would be under resetView() conditions.
     // These constants must match computeBaseView():
     const topPadPX = 30;
     const stagePadMM_Auto = 22;
-  
+
     // Under reset view, zoomForView = DEFAULT_AUTOFIT_ZOOM (=4), and stage pad is 22mm.
     // We only need vh to convert px->mm for the top gap.
     // We'll approximate vh_reset as the current vh if we're already autofit+DEFAULT_AUTOFIT_ZOOM,
     // otherwise recompute it from the guide bounds at zoom = DEFAULT_AUTOFIT_ZOOM.
     let vh_reset = cur.vh;
-  
+
     // Recompute vh_reset from the guide bounds using zoom = DEFAULT_AUTOFIT_ZOOM (4).
     // This mirrors the autofit branch in computeBaseView but only for vh.
     if (guideSets.length > 0) {
@@ -1075,23 +1082,23 @@ export default function GuidelinesPage() {
         ...guideSet.baseLine,
         ...guideSet.descLine,
       ]);
-  
+
       const ys = pts.map((p) => p.y);
       const minY0 = Math.min(...ys) - fitPad;
       const maxY0 = Math.max(...ys) + fitPad;
-  
+
       const vh0 = Math.max(1, maxY0 - minY0);
       vh_reset = vh0 / Math.max(1, DEFAULT_AUTOFIT_ZOOM);
     }
-  
+
     const baseVhMM_reset = vh_reset + stagePadMM_Auto * 2;
     const mmPerPx_reset = previewPxH > 0 ? baseVhMM_reset / previewPxH : 0;
     const extraTopMM_reset = topPadPX * mmPerPx_reset;
-  
+
     // After reset view, the viewBox minY is effectively: -extraTopMM_reset (because minY gets clamped to stagePad).
     // So our target for the current viewBox is: minYc_target = -extraTopMM_reset.
     const minYc_target = -extraTopMM_reset;
-  
+
     // Current vb formula: minYc = cur.minY + pan.y - cur.stagePadMM - cur.extraTopMM
     // Solve for pan.y:
     // pan.y = minYc_target + cur.stagePadMM + cur.extraTopMM - cur.minY
@@ -1100,35 +1107,35 @@ export default function GuidelinesPage() {
       y: minYc_target + cur.stagePadMM + cur.extraTopMM - cur.minY,
     }));
   }
-  
-  
 
-  
+
+
+
 
   function adjustZoom(direction: 'in' | 'out') {
     // Only set the origin WHEN LEAVING a non-custom mode.
     // If we're already in custom, keep the existing origin.
     if (view === 'fullpage') setCustomOrigin('fullpage');
     if (view === 'autofit') setCustomOrigin('autofit');
-  
+
     const currentEffectiveZoom =
       view === 'custom'
         ? zoom
         : view === 'autofit'
           ? DEFAULT_AUTOFIT_ZOOM
           : 1;
-  
+
     const next =
       direction === 'in'
         ? currentEffectiveZoom * 1.25
         : currentEffectiveZoom / 1.25;
-  
+
     setView('custom');
     setZoom(clamp(next, 1, 12));
   }
-  
-  
-  
+
+
+
   const centerX = margins.left + (box.w - margins.left - margins.right) / 2;
 
   return (
@@ -1256,17 +1263,17 @@ export default function GuidelinesPage() {
 
 
 
-{showCenterLine && (
-  <line
-  x1={centerX}
-  x2={centerX}
-    y1={margins.top}
-    y2={box.h - margins.bottom}
-    stroke="#000"
-    strokeWidth={highContrastMode ? swBold : swThin}
-    vectorEffect="non-scaling-stroke"
-  />
-)}
+                {showCenterLine && (
+                  <line
+                    x1={centerX}
+                    x2={centerX}
+                    y1={margins.top}
+                    y2={box.h - margins.bottom}
+                    stroke="#000"
+                    strokeWidth={highContrastMode ? swBold : swThin}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
 
                 {guideSets.map((guideSet, index) => {
                   const x1 = guideSet.baseLine[0].x;
@@ -1471,8 +1478,8 @@ export default function GuidelinesPage() {
                     onClick={() => setShowBaselineIndicator(v => !v)}
                     className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
         ${showBaselineIndicator
-          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-          : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
                   >
                     <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
         ${showBaselineIndicator ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
@@ -1503,8 +1510,8 @@ export default function GuidelinesPage() {
                     }}
                     className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
         ${highContrastMode
-          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-          : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
                   >
                     <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
         ${highContrastMode ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
@@ -1523,8 +1530,8 @@ export default function GuidelinesPage() {
                     onClick={() => setShowCenterLine(v => !v)}
                     className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
         ${showCenterLine
-          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-          : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
                   >
                     <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
         ${showCenterLine ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
@@ -1536,36 +1543,36 @@ export default function GuidelinesPage() {
               </div>
             </div>
             <div className="col-span-2">
-  <div className="grid grid-cols-2 gap-4 items-center">
-    {/* Baseline color */}
-    <label className="flex items-center justify-between gap-3">
-      <span className="font-medium text-slate-700">Baseline color</span>
-      <input
-        type="color"
-        className="h-10 w-10 p-0 rounded-md border border-slate-300 bg-white"
-        value={baselineColor}
-        onChange={(e) => {
-          setBaselineColor(e.target.value);
-          setHighContrastMode(false);
-        }}
-      />
-    </label>
+              <div className="grid grid-cols-2 gap-4 items-center">
+                {/* Baseline color */}
+                <label className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-slate-700">Baseline color</span>
+                  <input
+                    type="color"
+                    className="h-10 w-10 p-0 rounded-md border border-slate-300 bg-white"
+                    value={baselineColor}
+                    onChange={(e) => {
+                      setBaselineColor(e.target.value);
+                      setHighContrastMode(false);
+                    }}
+                  />
+                </label>
 
-    {/* Waistline color */}
-    <label className="flex items-center justify-between gap-3">
-      <span className="font-medium text-slate-700">Waistline color</span>
-      <input
-        type="color"
-        className="h-10 w-10 p-0 rounded-md border border-slate-300 bg-white"
-        value={waistlineColor}
-        onChange={(e) => {
-          setWaistlineColor(e.target.value);
-          setHighContrastMode(false);
-        }}
-      />
-    </label>
-  </div>
-</div>
+                {/* Waistline color */}
+                <label className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-slate-700">Waistline color</span>
+                  <input
+                    type="color"
+                    className="h-10 w-10 p-0 rounded-md border border-slate-300 bg-white"
+                    value={waistlineColor}
+                    onChange={(e) => {
+                      setWaistlineColor(e.target.value);
+                      setHighContrastMode(false);
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
 
 
           </div>
@@ -1582,387 +1589,431 @@ export default function GuidelinesPage() {
             </InfoTip>
           </div>
 
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="font-medium text-slate-700">Script</label>
-              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={script} onChange={e => setScript(e.target.value as ScriptId)}>
-                <option value="Copperplate">Copperplate</option>
-                <option value="Fraktur">Fraktur</option>
-                <option value="TexturaQuadrata">Textura Quadrata</option>
-              </select>
-            </div>
-            <div>
-              <label className="font-medium text-slate-700">{script === 'Copperplate' ? 'X-height (mm)' : 'x-height (nibs)'}</label>
-              {script === 'Copperplate' ? (
-                <select
-                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                  value={xHeightMM}
-                  onChange={(e) => setXHeightMM(parseFloat(e.target.value))}
-                >
-                  {X_OPTIONS.map((v) => (
-                    <option key={v} value={v}>
-                      {v.toFixed(1)}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="number"
-                  step={0.5}
-                  min={1}
-                  max={8}
-                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                  value={xNib}
-                  onChange={e => setXNib(parseFloat(e.target.value || '5'))}
-                />
-              )}
-            </div>
-          </div>
-
-          {script === 'Copperplate' ? (
-            <div className="mt-4 space-y-4">
+          {/* Top controls */}
+          <div className="mt-3 space-y-3">
+            {/* Row 1: Script + X-height (keep 2-up on small screens; collapse only on very narrow) */}
+            <div className="grid grid-cols-2 max-[420px]:grid-cols-1 gap-3">
               <div>
-                <label className="font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
+                <label className="font-medium text-slate-700">Script</label>
                 <select
                   className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                  value={copperplateRatioPreset}
-                  onChange={(e) => setCopperplateRatioPreset(e.target.value as CopperplateRatioPreset)}
+                  value={script}
+                  onChange={(e) => setScript(e.target.value as ScriptId)}
                 >
-                  <option value="2:1:2">2 : 1 : 2 (default)</option>
-                  <option value="3:2:3">3 : 2 : 3</option>
-                  <option value="1:1:1">1 : 1 : 1</option>
-                  <option value="custom">Custom…</option>
+                  <option value="Copperplate">Copperplate</option>
+                  <option value="Fraktur">Fraktur</option>
+                  <option value="TexturaQuadrata">Textura Quadrata</option>
                 </select>
-                <p className="mt-1 text-[11px] text-slate-400">Ascender/descender scale from x-height.</p>
               </div>
 
-              {copperplateRatioPreset === 'custom' && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div>
-                    <label className="font-medium text-slate-700">Desc units</label>
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.5"
-                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                      value={copperplateDescUnitsText}
-                      onWheel={(e) => {
-                        (e.currentTarget as HTMLInputElement).blur();
-                      }}
-                      onChange={(e) => {
-                        const next = e.target.value;
-                        setCopperplateDescUnitsText(next);
-                        const parsed = parseFloat(next);
-                        if (Number.isFinite(parsed)) {
-                          setCopperplateDescUnits(Math.max(0, parsed));
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-                        e.preventDefault();
+              <div>
+                <label className="font-medium text-slate-700">
+                  {script === 'Copperplate' ? 'X-height (mm)' : 'x-height (nibs)'}
+                </label>
 
-                        const current = parseFloat(copperplateDescUnitsText);
-                        const safe = Number.isFinite(current) ? current : copperplateDescUnits;
-                        const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
-
-                        const stepped = stepHalfFrom(safe, dir);
-                        const next = Math.max(0, stepped);
-                        setCopperplateDescUnitsText(String(next));
-                        setCopperplateDescUnits(next);
-                      }}
-                      onBlur={() => {
-                        const v = parseFloat(copperplateDescUnitsText);
-                        if (!Number.isFinite(v)) {
-                          setCopperplateDescUnitsText(String(copperplateDescUnits));
-                          return;
-                        }
-                        const next = Math.max(0, v);
-                        setCopperplateDescUnitsText(String(next));
-                        setCopperplateDescUnits(next);
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className="font-medium text-slate-700">X units</label>
-                    <input
-                      type="number"
-                      min={0.5}
-                      step="0.5"
-                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                      value={copperplateXUnitsText}
-                      onWheel={(e) => {
-                        (e.currentTarget as HTMLInputElement).blur();
-                      }}
-                      onChange={(e) => {
-                        const next = e.target.value;
-                        setCopperplateXUnitsText(next);
-                        const parsed = parseFloat(next);
-                        if (Number.isFinite(parsed)) {
-                          setCopperplateXUnits(Math.max(0.1, parsed));
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-                        e.preventDefault();
-
-                        const current = parseFloat(copperplateXUnitsText);
-                        const safe = Number.isFinite(current) ? current : copperplateXUnits;
-                        const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
-
-                        const stepped = stepHalfFrom(safe, dir);
-                        const next = Math.max(0.5, stepped);
-                        setCopperplateXUnitsText(String(next));
-                        setCopperplateXUnits(next);
-                      }}
-                      onBlur={() => {
-                        const v = parseFloat(copperplateXUnitsText);
-                        if (!Number.isFinite(v)) {
-                          setCopperplateXUnitsText(String(copperplateXUnits));
-                          return;
-                        }
-                        const next = Math.max(0.5, v);
-                        setCopperplateXUnitsText(String(next));
-                        setCopperplateXUnits(next);
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className="font-medium text-slate-700">Asc units</label>
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.5"
-                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                      value={copperplateAscUnitsText}
-                      onWheel={(e) => {
-                        (e.currentTarget as HTMLInputElement).blur();
-                      }}
-                      onChange={(e) => {
-                        const next = e.target.value;
-                        setCopperplateAscUnitsText(next);
-                        const parsed = parseFloat(next);
-                        if (Number.isFinite(parsed)) {
-                          setCopperplateAscUnits(Math.max(0, parsed));
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-                        e.preventDefault();
-
-                        const current = parseFloat(copperplateAscUnitsText);
-                        const safe = Number.isFinite(current) ? current : copperplateAscUnits;
-                        const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
-
-                        const stepped = stepHalfFrom(safe, dir);
-                        const next = Math.max(0, stepped);
-                        setCopperplateAscUnitsText(String(next));
-                        setCopperplateAscUnits(next);
-                      }}
-                      onBlur={() => {
-                        const v = parseFloat(copperplateAscUnitsText);
-                        if (!Number.isFinite(v)) {
-                          setCopperplateAscUnitsText(String(copperplateAscUnits));
-                          return;
-                        }
-                        const next = Math.max(0, v);
-                        setCopperplateAscUnitsText(String(next));
-                        setCopperplateAscUnits(next);
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="border-t border-slate-200 pt-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium text-slate-700">Calibration (optional)</div>
-                    <p className="text-xs text-slate-500">Stored per x-height. Adjusts lowercase scale + spacing.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => setUseCalibration((v) => !v)}
-                    className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-                      ${useCalibration ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition ${useCalibration ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
-                      <span className="h-3 w-3 rounded-full bg-white shadow" />
-                    </span>
-                    {useCalibration ? 'Calibration: On' : 'Calibration: Off'}
-                  </button>
-                </div>
-
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-mono text-indigo-500">{CAL_WORD}</span>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      className="w-full p-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50"
-                      placeholder="Lowercase word (mm)"
-                      value={calWordLowerMM}
-                      onChange={(e) => setCalWordLowerMM(e.target.value)}
-                      disabled={!useCalibration}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-mono text-indigo-500">{CAL_WORD_DOUBLE}</span>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      className="w-full p-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50"
-                      placeholder="Double word (mm)"
-                      value={calWordDoubleMM}
-                      onChange={(e) => setCalWordDoubleMM(e.target.value)}
-                      disabled={!useCalibration}
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-3">
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => setShowAdvanced((v) => !v)}
-                    className="flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-indigo-600 select-none"
-                    disabled={!useCalibration}
-                  >
-                    <span className={`inline-block transform transition-transform ${showAdvanced && useCalibration ? 'rotate-90' : 'rotate-0'}`}>▶</span>
-                    <span>Advanced tweaks</span>
-                    {!useCalibration && <span className="ml-1 text-[10px] text-slate-400">(enable calibration to adjust)</span>}
-                  </button>
-
-                  {showAdvanced && useCalibration && (
-                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-slate-700">Overall scale</span>
-                          <span className="font-mono text-slate-500">×{userScaleFactor.toFixed(2)}</span>
-                        </div>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0.7"
-                          max="1.3"
-                          className="w-full p-2 rounded-lg border border-slate-300 text-sm"
-                          value={userScaleFactor}
-                          onChange={(e) => setUserScaleFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.7, 1.3))}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-slate-700">Spacing factor</span>
-                          <span className="font-mono text-slate-500">×{userSpaceFactor.toFixed(2)}</span>
-                        </div>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0.5"
-                          max="1.5"
-                          className="w-full p-2 rounded-lg border border-slate-300 text-sm"
-                          value={userSpaceFactor}
-                          onChange={(e) => setUserSpaceFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.5, 1.5))}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-4 mt-3">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                <div>
-                  <label className="font-medium text-slate-700">Nib size (mm)</label>
-                  <input
-                    type="number"
-                    step="any"
-                    min={0.2}
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                    value={nibText}
-                    onWheel={(e) => {
-                      // Prevent mouse wheel from stepping this number input
-                      (e.currentTarget as HTMLInputElement).blur();
-                    }}
-                    onChange={(e) => {
-                      // Allow free typing (e.g. "3.8", "2.", "")
-                      setNibText(e.target.value);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-                      e.preventDefault();
-
-                      const current = parseFloat(nibText);
-                      const safe = Number.isFinite(current) ? current : 2;
-                      const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
-
-                      const stepped = stepHalfFrom(safe, dir);
-                      setNibText(String(Math.max(0.2, stepped)));
-                    }}
-                    onBlur={() => {
-                      // Validate only (NO snapping)
-                      const v = parseFloat(nibText);
-                      if (!Number.isFinite(v)) {
-                        setNibText('2');
-                        return;
-                      }
-                      setNibText(String(Math.max(0.2, v)));
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label className="font-medium text-slate-700">Pen angle (°)</label>
+                {script === 'Copperplate' ? (
                   <select
                     className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                    value={penAngleDeg}
-                    onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
+                    value={xHeightMM}
+                    onChange={(e) => setXHeightMM(parseFloat(e.target.value))}
                   >
-                    <option value={35}>35°</option>
-                    <option value={40}>40°</option>
-                    <option value={45}>45°</option>
-                    </select>
-                  {showGridControls && (
-                    <div className="mt-2 flex items-center justify-between gap-3">
-                      <div className="text-sm font-medium text-slate-700">Angle guide</div>
-                      <button
-                        type="button"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => setShowNibAngleGuide((v) => !v)}
-                        className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-        ${showNibAngleGuide
-          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-          : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-                      >
-                        <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
-        ${showNibAngleGuide ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
-                          <span className="h-3 w-3 rounded-full bg-white shadow" />
-                        </span>
-                        {showNibAngleGuide ? 'On' : 'Off'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="font-medium text-slate-700">Ascender (nibs)</label>
-                  <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={ascNib} onChange={e => setAscNib(parseFloat(e.target.value || '3'))} />
-                </div>
-                <div>
-                  <label className="font-medium text-slate-700">Descender (nibs)</label>
-                  <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={descNib} onChange={e => setDescNib(parseFloat(e.target.value || '2'))} />
-                </div>
+                    {X_OPTIONS.map((v) => (
+                      <option key={v} value={v}>
+                        {v.toFixed(1)}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="number"
+                    step={0.5}
+                    min={1}
+                    max={8}
+                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                    value={xNib}
+                    onChange={(e) => setXNib(parseFloat(e.target.value || '5'))}
+                  />
+                )}
               </div>
             </div>
-          )}
+
+            {script === 'Copperplate' ? (
+              /* Copperplate-only options (unchanged content, just keeps it in the “top controls” zone) */
+              <div className="space-y-4 pt-1">
+                <div>
+                  <label className="font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
+                  <select
+                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                    value={copperplateRatioPreset}
+                    onChange={(e) => setCopperplateRatioPreset(e.target.value as CopperplateRatioPreset)}
+                  >
+                    <option value="2:1:2">2 : 1 : 2 (default)</option>
+                    <option value="3:2:3">3 : 2 : 3</option>
+                    <option value="1:1:1">1 : 1 : 1</option>
+                    <option value="custom">Custom…</option>
+                  </select>
+                  <p className="mt-1 text-[11px] text-slate-400">Ascender/descender scale from x-height.</p>
+                </div>
+
+                {copperplateRatioPreset === 'custom' && (
+                  <div className="grid grid-cols-2 max-[420px]:grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Desc */}
+                    <div>
+                      <label className="font-medium text-slate-700">Desc units</label>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.5"
+                        className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                        value={copperplateDescUnitsText}
+                        onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          setCopperplateDescUnitsText(next);
+                          const parsed = parseFloat(next);
+                          if (Number.isFinite(parsed)) setCopperplateDescUnits(Math.max(0, parsed));
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                          e.preventDefault();
+                          const current = parseFloat(copperplateDescUnitsText);
+                          const safe = Number.isFinite(current) ? current : copperplateDescUnits;
+                          const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+                          const stepped = stepHalfFrom(safe, dir);
+                          const next = Math.max(0, stepped);
+                          setCopperplateDescUnitsText(String(next));
+                          setCopperplateDescUnits(next);
+                        }}
+                        onBlur={() => {
+                          const v = parseFloat(copperplateDescUnitsText);
+                          if (!Number.isFinite(v)) {
+                            setCopperplateDescUnitsText(String(copperplateDescUnits));
+                            return;
+                          }
+                          const next = Math.max(0, v);
+                          setCopperplateDescUnitsText(String(next));
+                          setCopperplateDescUnits(next);
+                        }}
+                      />
+                    </div>
+
+                    {/* X */}
+                    <div>
+                      <label className="font-medium text-slate-700">X units</label>
+                      <input
+                        type="number"
+                        min={0.5}
+                        step="0.5"
+                        className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                        value={copperplateXUnitsText}
+                        onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          setCopperplateXUnitsText(next);
+                          const parsed = parseFloat(next);
+                          if (Number.isFinite(parsed)) setCopperplateXUnits(Math.max(0.1, parsed));
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                          e.preventDefault();
+                          const current = parseFloat(copperplateXUnitsText);
+                          const safe = Number.isFinite(current) ? current : copperplateXUnits;
+                          const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+                          const stepped = stepHalfFrom(safe, dir);
+                          const next = Math.max(0.5, stepped);
+                          setCopperplateXUnitsText(String(next));
+                          setCopperplateXUnits(next);
+                        }}
+                        onBlur={() => {
+                          const v = parseFloat(copperplateXUnitsText);
+                          if (!Number.isFinite(v)) {
+                            setCopperplateXUnitsText(String(copperplateXUnits));
+                            return;
+                          }
+                          const next = Math.max(0.5, v);
+                          setCopperplateXUnitsText(String(next));
+                          setCopperplateXUnits(next);
+                        }}
+                      />
+                    </div>
+
+                    {/* Asc */}
+                    <div>
+                      <label className="font-medium text-slate-700">Asc units</label>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.5"
+                        className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                        value={copperplateAscUnitsText}
+                        onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          setCopperplateAscUnitsText(next);
+                          const parsed = parseFloat(next);
+                          if (Number.isFinite(parsed)) setCopperplateAscUnits(Math.max(0, parsed));
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                          e.preventDefault();
+                          const current = parseFloat(copperplateAscUnitsText);
+                          const safe = Number.isFinite(current) ? current : copperplateAscUnits;
+                          const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+                          const stepped = stepHalfFrom(safe, dir);
+                          const next = Math.max(0, stepped);
+                          setCopperplateAscUnitsText(String(next));
+                          setCopperplateAscUnits(next);
+                        }}
+                        onBlur={() => {
+                          const v = parseFloat(copperplateAscUnitsText);
+                          if (!Number.isFinite(v)) {
+                            setCopperplateAscUnitsText(String(copperplateAscUnits));
+                            return;
+                          }
+                          const next = Math.max(0, v);
+                          setCopperplateAscUnitsText(String(next));
+                          setCopperplateAscUnits(next);
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Calibration block unchanged */}
+                <div className="border-t border-slate-200 pt-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium text-slate-700">Calibration (optional)</div>
+                      <p className="text-xs text-slate-500">Stored per x-height. Adjusts lowercase scale + spacing.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setUseCalibration((v) => !v)}
+                      className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+                ${useCalibration ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+                    >
+                      <span
+                        className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition ${useCalibration ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'
+                          }`}
+                      >
+                        <span className="h-3 w-3 rounded-full bg-white shadow" />
+                      </span>
+                      {useCalibration ? 'Calibration: On' : 'Calibration: Off'}
+                    </button>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 max-[420px]:grid-cols-1 gap-4 text-sm">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-mono text-indigo-500">{CAL_WORD}</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        className="w-full p-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50"
+                        placeholder="Lowercase word (mm)"
+                        value={calWordLowerMM}
+                        onChange={(e) => setCalWordLowerMM(e.target.value)}
+                        disabled={!useCalibration}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-mono text-indigo-500">{CAL_WORD_DOUBLE}</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        className="w-full p-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50"
+                        placeholder="Double word (mm)"
+                        value={calWordDoubleMM}
+                        onChange={(e) => setCalWordDoubleMM(e.target.value)}
+                        disabled={!useCalibration}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setShowAdvanced((v) => !v)}
+                      className="flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-indigo-600 select-none"
+                      disabled={!useCalibration}
+                    >
+                      <span className={`inline-block transform transition-transform ${showAdvanced && useCalibration ? 'rotate-90' : 'rotate-0'}`}>▶</span>
+                      <span>Advanced tweaks</span>
+                      {!useCalibration && <span className="ml-1 text-[10px] text-slate-400">(enable calibration to adjust)</span>}
+                    </button>
+
+                    {showAdvanced && useCalibration && (
+                      <div className="mt-3 grid grid-cols-2 max-[420px]:grid-cols-1 gap-4 text-xs">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-slate-700">Overall scale</span>
+                            <span className="font-mono text-slate-500">×{userScaleFactor.toFixed(2)}</span>
+                          </div>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.7"
+                            max="1.3"
+                            className="w-full p-2 rounded-lg border border-slate-300 text-sm"
+                            value={userScaleFactor}
+                            onChange={(e) => setUserScaleFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.7, 1.3))}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-slate-700">Spacing factor</span>
+                            <span className="font-mono text-slate-500">×{userSpaceFactor.toFixed(2)}</span>
+                          </div>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.5"
+                            max="1.5"
+                            className="w-full p-2 rounded-lg border border-slate-300 text-sm"
+                            value={userSpaceFactor}
+                            onChange={(e) => setUserSpaceFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.5, 1.5))}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Blackletter controls */}
+                <div className="mt-3 space-y-3">
+            
+                  {/* Row 2: nib size / pen angle / grid width / angle guide */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+                    {/* Nib size */}
+                    <div>
+                      <label className="font-medium text-slate-700">Nib size (mm)</label>
+                      <input
+                        type="number"
+                        step="any"
+                        min={0.2}
+                        className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                        value={nibText}
+                        onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                        onChange={(e) => setNibText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                          e.preventDefault();
+            
+                          const current = parseFloat(nibText);
+                          const safe = Number.isFinite(current) ? current : 2;
+                          const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+            
+                          const stepped = stepHalfFrom(safe, dir);
+                          setNibText(String(Math.max(0.2, stepped)));
+                        }}
+                        onBlur={() => {
+                          const v = parseFloat(nibText);
+                          if (!Number.isFinite(v)) {
+                            setNibText('2');
+                            return;
+                          }
+                          setNibText(String(Math.max(0.2, v)));
+                        }}
+                      />
+                    </div>
+            
+                    {/* Pen angle */}
+                    <div>
+                      <label className="font-medium text-slate-700">Pen angle (°)</label>
+                      <select
+                        className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                        value={penAngleDeg}
+                        onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
+                      >
+                        <option value={35}>35°</option>
+                        <option value={40}>40°</option>
+                        <option value={45}>45°</option>
+                      </select>
+                    </div>
+            
+                    {/* Grid width */}
+                    {showGridControls ? (
+                      <div>
+                        <label className="font-medium text-slate-700">Grid width</label>
+                        <select
+                          className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                          value={gridWidthMode}
+                          onChange={(e) => setGridWidthMode(e.target.value as 'effective' | 'actual')}
+                        >
+                          <option value="effective">Angled</option>
+                          <option value="actual">Actual</option>
+                        </select>
+                      </div>
+                    ) : (
+                      <div />
+                    )}
+            
+                    {/* Angle guide toggle */}
+                    {showGridControls ? (
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-slate-700">Angle guide</div>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => setShowNibAngleGuide((v) => !v)}
+                          className={`mt-1 inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+                            ${showNibAngleGuide
+                              ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                              : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+                        >
+                          <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
+                            ${showNibAngleGuide ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
+                            <span className="h-3 w-3 rounded-full bg-white shadow" />
+                          </span>
+                          {showNibAngleGuide ? 'On' : 'Off'}
+                        </button>
+                      </div>
+                    ) : (
+                      <div />
+                    )}
+                  </div>
+            
+                  {/* Row 3: ascender / descender */}
+                  <div className="grid grid-cols-2 max-[420px]:grid-cols-1 gap-3">
+                    <div>
+                      <label className="font-medium text-slate-700">Ascender (nibs)</label>
+                      <input
+                        type="number"
+                        step={0.5}
+                        min={0}
+                        max={8}
+                        className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                        value={ascNib}
+                        onChange={(e) => setAscNib(parseFloat(e.target.value || '3'))}
+                      />
+                    </div>
+                    <div>
+                      <label className="font-medium text-slate-700">Descender (nibs)</label>
+                      <input
+                        type="number"
+                        step={0.5}
+                        min={0}
+                        max={8}
+                        className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                        value={descNib}
+                        onChange={(e) => setDescNib(parseFloat(e.target.value || '2'))}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
 
           <div className="my-3 border-t border-slate-200/70" />
 
-          <div className="grid grid-cols-2 gap-4">
+          {/* Sliders (unchanged) */}
+          <div className="grid grid-cols-2 max-[520px]:grid-cols-1 gap-4">
             {/* X-line contrast */}
             <div>
               <div className="flex items-center justify-between">
@@ -2004,9 +2055,7 @@ export default function GuidelinesPage() {
                   setHighContrastMode(false);
                 }}
               />
-              <p className="mt-1 text-xs text-slate-500">
-                Multiplies the stroke thickness of the main four X-lines.
-              </p>
+              <p className="mt-1 text-xs text-slate-500">Multiplies the stroke thickness of the main four X-lines.</p>
             </div>
 
             {showGridControls && (
@@ -2028,9 +2077,7 @@ export default function GuidelinesPage() {
                       setHighContrastMode(false);
                     }}
                   />
-                  <p className="mt-1 text-xs text-slate-500">
-                    Controls the contrast of the square grid only.
-                  </p>
+                  <p className="mt-1 text-xs text-slate-500">Controls the contrast of the square grid only.</p>
                 </div>
 
                 <div>
@@ -2050,16 +2097,14 @@ export default function GuidelinesPage() {
                       setHighContrastMode(false);
                     }}
                   />
-                  <p className="mt-1 text-xs text-slate-500">
-                    Multiplies the square grid stroke thickness.
-                  </p>
+                  <p className="mt-1 text-xs text-slate-500">Multiplies the square grid stroke thickness.</p>
                 </div>
               </>
             )}
           </div>
 
           {showGridControls && (
-            <div className="mt-3 grid grid-cols-2 gap-4">
+            <div className="mt-3 grid grid-cols-2 max-[520px]:grid-cols-1 gap-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-medium text-slate-700">Horizontal grid lines</div>
                 <button
@@ -2067,12 +2112,14 @@ export default function GuidelinesPage() {
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => setShowGridHorizontal((v) => !v)}
                   className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-        ${showGridHorizontal
-          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-          : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+            ${showGridHorizontal
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                      : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
                 >
-                  <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
-        ${showGridHorizontal ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
+                  <span
+                    className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
+              ${showGridHorizontal ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}
+                  >
                     <span className="h-3 w-3 rounded-full bg-white shadow" />
                   </span>
                   {showGridHorizontal ? 'On' : 'Off'}
@@ -2086,12 +2133,14 @@ export default function GuidelinesPage() {
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => setShowGridVertical((v) => !v)}
                   className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-        ${showGridVertical
-          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-          : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+            ${showGridVertical
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                      : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
                 >
-                  <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
-        ${showGridVertical ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
+                  <span
+                    className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
+              ${showGridVertical ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}
+                  >
                     <span className="h-3 w-3 rounded-full bg-white shadow" />
                   </span>
                   {showGridVertical ? 'On' : 'Off'}
@@ -2100,6 +2149,7 @@ export default function GuidelinesPage() {
             </div>
           )}
         </div>
+
       </section>
     </main>
   );
