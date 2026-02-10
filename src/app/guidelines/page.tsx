@@ -1,13 +1,9 @@
 'use client';
 
 import React, { useMemo, useRef, useState, useLayoutEffect, useEffect } from 'react';
-import {
-  PAPERS_MM,
-} from '@/lib/curve-helpers';
+import {PAPERS_MM } from '@/lib/curve-helpers';
 
 import {
-  CAL_WORD,
-  CAL_WORD_DOUBLE,
   clamp,
 } from '@/lib/line-widths';
 import { type ScriptId } from '@/lib/scripts';
@@ -22,12 +18,6 @@ type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 type Pt = { x: number; y: number };
 type Box = { w: number; h: number };
 type GuideSet = ReturnType<typeof buildGuideSet>;
-
-const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0.5);
-
-const CAL_STORAGE_KEY_PREFIX = 'ct_guidelines_calibration_v2_xh_';
-const keyForXHeight = (x: number) => `${CAL_STORAGE_KEY_PREFIX}${x.toFixed(1)}`;
-
 
 
 function buildPageSlantLines(opts: {
@@ -57,21 +47,25 @@ function buildPageSlantLines(opts: {
   return lines;
 }
 
-function buildCopperplateSlantLines(guideSets: GuideSet[], box: Box, xHeightMM: number) {
+function buildCopperplateSlantLines(
+  guideSets: GuideSet[],
+  box: Box,
+  slantSpacingMM: number,
+  slantAngleDeg: number
+) {
   const first = guideSets[0];
   if (!first) return [];
 
   const xMin = first.baseLine[0].x;
   const xMax = first.baseLine[first.baseLine.length - 1].x;
-  const stepMM = Math.max(xHeightMM * 0.9, 3);
 
   const lines = buildPageSlantLines({
     boxW: box.w,
     boxH: box.h,
     xMin,
     xMax,
-    angleDeg: -55,
-    stepMM,
+    angleDeg: -slantAngleDeg,
+    stepMM: slantSpacingMM,
   });
 
   return lines.map(line => ({
@@ -81,6 +75,7 @@ function buildCopperplateSlantLines(guideSets: GuideSet[], box: Box, xHeightMM: 
     y2: line.b.y,
   }));
 }
+
 
 function GuidelinesRowMask({ guideSets, box }: { guideSets: GuideSet[]; box: Box }) {
   return (
@@ -111,15 +106,21 @@ function GuidelinesRowMask({ guideSets, box }: { guideSets: GuideSet[]; box: Box
 function CopperplateSlantLines({
   guideSets,
   box,
-  xHeightMM,
+  slantSpacingMM,
+  slantAngleDeg,
+  slantLineContrast,
+  highContrastMode,
   swThin,
 }: {
   guideSets: GuideSet[];
   box: Box;
-  xHeightMM: number;
+  slantSpacingMM: number;
+  slantAngleDeg: number;
+  slantLineContrast: number;
+  highContrastMode: boolean;
   swThin: number;
 }) {
-  const lines = buildCopperplateSlantLines(guideSets, box, xHeightMM);
+  const lines = buildCopperplateSlantLines(guideSets, box, slantSpacingMM, slantAngleDeg);
   if (lines.length === 0) return null;
 
   return (
@@ -131,7 +132,9 @@ function CopperplateSlantLines({
           y1={ln.y1}
           x2={ln.x2}
           y2={ln.y2}
-          stroke="#e2e8f0"
+          stroke="#000"
+strokeOpacity={highContrastMode ? 1 : slantLineContrast}
+
           strokeWidth={swThin}
           vectorEffect="non-scaling-stroke"
         />
@@ -139,6 +142,7 @@ function CopperplateSlantLines({
     </g>
   );
 }
+
 
 
 /* ---------------- Reusable InfoTip ---------------- */
@@ -431,6 +435,19 @@ export default function GuidelinesPage() {
   const [waistlineColor, setWaistlineColor] = useState('#111827');
   const [xLineContrast, setXLineContrast] = useState(1);
   const [xLineThickness, setXLineThickness] = useState(1); // multiplier
+  const [midlineDashGap, setMidlineDashGap] = useState(6); // mm gap between dashes
+  const [midlineDashContrast, setMidlineDashContrast] = useState(0.5); // alpha multiplier
+  const [slantSpacingMM, setSlantSpacingMM] = useState(10);
+  const [slantLineContrast, setSlantLineContrast] = useState(0.3);
+  const [slantAngleText, setSlantAngleText] = useState('55');
+
+const slantAngleDeg = useMemo(() => {
+  const v = parseInt(slantAngleText, 10);
+  return Number.isFinite(v) ? v : 55;
+}, [slantAngleText]);
+
+
+
   const [gridContrast, setGridContrast] = useState(0.5);
   const [gridThickness, setGridThickness] = useState(1);
   const [showGridHorizontal, setShowGridHorizontal] = useState(true);
@@ -516,10 +533,15 @@ export default function GuidelinesPage() {
   const gridContrastBeforeHigh = useRef<number | null>(null);
 
 
-  const [xHeightMM, setXHeightMM] = useState(6);
+  const [xHeightMMText, setXHeightMMText] = useState('6');
+
+  const xHeightMM = useMemo(() => {
+    const v = parseFloat(xHeightMMText);
+    return Number.isFinite(v) ? v : 6;
+  }, [xHeightMMText]);
   const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
   const [nibText, setNibText] = useState('2');
-  const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>('2:1:2');
+  const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>('3:2:3');
   const [copperplateDescUnitsText, setCopperplateDescUnitsText] = useState('2');
   const [copperplateXUnitsText, setCopperplateXUnitsText] = useState('1');
   const [copperplateAscUnitsText, setCopperplateAscUnitsText] = useState('2');
@@ -536,14 +558,16 @@ export default function GuidelinesPage() {
 
   const [ascNib, setAscNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.ascNib);
   const [descNib, setDescNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.descNib);
-  const [rowGapMM, setRowGapMM] = useState(6);
 
-  const [useCalibration, setUseCalibration] = useState(false);
-  const [calWordLowerMM, setCalWordLowerMM] = useState('');
-  const [calWordDoubleMM, setCalWordDoubleMM] = useState('');
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [userScaleFactor, setUserScaleFactor] = useState(1);
-  const [userSpaceFactor, setUserSpaceFactor] = useState(1);
+  useEffect(() => {
+    if (script === 'Fraktur' || script === 'TexturaQuadrata') {
+      setAscNib(2);
+      setDescNib(2);
+    }
+  }, [script]);
+
+
+  const [rowGapMM, setRowGapMM] = useState(6);
 
   const [isNarrow, setIsNarrow] = useState(() => (typeof window !== 'undefined'
     ? window.matchMedia('(max-width: 640px)').matches
@@ -621,60 +645,6 @@ export default function GuidelinesPage() {
       body.style.backgroundImage = prevBodyBg;
     };
   }, []);
-
-  useEffect(() => {
-    if (script !== 'Copperplate') {
-      setUseCalibration(false);
-      setShowAdvanced(false);
-    }
-  }, [script]);
-
-  useEffect(() => {
-    if (script !== 'Copperplate') return;
-
-    try {
-      const key = keyForXHeight(xHeightMM);
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
-      if (!raw) {
-        setUseCalibration(false);
-        setCalWordLowerMM('');
-        setCalWordDoubleMM('');
-        setUserScaleFactor(1);
-        setUserSpaceFactor(1);
-        setShowAdvanced(false);
-        return;
-      }
-      const data = JSON.parse(raw);
-      setUseCalibration(!!data.useCalibration);
-      setCalWordLowerMM(typeof data.calWordLowerMM === 'string' ? data.calWordLowerMM : '');
-      setCalWordDoubleMM(typeof data.calWordDoubleMM === 'string' ? data.calWordDoubleMM : '');
-      setUserScaleFactor(typeof data.userScaleFactor === 'number' ? clamp(data.userScaleFactor, 0.7, 1.3) : 1);
-      setUserSpaceFactor(typeof data.userSpaceFactor === 'number' ? clamp(data.userSpaceFactor, 0.5, 1.5) : 1);
-      setShowAdvanced(false);
-    } catch {
-      // ignore
-    }
-  }, [xHeightMM, script]);
-
-  useEffect(() => {
-    if (script !== 'Copperplate') return;
-
-    try {
-      const key = keyForXHeight(xHeightMM);
-      const data = {
-        useCalibration,
-        calWordLowerMM,
-        calWordDoubleMM,
-        userScaleFactor,
-        userSpaceFactor,
-      };
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(key, JSON.stringify(data));
-      }
-    } catch {
-      // ignore
-    }
-  }, [xHeightMM, script, useCalibration, calWordLowerMM, calWordDoubleMM, userScaleFactor, userSpaceFactor]);
 
   // ---------- Page box (mm) ----------
   const raw = PAPERS_MM[paper];
@@ -787,13 +757,13 @@ export default function GuidelinesPage() {
         { x: left, y },
         { x: box.w - right, y },
       ];
-    
+
       // ADD THIS (right here)
       const gridUnitMM =
         gridWidthMode === 'actual'
           ? nibMM
           : effectiveNibMM;
-    
+
       return buildGuideSet(guideTemplate, {
         baseline,
         xMM,
@@ -1254,11 +1224,15 @@ export default function GuidelinesPage() {
                 {/* Guides */}
                 {script === 'Copperplate' && (
                   <CopperplateSlantLines
-                    guideSets={guideSets}
-                    box={box}
-                    xHeightMM={xHeightMM}
-                    swThin={swThin}
-                  />
+  guideSets={guideSets}
+  box={box}
+  slantSpacingMM={slantSpacingMM}
+  slantAngleDeg={slantAngleDeg}
+  slantLineContrast={slantLineContrast}
+  highContrastMode={highContrastMode}
+  swThin={swThin}
+/>
+
                 )}
 
 
@@ -1306,21 +1280,31 @@ export default function GuidelinesPage() {
                             x2={x2}
                             y1={yMidAsc}
                             y2={yMidAsc}
-                            stroke="#111827"
-                            strokeWidth={swThin}
+                            stroke={hexToRgba('#111827', highContrastMode ? 1 : midlineDashContrast)}
+
+                            strokeWidth={1}
                             vectorEffect="non-scaling-stroke"
-                            strokeDasharray="6 6"
+                            strokeDasharray={`6 ${midlineDashGap}`}
+
+                            strokeLinecap="butt"
+                            shapeRendering="crispEdges"
                           />
+
                           <line
                             x1={x1}
                             x2={x2}
                             y1={yMidDesc}
                             y2={yMidDesc}
-                            stroke="#111827"
-                            strokeWidth={swThin}
+                            stroke={hexToRgba('#111827', highContrastMode ? 1 : midlineDashContrast)}
+
+                            strokeWidth={1}
                             vectorEffect="non-scaling-stroke"
-                            strokeDasharray="6 6"
+                            strokeDasharray={`6 ${midlineDashGap}`}
+
+                            strokeLinecap="butt"
+                            shapeRendering="crispEdges"
                           />
+
                         </>
                       )}
 
@@ -1612,18 +1596,39 @@ export default function GuidelinesPage() {
                 </label>
 
                 {script === 'Copperplate' ? (
-                  <select
+                  <input
+                    type="number"
+                    step={0.5}
+                    min={2}
+                    max={10}
                     className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                    value={xHeightMM}
-                    onChange={(e) => setXHeightMM(parseFloat(e.target.value))}
-                  >
-                    {X_OPTIONS.map((v) => (
-                      <option key={v} value={v}>
-                        {v.toFixed(1)}
-                      </option>
-                    ))}
-                  </select>
+                    value={xHeightMMText}
+                    onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                    onChange={(e) => setXHeightMMText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                      e.preventDefault();
+
+                      const current = parseFloat(xHeightMMText);
+                      const safe = Number.isFinite(current) ? current : 6;
+                      const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+
+                      const stepped = stepHalfFrom(safe, dir);
+                      const clamped = clamp(stepped, 2, 10);
+                      setXHeightMMText(String(clamped));
+                    }}
+                    onBlur={() => {
+                      const v = parseFloat(xHeightMMText);
+                      if (!Number.isFinite(v)) {
+                        setXHeightMMText('6');
+                        return;
+                      }
+                      // Keep manual entries as-is (no snapping), just clamp to allowed range:
+                      setXHeightMMText(String(clamp(v, 2, 10)));
+                    }}
+                  />
                 ) : (
+
                   <input
                     type="number"
                     step={0.5}
@@ -1647,7 +1652,7 @@ export default function GuidelinesPage() {
                     value={copperplateRatioPreset}
                     onChange={(e) => setCopperplateRatioPreset(e.target.value as CopperplateRatioPreset)}
                   >
-                    <option value="2:1:2">2 : 1 : 2 (default)</option>
+                    <option value="2:1:2">2 : 1 : 2</option>
                     <option value="3:2:3">3 : 2 : 3</option>
                     <option value="1:1:1">1 : 1 : 1</option>
                     <option value="custom">Custom…</option>
@@ -1779,114 +1784,16 @@ export default function GuidelinesPage() {
                   </div>
                 )}
 
+
+
                 {/* Calibration block unchanged */}
-                <div className="border-t border-slate-200 pt-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-medium text-slate-700">Calibration (optional)</div>
-                      <p className="text-xs text-slate-500">Stored per x-height. Adjusts lowercase scale + spacing.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => setUseCalibration((v) => !v)}
-                      className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-                ${useCalibration ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      <span
-                        className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition ${useCalibration ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'
-                          }`}
-                      >
-                        <span className="h-3 w-3 rounded-full bg-white shadow" />
-                      </span>
-                      {useCalibration ? 'Calibration: On' : 'Calibration: Off'}
-                    </button>
-                  </div>
 
-                  <div className="mt-3 grid grid-cols-2 max-[420px]:grid-cols-1 gap-4 text-sm">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-mono text-indigo-500">{CAL_WORD}</span>
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        className="w-full p-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50"
-                        placeholder="Lowercase word (mm)"
-                        value={calWordLowerMM}
-                        onChange={(e) => setCalWordLowerMM(e.target.value)}
-                        disabled={!useCalibration}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-mono text-indigo-500">{CAL_WORD_DOUBLE}</span>
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        className="w-full p-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50"
-                        placeholder="Double word (mm)"
-                        value={calWordDoubleMM}
-                        onChange={(e) => setCalWordDoubleMM(e.target.value)}
-                        disabled={!useCalibration}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => setShowAdvanced((v) => !v)}
-                      className="flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-indigo-600 select-none"
-                      disabled={!useCalibration}
-                    >
-                      <span className={`inline-block transform transition-transform ${showAdvanced && useCalibration ? 'rotate-90' : 'rotate-0'}`}>▶</span>
-                      <span>Advanced tweaks</span>
-                      {!useCalibration && <span className="ml-1 text-[10px] text-slate-400">(enable calibration to adjust)</span>}
-                    </button>
-
-                    {showAdvanced && useCalibration && (
-                      <div className="mt-3 grid grid-cols-2 max-[420px]:grid-cols-1 gap-4 text-xs">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium text-slate-700">Overall scale</span>
-                            <span className="font-mono text-slate-500">×{userScaleFactor.toFixed(2)}</span>
-                          </div>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0.7"
-                            max="1.3"
-                            className="w-full p-2 rounded-lg border border-slate-300 text-sm"
-                            value={userScaleFactor}
-                            onChange={(e) => setUserScaleFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.7, 1.3))}
-                          />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium text-slate-700">Spacing factor</span>
-                            <span className="font-mono text-slate-500">×{userSpaceFactor.toFixed(2)}</span>
-                          </div>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0.5"
-                            max="1.5"
-                            className="w-full p-2 rounded-lg border border-slate-300 text-sm"
-                            value={userSpaceFactor}
-                            onChange={(e) => setUserSpaceFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.5, 1.5))}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
               </div>
             ) : (
               <>
                 {/* Blackletter controls */}
                 <div className="mt-3 space-y-3">
-            
+
                   {/* Row 2: nib size / pen angle / grid width / angle guide */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
                     {/* Nib size */}
@@ -1903,11 +1810,11 @@ export default function GuidelinesPage() {
                         onKeyDown={(e) => {
                           if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
                           e.preventDefault();
-            
+
                           const current = parseFloat(nibText);
                           const safe = Number.isFinite(current) ? current : 2;
                           const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
-            
+
                           const stepped = stepHalfFrom(safe, dir);
                           setNibText(String(Math.max(0.2, stepped)));
                         }}
@@ -1921,7 +1828,7 @@ export default function GuidelinesPage() {
                         }}
                       />
                     </div>
-            
+
                     {/* Pen angle */}
                     <div>
                       <label className="font-medium text-slate-700">Pen angle (°)</label>
@@ -1935,7 +1842,7 @@ export default function GuidelinesPage() {
                         <option value={45}>45°</option>
                       </select>
                     </div>
-            
+
                     {/* Grid width */}
                     {showGridControls ? (
                       <div>
@@ -1952,7 +1859,7 @@ export default function GuidelinesPage() {
                     ) : (
                       <div />
                     )}
-            
+
                     {/* Angle guide toggle */}
                     {showGridControls ? (
                       <div className="min-w-0">
@@ -1977,7 +1884,7 @@ export default function GuidelinesPage() {
                       <div />
                     )}
                   </div>
-            
+
                   {/* Row 3: ascender / descender */}
                   <div className="grid grid-cols-2 max-[420px]:grid-cols-1 gap-3">
                     <div>
@@ -1989,7 +1896,7 @@ export default function GuidelinesPage() {
                         max={8}
                         className="mt-1 w-full p-2 rounded-lg border border-slate-300"
                         value={ascNib}
-                        onChange={(e) => setAscNib(parseFloat(e.target.value || '3'))}
+                        onChange={(e) => setAscNib(parseFloat(e.target.value || '2'))}
                       />
                     </div>
                     <div>
@@ -2057,6 +1964,138 @@ export default function GuidelinesPage() {
               />
               <p className="mt-1 text-xs text-slate-500">Multiplies the stroke thickness of the main four X-lines.</p>
             </div>
+
+            {script === 'Copperplate' && (
+              <>
+                {/* 1st asc/desc dash spacing */}
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="font-medium text-slate-700">1st asc/desc spacing</label>
+                    <span className="text-xs text-slate-500">{midlineDashGap.toFixed(1)} mm</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="2"
+                    max="14"
+                    step="0.5"
+                    className="mt-2 w-full"
+                    value={midlineDashGap}
+                    onChange={(e) => setMidlineDashGap(parseFloat(e.target.value))}
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    Controls the gap between dashes on the 1st ascender/descender reference lines.
+                  </p>
+                </div>
+
+                {/* 1st asc/desc contrast */}
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="font-medium text-slate-700">1st asc/desc contrast</label>
+                    <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : midlineDashContrast) * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    className="mt-2 w-full"
+                    value={highContrastMode ? 1 : midlineDashContrast}
+                    onChange={(e) => {
+                      setMidlineDashContrast(parseFloat(e.target.value));
+                      setHighContrastMode(false);
+                    }}
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    Adjusts only the 1st ascender/descender dashed reference lines.
+                  </p>
+                </div>
+              </>
+            )}
+
+{script === 'Copperplate' && (
+  <>
+    {/* Slant spacing */}
+    <div>
+      <div className="flex items-center justify-between">
+        <label className="font-medium text-slate-700">Slant spacing</label>
+        <span className="text-xs text-slate-500">
+          {slantSpacingMM.toFixed(1)} mm
+        </span>
+      </div>
+      <input
+        type="range"
+        min="4"
+        max="30"
+        step="0.5"
+        className="mt-2 w-full"
+        value={slantSpacingMM}
+        onChange={(e) => setSlantSpacingMM(parseFloat(e.target.value))}
+      />
+    </div>
+
+    {/* Slant contrast */}
+    <div>
+      <div className="flex items-center justify-between">
+        <label className="font-medium text-slate-700">Slant contrast</label>
+        <span className="text-xs text-slate-500">
+          {Math.round((highContrastMode ? 1 : slantLineContrast) * 100)}%
+        </span>
+      </div>
+      <input
+        type="range"
+        min="0"
+        max="1"
+        step="0.01"
+        className="mt-2 w-full"
+        value={highContrastMode ? 1 : slantLineContrast}
+        onChange={(e) => {
+          setSlantLineContrast(parseFloat(e.target.value));
+          setHighContrastMode(false);
+        }}
+      />
+    </div>
+
+    {/* Slant angle */}
+    <div className="col-span-2">
+      <div className="flex items-center justify-between">
+        <label className="font-medium text-slate-700">Slant angle</label>
+        <span className="text-xs text-slate-500">
+          {slantAngleDeg}°
+        </span>
+      </div>
+      <input
+  type="number"
+  step={1}
+  min={0}
+  max={90}
+  className="mt-2 w-full p-2 rounded-lg border border-slate-300"
+  value={slantAngleText}
+  onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+  onChange={(e) => setSlantAngleText(e.target.value)}
+  onKeyDown={(e) => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+
+    const current = parseInt(slantAngleText, 10);
+    const safe = Number.isFinite(current) ? current : 55;
+    const dir = e.key === 'ArrowUp' ? 1 : -1;
+    setSlantAngleText(String(safe + dir));
+  }}
+  onBlur={() => {
+    const v = parseInt(slantAngleText, 10);
+    if (!Number.isFinite(v)) {
+      setSlantAngleText('55');
+      return;
+    }
+    setSlantAngleText(String(Math.min(90, Math.max(0, v))));
+  }}
+/>
+
+    </div>
+  </>
+)}
+
+
 
             {showGridControls && (
               <>
