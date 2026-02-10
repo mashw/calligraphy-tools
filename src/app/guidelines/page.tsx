@@ -1423,52 +1423,64 @@ const slantAngleDeg = useMemo(() => {
           <div className="my-3 border-t border-slate-200/70" />
 
           <div className="grid grid-cols-2 gap-4 mt-4">
-            <div>
-              <label className="font-medium text-slate-700">Top margin (mm)</label>
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                value={marginTopMM}
-                onChange={(e) => setMarginTopMM(parseFloat(e.target.value || '0') || 0)}
-              />
+            <div className="flex items-center justify-between gap-3">
+              <label className="font-medium text-slate-700">Top margin</label>
+              <div className="relative w-24">
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  className="w-full p-2 pr-10 rounded-lg border border-slate-300"
+                  value={marginTopMM}
+                  onChange={(e) => setMarginTopMM(parseFloat(e.target.value || '0') || 0)}
+                />
+                <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
+              </div>
             </div>
 
-            <div>
-              <label className="font-medium text-slate-700">Bottom margin (mm)</label>
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                value={marginBottomMM}
-                onChange={(e) => setMarginBottomMM(parseFloat(e.target.value || '0') || 0)}
-              />
+            <div className="flex items-center justify-between gap-3">
+              <label className="font-medium text-slate-700">Bottom margin</label>
+              <div className="relative w-24">
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  className="w-full p-2 pr-10 rounded-lg border border-slate-300"
+                  value={marginBottomMM}
+                  onChange={(e) => setMarginBottomMM(parseFloat(e.target.value || '0') || 0)}
+                />
+                <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
+              </div>
             </div>
 
-            <div>
-              <label className="font-medium text-slate-700">Left margin (mm)</label>
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                value={marginLeftMM}
-                onChange={(e) => setMarginLeftMM(parseFloat(e.target.value || '0') || 0)}
-              />
+            <div className="flex items-center justify-between gap-3">
+              <label className="font-medium text-slate-700">Left margin</label>
+              <div className="relative w-24">
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  className="w-full p-2 pr-10 rounded-lg border border-slate-300"
+                  value={marginLeftMM}
+                  onChange={(e) => setMarginLeftMM(parseFloat(e.target.value || '0') || 0)}
+                />
+                <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
+              </div>
             </div>
 
-            <div>
-              <label className="font-medium text-slate-700">Right margin (mm)</label>
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                value={marginRightMM}
-                onChange={(e) => setMarginRightMM(parseFloat(e.target.value || '0') || 0)}
-              />
+            <div className="flex items-center justify-between gap-3">
+              <label className="font-medium text-slate-700">Right margin</label>
+              <div className="relative w-24">
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  className="w-full p-2 pr-10 rounded-lg border border-slate-300"
+                  value={marginRightMM}
+                  onChange={(e) => setMarginRightMM(parseFloat(e.target.value || '0') || 0)}
+                />
+                <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
+              </div>
             </div>
 
             <div className="col-span-2">
@@ -2056,7 +2068,7 @@ const slantAngleDeg = useMemo(() => {
             step={1}
             min={0}
             max={90}
-            className="w-full p-2 pr-8 rounded-lg border border-slate-300"
+            className="w-full p-2 pr-10 rounded-lg border border-slate-300"
             value={slantAngleText}
             onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
             onChange={(e) => setSlantAngleText(e.target.value)}
@@ -2078,7 +2090,7 @@ const slantAngleDeg = useMemo(() => {
               setSlantAngleText(String(Math.min(90, Math.max(0, v))));
             }}
           />
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">°</span>
+          <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-base font-semibold text-slate-600">°</span>
         </div>
       </div>
     </div>
@@ -2099,7 +2111,7 @@ const slantAngleDeg = useMemo(() => {
             step={1}
             min={0}
             max={90}
-            className={`w-full p-2 pr-8 rounded-lg border border-slate-300 ${enableSlant2 ? '' : 'bg-slate-50 opacity-60 cursor-not-allowed'}`}
+            className={`w-full p-2 pr-10 rounded-lg border border-slate-300 ${enableSlant2 ? '' : 'bg-slate-50 opacity-60 cursor-not-allowed'}`}
             value={slantAngle2}
             disabled={!enableSlant2}
             onChange={(e) => {
@@ -2109,7 +2121,7 @@ const slantAngleDeg = useMemo(() => {
             onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
             onBlur={() => setSlantAngle2((v) => Math.min(90, Math.max(0, v)))}
           />
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">°</span>
+          <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-base font-semibold text-slate-600">°</span>
         </div>
       </div>
     </div>
