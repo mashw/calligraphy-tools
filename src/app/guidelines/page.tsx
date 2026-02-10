@@ -1422,7 +1422,7 @@ const slantAngleDeg = useMemo(() => {
 
           <div className="my-3 border-t border-slate-200/70" />
 
-          <div className="grid grid-cols-2 gap-4 mt-4">
+          <div className="grid grid-cols-2 gap-y-4 gap-x-10 mt-4">
             <div className="flex items-center justify-between gap-3">
               <label className="font-medium text-slate-700">Top margin</label>
               <div className="relative w-24">
@@ -1488,7 +1488,7 @@ const slantAngleDeg = useMemo(() => {
             </div>
 
             <div className="col-span-2">
-              <div className="mt-4 grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 {/* Baseline */}
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-medium text-slate-700">Baseline</div>
