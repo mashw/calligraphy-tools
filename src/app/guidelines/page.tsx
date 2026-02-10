@@ -1558,6 +1558,50 @@ const slantAngleDeg = useMemo(() => {
               </div>
             </div>
 
+            {/* X-line contrast */}
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="font-medium text-slate-700">X-line contrast</label>
+                <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : xLineContrast) * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                className="mt-2 w-full"
+                value={highContrastMode ? 1 : xLineContrast}
+                onChange={(e) => {
+                  setXLineContrast(parseFloat(e.target.value));
+                  setHighContrastMode(false);
+                }}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Affects only ascender, waistline, baseline, descender. Contrast scales alpha; hue is preserved.
+              </p>
+            </div>
+
+            {/* X-line thickness */}
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="font-medium text-slate-700">X-line thickness</label>
+                <span className="text-xs text-slate-500">{(highContrastMode ? 1.8 : xLineThickness).toFixed(2)}×</span>
+              </div>
+              <input
+                type="range"
+                min="0.6"
+                max="2.5"
+                step="0.05"
+                className="mt-2 w-full"
+                value={highContrastMode ? 1.8 : xLineThickness}
+                onChange={(e) => {
+                  setXLineThickness(parseFloat(e.target.value));
+                  setHighContrastMode(false);
+                }}
+              />
+              <p className="mt-1 text-xs text-slate-500">Multiplies the stroke thickness of the main four X-lines.</p>
+            </div>
+
 
           </div>
         </div>
@@ -1921,50 +1965,6 @@ const slantAngleDeg = useMemo(() => {
 
           {/* Sliders (unchanged) */}
           <div className="grid grid-cols-2 max-[520px]:grid-cols-1 gap-4">
-            {/* X-line contrast */}
-            <div>
-              <div className="flex items-center justify-between">
-                <label className="font-medium text-slate-700">X-line contrast</label>
-                <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : xLineContrast) * 100)}%</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                className="mt-2 w-full"
-                value={highContrastMode ? 1 : xLineContrast}
-                onChange={(e) => {
-                  setXLineContrast(parseFloat(e.target.value));
-                  setHighContrastMode(false);
-                }}
-              />
-              <p className="mt-1 text-xs text-slate-500">
-                Affects only ascender, waistline, baseline, descender. Contrast scales alpha; hue is preserved.
-              </p>
-            </div>
-
-            {/* X-line thickness */}
-            <div>
-              <div className="flex items-center justify-between">
-                <label className="font-medium text-slate-700">X-line thickness</label>
-                <span className="text-xs text-slate-500">{(highContrastMode ? 1.8 : xLineThickness).toFixed(2)}×</span>
-              </div>
-              <input
-                type="range"
-                min="0.6"
-                max="2.5"
-                step="0.05"
-                className="mt-2 w-full"
-                value={highContrastMode ? 1.8 : xLineThickness}
-                onChange={(e) => {
-                  setXLineThickness(parseFloat(e.target.value));
-                  setHighContrastMode(false);
-                }}
-              />
-              <p className="mt-1 text-xs text-slate-500">Multiplies the stroke thickness of the main four X-lines.</p>
-            </div>
-
             {script === 'Copperplate' && (
               <>
                 {/* 1st asc/desc dash spacing */}
