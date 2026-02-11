@@ -1420,64 +1420,84 @@ const slantAngleDeg = useMemo(() => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 mt-4">
-            <div>
-              <label className="font-medium text-slate-700">Top margin (mm)</label>
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                value={marginTopMM}
-                onChange={(e) => setMarginTopMM(parseFloat(e.target.value || '0') || 0)}
-              />
+          <div className="my-3 border-t border-slate-200/70" />
+
+          <div className="grid grid-cols-2 gap-y-4 gap-x-10 mt-4">
+            <div className="flex items-center gap-3">
+              <label className="w-28 shrink-0 font-medium text-slate-700">Top margin</label>
+              <div className="relative flex-1 min-w-0">
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  className="w-full p-2 pr-10 rounded-lg border border-slate-300"
+                  value={marginTopMM}
+                  onChange={(e) => setMarginTopMM(parseFloat(e.target.value || '0') || 0)}
+                />
+                <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
+              </div>
             </div>
 
-            <div>
-              <label className="font-medium text-slate-700">Bottom margin (mm)</label>
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                value={marginBottomMM}
-                onChange={(e) => setMarginBottomMM(parseFloat(e.target.value || '0') || 0)}
-              />
+            <div className="flex items-center gap-3">
+              <label className="w-28 shrink-0 font-medium text-slate-700">Bottom margin</label>
+              <div className="relative flex-1 min-w-0">
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  className="w-full p-2 pr-10 rounded-lg border border-slate-300"
+                  value={marginBottomMM}
+                  onChange={(e) => setMarginBottomMM(parseFloat(e.target.value || '0') || 0)}
+                />
+                <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
+              </div>
             </div>
 
-            <div>
-              <label className="font-medium text-slate-700">Left margin (mm)</label>
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                value={marginLeftMM}
-                onChange={(e) => setMarginLeftMM(parseFloat(e.target.value || '0') || 0)}
-              />
+            <div className="flex items-center gap-3">
+              <label className="w-28 shrink-0 font-medium text-slate-700">Left margin</label>
+              <div className="relative flex-1 min-w-0">
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  className="w-full p-2 pr-10 rounded-lg border border-slate-300"
+                  value={marginLeftMM}
+                  onChange={(e) => setMarginLeftMM(parseFloat(e.target.value || '0') || 0)}
+                />
+                <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
+              </div>
             </div>
 
-            <div>
-              <label className="font-medium text-slate-700">Right margin (mm)</label>
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                value={marginRightMM}
-                onChange={(e) => setMarginRightMM(parseFloat(e.target.value || '0') || 0)}
-              />
+            <div className="flex items-center gap-3">
+              <label className="w-28 shrink-0 font-medium text-slate-700">Right margin</label>
+              <div className="relative flex-1 min-w-0">
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  className="w-full p-2 pr-10 rounded-lg border border-slate-300"
+                  value={marginRightMM}
+                  onChange={(e) => setMarginRightMM(parseFloat(e.target.value || '0') || 0)}
+                />
+                <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
+              </div>
             </div>
+
             <div className="col-span-2">
-              <div className="mt-4 grid grid-cols-3 gap-4">
+              <div className="my-2 border-t border-slate-200/70" />
+            </div>
+
+            <div className="col-span-2">
+              <div className="grid grid-cols-3 gap-4">
                 {/* Baseline */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-slate-700">Baseline</div>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => setShowBaselineIndicator(v => !v)}
-                    className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 text-sm font-medium text-slate-700">Baseline</div>
+                  <div className="shrink-0 md:scale-[1.75] md:origin-left">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setShowBaselineIndicator(v => !v)}
+                    className={`shrink-0 inline-flex items-center px-3 md:px-[1.75rem] py-1.5 text-sm rounded-full border transition select-none
         ${showBaselineIndicator
                         ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                         : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
@@ -1487,16 +1507,18 @@ const slantAngleDeg = useMemo(() => {
                       <span className="h-3 w-3 rounded-full bg-white shadow" />
                     </span>
                     {showBaselineIndicator ? 'On' : 'Off'}
-                  </button>
+                    </button>
+                  </div>
                 </div>
 
                 {/* High-contrast */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-slate-700">High-contrast</div>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => {
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 text-sm font-medium text-slate-700">High-contrast</div>
+                  <div className="shrink-0 md:scale-[1.75] md:origin-left">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
                       setHighContrastMode((prev) => {
                         const next = !prev;
                         if (next) {
@@ -1509,7 +1531,7 @@ const slantAngleDeg = useMemo(() => {
                         return next;
                       });
                     }}
-                    className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+                    className={`shrink-0 inline-flex items-center px-3 md:px-[1.75rem] py-1.5 text-sm rounded-full border transition select-none
         ${highContrastMode
                         ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                         : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
@@ -1519,17 +1541,19 @@ const slantAngleDeg = useMemo(() => {
                       <span className="h-3 w-3 rounded-full bg-white shadow" />
                     </span>
                     {highContrastMode ? 'On' : 'Off'}
-                  </button>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Center */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-slate-700">Center</div>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => setShowCenterLine(v => !v)}
-                    className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 text-sm font-medium text-slate-700">Center</div>
+                  <div className="shrink-0 md:scale-[1.75] md:origin-left">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setShowCenterLine(v => !v)}
+                    className={`shrink-0 inline-flex items-center px-3 md:px-[1.75rem] py-1.5 text-sm rounded-full border transition select-none
         ${showCenterLine
                         ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                         : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
@@ -1539,7 +1563,8 @@ const slantAngleDeg = useMemo(() => {
                       <span className="h-3 w-3 rounded-full bg-white shadow" />
                     </span>
                     {showCenterLine ? 'On' : 'Off'}
-                  </button>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1573,6 +1598,10 @@ const slantAngleDeg = useMemo(() => {
                   />
                 </label>
               </div>
+            </div>
+
+            <div className="col-span-2">
+              <div className="my-3 border-t border-slate-200/70" />
             </div>
 
             {/* X-line contrast */}
@@ -1638,68 +1667,71 @@ const slantAngleDeg = useMemo(() => {
           <div className="mt-3 space-y-3">
             {/* Row 1: Script + X-height (keep 2-up on small screens; collapse only on very narrow) */}
             <div className="grid grid-cols-2 max-[420px]:grid-cols-1 gap-3">
-              <div>
-                <label className="font-medium text-slate-700">Script</label>
-                <select
-                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                  value={script}
-                  onChange={(e) => setScript(e.target.value as ScriptId)}
-                >
-                  <option value="Copperplate">Copperplate</option>
-                  <option value="Fraktur">Fraktur</option>
-                  <option value="TexturaQuadrata">Textura Quadrata</option>
-                </select>
+              <div className="flex items-center gap-3">
+                <label className="w-28 shrink-0 font-medium text-slate-700">Script</label>
+                <div className="flex-1 min-w-0">
+                  <select
+                    className="w-full p-2 rounded-lg border border-slate-300"
+                    value={script}
+                    onChange={(e) => setScript(e.target.value as ScriptId)}
+                  >
+                    <option value="Copperplate">Copperplate</option>
+                    <option value="Fraktur">Fraktur</option>
+                    <option value="TexturaQuadrata">Textura Quadrata</option>
+                  </select>
+                </div>
               </div>
 
-              <div>
-                <label className="font-medium text-slate-700">
+              <div className="flex items-center gap-3">
+                <label className="w-28 shrink-0 font-medium text-slate-700">
                   {script === 'Copperplate' ? 'X-height (mm)' : 'x-height (nibs)'}
                 </label>
 
-                {script === 'Copperplate' ? (
-                  <input
-                    type="number"
-                    step={0.5}
-                    min={2}
-                    max={10}
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                    value={xHeightMMText}
-                    onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-                    onChange={(e) => setXHeightMMText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-                      e.preventDefault();
+                <div className="flex-1 min-w-0">
+                  {script === 'Copperplate' ? (
+                    <input
+                      type="number"
+                      step={0.5}
+                      min={2}
+                      max={10}
+                      className="w-full p-2 rounded-lg border border-slate-300"
+                      value={xHeightMMText}
+                      onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                      onChange={(e) => setXHeightMMText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                        e.preventDefault();
 
-                      const current = parseFloat(xHeightMMText);
-                      const safe = Number.isFinite(current) ? current : 6;
-                      const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+                        const current = parseFloat(xHeightMMText);
+                        const safe = Number.isFinite(current) ? current : 6;
+                        const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
 
-                      const stepped = stepHalfFrom(safe, dir);
-                      const clamped = clamp(stepped, 2, 10);
-                      setXHeightMMText(String(clamped));
-                    }}
-                    onBlur={() => {
-                      const v = parseFloat(xHeightMMText);
-                      if (!Number.isFinite(v)) {
-                        setXHeightMMText('6');
-                        return;
-                      }
-                      // Keep manual entries as-is (no snapping), just clamp to allowed range:
-                      setXHeightMMText(String(clamp(v, 2, 10)));
-                    }}
-                  />
-                ) : (
-
-                  <input
-                    type="number"
-                    step={0.5}
-                    min={1}
-                    max={8}
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                    value={xNib}
-                    onChange={(e) => setXNib(parseFloat(e.target.value || '5'))}
-                  />
-                )}
+                        const stepped = stepHalfFrom(safe, dir);
+                        const clamped = clamp(stepped, 2, 10);
+                        setXHeightMMText(String(clamped));
+                      }}
+                      onBlur={() => {
+                        const v = parseFloat(xHeightMMText);
+                        if (!Number.isFinite(v)) {
+                          setXHeightMMText('6');
+                          return;
+                        }
+                        // Keep manual entries as-is (no snapping), just clamp to allowed range:
+                        setXHeightMMText(String(clamp(v, 2, 10)));
+                      }}
+                    />
+                  ) : (
+                    <input
+                      type="number"
+                      step={0.5}
+                      min={1}
+                      max={8}
+                      className="w-full p-2 rounded-lg border border-slate-300"
+                      value={xNib}
+                      onChange={(e) => setXNib(parseFloat(e.target.value || '5'))}
+                    />
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1707,17 +1739,21 @@ const slantAngleDeg = useMemo(() => {
               /* Copperplate-only options (unchanged content, just keeps it in the “top controls” zone) */
               <div className="space-y-4 pt-1">
                 <div>
-                  <label className="font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
-                  <select
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                    value={copperplateRatioPreset}
-                    onChange={(e) => setCopperplateRatioPreset(e.target.value as CopperplateRatioPreset)}
-                  >
-                    <option value="2:1:2">2 : 1 : 2</option>
-                    <option value="3:2:3">3 : 2 : 3</option>
-                    <option value="1:1:1">1 : 1 : 1</option>
-                    <option value="custom">Custom…</option>
-                  </select>
+                  <div className="flex items-center gap-3">
+                    <label className="w-28 shrink-0 font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
+                    <div className="flex-1 min-w-0">
+                      <select
+                        className="w-full p-2 rounded-lg border border-slate-300"
+                        value={copperplateRatioPreset}
+                        onChange={(e) => setCopperplateRatioPreset(e.target.value as CopperplateRatioPreset)}
+                      >
+                        <option value="2:1:2">2 : 1 : 2</option>
+                        <option value="3:2:3">3 : 2 : 3</option>
+                        <option value="1:1:1">1 : 1 : 1</option>
+                        <option value="custom">Custom…</option>
+                      </select>
+                    </div>
+                  </div>
                   <p className="mt-1 text-[11px] text-slate-400">Ascender/descender scale from x-height.</p>
                 </div>
 
@@ -2031,71 +2067,75 @@ const slantAngleDeg = useMemo(() => {
 
 {script === 'Copperplate' && (
   <>
-    {/* Slant angle */}
     <div className="col-span-2">
-      <div className="flex items-center justify-between">
-        <label className="font-medium text-slate-700">Slant angle</label>
-        <span className="text-xs text-slate-500">
-          {slantAngleDeg}°
-        </span>
+      <div className="my-3 border-t border-slate-200/70" />
+    </div>
+
+    {/* Slant angle */}
+    <div>
+      <div className="flex items-center gap-3">
+        <label className="w-28 shrink-0 font-medium text-slate-700">Slant angle</label>
+        <div className="relative flex-1 min-w-0">
+          <input
+            type="number"
+            step={1}
+            min={0}
+            max={90}
+            className="w-full p-2 pr-10 rounded-lg border border-slate-300"
+            value={slantAngleText}
+            onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+            onChange={(e) => setSlantAngleText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+              e.preventDefault();
+
+              const current = parseInt(slantAngleText, 10);
+              const safe = Number.isFinite(current) ? current : 55;
+              const dir = e.key === 'ArrowUp' ? 1 : -1;
+              setSlantAngleText(String(safe + dir));
+            }}
+            onBlur={() => {
+              const v = parseInt(slantAngleText, 10);
+              if (!Number.isFinite(v)) {
+                setSlantAngleText('55');
+                return;
+              }
+              setSlantAngleText(String(Math.min(90, Math.max(0, v))));
+            }}
+          />
+          <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-base font-semibold text-slate-600">°</span>
+        </div>
       </div>
-      <div className="mt-2 flex flex-wrap items-end gap-3">
-        <input
-          type="number"
-          step={1}
-          min={0}
-          max={90}
-          className="w-full sm:flex-1 p-2 rounded-lg border border-slate-300"
-          value={slantAngleText}
-          onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-          onChange={(e) => setSlantAngleText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-            e.preventDefault();
+    </div>
 
-            const current = parseInt(slantAngleText, 10);
-            const safe = Number.isFinite(current) ? current : 55;
-            const dir = e.key === 'ArrowUp' ? 1 : -1;
-            setSlantAngleText(String(safe + dir));
-          }}
-          onBlur={() => {
-            const v = parseInt(slantAngleText, 10);
-            if (!Number.isFinite(v)) {
-              setSlantAngleText('55');
-              return;
-            }
-            setSlantAngleText(String(Math.min(90, Math.max(0, v))));
-          }}
-        />
-
-        <label className="inline-flex items-center gap-2 text-sm text-slate-700 select-none">
+    <div>
+      <div className="flex items-center gap-3">
+        <div className="w-28 shrink-0 flex items-center gap-2">
+          <label className="font-medium text-slate-700">Slant 2</label>
           <input
             type="checkbox"
             checked={enableSlant2}
             onChange={(e) => setEnableSlant2(e.target.checked)}
           />
-          Slant 2
-        </label>
-
-        {enableSlant2 && (
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <span>Angle 2</span>
-            <input
-              type="number"
-              step={1}
-              min={0}
-              max={90}
-              className="w-24 p-2 rounded-lg border border-slate-300"
-              value={slantAngle2}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                setSlantAngle2(Number.isFinite(v) ? v : 55);
-              }}
-              onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-              onBlur={() => setSlantAngle2((v) => Math.min(90, Math.max(0, v)))}
-            />
-          </label>
-        )}
+        </div>
+        <div className="relative flex-1 min-w-0">
+          <input
+            type="number"
+            step={1}
+            min={0}
+            max={90}
+            className={`w-full p-2 pr-10 rounded-lg border border-slate-300 ${enableSlant2 ? '' : 'bg-slate-50 opacity-60 cursor-not-allowed'}`}
+            value={slantAngle2}
+            disabled={!enableSlant2}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              setSlantAngle2(Number.isFinite(v) ? v : 55);
+            }}
+            onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+            onBlur={() => setSlantAngle2((v) => Math.min(90, Math.max(0, v)))}
+          />
+          <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-base font-semibold text-slate-600">°</span>
+        </div>
       </div>
     </div>
 
