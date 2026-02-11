@@ -1116,8 +1116,8 @@ const slantAngleDeg = useMemo(() => {
   const centerX = margins.left + (box.w - margins.left - margins.right) / 2;
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="mx-auto max-w-7xl px-4 py-5">
+    <main className="h-screen min-h-screen bg-slate-50 text-slate-900 flex flex-col">
+      <div className="mx-auto max-w-7xl px-4 py-4 flex-1 flex flex-col overflow-hidden">
 
       {/* Header */}
       <header className="pt-2 pb-2">
@@ -1131,11 +1131,11 @@ const slantAngleDeg = useMemo(() => {
         </div>
       </header>
 
-      <div className="mt-4 grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-4">
+      <div className="mt-3 flex-1 grid grid-cols-1 lg:grid-cols-[1fr_1.35fr] gap-4 overflow-hidden">
 
       {/* Preview */}
-      <section className="lg:order-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-        <div>
+      <section className="lg:order-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm flex flex-col overflow-hidden min-h-0">
+        <div className="flex flex-col min-h-0 flex-1">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
@@ -1188,11 +1188,12 @@ const slantAngleDeg = useMemo(() => {
           </div>
 
           {/* Darker stage behind paper */}
-          <div className="relative overflow-x-auto rounded-xl border border-slate-200 bg-slate-300">
+          <div className="relative flex-1 min-h-0 overflow-hidden">
+            <div className="relative h-full w-full overflow-x-auto rounded-xl border border-slate-200 bg-slate-300">
             <svg
               ref={svgRef}
               viewBox={vb.str}
-              className={`block mx-auto w-full h-[38vh] sm:h-[44vh] md:h-[50vh] touch-none ${isPanning ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
+              className={`block mx-auto w-full h-full min-h-[38vh] sm:min-h-[44vh] md:min-h-[50vh] lg:min-h-0 touch-none ${isPanning ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
               style={{ background: '#cbd5e1' }}
               preserveAspectRatio={(view === 'fullpage' || (view === 'custom' && customOrigin === 'fullpage')) ? 'xMidYMid meet' : 'xMidYMin meet'}
               onPointerDown={onPointerDown}
@@ -1368,17 +1369,20 @@ const slantAngleDeg = useMemo(() => {
                 Baselines: {guideSets.length} · Line height: {lineHeight.toFixed(1)} mm · Row gap: {rowGapMM.toFixed(1)} mm · Row step: {rowStepMM.toFixed(1)} mm
               </div>
             </div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Controls */}
-      <section className="lg:order-1 space-y-4">
+      <section className="lg:order-1 overflow-hidden flex flex-col min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Step 1 */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold text-slate-800">Step 1 — Basics</h2>
+              <h2 className="text-base font-semibold text-slate-800">Step 1 — Basics</h2>
               <InfoTip side="right">Guidelines are spaced by x-height + ascender + descender.</InfoTip>
             </div>
             <button
@@ -1394,11 +1398,11 @@ const slantAngleDeg = useMemo(() => {
 
           {step1Open && (
             <>
-            <div id="guidelines-step-1-content" className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div id="guidelines-step-1-content" className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div className="col-span-2 sm:col-span-1">
-              <label className="font-medium text-slate-700">Paper size</label>
+              <label className="text-sm font-medium text-slate-700">Paper size</label>
               <select
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300"
                 value={paper}
                 onChange={e => {
                   const id = e.target.value as PaperId;
@@ -1416,76 +1420,76 @@ const slantAngleDeg = useMemo(() => {
             </div>
 
             <div>
-              <label className="font-medium text-slate-700">Orientation</label>
-              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={orientation} onChange={e => setOrientation(e.target.value as Orientation)}>
+              <label className="text-sm font-medium text-slate-700">Orientation</label>
+              <select className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300" value={orientation} onChange={e => setOrientation(e.target.value as Orientation)}>
                 <option value="portrait">Portrait</option>
                 <option value="landscape">Landscape</option>
               </select>
             </div>
 
             <div>
-              <label className="font-medium text-slate-700">Row gap (mm)</label>
+              <label className="text-sm font-medium text-slate-700">Row gap (mm)</label>
               <input
                 type="number"
                 step="0.1"
                 min="0"
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300"
                 value={rowGapMM}
                 onChange={(e) => setRowGapMM(parseFloat(e.target.value || '0') || 0)}
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 mt-4">
+          <div className="grid grid-cols-2 gap-3 mt-3">
             <div>
-              <label className="font-medium text-slate-700">Top margin (mm)</label>
+              <label className="text-sm font-medium text-slate-700">Top margin (mm)</label>
               <input
                 type="number"
                 step="0.5"
                 min="0"
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300"
                 value={marginTopMM}
                 onChange={(e) => setMarginTopMM(parseFloat(e.target.value || '0') || 0)}
               />
             </div>
 
             <div>
-              <label className="font-medium text-slate-700">Bottom margin (mm)</label>
+              <label className="text-sm font-medium text-slate-700">Bottom margin (mm)</label>
               <input
                 type="number"
                 step="0.5"
                 min="0"
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300"
                 value={marginBottomMM}
                 onChange={(e) => setMarginBottomMM(parseFloat(e.target.value || '0') || 0)}
               />
             </div>
 
             <div>
-              <label className="font-medium text-slate-700">Left margin (mm)</label>
+              <label className="text-sm font-medium text-slate-700">Left margin (mm)</label>
               <input
                 type="number"
                 step="0.5"
                 min="0"
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300"
                 value={marginLeftMM}
                 onChange={(e) => setMarginLeftMM(parseFloat(e.target.value || '0') || 0)}
               />
             </div>
 
             <div>
-              <label className="font-medium text-slate-700">Right margin (mm)</label>
+              <label className="text-sm font-medium text-slate-700">Right margin (mm)</label>
               <input
                 type="number"
                 step="0.5"
                 min="0"
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300"
                 value={marginRightMM}
                 onChange={(e) => setMarginRightMM(parseFloat(e.target.value || '0') || 0)}
               />
             </div>
             <div className="col-span-2">
-              <div className="mt-4 grid grid-cols-3 gap-4">
+              <div className="mt-3 grid grid-cols-3 gap-3">
                 {/* Baseline */}
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-medium text-slate-700">Baseline</div>
@@ -1563,7 +1567,7 @@ const slantAngleDeg = useMemo(() => {
               <div className="grid grid-cols-2 gap-4 items-center">
                 {/* Baseline color */}
                 <label className="flex items-center justify-between gap-3">
-                  <span className="font-medium text-slate-700">Baseline color</span>
+                  <span className="text-sm font-medium text-slate-700">Baseline color</span>
                   <input
                     type="color"
                     className="h-10 w-10 p-0 rounded-md border border-slate-300 bg-white"
@@ -1577,7 +1581,7 @@ const slantAngleDeg = useMemo(() => {
 
                 {/* Waistline color */}
                 <label className="flex items-center justify-between gap-3">
-                  <span className="font-medium text-slate-700">Waistline color</span>
+                  <span className="text-sm font-medium text-slate-700">Waistline color</span>
                   <input
                     type="color"
                     className="h-10 w-10 p-0 rounded-md border border-slate-300 bg-white"
@@ -1593,22 +1597,22 @@ const slantAngleDeg = useMemo(() => {
 
             {/* X-line contrast */}
             <div>
-              <div className="flex items-center justify-between">
-                <label className="font-medium text-slate-700">X-line contrast</label>
-                <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : xLineContrast) * 100)}%</span>
+              <div className="flex items-center gap-3">
+                <label className="w-32 shrink-0 text-sm font-medium text-slate-700">X-line contrast</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  className="flex-1 min-w-0"
+                  value={highContrastMode ? 1 : xLineContrast}
+                  onChange={(e) => {
+                    setXLineContrast(parseFloat(e.target.value));
+                    setHighContrastMode(false);
+                  }}
+                />
+                <span className="w-14 shrink-0 text-right text-xs text-slate-500 tabular-nums">{Math.round((highContrastMode ? 1 : xLineContrast) * 100)}%</span>
               </div>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                className="mt-2 w-full"
-                value={highContrastMode ? 1 : xLineContrast}
-                onChange={(e) => {
-                  setXLineContrast(parseFloat(e.target.value));
-                  setHighContrastMode(false);
-                }}
-              />
               <p className="mt-1 text-xs text-slate-500">
                 Affects only ascender, waistline, baseline, descender. Contrast scales alpha; hue is preserved.
               </p>
@@ -1616,22 +1620,22 @@ const slantAngleDeg = useMemo(() => {
 
             {/* X-line thickness */}
             <div>
-              <div className="flex items-center justify-between">
-                <label className="font-medium text-slate-700">X-line thickness</label>
-                <span className="text-xs text-slate-500">{(highContrastMode ? 1.8 : xLineThickness).toFixed(2)}×</span>
+              <div className="flex items-center gap-3">
+                <label className="w-32 shrink-0 text-sm font-medium text-slate-700">X-line thickness</label>
+                <input
+                  type="range"
+                  min="0.6"
+                  max="2.5"
+                  step="0.05"
+                  className="flex-1 min-w-0"
+                  value={highContrastMode ? 1.8 : xLineThickness}
+                  onChange={(e) => {
+                    setXLineThickness(parseFloat(e.target.value));
+                    setHighContrastMode(false);
+                  }}
+                />
+                <span className="w-14 shrink-0 text-right text-xs text-slate-500 tabular-nums">{(highContrastMode ? 1.8 : xLineThickness).toFixed(2)}×</span>
               </div>
-              <input
-                type="range"
-                min="0.6"
-                max="2.5"
-                step="0.05"
-                className="mt-2 w-full"
-                value={highContrastMode ? 1.8 : xLineThickness}
-                onChange={(e) => {
-                  setXLineThickness(parseFloat(e.target.value));
-                  setHighContrastMode(false);
-                }}
-              />
               <p className="mt-1 text-xs text-slate-500">Multiplies the stroke thickness of the main four X-lines.</p>
             </div>
 
@@ -1642,10 +1646,10 @@ const slantAngleDeg = useMemo(() => {
         </div>
 
         {/* Step 2 */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold text-slate-800">Step 2 — Heights & Guides</h2>
+              <h2 className="text-base font-semibold text-slate-800">Step 2 — Heights & Guides</h2>
               <InfoTip side="right">
                 {script === 'Copperplate'
                   ? 'Copperplate uses x-height (mm) with optional calibration for lowercase scale and spacing.'
@@ -1666,13 +1670,13 @@ const slantAngleDeg = useMemo(() => {
           {step2Open && (
             <>
           {/* Top controls */}
-          <div id="guidelines-step-2-content" className="mt-3 space-y-3">
+          <div id="guidelines-step-2-content" className="mt-3 space-y-2">
             {/* Row 1: Script + X-height (keep 2-up on small screens; collapse only on very narrow) */}
             <div className="grid grid-cols-2 max-[420px]:grid-cols-1 gap-3">
               <div>
-                <label className="font-medium text-slate-700">Script</label>
+                <label className="text-sm font-medium text-slate-700">Script</label>
                 <select
-                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300"
                   value={script}
                   onChange={(e) => setScript(e.target.value as ScriptId)}
                 >
@@ -1683,7 +1687,7 @@ const slantAngleDeg = useMemo(() => {
               </div>
 
               <div>
-                <label className="font-medium text-slate-700">
+                <label className="text-sm font-medium text-slate-700">
                   {script === 'Copperplate' ? 'X-height (mm)' : 'x-height (nibs)'}
                 </label>
 
@@ -1693,7 +1697,7 @@ const slantAngleDeg = useMemo(() => {
                     step={0.5}
                     min={2}
                     max={10}
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                    className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300"
                     value={xHeightMMText}
                     onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                     onChange={(e) => setXHeightMMText(e.target.value)}
@@ -1726,7 +1730,7 @@ const slantAngleDeg = useMemo(() => {
                     step={0.5}
                     min={1}
                     max={8}
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                    className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300"
                     value={xNib}
                     onChange={(e) => setXNib(parseFloat(e.target.value || '5'))}
                   />
@@ -1738,9 +1742,9 @@ const slantAngleDeg = useMemo(() => {
               /* Copperplate-only options (unchanged content, just keeps it in the “top controls” zone) */
               <div className="space-y-4 pt-1">
                 <div>
-                  <label className="font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
+                  <label className="text-sm font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
                   <select
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                    className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300"
                     value={copperplateRatioPreset}
                     onChange={(e) => setCopperplateRatioPreset(e.target.value as CopperplateRatioPreset)}
                   >
@@ -1756,12 +1760,12 @@ const slantAngleDeg = useMemo(() => {
                   <div className="grid grid-cols-2 max-[420px]:grid-cols-1 sm:grid-cols-3 gap-3">
                     {/* Desc */}
                     <div>
-                      <label className="font-medium text-slate-700">Desc units</label>
+                      <label className="text-sm font-medium text-slate-700">Desc units</label>
                       <input
                         type="number"
                         min={0}
                         step="0.5"
-                        className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                        className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300"
                         value={copperplateDescUnitsText}
                         onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                         onChange={(e) => {
@@ -1796,12 +1800,12 @@ const slantAngleDeg = useMemo(() => {
 
                     {/* X */}
                     <div>
-                      <label className="font-medium text-slate-700">X units</label>
+                      <label className="text-sm font-medium text-slate-700">X units</label>
                       <input
                         type="number"
                         min={0.5}
                         step="0.5"
-                        className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                        className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300"
                         value={copperplateXUnitsText}
                         onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                         onChange={(e) => {
@@ -1836,12 +1840,12 @@ const slantAngleDeg = useMemo(() => {
 
                     {/* Asc */}
                     <div>
-                      <label className="font-medium text-slate-700">Asc units</label>
+                      <label className="text-sm font-medium text-slate-700">Asc units</label>
                       <input
                         type="number"
                         min={0}
                         step="0.5"
-                        className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                        className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300"
                         value={copperplateAscUnitsText}
                         onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                         onChange={(e) => {
@@ -1890,12 +1894,12 @@ const slantAngleDeg = useMemo(() => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
                     {/* Nib size */}
                     <div>
-                      <label className="font-medium text-slate-700">Nib size (mm)</label>
+                      <label className="text-sm font-medium text-slate-700">Nib size (mm)</label>
                       <input
                         type="number"
                         step="any"
                         min={0.2}
-                        className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                        className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300"
                         value={nibText}
                         onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                         onChange={(e) => setNibText(e.target.value)}
@@ -1923,9 +1927,9 @@ const slantAngleDeg = useMemo(() => {
 
                     {/* Pen angle */}
                     <div>
-                      <label className="font-medium text-slate-700">Pen angle (°)</label>
+                      <label className="text-sm font-medium text-slate-700">Pen angle (°)</label>
                       <select
-                        className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                        className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300"
                         value={penAngleDeg}
                         onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
                       >
@@ -1938,9 +1942,9 @@ const slantAngleDeg = useMemo(() => {
                     {/* Grid width */}
                     {showGridControls ? (
                       <div>
-                        <label className="font-medium text-slate-700">Grid width</label>
+                        <label className="text-sm font-medium text-slate-700">Grid width</label>
                         <select
-                          className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                          className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300"
                           value={gridWidthMode}
                           onChange={(e) => setGridWidthMode(e.target.value as 'effective' | 'actual')}
                         >
@@ -1980,25 +1984,25 @@ const slantAngleDeg = useMemo(() => {
                   {/* Row 3: ascender / descender */}
                   <div className="grid grid-cols-2 max-[420px]:grid-cols-1 gap-3">
                     <div>
-                      <label className="font-medium text-slate-700">Ascender (nibs)</label>
+                      <label className="text-sm font-medium text-slate-700">Ascender (nibs)</label>
                       <input
                         type="number"
                         step={0.5}
                         min={0}
                         max={8}
-                        className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                        className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300"
                         value={ascNib}
                         onChange={(e) => setAscNib(parseFloat(e.target.value || '2'))}
                       />
                     </div>
                     <div>
-                      <label className="font-medium text-slate-700">Descender (nibs)</label>
+                      <label className="text-sm font-medium text-slate-700">Descender (nibs)</label>
                       <input
                         type="number"
                         step={0.5}
                         min={0}
                         max={8}
-                        className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                        className="mt-1 w-full p-1.5 text-sm rounded-lg border border-slate-300"
                         value={descNib}
                         onChange={(e) => setDescNib(parseFloat(e.target.value || '2'))}
                       />
@@ -2012,24 +2016,24 @@ const slantAngleDeg = useMemo(() => {
           <div className="my-3 border-t border-slate-200/70" />
 
           {/* Sliders (unchanged) */}
-          <div className="grid grid-cols-2 max-[520px]:grid-cols-1 gap-4">
+          <div className="grid grid-cols-2 max-[520px]:grid-cols-1 gap-3">
             {script === 'Copperplate' && (
               <>
                 {/* 1st asc/desc dash spacing */}
                 <div>
-                  <div className="flex items-center justify-between">
-                    <label className="font-medium text-slate-700">1st asc/desc spacing</label>
-                    <span className="text-xs text-slate-500">{midlineDashGap.toFixed(1)} mm</span>
+                  <div className="flex items-center gap-3">
+                    <label className="w-32 shrink-0 text-sm font-medium text-slate-700">1st asc/desc spacing</label>
+                    <input
+                      type="range"
+                      min="2"
+                      max="14"
+                      step="0.5"
+                      className="flex-1 min-w-0"
+                      value={midlineDashGap}
+                      onChange={(e) => setMidlineDashGap(parseFloat(e.target.value))}
+                    />
+                    <span className="w-14 shrink-0 text-right text-xs text-slate-500 tabular-nums">{midlineDashGap.toFixed(1)} mm</span>
                   </div>
-                  <input
-                    type="range"
-                    min="2"
-                    max="14"
-                    step="0.5"
-                    className="mt-2 w-full"
-                    value={midlineDashGap}
-                    onChange={(e) => setMidlineDashGap(parseFloat(e.target.value))}
-                  />
                   <p className="mt-1 text-xs text-slate-500">
                     Controls the gap between dashes on the 1st ascender/descender reference lines.
                   </p>
@@ -2037,22 +2041,22 @@ const slantAngleDeg = useMemo(() => {
 
                 {/* 1st asc/desc contrast */}
                 <div>
-                  <div className="flex items-center justify-between">
-                    <label className="font-medium text-slate-700">1st asc/desc contrast</label>
-                    <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : midlineDashContrast) * 100)}%</span>
+                  <div className="flex items-center gap-3">
+                    <label className="w-32 shrink-0 text-sm font-medium text-slate-700">1st asc/desc contrast</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      className="flex-1 min-w-0"
+                      value={highContrastMode ? 1 : midlineDashContrast}
+                      onChange={(e) => {
+                        setMidlineDashContrast(parseFloat(e.target.value));
+                        setHighContrastMode(false);
+                      }}
+                    />
+                    <span className="w-14 shrink-0 text-right text-xs text-slate-500 tabular-nums">{Math.round((highContrastMode ? 1 : midlineDashContrast) * 100)}%</span>
                   </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    className="mt-2 w-full"
-                    value={highContrastMode ? 1 : midlineDashContrast}
-                    onChange={(e) => {
-                      setMidlineDashContrast(parseFloat(e.target.value));
-                      setHighContrastMode(false);
-                    }}
-                  />
                   <p className="mt-1 text-xs text-slate-500">
                     Adjusts only the 1st ascender/descender dashed reference lines.
                   </p>
@@ -2065,7 +2069,7 @@ const slantAngleDeg = useMemo(() => {
     {/* Slant angle */}
     <div className="col-span-2">
       <div className="flex items-center justify-between">
-        <label className="font-medium text-slate-700">Slant angle</label>
+        <label className="text-sm font-medium text-slate-700">Slant angle</label>
         <span className="text-xs text-slate-500">
           {slantAngleDeg}°
         </span>
@@ -2076,7 +2080,7 @@ const slantAngleDeg = useMemo(() => {
           step={1}
           min={0}
           max={90}
-          className="w-full sm:flex-1 p-2 rounded-lg border border-slate-300"
+          className="w-full sm:flex-1 p-1.5 text-sm rounded-lg border border-slate-300"
           value={slantAngleText}
           onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
           onChange={(e) => setSlantAngleText(e.target.value)}
@@ -2116,7 +2120,7 @@ const slantAngleDeg = useMemo(() => {
               step={1}
               min={0}
               max={90}
-              className="w-24 p-2 rounded-lg border border-slate-300"
+              className="w-24 p-1.5 text-sm rounded-lg border border-slate-300"
               value={slantAngle2}
               onChange={(e) => {
                 const v = parseInt(e.target.value, 10);
@@ -2132,43 +2136,39 @@ const slantAngleDeg = useMemo(() => {
 
     {/* Slant spacing */}
     <div>
-      <div className="flex items-center justify-between">
-        <label className="font-medium text-slate-700">Slant spacing</label>
-        <span className="text-xs text-slate-500">
-          {slantSpacingMM.toFixed(1)} mm
-        </span>
+      <div className="flex items-center gap-3">
+        <label className="w-32 shrink-0 text-sm font-medium text-slate-700">Slant spacing</label>
+        <input
+          type="range"
+          min="4"
+          max="30"
+          step="0.5"
+          className="flex-1 min-w-0"
+          value={slantSpacingMM}
+          onChange={(e) => setSlantSpacingMM(parseFloat(e.target.value))}
+        />
+        <span className="w-14 shrink-0 text-right text-xs text-slate-500 tabular-nums">{slantSpacingMM.toFixed(1)} mm</span>
       </div>
-      <input
-        type="range"
-        min="4"
-        max="30"
-        step="0.5"
-        className="mt-2 w-full"
-        value={slantSpacingMM}
-        onChange={(e) => setSlantSpacingMM(parseFloat(e.target.value))}
-      />
     </div>
 
     {/* Slant contrast */}
     <div>
-      <div className="flex items-center justify-between">
-        <label className="font-medium text-slate-700">Slant contrast</label>
-        <span className="text-xs text-slate-500">
-          {Math.round((highContrastMode ? 1 : slantLineContrast) * 100)}%
-        </span>
+      <div className="flex items-center gap-3">
+        <label className="w-32 shrink-0 text-sm font-medium text-slate-700">Slant contrast</label>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          className="flex-1 min-w-0"
+          value={highContrastMode ? 1 : slantLineContrast}
+          onChange={(e) => {
+            setSlantLineContrast(parseFloat(e.target.value));
+            setHighContrastMode(false);
+          }}
+        />
+        <span className="w-14 shrink-0 text-right text-xs text-slate-500 tabular-nums">{Math.round((highContrastMode ? 1 : slantLineContrast) * 100)}%</span>
       </div>
-      <input
-        type="range"
-        min="0"
-        max="1"
-        step="0.01"
-        className="mt-2 w-full"
-        value={highContrastMode ? 1 : slantLineContrast}
-        onChange={(e) => {
-          setSlantLineContrast(parseFloat(e.target.value));
-          setHighContrastMode(false);
-        }}
-      />
     </div>
   </>
 )}
@@ -2178,42 +2178,42 @@ const slantAngleDeg = useMemo(() => {
             {showGridControls && (
               <>
                 <div>
-                  <div className="flex items-center justify-between">
-                    <label className="font-medium text-slate-700">Grid contrast</label>
-                    <span className="text-xs text-slate-500">{Math.round(gridContrast * 100)}%</span>
+                  <div className="flex items-center gap-3">
+                    <label className="w-32 shrink-0 text-sm font-medium text-slate-700">Grid contrast</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      className="flex-1 min-w-0"
+                      value={gridContrast}
+                      onChange={(e) => {
+                        setGridContrast(parseFloat(e.target.value));
+                        setHighContrastMode(false);
+                      }}
+                    />
+                    <span className="w-14 shrink-0 text-right text-xs text-slate-500 tabular-nums">{Math.round(gridContrast * 100)}%</span>
                   </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    className="mt-2 w-full"
-                    value={gridContrast}
-                    onChange={(e) => {
-                      setGridContrast(parseFloat(e.target.value));
-                      setHighContrastMode(false);
-                    }}
-                  />
                   <p className="mt-1 text-xs text-slate-500">Controls the contrast of the square grid only.</p>
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between">
-                    <label className="font-medium text-slate-700">Grid thickness</label>
-                    <span className="text-xs text-slate-500">{gridThickness.toFixed(2)}×</span>
+                  <div className="flex items-center gap-3">
+                    <label className="w-32 shrink-0 text-sm font-medium text-slate-700">Grid thickness</label>
+                    <input
+                      type="range"
+                      min="0.6"
+                      max="1.4"
+                      step="0.05"
+                      className="flex-1 min-w-0"
+                      value={gridThickness}
+                      onChange={(e) => {
+                        setGridThickness(parseFloat(e.target.value));
+                        setHighContrastMode(false);
+                      }}
+                    />
+                    <span className="w-14 shrink-0 text-right text-xs text-slate-500 tabular-nums">{gridThickness.toFixed(2)}×</span>
                   </div>
-                  <input
-                    type="range"
-                    min="0.6"
-                    max="1.4"
-                    step="0.05"
-                    className="mt-2 w-full"
-                    value={gridThickness}
-                    onChange={(e) => {
-                      setGridThickness(parseFloat(e.target.value));
-                      setHighContrastMode(false);
-                    }}
-                  />
                   <p className="mt-1 text-xs text-slate-500">Multiplies the square grid stroke thickness.</p>
                 </div>
               </>
@@ -2221,7 +2221,7 @@ const slantAngleDeg = useMemo(() => {
           </div>
 
           {showGridControls && (
-            <div className="mt-3 grid grid-cols-2 max-[520px]:grid-cols-1 gap-4">
+            <div className="mt-3 grid grid-cols-2 max-[520px]:grid-cols-1 gap-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-medium text-slate-700">Horizontal grid lines</div>
                 <button
@@ -2267,6 +2267,8 @@ const slantAngleDeg = useMemo(() => {
           )}
             </>
           )}
+        </div>
+        </div>
         </div>
 
       </section>
