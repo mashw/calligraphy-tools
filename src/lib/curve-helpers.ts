@@ -9,7 +9,8 @@ export type CurvePresetId =
   | 'highArch'
   | 'shallowArch'
   | 'compoundArch'
-  | 'zanerian';
+  | 'zanerian'
+  | 'snakey';
 export type Orientation = 'portrait' | 'landscape';
 
 export type Pt = { x: number; y: number };
@@ -383,6 +384,15 @@ c511.68,0.09,921.06,114.74,1232.21,262.13,
 311.28,147.45,704.48,-28.67,704.48,-28.67
 `;
 
+export const SNAKEY_SVG_PATH_D = `
+M0,130
+C140,70 280,190 420,130
+S700,70 840,130
+S1120,190 1260,130
+S1540,70 1680,130
+S1960,190 2100,130
+`;
+
 /* ---------------- Curve presets + transforms ---------------- */
 
 export function buildPreset(id: CurvePresetId, box: { w: number; h: number }): PtCubic {
@@ -448,6 +458,54 @@ export function buildPreset(id: CurvePresetId, box: { w: number; h: number }): P
       };
     }
     // If parsing somehow fails, fall through to simpleArch as a safe default.
+  }
+
+  if (id === 'snakey') {
+    const parsed = parseSvgPath(SNAKEY_SVG_PATH_D);
+    if (parsed.ok) {
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+
+      for (const s of parsed.segs) {
+        for (let j = 0; j < s.length; j += 2) {
+          const x = s[j];
+          const y = s[j + 1];
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+
+      const w = Math.max(1, maxX - minX);
+      const h = Math.max(1, maxY - minY);
+      const scale = (box.w * 0.86) / w;
+      const offX = (box.w - w * scale) / 2 - minX * scale;
+      const midY = box.h * 0.44;
+
+      const segs: Seg[] = parsed.segs.map(s => {
+        const map = (x: number, y: number): Pt => ({
+          x: x * scale + offX,
+          y: y * scale + (midY - (h * scale) * 0.5),
+        });
+        const p0 = map(s[0], s[1]);
+        const p1 = map(s[2], s[3]);
+        const p2 = map(s[4], s[5]);
+        const p3 = map(s[6], s[7]);
+        return [p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y];
+      });
+
+      const s0 = segs[0];
+      return {
+        p0: { x: s0[0], y: s0[1] },
+        p1: { x: s0[2], y: s0[3] },
+        p2: { x: s0[4], y: s0[5] },
+        p3: { x: s0[6], y: s0[7] },
+        _extraSegs: segs,
+      };
+    }
   }
 
   // Other presets (same as before)
