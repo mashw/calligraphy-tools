@@ -9,6 +9,7 @@ import {
   sample,
   lengthPoly,
   pointAt,
+  offset,
   buildPreset,
   transformCubic,
 } from '@/lib/curve-helpers';
@@ -26,7 +27,7 @@ import { buildGuideSet, BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/guide-te
 import GuideOverlay from '@/components/preview/GuideOverlay';
 
 type PaperId = keyof typeof PAPERS_MM;
-type CurvePresetId = 'simpleArch' | 'highArch' | 'shallowArch' | 'compoundArch' | 'zanerian';
+type CurvePresetId = 'simpleArch' | 'highArch' | 'shallowArch' | 'compoundArch' | 'zanerian' | 'snakey';
 type Orientation = 'portrait' | 'landscape';
 type AlignMode = 'start' | 'center' | 'end';
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
@@ -396,6 +397,10 @@ export default function CurvedTitlePage() {
   const [xHeightMM, setXHeightMM] = useState(6);
   const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
   const [nibText, setNibText] = useState('2');
+  const [addTopCurve, setAddTopCurve] = useState(false);
+  const [addBottomCurve, setAddBottomCurve] = useState(false);
+  const [topNibText, setTopNibText] = useState('2');
+  const [bottomNibText, setBottomNibText] = useState('2');
   const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>('2:1:2');
   const [copperplateDescUnitsText, setCopperplateDescUnitsText] = useState('2');
   const [copperplateXUnitsText, setCopperplateXUnitsText] = useState('1');
@@ -408,6 +413,14 @@ export default function CurvedTitlePage() {
     const v = parseFloat(nibText);
     return Number.isFinite(v) ? v : 2;
   }, [nibText]);
+  const topNibMM = useMemo(() => {
+    const v = parseFloat(topNibText);
+    return Number.isFinite(v) ? v : 2;
+  }, [topNibText]);
+  const bottomNibMM = useMemo(() => {
+    const v = parseFloat(bottomNibText);
+    return Number.isFinite(v) ? v : 2;
+  }, [bottomNibText]);
   const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
 
@@ -737,6 +750,50 @@ export default function CurvedTitlePage() {
     [script, xMM, effectiveNibMM],
   );
 
+  const topGuideMetrics = useMemo(() => {
+    if (!addTopCurve) return null;
+
+    const topEffectiveNibMM = script === 'Copperplate'
+      ? topNibMM
+      : topNibMM * Math.cos((penAngleDeg * Math.PI) / 180);
+    const heights = script === 'Copperplate'
+      ? copperplateHeights
+      : { xMM: xNib * topNibMM, ascMM: ascNib * topNibMM, descMM: descNib * topNibMM };
+    const topBaseline = offset(baseline, -(xMM + ascMM) - heights.descMM);
+    const tickStepTop = script === 'Copperplate' ? Math.max(heights.xMM * 0.9, 3) : topEffectiveNibMM;
+
+    return {
+      baseline: topBaseline,
+      xMM: heights.xMM,
+      ascMM: heights.ascMM,
+      descMM: heights.descMM,
+      tickStepMM: tickStepTop,
+      nibMM: topNibMM,
+    };
+  }, [addTopCurve, script, topNibMM, penAngleDeg, copperplateHeights, xNib, ascNib, descNib, baseline, xMM, ascMM]);
+
+  const bottomGuideMetrics = useMemo(() => {
+    if (!addBottomCurve) return null;
+
+    const bottomEffectiveNibMM = script === 'Copperplate'
+      ? bottomNibMM
+      : bottomNibMM * Math.cos((penAngleDeg * Math.PI) / 180);
+    const heights = script === 'Copperplate'
+      ? copperplateHeights
+      : { xMM: xNib * bottomNibMM, ascMM: ascNib * bottomNibMM, descMM: descNib * bottomNibMM };
+    const bottomBaseline = offset(baseline, descMM + (heights.xMM + heights.ascMM));
+    const tickStepBottom = script === 'Copperplate' ? Math.max(heights.xMM * 0.9, 3) : bottomEffectiveNibMM;
+
+    return {
+      baseline: bottomBaseline,
+      xMM: heights.xMM,
+      ascMM: heights.ascMM,
+      descMM: heights.descMM,
+      tickStepMM: tickStepBottom,
+      nibMM: bottomNibMM,
+    };
+  }, [addBottomCurve, script, bottomNibMM, penAngleDeg, copperplateHeights, xNib, ascNib, descNib, baseline, descMM]);
+
 
 
 
@@ -855,6 +912,32 @@ export default function CurvedTitlePage() {
       }),
     [baseline, guideTemplate, xMM, ascMM, descMM, tickStepMM, nibMM, span],
   );
+
+  const topGuideSet = useMemo(() => {
+    if (!topGuideMetrics) return null;
+    return buildGuideSet(guideTemplate, {
+      baseline: topGuideMetrics.baseline,
+      xMM: topGuideMetrics.xMM,
+      ascMM: topGuideMetrics.ascMM,
+      descMM: topGuideMetrics.descMM,
+      tickStepMM: topGuideMetrics.tickStepMM,
+      tickAnchorS: span ? span.sStart : undefined,
+      actualNibMM: topGuideMetrics.nibMM,
+    });
+  }, [topGuideMetrics, guideTemplate, span]);
+
+  const bottomGuideSet = useMemo(() => {
+    if (!bottomGuideMetrics) return null;
+    return buildGuideSet(guideTemplate, {
+      baseline: bottomGuideMetrics.baseline,
+      xMM: bottomGuideMetrics.xMM,
+      ascMM: bottomGuideMetrics.ascMM,
+      descMM: bottomGuideMetrics.descMM,
+      tickStepMM: bottomGuideMetrics.tickStepMM,
+      tickAnchorS: span ? span.sStart : undefined,
+      actualNibMM: bottomGuideMetrics.nibMM,
+    });
+  }, [bottomGuideMetrics, guideTemplate, span]);
 
 
 
@@ -1474,6 +1557,26 @@ export default function CurvedTitlePage() {
 
               <g clipPath="url(#pageClip)">
                 {/* Guides */}
+                {topGuideSet && (
+                  <GuideOverlay
+                    guideSet={topGuideSet}
+                    style={{
+                      thin: swBold,
+                      bold: swBold,
+                      colors: {
+                        thin: isCurveDragging ? '#7c3aed' : '#111827',
+                        bold: isCurveDragging ? '#7c3aed' : '#111827',
+                        tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
+                        frame: '#cbd5e1',
+                      },
+                    }}
+                    interactive={{
+                      onGuidePointerDown,
+                      hitStrokeWidthMM: Math.max(8, swBold * 8),
+                    }}
+                  />
+                )}
+
                 <GuideOverlay
                   guideSet={guideSet}
                   style={{
@@ -1491,6 +1594,26 @@ export default function CurvedTitlePage() {
                     hitStrokeWidthMM: Math.max(8, swBold * 8),
                   }}
                 />
+
+                {bottomGuideSet && (
+                  <GuideOverlay
+                    guideSet={bottomGuideSet}
+                    style={{
+                      thin: swBold,
+                      bold: swBold,
+                      colors: {
+                        thin: isCurveDragging ? '#7c3aed' : '#111827',
+                        bold: isCurveDragging ? '#7c3aed' : '#111827',
+                        tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
+                        frame: '#cbd5e1',
+                      },
+                    }}
+                    interactive={{
+                      onGuidePointerDown,
+                      hitStrokeWidthMM: Math.max(8, swBold * 8),
+                    }}
+                  />
+                )}
 
                 {showSpanFill && spanPoly && (
                   <>
@@ -1672,7 +1795,73 @@ export default function CurvedTitlePage() {
                 <option value="shallowArch">Shallow Arch</option>
                 <option value="compoundArch">Compound Arch</option>
                 <option value="zanerian">Zanerian Resolution</option>
+                <option value="snakey">Snakey / wavy</option>
               </select>
+            </div>
+
+            <div className="sm:col-span-2 rounded-lg border border-slate-200 p-3 space-y-3">
+              <div className="text-sm font-medium text-slate-700">Secondary guide curves</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                    checked={addTopCurve}
+                    onChange={e => setAddTopCurve(e.target.checked)}
+                  />
+                  Add top curve
+                </label>
+                <div>
+                  <label className="font-medium text-slate-700">Top nib (mm)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    min={0.2}
+                    disabled={!addTopCurve}
+                    className="mt-1 w-full p-2 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                    value={topNibText}
+                    onChange={(e) => setTopNibText(e.target.value)}
+                    onBlur={() => {
+                      const v = parseFloat(topNibText);
+                      if (!Number.isFinite(v)) {
+                        setTopNibText('2');
+                        return;
+                      }
+                      setTopNibText(String(Math.max(0.2, v)));
+                    }}
+                  />
+                </div>
+
+                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                    checked={addBottomCurve}
+                    onChange={e => setAddBottomCurve(e.target.checked)}
+                  />
+                  Add bottom curve
+                </label>
+                <div>
+                  <label className="font-medium text-slate-700">Bottom nib (mm)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    min={0.2}
+                    disabled={!addBottomCurve}
+                    className="mt-1 w-full p-2 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                    value={bottomNibText}
+                    onChange={(e) => setBottomNibText(e.target.value)}
+                    onBlur={() => {
+                      const v = parseFloat(bottomNibText);
+                      if (!Number.isFinite(v)) {
+                        setBottomNibText('2');
+                        return;
+                      }
+                      setBottomNibText(String(Math.max(0.2, v)));
+                    }}
+                  />
+                </div>
+              </div>
             </div>
 
             <div>
