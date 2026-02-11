@@ -1424,8 +1424,8 @@ const slantAngleDeg = useMemo(() => {
 
           <div className="grid grid-cols-2 gap-y-4 gap-x-10 mt-4">
             <div className="flex items-center gap-3">
-              <label className="w-28 font-medium text-slate-700">Top margin</label>
-              <div className="relative w-24">
+              <label className="w-28 shrink-0 font-medium text-slate-700">Top margin</label>
+              <div className="relative flex-1 min-w-0">
                 <input
                   type="number"
                   step="0.5"
@@ -1439,8 +1439,8 @@ const slantAngleDeg = useMemo(() => {
             </div>
 
             <div className="flex items-center gap-3">
-              <label className="w-28 font-medium text-slate-700">Bottom margin</label>
-              <div className="relative w-24">
+              <label className="w-28 shrink-0 font-medium text-slate-700">Bottom margin</label>
+              <div className="relative flex-1 min-w-0">
                 <input
                   type="number"
                   step="0.5"
@@ -1454,8 +1454,8 @@ const slantAngleDeg = useMemo(() => {
             </div>
 
             <div className="flex items-center gap-3">
-              <label className="w-28 font-medium text-slate-700">Left margin</label>
-              <div className="relative w-24">
+              <label className="w-28 shrink-0 font-medium text-slate-700">Left margin</label>
+              <div className="relative flex-1 min-w-0">
                 <input
                   type="number"
                   step="0.5"
@@ -1469,8 +1469,8 @@ const slantAngleDeg = useMemo(() => {
             </div>
 
             <div className="flex items-center gap-3">
-              <label className="w-28 font-medium text-slate-700">Right margin</label>
-              <div className="relative w-24">
+              <label className="w-28 shrink-0 font-medium text-slate-700">Right margin</label>
+              <div className="relative flex-1 min-w-0">
                 <input
                   type="number"
                   step="0.5"
@@ -1661,68 +1661,71 @@ const slantAngleDeg = useMemo(() => {
           <div className="mt-3 space-y-3">
             {/* Row 1: Script + X-height (keep 2-up on small screens; collapse only on very narrow) */}
             <div className="grid grid-cols-2 max-[420px]:grid-cols-1 gap-3">
-              <div className="flex items-center justify-between gap-3">
-                <label className="font-medium text-slate-700">Script</label>
-                <select
-                  className="w-40 p-2 rounded-lg border border-slate-300"
-                  value={script}
-                  onChange={(e) => setScript(e.target.value as ScriptId)}
-                >
-                  <option value="Copperplate">Copperplate</option>
-                  <option value="Fraktur">Fraktur</option>
-                  <option value="TexturaQuadrata">Textura Quadrata</option>
-                </select>
+              <div className="flex items-center gap-3">
+                <label className="w-28 shrink-0 font-medium text-slate-700">Script</label>
+                <div className="flex-1 min-w-0">
+                  <select
+                    className="w-full p-2 rounded-lg border border-slate-300"
+                    value={script}
+                    onChange={(e) => setScript(e.target.value as ScriptId)}
+                  >
+                    <option value="Copperplate">Copperplate</option>
+                    <option value="Fraktur">Fraktur</option>
+                    <option value="TexturaQuadrata">Textura Quadrata</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="flex items-center justify-between gap-3">
-                <label className="font-medium text-slate-700">
+              <div className="flex items-center gap-3">
+                <label className="w-28 shrink-0 font-medium text-slate-700">
                   {script === 'Copperplate' ? 'X-height (mm)' : 'x-height (nibs)'}
                 </label>
 
-                {script === 'Copperplate' ? (
-                  <input
-                    type="number"
-                    step={0.5}
-                    min={2}
-                    max={10}
-                    className="w-24 p-2 rounded-lg border border-slate-300"
-                    value={xHeightMMText}
-                    onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-                    onChange={(e) => setXHeightMMText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-                      e.preventDefault();
+                <div className="flex-1 min-w-0">
+                  {script === 'Copperplate' ? (
+                    <input
+                      type="number"
+                      step={0.5}
+                      min={2}
+                      max={10}
+                      className="w-full p-2 rounded-lg border border-slate-300"
+                      value={xHeightMMText}
+                      onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                      onChange={(e) => setXHeightMMText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                        e.preventDefault();
 
-                      const current = parseFloat(xHeightMMText);
-                      const safe = Number.isFinite(current) ? current : 6;
-                      const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+                        const current = parseFloat(xHeightMMText);
+                        const safe = Number.isFinite(current) ? current : 6;
+                        const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
 
-                      const stepped = stepHalfFrom(safe, dir);
-                      const clamped = clamp(stepped, 2, 10);
-                      setXHeightMMText(String(clamped));
-                    }}
-                    onBlur={() => {
-                      const v = parseFloat(xHeightMMText);
-                      if (!Number.isFinite(v)) {
-                        setXHeightMMText('6');
-                        return;
-                      }
-                      // Keep manual entries as-is (no snapping), just clamp to allowed range:
-                      setXHeightMMText(String(clamp(v, 2, 10)));
-                    }}
-                  />
-                ) : (
-
-                  <input
-                    type="number"
-                    step={0.5}
-                    min={1}
-                    max={8}
-                    className="w-24 p-2 rounded-lg border border-slate-300"
-                    value={xNib}
-                    onChange={(e) => setXNib(parseFloat(e.target.value || '5'))}
-                  />
-                )}
+                        const stepped = stepHalfFrom(safe, dir);
+                        const clamped = clamp(stepped, 2, 10);
+                        setXHeightMMText(String(clamped));
+                      }}
+                      onBlur={() => {
+                        const v = parseFloat(xHeightMMText);
+                        if (!Number.isFinite(v)) {
+                          setXHeightMMText('6');
+                          return;
+                        }
+                        // Keep manual entries as-is (no snapping), just clamp to allowed range:
+                        setXHeightMMText(String(clamp(v, 2, 10)));
+                      }}
+                    />
+                  ) : (
+                    <input
+                      type="number"
+                      step={0.5}
+                      min={1}
+                      max={8}
+                      className="w-full p-2 rounded-lg border border-slate-300"
+                      value={xNib}
+                      onChange={(e) => setXNib(parseFloat(e.target.value || '5'))}
+                    />
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1730,18 +1733,20 @@ const slantAngleDeg = useMemo(() => {
               /* Copperplate-only options (unchanged content, just keeps it in the “top controls” zone) */
               <div className="space-y-4 pt-1">
                 <div>
-                  <div className="flex items-center justify-between gap-3">
-                    <label className="font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
-                    <select
-                      className="w-40 p-2 rounded-lg border border-slate-300"
-                      value={copperplateRatioPreset}
-                      onChange={(e) => setCopperplateRatioPreset(e.target.value as CopperplateRatioPreset)}
-                    >
-                      <option value="2:1:2">2 : 1 : 2</option>
-                      <option value="3:2:3">3 : 2 : 3</option>
-                      <option value="1:1:1">1 : 1 : 1</option>
-                      <option value="custom">Custom…</option>
-                    </select>
+                  <div className="flex items-center gap-3">
+                    <label className="w-28 shrink-0 font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
+                    <div className="flex-1 min-w-0">
+                      <select
+                        className="w-full p-2 rounded-lg border border-slate-300"
+                        value={copperplateRatioPreset}
+                        onChange={(e) => setCopperplateRatioPreset(e.target.value as CopperplateRatioPreset)}
+                      >
+                        <option value="2:1:2">2 : 1 : 2</option>
+                        <option value="3:2:3">3 : 2 : 3</option>
+                        <option value="1:1:1">1 : 1 : 1</option>
+                        <option value="custom">Custom…</option>
+                      </select>
+                    </div>
                   </div>
                   <p className="mt-1 text-[11px] text-slate-400">Ascender/descender scale from x-height.</p>
                 </div>
@@ -2062,9 +2067,9 @@ const slantAngleDeg = useMemo(() => {
 
     {/* Slant angle */}
     <div>
-      <div className="flex items-center justify-between gap-3">
-        <label className="font-medium text-slate-700">Slant angle</label>
-        <div className="relative w-24">
+      <div className="flex items-center gap-3">
+        <label className="w-28 shrink-0 font-medium text-slate-700">Slant angle</label>
+        <div className="relative flex-1 min-w-0">
           <input
             type="number"
             step={1}
@@ -2098,8 +2103,8 @@ const slantAngleDeg = useMemo(() => {
     </div>
 
     <div>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
+        <div className="w-28 shrink-0 flex items-center gap-2">
           <label className="font-medium text-slate-700">Slant 2</label>
           <input
             type="checkbox"
@@ -2107,7 +2112,7 @@ const slantAngleDeg = useMemo(() => {
             onChange={(e) => setEnableSlant2(e.target.checked)}
           />
         </div>
-        <div className="relative w-24">
+        <div className="relative flex-1 min-w-0">
           <input
             type="number"
             step={1}
