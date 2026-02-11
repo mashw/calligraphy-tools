@@ -1130,11 +1130,11 @@ const slantAngleDeg = useMemo(() => {
         </div>
       </header>
 
-      <section className="px-6 pb-6 flex-1">
-        <div className="max-w-[1120px] mx-auto h-full">
-          <div className="flex flex-col md:flex-row gap-6 h-full items-stretch">
+      <section className="px-6 pb-6 flex-1 min-h-0">
+        <div className="max-w-[1440px] w-full mx-auto h-full">
+          <div className="flex flex-col md:flex-row gap-6 h-full items-stretch min-h-0">
             {/* Preview */}
-            <div className="order-1 md:order-3 bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5 flex flex-col h-full min-h-0 md:w-1/3">
+            <div className="order-1 md:order-3 bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5 flex flex-col min-h-0 md:flex-[1.35_1_0] md:min-w-[440px]">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
@@ -1373,8 +1373,8 @@ const slantAngleDeg = useMemo(() => {
             </div>
 
             {/* Step 1 */}
-            <div className="order-2 md:order-1 bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5 flex flex-col h-full min-h-0 md:w-1/3">
-              <div className="min-h-0 overflow-auto">
+            <div className="order-2 md:order-1 bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5 flex flex-col min-h-0 md:flex-[1_1_0] md:min-w-[360px]">
+              <div className="flex-1 min-h-0 overflow-auto">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold text-slate-800">Step 1 — Basics</h2>
             <InfoTip side="right">Guidelines are spaced by x-height + ascender + descender.</InfoTip>
@@ -1650,8 +1650,8 @@ const slantAngleDeg = useMemo(() => {
         </div>
 
             {/* Step 2 */}
-            <div className="order-3 md:order-2 bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5 flex flex-col h-full min-h-0 md:w-1/3">
-              <div className="min-h-0 overflow-auto">
+            <div className="order-3 md:order-2 bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5 flex flex-col min-h-0 md:flex-[1_1_0] md:min-w-[360px]">
+              <div className="flex-1 min-h-0 overflow-auto">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold text-slate-800">Step 2 — Heights & Guides</h2>
             <InfoTip side="right">
