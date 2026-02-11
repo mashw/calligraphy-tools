@@ -1484,19 +1484,19 @@ const slantAngleDeg = useMemo(() => {
             </div>
 
             <div className="col-span-2">
-              <div className="my-3 border-t border-slate-200/70" />
+              <div className="my-2 border-t border-slate-200/70" />
             </div>
 
             <div className="col-span-2">
               <div className="grid grid-cols-3 gap-4">
                 {/* Baseline */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-slate-700">Baseline</div>
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 text-sm font-medium text-slate-700">Baseline</div>
                   <button
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => setShowBaselineIndicator(v => !v)}
-                    className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+                    className={`shrink-0 inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
         ${showBaselineIndicator
                         ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                         : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
@@ -1510,8 +1510,8 @@ const slantAngleDeg = useMemo(() => {
                 </div>
 
                 {/* High-contrast */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-slate-700">High-contrast</div>
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 text-sm font-medium text-slate-700">High-contrast</div>
                   <button
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
@@ -1528,7 +1528,7 @@ const slantAngleDeg = useMemo(() => {
                         return next;
                       });
                     }}
-                    className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+                    className={`shrink-0 inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
         ${highContrastMode
                         ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                         : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
@@ -1542,13 +1542,13 @@ const slantAngleDeg = useMemo(() => {
                 </div>
 
                 {/* Center */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-slate-700">Center</div>
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 text-sm font-medium text-slate-700">Center</div>
                   <button
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => setShowCenterLine(v => !v)}
-                    className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+                    className={`shrink-0 inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
         ${showCenterLine
                         ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                         : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
