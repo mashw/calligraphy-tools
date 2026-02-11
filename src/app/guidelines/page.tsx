@@ -461,6 +461,8 @@ const slantAngleDeg = useMemo(() => {
   const [showNibAngleGuide, setShowNibAngleGuide] = useState(true);
   const [highContrastMode, setHighContrastMode] = useState(false);
   const [showCenterLine, setShowCenterLine] = useState(false);
+  const [step1Open, setStep1Open] = useState(true);
+  const [step2Open, setStep2Open] = useState(true);
 
 
   const midY = (a: Pt[], b: Pt[]) => (a[0].y + b[0].y) / 2;
@@ -1114,13 +1116,12 @@ const slantAngleDeg = useMemo(() => {
   const centerX = margins.left + (box.w - margins.left - margins.right) / 2;
 
   return (
-    <main className="min-h-screen text-slate-900 relative">
-      {/* FULL-VIEWPORT “PAINT OVER” LAYER */}
-      <div className="fixed inset-0 -z-10 bg-slate-100" style={{ backgroundImage: 'none' }} />
+    <main className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="mx-auto max-w-7xl px-4 py-5">
 
       {/* Header */}
-      <header className="px-6 pt-8 pb-4">
-        <div className="max-w-[1120px] mx-auto">
+      <header className="pt-2 pb-2">
+        <div>
           <h1 className="text-3xl font-semibold tracking-tight">
             Calligraphy Tools <span className="text-indigo-600">— Guideline Generator</span>
           </h1>
@@ -1130,9 +1131,11 @@ const slantAngleDeg = useMemo(() => {
         </div>
       </header>
 
+      <div className="mt-4 grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-4">
+
       {/* Preview */}
-      <section className="px-6">
-        <div className="max-w-[1120px] mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4">
+      <section className="lg:order-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div>
           <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
@@ -1370,15 +1373,28 @@ const slantAngleDeg = useMemo(() => {
       </section>
 
       {/* Controls */}
-      <section className="px-6 py-5 max-w-[1120px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <section className="lg:order-1 space-y-4">
         {/* Step 1 */}
-        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-slate-800">Step 1 — Basics</h2>
-            <InfoTip side="right">Guidelines are spaced by x-height + ascender + descender.</InfoTip>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-slate-800">Step 1 — Basics</h2>
+              <InfoTip side="right">Guidelines are spaced by x-height + ascender + descender.</InfoTip>
+            </div>
+            <button
+              type="button"
+              onClick={() => setStep1Open((v) => !v)}
+              className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              aria-expanded={step1Open}
+              aria-controls="guidelines-step-1-content"
+            >
+              {step1Open ? 'Collapse' : 'Expand'}
+            </button>
           </div>
 
-          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-4">
+          {step1Open && (
+            <>
+            <div id="guidelines-step-1-content" className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-4">
             <div className="col-span-2 sm:col-span-1">
               <label className="font-medium text-slate-700">Paper size</label>
               <select
@@ -1621,21 +1637,36 @@ const slantAngleDeg = useMemo(() => {
 
 
           </div>
+            </>
+          )}
         </div>
 
         {/* Step 2 */}
-        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-slate-800">Step 2 — Heights & Guides</h2>
-            <InfoTip side="right">
-              {script === 'Copperplate'
-                ? 'Copperplate uses x-height (mm) with optional calibration for lowercase scale and spacing.'
-                : 'Heights are nibs × nib size (mm).'}
-            </InfoTip>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-slate-800">Step 2 — Heights & Guides</h2>
+              <InfoTip side="right">
+                {script === 'Copperplate'
+                  ? 'Copperplate uses x-height (mm) with optional calibration for lowercase scale and spacing.'
+                  : 'Heights are nibs × nib size (mm).'}
+              </InfoTip>
+            </div>
+            <button
+              type="button"
+              onClick={() => setStep2Open((v) => !v)}
+              className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              aria-expanded={step2Open}
+              aria-controls="guidelines-step-2-content"
+            >
+              {step2Open ? 'Collapse' : 'Expand'}
+            </button>
           </div>
 
+          {step2Open && (
+            <>
           {/* Top controls */}
-          <div className="mt-3 space-y-3">
+          <div id="guidelines-step-2-content" className="mt-3 space-y-3">
             {/* Row 1: Script + X-height (keep 2-up on small screens; collapse only on very narrow) */}
             <div className="grid grid-cols-2 max-[420px]:grid-cols-1 gap-3">
               <div>
@@ -2234,9 +2265,13 @@ const slantAngleDeg = useMemo(() => {
               </div>
             </div>
           )}
+            </>
+          )}
         </div>
 
       </section>
+      </div>
+      </div>
     </main>
   );
 }
