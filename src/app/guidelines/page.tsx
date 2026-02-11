@@ -1423,8 +1423,8 @@ const slantAngleDeg = useMemo(() => {
           <div className="my-3 border-t border-slate-200/70" />
 
           <div className="grid grid-cols-2 gap-y-4 gap-x-10 mt-4">
-            <div className="flex items-center justify-between gap-3">
-              <label className="font-medium text-slate-700">Top margin</label>
+            <div className="flex items-center gap-3">
+              <label className="w-28 font-medium text-slate-700">Top margin</label>
               <div className="relative w-24">
                 <input
                   type="number"
@@ -1438,8 +1438,8 @@ const slantAngleDeg = useMemo(() => {
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-3">
-              <label className="font-medium text-slate-700">Bottom margin</label>
+            <div className="flex items-center gap-3">
+              <label className="w-28 font-medium text-slate-700">Bottom margin</label>
               <div className="relative w-24">
                 <input
                   type="number"
@@ -1453,8 +1453,8 @@ const slantAngleDeg = useMemo(() => {
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-3">
-              <label className="font-medium text-slate-700">Left margin</label>
+            <div className="flex items-center gap-3">
+              <label className="w-28 font-medium text-slate-700">Left margin</label>
               <div className="relative w-24">
                 <input
                   type="number"
@@ -1468,8 +1468,8 @@ const slantAngleDeg = useMemo(() => {
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-3">
-              <label className="font-medium text-slate-700">Right margin</label>
+            <div className="flex items-center gap-3">
+              <label className="w-28 font-medium text-slate-700">Right margin</label>
               <div className="relative w-24">
                 <input
                   type="number"
@@ -1661,10 +1661,10 @@ const slantAngleDeg = useMemo(() => {
           <div className="mt-3 space-y-3">
             {/* Row 1: Script + X-height (keep 2-up on small screens; collapse only on very narrow) */}
             <div className="grid grid-cols-2 max-[420px]:grid-cols-1 gap-3">
-              <div>
+              <div className="flex items-center justify-between gap-3">
                 <label className="font-medium text-slate-700">Script</label>
                 <select
-                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  className="w-40 p-2 rounded-lg border border-slate-300"
                   value={script}
                   onChange={(e) => setScript(e.target.value as ScriptId)}
                 >
@@ -1674,7 +1674,7 @@ const slantAngleDeg = useMemo(() => {
                 </select>
               </div>
 
-              <div>
+              <div className="flex items-center justify-between gap-3">
                 <label className="font-medium text-slate-700">
                   {script === 'Copperplate' ? 'X-height (mm)' : 'x-height (nibs)'}
                 </label>
@@ -1685,7 +1685,7 @@ const slantAngleDeg = useMemo(() => {
                     step={0.5}
                     min={2}
                     max={10}
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                    className="w-24 p-2 rounded-lg border border-slate-300"
                     value={xHeightMMText}
                     onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                     onChange={(e) => setXHeightMMText(e.target.value)}
@@ -1718,7 +1718,7 @@ const slantAngleDeg = useMemo(() => {
                     step={0.5}
                     min={1}
                     max={8}
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                    className="w-24 p-2 rounded-lg border border-slate-300"
                     value={xNib}
                     onChange={(e) => setXNib(parseFloat(e.target.value || '5'))}
                   />
@@ -1730,17 +1730,19 @@ const slantAngleDeg = useMemo(() => {
               /* Copperplate-only options (unchanged content, just keeps it in the “top controls” zone) */
               <div className="space-y-4 pt-1">
                 <div>
-                  <label className="font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
-                  <select
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                    value={copperplateRatioPreset}
-                    onChange={(e) => setCopperplateRatioPreset(e.target.value as CopperplateRatioPreset)}
-                  >
-                    <option value="2:1:2">2 : 1 : 2</option>
-                    <option value="3:2:3">3 : 2 : 3</option>
-                    <option value="1:1:1">1 : 1 : 1</option>
-                    <option value="custom">Custom…</option>
-                  </select>
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
+                    <select
+                      className="w-40 p-2 rounded-lg border border-slate-300"
+                      value={copperplateRatioPreset}
+                      onChange={(e) => setCopperplateRatioPreset(e.target.value as CopperplateRatioPreset)}
+                    >
+                      <option value="2:1:2">2 : 1 : 2</option>
+                      <option value="3:2:3">3 : 2 : 3</option>
+                      <option value="1:1:1">1 : 1 : 1</option>
+                      <option value="custom">Custom…</option>
+                    </select>
+                  </div>
                   <p className="mt-1 text-[11px] text-slate-400">Ascender/descender scale from x-height.</p>
                 </div>
 
