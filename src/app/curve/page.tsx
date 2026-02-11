@@ -424,8 +424,8 @@ export default function CurvedTitlePage() {
   const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
 
-  const [ascNib, setAscNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.ascNib);
-  const [descNib, setDescNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.descNib);
+  const [ascNib, setAscNib] = useState(2);
+  const [descNib, setDescNib] = useState(2);
 
   const [useCalibration, setUseCalibration] = useState(false);
   const [calWordLowerMM, setCalWordLowerMM] = useState('');
@@ -1799,71 +1799,6 @@ export default function CurvedTitlePage() {
               </select>
             </div>
 
-            <div className="sm:col-span-2 rounded-lg border border-slate-200 p-3 space-y-3">
-              <div className="text-sm font-medium text-slate-700">Secondary guide curves</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                    checked={addTopCurve}
-                    onChange={e => setAddTopCurve(e.target.checked)}
-                  />
-                  Add top curve
-                </label>
-                <div>
-                  <label className="font-medium text-slate-700">Top nib (mm)</label>
-                  <input
-                    type="number"
-                    step="any"
-                    min={0.2}
-                    disabled={!addTopCurve}
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
-                    value={topNibText}
-                    onChange={(e) => setTopNibText(e.target.value)}
-                    onBlur={() => {
-                      const v = parseFloat(topNibText);
-                      if (!Number.isFinite(v)) {
-                        setTopNibText('2');
-                        return;
-                      }
-                      setTopNibText(String(Math.max(0.2, v)));
-                    }}
-                  />
-                </div>
-
-                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                    checked={addBottomCurve}
-                    onChange={e => setAddBottomCurve(e.target.checked)}
-                  />
-                  Add bottom curve
-                </label>
-                <div>
-                  <label className="font-medium text-slate-700">Bottom nib (mm)</label>
-                  <input
-                    type="number"
-                    step="any"
-                    min={0.2}
-                    disabled={!addBottomCurve}
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
-                    value={bottomNibText}
-                    onChange={(e) => setBottomNibText(e.target.value)}
-                    onBlur={() => {
-                      const v = parseFloat(bottomNibText);
-                      if (!Number.isFinite(v)) {
-                        setBottomNibText('2');
-                        return;
-                      }
-                      setBottomNibText(String(Math.max(0.2, v)));
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-
             <div>
               <label className="font-medium text-slate-700">Paper size</label>
               <select
@@ -2345,6 +2280,70 @@ export default function CurvedTitlePage() {
               />
               Flip curve
             </label>
+
+            <div className="my-3 border-t border-slate-200/70" />
+
+            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                checked={addTopCurve}
+                onChange={e => setAddTopCurve(e.target.checked)}
+              />
+              Add top curve
+            </label>
+
+            <div>
+              <label className="font-medium text-slate-700">Top nib (mm)</label>
+              <input
+                type="number"
+                step="any"
+                min={0.2}
+                disabled={!addTopCurve}
+                className="mt-1 w-full p-2 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                value={topNibText}
+                onChange={(e) => setTopNibText(e.target.value)}
+                onBlur={() => {
+                  const v = parseFloat(topNibText);
+                  if (!Number.isFinite(v)) {
+                    setTopNibText('2');
+                    return;
+                  }
+                  setTopNibText(String(Math.max(0.2, v)));
+                }}
+              />
+            </div>
+
+            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                checked={addBottomCurve}
+                onChange={e => setAddBottomCurve(e.target.checked)}
+              />
+              Add bottom curve
+            </label>
+
+            <div>
+              <label className="font-medium text-slate-700">Bottom nib (mm)</label>
+              <input
+                type="number"
+                step="any"
+                min={0.2}
+                disabled={!addBottomCurve}
+                className="mt-1 w-full p-2 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                value={bottomNibText}
+                onChange={(e) => setBottomNibText(e.target.value)}
+                onBlur={() => {
+                  const v = parseFloat(bottomNibText);
+                  if (!Number.isFinite(v)) {
+                    setBottomNibText('2');
+                    return;
+                  }
+                  setBottomNibText(String(Math.max(0.2, v)));
+                }}
+              />
+            </div>
           </div>
 
 
