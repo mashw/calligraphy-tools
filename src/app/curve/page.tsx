@@ -399,6 +399,10 @@ export default function CurvedTitlePage() {
   const [xHeightMM, setXHeightMM] = useState(6);
   const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
   const [nibText, setNibText] = useState('2');
+  const [topBandEnabled, setTopBandEnabled] = useState(false);
+  const [bottomBandEnabled, setBottomBandEnabled] = useState(false);
+  const [topNibText, setTopNibText] = useState('2');
+  const [bottomNibText, setBottomNibText] = useState('2');
   const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>('2:1:2');
   const [copperplateDescUnitsText, setCopperplateDescUnitsText] = useState('2');
   const [copperplateXUnitsText, setCopperplateXUnitsText] = useState('1');
@@ -411,6 +415,14 @@ export default function CurvedTitlePage() {
     const v = parseFloat(nibText);
     return Number.isFinite(v) ? v : 2;
   }, [nibText]);
+  const topNibMM = useMemo(() => {
+    const v = parseFloat(topNibText);
+    return Number.isFinite(v) ? v : nibMM;
+  }, [topNibText, nibMM]);
+  const bottomNibMM = useMemo(() => {
+    const v = parseFloat(bottomNibText);
+    return Number.isFinite(v) ? v : nibMM;
+  }, [bottomNibText, nibMM]);
   const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
 
@@ -868,6 +880,33 @@ export default function CurvedTitlePage() {
     if (script !== 'Copperplate' || descMM <= 0) return null;
     return offset(baseline, descMM * 0.5);
   }, [script, baseline, descMM]);
+
+  const topBandWaistLine = useMemo(() => {
+    if (!topBandEnabled) return null;
+    const xMMTop = topNibMM * xNib;
+    return offset(guideSet.ascLine, -xMMTop);
+  }, [topBandEnabled, topNibMM, xNib, guideSet.ascLine]);
+
+  const topBandAscLine = useMemo(() => {
+    if (!topBandEnabled) return null;
+    const xMMTop = topNibMM * xNib;
+    const ascMMTop = topNibMM * ascNib;
+    return offset(guideSet.ascLine, -(xMMTop + ascMMTop));
+  }, [topBandEnabled, topNibMM, xNib, ascNib, guideSet.ascLine]);
+
+  const bottomBandBaseLine = useMemo(() => {
+    if (!bottomBandEnabled) return null;
+    const xMMBottom = bottomNibMM * xNib;
+    return offset(guideSet.descLine, xMMBottom);
+  }, [bottomBandEnabled, bottomNibMM, xNib, guideSet.descLine]);
+
+  const bottomBandDescLine = useMemo(() => {
+    if (!bottomBandEnabled) return null;
+    const xMMBottom = bottomNibMM * xNib;
+    const descMMBottom = bottomNibMM * descNib;
+    const baselineBottom = offset(guideSet.descLine, xMMBottom);
+    return offset(baselineBottom, descMMBottom);
+  }, [bottomBandEnabled, bottomNibMM, xNib, descNib, guideSet.descLine]);
 
 
 
@@ -1508,6 +1547,42 @@ export default function CurvedTitlePage() {
                     vectorEffect="non-scaling-stroke"
                     strokeLinecap="round"
                     shapeRendering="geometricPrecision"
+                  />
+                )}
+                {topBandWaistLine && (
+                  <path
+                    d={pathD(topBandWaistLine)}
+                    fill="none"
+                    stroke={isCurveDragging ? '#7c3aed' : '#111827'}
+                    strokeWidth={swBold}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
+                {topBandAscLine && (
+                  <path
+                    d={pathD(topBandAscLine)}
+                    fill="none"
+                    stroke={isCurveDragging ? '#7c3aed' : '#111827'}
+                    strokeWidth={swThin}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
+                {bottomBandBaseLine && (
+                  <path
+                    d={pathD(bottomBandBaseLine)}
+                    fill="none"
+                    stroke={isCurveDragging ? '#7c3aed' : '#111827'}
+                    strokeWidth={swBold}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
+                {bottomBandDescLine && (
+                  <path
+                    d={pathD(bottomBandDescLine)}
+                    fill="none"
+                    stroke={isCurveDragging ? '#7c3aed' : '#111827'}
+                    strokeWidth={swThin}
+                    vectorEffect="non-scaling-stroke"
                   />
                 )}
                 {/* Guides */}
@@ -2201,6 +2276,54 @@ export default function CurvedTitlePage() {
             <button onMouseDown={e => e.preventDefault()} onClick={resetTransform} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
               Reset rotation &amp; scale
             </button>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-3">
+            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                checked={topBandEnabled}
+                onChange={e => setTopBandEnabled(e.target.checked)}
+              />
+              Enable top band
+            </label>
+            {topBandEnabled && (
+              <div>
+                <label className="font-medium text-slate-700">Top nib (mm)</label>
+                <input
+                  type="number"
+                  step="any"
+                  min={0.2}
+                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  value={topNibText}
+                  onChange={e => setTopNibText(e.target.value)}
+                />
+              </div>
+            )}
+
+            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                checked={bottomBandEnabled}
+                onChange={e => setBottomBandEnabled(e.target.checked)}
+              />
+              Enable bottom band
+            </label>
+            {bottomBandEnabled && (
+              <div>
+                <label className="font-medium text-slate-700">Bottom nib (mm)</label>
+                <input
+                  type="number"
+                  step="any"
+                  min={0.2}
+                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  value={bottomNibText}
+                  onChange={e => setBottomNibText(e.target.value)}
+                />
+              </div>
+            )}
           </div>
         </div>
       </section>
