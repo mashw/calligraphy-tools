@@ -741,6 +741,8 @@ export default function CurvedTitlePage() {
 
   const arcLen = useMemo(() => lengthPoly(baseline), [baseline]);
   const guideTemplate = script === 'Copperplate' ? 'copperplate' : 'blackletter';
+  const mainAscLine = offset(baseline, -(xMM + ascMM));
+  const mainDescLine = offset(baseline, descMM);
 
   const tickStepMM = useMemo(
     () =>
@@ -762,8 +764,8 @@ export default function CurvedTitlePage() {
     const topDescMM = ascMM;
 
     const topBaseline = offset(
-      baseline,
-      -(xMM + ascMM) - topDescMM,
+      mainAscLine,
+      -topDescMM,
     );
     const tickStepTop = script === 'Copperplate' ? Math.max(topXMM * 0.9, 3) : topEffectiveNibMM;
 
@@ -775,7 +777,7 @@ export default function CurvedTitlePage() {
       tickStepMM: tickStepTop,
       nibMM: topNibMM,
     };
-  }, [addTopCurve, script, topNibMM, penAngleDeg, copperplateHeights, xNib, ascNib, baseline, xMM, ascMM]);
+  }, [addTopCurve, script, topNibMM, penAngleDeg, copperplateHeights, xNib, ascNib, mainAscLine, ascMM]);
 
   const bottomGuideMetrics = useMemo(() => {
     if (!addBottomCurve) return null;
@@ -789,8 +791,8 @@ export default function CurvedTitlePage() {
     const bottomAscMM = descMM;
 
     const bottomBaseline = offset(
-      baseline,
-      descMM + (bottomXMM + bottomAscMM),
+      mainDescLine,
+      bottomAscMM,
     );
     const tickStepBottom = script === 'Copperplate' ? Math.max(bottomXMM * 0.9, 3) : bottomEffectiveNibMM;
 
@@ -802,7 +804,7 @@ export default function CurvedTitlePage() {
       tickStepMM: tickStepBottom,
       nibMM: bottomNibMM,
     };
-  }, [addBottomCurve, script, bottomNibMM, penAngleDeg, copperplateHeights, xNib, descNib, baseline, descMM]);
+  }, [addBottomCurve, script, bottomNibMM, penAngleDeg, copperplateHeights, xNib, descNib, mainDescLine, descMM]);
 
 
 
