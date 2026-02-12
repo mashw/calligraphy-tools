@@ -35,7 +35,7 @@ type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 
 const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0.5);
-const MIDLINE_DASH_GAP = 6;
+const MIDLINE_DASH_GAP = 12;
 
 const CAL_STORAGE_KEY_PREFIX = 'ct_curveplanner_calibration_v2_xh_';
 const keyForXHeight = (x: number) => `${CAL_STORAGE_KEY_PREFIX}${x.toFixed(1)}`;
@@ -1490,24 +1490,24 @@ export default function CurvedTitlePage() {
                   <path
                     d={pathD(midAscPts)}
                     fill="none"
-                    stroke="rgba(17, 24, 39, 0.5)"
-                    strokeWidth={1}
-                    strokeDasharray={`6 ${MIDLINE_DASH_GAP}`}
+                    stroke="rgba(17, 24, 39, 0.35)"
+                    strokeWidth={0.9}
+                    strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
                     vectorEffect="non-scaling-stroke"
-                    strokeLinecap="butt"
-                    shapeRendering="crispEdges"
+                    strokeLinecap="round"
+                    shapeRendering="geometricPrecision"
                   />
                 )}
                 {midDescPts && (
                   <path
                     d={pathD(midDescPts)}
                     fill="none"
-                    stroke="rgba(17, 24, 39, 0.5)"
-                    strokeWidth={1}
-                    strokeDasharray={`6 ${MIDLINE_DASH_GAP}`}
+                    stroke="rgba(17, 24, 39, 0.35)"
+                    strokeWidth={0.9}
+                    strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
                     vectorEffect="non-scaling-stroke"
-                    strokeLinecap="butt"
-                    shapeRendering="crispEdges"
+                    strokeLinecap="round"
+                    shapeRendering="geometricPrecision"
                   />
                 )}
                 {/* Guides */}
