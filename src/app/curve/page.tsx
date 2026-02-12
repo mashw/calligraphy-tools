@@ -424,8 +424,8 @@ export default function CurvedTitlePage() {
   const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
 
-  const [ascNib, setAscNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.ascNib);
-  const [descNib, setDescNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.descNib);
+  const [ascNib, setAscNib] = useState(2);
+  const [descNib, setDescNib] = useState(2);
 
   const [useCalibration, setUseCalibration] = useState(false);
   const [calWordLowerMM, setCalWordLowerMM] = useState('');
@@ -741,6 +741,8 @@ export default function CurvedTitlePage() {
 
   const arcLen = useMemo(() => lengthPoly(baseline), [baseline]);
   const guideTemplate = script === 'Copperplate' ? 'copperplate' : 'blackletter';
+  const mainAscLine = offset(baseline, -(xMM + ascMM));
+  const mainDescLine = offset(baseline, descMM);
 
   const tickStepMM = useMemo(
     () =>
@@ -756,21 +758,26 @@ export default function CurvedTitlePage() {
     const topEffectiveNibMM = script === 'Copperplate'
       ? topNibMM
       : topNibMM * Math.cos((penAngleDeg * Math.PI) / 180);
-    const heights = script === 'Copperplate'
-      ? copperplateHeights
-      : { xMM: xNib * topNibMM, ascMM: ascNib * topNibMM, descMM: descNib * topNibMM };
-    const topBaseline = offset(baseline, -(xMM + ascMM) - heights.descMM);
-    const tickStepTop = script === 'Copperplate' ? Math.max(heights.xMM * 0.9, 3) : topEffectiveNibMM;
+
+    const topXMM = script === 'Copperplate' ? copperplateHeights.xMM : xNib * topNibMM;
+    const topAscMM = script === 'Copperplate' ? copperplateHeights.ascMM : ascNib * topNibMM;
+    const topDescMM = ascMM;
+
+    const topBaseline = offset(
+      mainAscLine,
+      -topDescMM,
+    );
+    const tickStepTop = script === 'Copperplate' ? Math.max(topXMM * 0.9, 3) : topEffectiveNibMM;
 
     return {
       baseline: topBaseline,
-      xMM: heights.xMM,
-      ascMM: heights.ascMM,
-      descMM: heights.descMM,
+      xMM: topXMM,
+      ascMM: topAscMM,
+      descMM: topDescMM,
       tickStepMM: tickStepTop,
       nibMM: topNibMM,
     };
-  }, [addTopCurve, script, topNibMM, penAngleDeg, copperplateHeights, xNib, ascNib, descNib, baseline, xMM, ascMM]);
+  }, [addTopCurve, script, topNibMM, penAngleDeg, copperplateHeights, xNib, ascNib, mainAscLine, ascMM]);
 
   const bottomGuideMetrics = useMemo(() => {
     if (!addBottomCurve) return null;
@@ -778,21 +785,26 @@ export default function CurvedTitlePage() {
     const bottomEffectiveNibMM = script === 'Copperplate'
       ? bottomNibMM
       : bottomNibMM * Math.cos((penAngleDeg * Math.PI) / 180);
-    const heights = script === 'Copperplate'
-      ? copperplateHeights
-      : { xMM: xNib * bottomNibMM, ascMM: ascNib * bottomNibMM, descMM: descNib * bottomNibMM };
-    const bottomBaseline = offset(baseline, descMM + (heights.xMM + heights.ascMM));
-    const tickStepBottom = script === 'Copperplate' ? Math.max(heights.xMM * 0.9, 3) : bottomEffectiveNibMM;
+
+    const bottomXMM = script === 'Copperplate' ? copperplateHeights.xMM : xNib * bottomNibMM;
+    const bottomDescMM = script === 'Copperplate' ? copperplateHeights.descMM : descNib * bottomNibMM;
+    const bottomAscMM = descMM;
+
+    const bottomBaseline = offset(
+      mainDescLine,
+      bottomAscMM,
+    );
+    const tickStepBottom = script === 'Copperplate' ? Math.max(bottomXMM * 0.9, 3) : bottomEffectiveNibMM;
 
     return {
       baseline: bottomBaseline,
-      xMM: heights.xMM,
-      ascMM: heights.ascMM,
-      descMM: heights.descMM,
+      xMM: bottomXMM,
+      ascMM: bottomAscMM,
+      descMM: bottomDescMM,
       tickStepMM: tickStepBottom,
       nibMM: bottomNibMM,
     };
-  }, [addBottomCurve, script, bottomNibMM, penAngleDeg, copperplateHeights, xNib, ascNib, descNib, baseline, descMM]);
+  }, [addBottomCurve, script, bottomNibMM, penAngleDeg, copperplateHeights, xNib, descNib, mainDescLine, descMM]);
 
 
 
@@ -1799,71 +1811,6 @@ export default function CurvedTitlePage() {
               </select>
             </div>
 
-            <div className="sm:col-span-2 rounded-lg border border-slate-200 p-3 space-y-3">
-              <div className="text-sm font-medium text-slate-700">Secondary guide curves</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                    checked={addTopCurve}
-                    onChange={e => setAddTopCurve(e.target.checked)}
-                  />
-                  Add top curve
-                </label>
-                <div>
-                  <label className="font-medium text-slate-700">Top nib (mm)</label>
-                  <input
-                    type="number"
-                    step="any"
-                    min={0.2}
-                    disabled={!addTopCurve}
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
-                    value={topNibText}
-                    onChange={(e) => setTopNibText(e.target.value)}
-                    onBlur={() => {
-                      const v = parseFloat(topNibText);
-                      if (!Number.isFinite(v)) {
-                        setTopNibText('2');
-                        return;
-                      }
-                      setTopNibText(String(Math.max(0.2, v)));
-                    }}
-                  />
-                </div>
-
-                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                    checked={addBottomCurve}
-                    onChange={e => setAddBottomCurve(e.target.checked)}
-                  />
-                  Add bottom curve
-                </label>
-                <div>
-                  <label className="font-medium text-slate-700">Bottom nib (mm)</label>
-                  <input
-                    type="number"
-                    step="any"
-                    min={0.2}
-                    disabled={!addBottomCurve}
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
-                    value={bottomNibText}
-                    onChange={(e) => setBottomNibText(e.target.value)}
-                    onBlur={() => {
-                      const v = parseFloat(bottomNibText);
-                      if (!Number.isFinite(v)) {
-                        setBottomNibText('2');
-                        return;
-                      }
-                      setBottomNibText(String(Math.max(0.2, v)));
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-
             <div>
               <label className="font-medium text-slate-700">Paper size</label>
               <select
@@ -2345,6 +2292,70 @@ export default function CurvedTitlePage() {
               />
               Flip curve
             </label>
+
+            <div className="my-3 border-t border-slate-200/70" />
+
+            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                checked={addTopCurve}
+                onChange={e => setAddTopCurve(e.target.checked)}
+              />
+              Add top curve
+            </label>
+
+            <div>
+              <label className="font-medium text-slate-700">Top nib (mm)</label>
+              <input
+                type="number"
+                step="any"
+                min={0.2}
+                disabled={!addTopCurve}
+                className="mt-1 w-full p-2 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                value={topNibText}
+                onChange={(e) => setTopNibText(e.target.value)}
+                onBlur={() => {
+                  const v = parseFloat(topNibText);
+                  if (!Number.isFinite(v)) {
+                    setTopNibText('2');
+                    return;
+                  }
+                  setTopNibText(String(Math.max(0.2, v)));
+                }}
+              />
+            </div>
+
+            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                checked={addBottomCurve}
+                onChange={e => setAddBottomCurve(e.target.checked)}
+              />
+              Add bottom curve
+            </label>
+
+            <div>
+              <label className="font-medium text-slate-700">Bottom nib (mm)</label>
+              <input
+                type="number"
+                step="any"
+                min={0.2}
+                disabled={!addBottomCurve}
+                className="mt-1 w-full p-2 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                value={bottomNibText}
+                onChange={(e) => setBottomNibText(e.target.value)}
+                onBlur={() => {
+                  const v = parseFloat(bottomNibText);
+                  if (!Number.isFinite(v)) {
+                    setBottomNibText('2');
+                    return;
+                  }
+                  setBottomNibText(String(Math.max(0.2, v)));
+                }}
+              />
+            </div>
           </div>
 
 
