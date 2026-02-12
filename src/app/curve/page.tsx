@@ -1022,6 +1022,42 @@ export default function CurvedTitlePage() {
     return { waistPts, basePts };
   }, [span, baseline, arcLen, xMM, effectiveNibMM]);
 
+  const topHasText = topText.trim().length > 0;
+  const bottomHasText = bottomText.trim().length > 0;
+
+  const topSpanPoly = useMemo(() => {
+    if (!topSpan || !topBandEnabled || !topHasText || !topLayout.placements.length) return null;
+    const ds = script === 'Copperplate' ? Math.max(0.5, topXMM * 0.2) : Math.max(0.5, topNibMM * 0.5);
+    const waistPts: Pt[] = [];
+    const basePts: Pt[] = [];
+    for (let s = topSpan.sStart; s <= topSpan.sEnd + 0.0001; s += ds) {
+      const { p, n } = pointAt(topGuideSet.baseLine, Math.min(topArcLen, s));
+      waistPts.push({ x: p.x - n.x * topXMM, y: p.y - n.y * topXMM });
+      basePts.push({ x: p.x, y: p.y });
+    }
+    return { waistPts, basePts };
+  }, [topSpan, topBandEnabled, topHasText, topLayout.placements.length, script, topXMM, topNibMM, topGuideSet.baseLine, topArcLen]);
+
+  const bottomSpanPoly = useMemo(() => {
+    if (!bottomSpan || !bottomBandEnabled || !bottomHasText || !bottomLayout.placements.length) return null;
+    const ds = script === 'Copperplate' ? Math.max(0.5, bottomXMM * 0.2) : Math.max(0.5, bottomNibMM * 0.5);
+    const waistPts: Pt[] = [];
+    const basePts: Pt[] = [];
+    for (let s = bottomSpan.sStart; s <= bottomSpan.sEnd + 0.0001; s += ds) {
+      const { p, n } = pointAt(bottomGuideSet.baseLine, Math.min(bottomArcLen, s));
+      waistPts.push({ x: p.x - n.x * bottomXMM, y: p.y - n.y * bottomXMM });
+      basePts.push({ x: p.x, y: p.y });
+    }
+    return { waistPts, basePts };
+  }, [bottomSpan, bottomBandEnabled, bottomHasText, bottomLayout.placements.length, script, bottomXMM, bottomNibMM, bottomGuideSet.baseLine, bottomArcLen]);
+
+  const bandPolyBetween = (aPts: Pt[], bPts: Pt[]) => `M ${aPts.map(pt => `${pt.x},${pt.y}`).join(' L ')} L ${[...bPts].reverse().map(pt => `${pt.x},${pt.y}`).join(' L ')} Z`;
+
+  const topBandClipT1 = useMemo(() => bandPolyBetween(topGuideSet.baseLine, topGuideSet.waistLine), [topGuideSet.baseLine, topGuideSet.waistLine]);
+  const topBandClipT2 = useMemo(() => bandPolyBetween(topGuideSet.waistLine, topGuideSet.ascLine), [topGuideSet.waistLine, topGuideSet.ascLine]);
+  const bottomBandClipB1 = useMemo(() => bandPolyBetween(bottomGuideSet.ascLine, bottomGuideSet.baseLine), [bottomGuideSet.ascLine, bottomGuideSet.baseLine]);
+  const bottomBandClipB2 = useMemo(() => bandPolyBetween(bottomGuideSet.baseLine, bottomGuideSet.descLine), [bottomGuideSet.baseLine, bottomGuideSet.descLine]);
+
   const startPt = baseline[0];
   const endPt = baseline[baseline.length - 1];
   const endpointsDistance = Math.hypot(endPt.x - startPt.x, endPt.y - startPt.y);
@@ -1672,6 +1708,14 @@ export default function CurvedTitlePage() {
                 <clipPath id="pageClip">
                   <rect x={0} y={0} width={box.w} height={box.h} />
                 </clipPath>
+                <clipPath id="topBandClip">
+                  <path d={topBandClipT1} />
+                  <path d={topBandClipT2} />
+                </clipPath>
+                <clipPath id="bottomBandClip">
+                  <path d={bottomBandClipB1} />
+                  <path d={bottomBandClipB2} />
+                </clipPath>
               </defs>
 
               {/* stage bg (kept only for on-screen; removed in export) */}
@@ -1761,39 +1805,43 @@ export default function CurvedTitlePage() {
                 />
 
                 {topBandEnabled && (
-                  <GuideOverlay
-                    guideSet={topGuideSet}
-                    style={{
-                      thin: swBold,
-                      bold: swBold,
-                      colors: {
-                        thin: isCurveDragging ? '#7c3aed' : '#111827',
-                        bold: isCurveDragging ? '#7c3aed' : '#111827',
-                        tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
-                        frame: 'transparent',
-                        base: 'transparent',
-                        desc: 'transparent',
-                      },
-                    }}
-                  />
+                  <g clipPath="url(#topBandClip)">
+                    <GuideOverlay
+                      guideSet={topGuideSet}
+                      style={{
+                        thin: swBold,
+                        bold: swBold,
+                        colors: {
+                          thin: isCurveDragging ? '#7c3aed' : '#111827',
+                          bold: isCurveDragging ? '#7c3aed' : '#111827',
+                          tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
+                          frame: 'transparent',
+                          base: 'transparent',
+                          desc: 'transparent',
+                        },
+                      }}
+                    />
+                  </g>
                 )}
 
                 {bottomBandEnabled && (
-                  <GuideOverlay
-                    guideSet={bottomGuideSet}
-                    style={{
-                      thin: swBold,
-                      bold: swBold,
-                      colors: {
-                        thin: isCurveDragging ? '#7c3aed' : '#111827',
-                        bold: isCurveDragging ? '#7c3aed' : '#111827',
-                        tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
-                        frame: 'transparent',
-                        asc: 'transparent',
-                        waist: 'transparent',
-                      },
-                    }}
-                  />
+                  <g clipPath="url(#bottomBandClip)">
+                    <GuideOverlay
+                      guideSet={bottomGuideSet}
+                      style={{
+                        thin: swBold,
+                        bold: swBold,
+                        colors: {
+                          thin: isCurveDragging ? '#7c3aed' : '#111827',
+                          bold: isCurveDragging ? '#7c3aed' : '#111827',
+                          tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
+                          frame: 'transparent',
+                          asc: 'transparent',
+                          waist: 'transparent',
+                        },
+                      }}
+                    />
+                  </g>
                 )}
 
                 {showSpanFill && spanPoly && (
@@ -1811,6 +1859,61 @@ export default function CurvedTitlePage() {
                     />
                     <path
                       d={`M ${spanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${spanPoly.basePts
+                        .slice()
+                        .reverse()
+                        .map(p => `${p.x},${p.y}`)
+                        .join(' L ')} Z`}
+                      fill="rgba(0,0,0,0.0001)"
+                      stroke="none"
+                      pointerEvents="fill"
+                      className="cursor-move"
+                      onPointerDown={onGuidePointerDown}
+                    />
+                  </>
+                )}
+                {showSpanFill && topSpanPoly && (
+                  <>
+                    <path
+                      d={`M ${topSpanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${topSpanPoly.basePts
+                        .slice()
+                        .reverse()
+                        .map(p => `${p.x},${p.y}`)
+                        .join(' L ')} Z`}
+                      fill="rgba(148,163,184,0.18)"
+                      stroke={isCurveDragging ? '#7c3aed' : 'rgba(100,116,139,0.55)'}
+                      strokeWidth={swThin}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <path
+                      d={`M ${topSpanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${topSpanPoly.basePts
+                        .slice()
+                        .reverse()
+                        .map(p => `${p.x},${p.y}`)
+                        .join(' L ')} Z`}
+                      fill="rgba(0,0,0,0.0001)"
+                      stroke="none"
+                      pointerEvents="fill"
+                      className="cursor-move"
+                      onPointerDown={onGuidePointerDown}
+                    />
+                  </>
+                )}
+
+                {showSpanFill && bottomSpanPoly && (
+                  <>
+                    <path
+                      d={`M ${bottomSpanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${bottomSpanPoly.basePts
+                        .slice()
+                        .reverse()
+                        .map(p => `${p.x},${p.y}`)
+                        .join(' L ')} Z`}
+                      fill="rgba(148,163,184,0.18)"
+                      stroke={isCurveDragging ? '#7c3aed' : 'rgba(100,116,139,0.55)'}
+                      strokeWidth={swThin}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <path
+                      d={`M ${bottomSpanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${bottomSpanPoly.basePts
                         .slice()
                         .reverse()
                         .map(p => `${p.x},${p.y}`)
