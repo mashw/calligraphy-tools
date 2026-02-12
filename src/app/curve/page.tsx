@@ -9,6 +9,8 @@ import {
   sample,
   lengthPoly,
   pointAt,
+  offset,
+  pathD,
   buildPreset,
   transformCubic,
 } from '@/lib/curve-helpers';
@@ -33,6 +35,7 @@ type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 
 const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0.5);
+const MIDLINE_DASH_GAP = 6;
 
 const CAL_STORAGE_KEY_PREFIX = 'ct_curveplanner_calibration_v2_xh_';
 const keyForXHeight = (x: number) => `${CAL_STORAGE_KEY_PREFIX}${x.toFixed(1)}`;
@@ -856,6 +859,16 @@ export default function CurvedTitlePage() {
     [baseline, guideTemplate, xMM, ascMM, descMM, tickStepMM, nibMM, span],
   );
 
+  const midAscPts = useMemo(() => {
+    if (script !== 'Copperplate' || ascMM <= 0) return null;
+    return offset(baseline, -(xMM + ascMM * 0.5));
+  }, [script, baseline, xMM, ascMM]);
+
+  const midDescPts = useMemo(() => {
+    if (script !== 'Copperplate' || descMM <= 0) return null;
+    return offset(baseline, descMM * 0.5);
+  }, [script, baseline, descMM]);
+
 
 
 
@@ -1473,6 +1486,30 @@ export default function CurvedTitlePage() {
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
 
               <g clipPath="url(#pageClip)">
+                {midAscPts && (
+                  <path
+                    d={pathD(midAscPts)}
+                    fill="none"
+                    stroke="rgba(17, 24, 39, 0.5)"
+                    strokeWidth={1}
+                    strokeDasharray={`6 ${MIDLINE_DASH_GAP}`}
+                    vectorEffect="non-scaling-stroke"
+                    strokeLinecap="butt"
+                    shapeRendering="crispEdges"
+                  />
+                )}
+                {midDescPts && (
+                  <path
+                    d={pathD(midDescPts)}
+                    fill="none"
+                    stroke="rgba(17, 24, 39, 0.5)"
+                    strokeWidth={1}
+                    strokeDasharray={`6 ${MIDLINE_DASH_GAP}`}
+                    vectorEffect="non-scaling-stroke"
+                    strokeLinecap="butt"
+                    shapeRendering="crispEdges"
+                  />
+                )}
                 {/* Guides */}
                 <GuideOverlay
                   guideSet={guideSet}
@@ -1779,27 +1816,6 @@ export default function CurvedTitlePage() {
                 <p className="mt-1 text-[11px] text-slate-400">Ascender/descender scale from x-height.</p>
               </div>
 
-              <div className="mt-4 flex items-center gap-4">
-                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                    checked={showBoxes}
-                    onChange={e => setShowBoxes(e.target.checked)}
-                  />
-                  Show letter bounding boxes
-                </label>
-
-                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                    checked={showSpanFill}
-                    onChange={e => setShowSpanFill(e.target.checked)}
-                  />
-                  Show title span fill
-                </label>
-              </div>
               <hr className="mt-4 mb-3 border-t border-slate-200" />
               <div className="mt-2 flex items-center gap-4">
   <div className="flex-1">
@@ -2124,6 +2140,28 @@ export default function CurvedTitlePage() {
               </div>
             </div>
           )}
+
+          <div className="mt-4 flex items-center gap-4">
+            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                checked={showBoxes}
+                onChange={e => setShowBoxes(e.target.checked)}
+              />
+              Show letter bounding boxes
+            </label>
+
+            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                checked={showSpanFill}
+                onChange={e => setShowSpanFill(e.target.checked)}
+              />
+              Show title span fill
+            </label>
+          </div>
         </div>
 
 
