@@ -395,6 +395,8 @@ export default function CurvedTitlePage() {
   const [flipCurve, setFlipCurve] = useState(false);
   const [align, setAlign] = useState<AlignMode>('center');
   const [text, setText] = useState('Merry Christmas');
+  const [topText, setTopText] = useState('');
+  const [bottomText, setBottomText] = useState('');
 
   const [xHeightMM, setXHeightMM] = useState(6);
   const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
@@ -681,6 +683,46 @@ export default function CurvedTitlePage() {
   }, [script, copper.ctx, texturaXHeightMM, effectiveNibMM]);
 
   const run = useMemo(() => measureRun(text, SCRIPT_PROFILES[script], ctx), [text, script, ctx]);
+  const topCtx = useMemo<ScriptContext>(() => {
+    if (script === 'Copperplate') {
+      return {
+        ...copper.ctx,
+        nibMM: topNibMM,
+      };
+    }
+    const rad = (penAngleDeg * Math.PI) / 180;
+    return {
+      xHeightMM: xNib * topNibMM,
+      nibMM: topNibMM * Math.cos(rad),
+      scale: 1,
+      spaceMult: 1,
+      capStyle: 'simple',
+    };
+  }, [script, copper.ctx, topNibMM, xNib, penAngleDeg]);
+  const bottomCtx = useMemo<ScriptContext>(() => {
+    if (script === 'Copperplate') {
+      return {
+        ...copper.ctx,
+        nibMM: bottomNibMM,
+      };
+    }
+    const rad = (penAngleDeg * Math.PI) / 180;
+    return {
+      xHeightMM: xNib * bottomNibMM,
+      nibMM: bottomNibMM * Math.cos(rad),
+      scale: 1,
+      spaceMult: 1,
+      capStyle: 'simple',
+    };
+  }, [script, copper.ctx, bottomNibMM, xNib, penAngleDeg]);
+  const topRun = useMemo(
+    () => measureRun(topText, SCRIPT_PROFILES[script], topCtx),
+    [topText, script, topCtx],
+  );
+  const bottomRun = useMemo(
+    () => measureRun(bottomText, SCRIPT_PROFILES[script], bottomCtx),
+    [bottomText, script, bottomCtx],
+  );
 
   // ---------- Curve geometry ----------
   const cubicRaw = useMemo<PtCubic>(() => {
@@ -758,15 +800,15 @@ export default function CurvedTitlePage() {
   // ---------- Layout along the curve ----------
   type Place = { ch: string; w: number; h: number; sMid: number };
 
-  const layout = useMemo(() => {
-    const glyphs = run.glyphs;
+  const computeLayout = (runData: ReturnType<typeof measureRun>, bandBaseline: Pt[], bandArcLen: number, bandXMM: number, bandNibMM: number) => {
+    const glyphs = runData.glyphs;
 
     // Pass 1: place using measured advances
     const placeWithAdvances = (advances: number[]) => {
       const totalAdvance = advances.reduce((a, v) => a + v, 0);
       let s0 = 0;
-      if (align === 'center') s0 = Math.max(0, (arcLen - totalAdvance) / 2);
-      if (align === 'end') s0 = Math.max(0, arcLen - totalAdvance);
+      if (align === 'center') s0 = Math.max(0, (bandArcLen - totalAdvance) / 2);
+      if (align === 'end') s0 = Math.max(0, bandArcLen - totalAdvance);
 
       const placements: Place[] = [];
       let cursor = s0;
@@ -780,7 +822,7 @@ export default function CurvedTitlePage() {
 
         const w = g.wMM;
         const isCap = g.ch >= 'A' && g.ch <= 'Z';
-        const h = isCap ? capMM : xMM;
+        const h = isCap ? capMM : bandXMM;
 
         const mid = cursor + w / 2;
         placements.push({ ch: g.ch, w, h, sMid: mid });
@@ -794,12 +836,12 @@ export default function CurvedTitlePage() {
     const pass1 = placeWithAdvances(adv1);
 
     if (pass1.placements.length === 0) {
-      const overBy0 = Math.max(0, pass1.totalAdvance - arcLen);
+      const overBy0 = Math.max(0, pass1.totalAdvance - bandArcLen);
       return { placements: pass1.placements, needed: pass1.totalAdvance, overBy: overBy0 };
     }
 
     if (script === 'Copperplate') {
-      const overBy = Math.max(0, pass1.totalAdvance - arcLen);
+      const overBy = Math.max(0, pass1.totalAdvance - bandArcLen);
       return { placements: pass1.placements, needed: pass1.totalAdvance, overBy };
     }
 
@@ -807,12 +849,12 @@ export default function CurvedTitlePage() {
     const adv2 = adv1.slice();
     for (let i = 0; i < pass1.placements.length; i++) {
       const pl = pass1.placements[i];
-      const sMid = Math.min(arcLen, Math.max(0, pl.sMid));
-      const sL = Math.max(0, Math.min(arcLen, sMid - pl.w / 2));
-      const sR = Math.max(0, Math.min(arcLen, sMid + pl.w / 2));
+      const sMid = Math.min(bandArcLen, Math.max(0, pl.sMid));
+      const sL = Math.max(0, Math.min(bandArcLen, sMid - pl.w / 2));
+      const sR = Math.max(0, Math.min(bandArcLen, sMid + pl.w / 2));
 
-      const nL = pointAt(baseline, sL).n;
-      const nR = pointAt(baseline, sR).n;
+      const nL = pointAt(bandBaseline, sL).n;
+      const nR = pointAt(bandBaseline, sR).n;
 
       const dot = nL.x * nR.x + nL.y * nR.y;
       const clampedDot = Math.max(-1, Math.min(1, dot));
@@ -823,8 +865,8 @@ export default function CurvedTitlePage() {
       const MAX = 28;
       const t = Math.max(0, Math.min(1, (turnDeg - THRESH) / (MAX - THRESH)));
 
-      const baseBump = effectiveNibMM * 0.25;
-      const heightFactor = 0.6 + 0.4 * Math.min(1, pl.h / xMM);
+      const baseBump = bandNibMM * 0.25;
+      const heightFactor = 0.6 + 0.4 * Math.min(1, pl.h / bandXMM);
       const extra = t * baseBump * heightFactor;
 
       // Find the glyph index corresponding to this placement (skip spaces)
@@ -844,9 +886,14 @@ export default function CurvedTitlePage() {
     }
 
     const pass2 = placeWithAdvances(adv2);
-    const overBy = Math.max(0, pass2.totalAdvance - arcLen);
+    const overBy = Math.max(0, pass2.totalAdvance - bandArcLen);
     return { placements: pass2.placements, needed: pass2.totalAdvance, overBy };
-  }, [run, arcLen, align, baseline, capMM, xMM, nibMM, script]);
+  };
+
+  const layout = useMemo(
+    () => computeLayout(run, baseline, arcLen, xMM, effectiveNibMM),
+    [run, baseline, arcLen, xMM, effectiveNibMM, align, capMM, script],
+  );
 
   const span = useMemo(() => {
     if (!layout.placements.length) return null;
@@ -871,6 +918,74 @@ export default function CurvedTitlePage() {
     [baseline, guideTemplate, xMM, ascMM, descMM, tickStepMM, nibMM, span],
   );
 
+  const topBaseline = useMemo(() => guideSet.ascLine, [guideSet.ascLine]);
+  const topArcLen = useMemo(() => lengthPoly(topBaseline), [topBaseline]);
+  const topXMM = useMemo(() => topNibMM * xNib, [topNibMM, xNib]);
+  const topAscMM = useMemo(() => topNibMM * ascNib, [topNibMM, ascNib]);
+  const topDescMMFixed = useMemo(() => ascMM, [ascMM]);
+  const topTickStepMM = useMemo(
+    () => (script === 'Copperplate' ? Math.max(topXMM * 0.9, 3) : topNibMM),
+    [script, topXMM, topNibMM],
+  );
+  const topLayout = useMemo(
+    () => computeLayout(topRun, topBaseline, topArcLen, topXMM, topNibMM),
+    [topRun, topBaseline, topArcLen, topXMM, topNibMM, align, capMM, script],
+  );
+  const topSpan = useMemo(() => {
+    if (!topLayout.placements.length) return null;
+    const first = topLayout.placements[0];
+    const last = topLayout.placements[topLayout.placements.length - 1];
+    const sStart = Math.max(0, first.sMid - first.w / 2);
+    const sEnd = Math.min(topArcLen, last.sMid + last.w / 2);
+    return { sStart, sEnd };
+  }, [topLayout, topArcLen]);
+  const topGuideSet = useMemo(
+    () => buildGuideSet(guideTemplate, {
+      baseline: topBaseline,
+      xMM: topXMM,
+      ascMM: topAscMM,
+      descMM: topDescMMFixed,
+      tickStepMM: topTickStepMM,
+      tickAnchorS: topSpan ? topSpan.sStart : undefined,
+      actualNibMM: topNibMM,
+    }),
+    [guideTemplate, topBaseline, topXMM, topAscMM, topDescMMFixed, topTickStepMM, topSpan, topNibMM],
+  );
+
+  const bottomXMM = useMemo(() => bottomNibMM * xNib, [bottomNibMM, xNib]);
+  const bottomAscMMFixed = useMemo(() => descMM, [descMM]);
+  const bottomDescMM = useMemo(() => bottomNibMM * descNib, [bottomNibMM, descNib]);
+  const bottomBaseline = useMemo(() => offset(guideSet.descLine, bottomXMM), [guideSet.descLine, bottomXMM]);
+  const bottomArcLen = useMemo(() => lengthPoly(bottomBaseline), [bottomBaseline]);
+  const bottomTickStepMM = useMemo(
+    () => (script === 'Copperplate' ? Math.max(bottomXMM * 0.9, 3) : bottomNibMM),
+    [script, bottomXMM, bottomNibMM],
+  );
+  const bottomLayout = useMemo(
+    () => computeLayout(bottomRun, bottomBaseline, bottomArcLen, bottomXMM, bottomNibMM),
+    [bottomRun, bottomBaseline, bottomArcLen, bottomXMM, bottomNibMM, align, capMM, script],
+  );
+  const bottomSpan = useMemo(() => {
+    if (!bottomLayout.placements.length) return null;
+    const first = bottomLayout.placements[0];
+    const last = bottomLayout.placements[bottomLayout.placements.length - 1];
+    const sStart = Math.max(0, first.sMid - first.w / 2);
+    const sEnd = Math.min(bottomArcLen, last.sMid + last.w / 2);
+    return { sStart, sEnd };
+  }, [bottomLayout, bottomArcLen]);
+  const bottomGuideSet = useMemo(
+    () => buildGuideSet(guideTemplate, {
+      baseline: bottomBaseline,
+      xMM: bottomXMM,
+      ascMM: bottomAscMMFixed,
+      descMM: bottomDescMM,
+      tickStepMM: bottomTickStepMM,
+      tickAnchorS: bottomSpan ? bottomSpan.sStart : undefined,
+      actualNibMM: bottomNibMM,
+    }),
+    [guideTemplate, bottomBaseline, bottomXMM, bottomAscMMFixed, bottomDescMM, bottomTickStepMM, bottomSpan, bottomNibMM],
+  );
+
   const midAscPts = useMemo(() => {
     if (script !== 'Copperplate' || ascMM <= 0) return null;
     return offset(baseline, -(xMM + ascMM * 0.5));
@@ -881,32 +996,13 @@ export default function CurvedTitlePage() {
     return offset(baseline, descMM * 0.5);
   }, [script, baseline, descMM]);
 
-  const topBandWaistLine = useMemo(() => {
-    if (!topBandEnabled) return null;
-    const xMMTop = topNibMM * xNib;
-    return offset(guideSet.ascLine, -xMMTop);
-  }, [topBandEnabled, topNibMM, xNib, guideSet.ascLine]);
+  const topBandWaistLine = useMemo(() => (topBandEnabled ? topGuideSet.waistLine : null), [topBandEnabled, topGuideSet.waistLine]);
 
-  const topBandAscLine = useMemo(() => {
-    if (!topBandEnabled) return null;
-    const xMMTop = topNibMM * xNib;
-    const ascMMTop = topNibMM * ascNib;
-    return offset(guideSet.ascLine, -(xMMTop + ascMMTop));
-  }, [topBandEnabled, topNibMM, xNib, ascNib, guideSet.ascLine]);
+  const topBandAscLine = useMemo(() => (topBandEnabled ? topGuideSet.ascLine : null), [topBandEnabled, topGuideSet.ascLine]);
 
-  const bottomBandBaseLine = useMemo(() => {
-    if (!bottomBandEnabled) return null;
-    const xMMBottom = bottomNibMM * xNib;
-    return offset(guideSet.descLine, xMMBottom);
-  }, [bottomBandEnabled, bottomNibMM, xNib, guideSet.descLine]);
+  const bottomBandBaseLine = useMemo(() => (bottomBandEnabled ? bottomGuideSet.baseLine : null), [bottomBandEnabled, bottomGuideSet.baseLine]);
 
-  const bottomBandDescLine = useMemo(() => {
-    if (!bottomBandEnabled) return null;
-    const xMMBottom = bottomNibMM * xNib;
-    const descMMBottom = bottomNibMM * descNib;
-    const baselineBottom = offset(guideSet.descLine, xMMBottom);
-    return offset(baselineBottom, descMMBottom);
-  }, [bottomBandEnabled, bottomNibMM, xNib, descNib, guideSet.descLine]);
+  const bottomBandDescLine = useMemo(() => (bottomBandEnabled ? bottomGuideSet.descLine : null), [bottomBandEnabled, bottomGuideSet.descLine]);
 
 
 
@@ -933,6 +1029,66 @@ export default function CurvedTitlePage() {
   const pageCenter = { x: box.w / 2, y: box.h / 2 };
   const radiusToStart = Math.hypot(pageCenter.x - startPt.x, pageCenter.y - startPt.y);
   const overWarn = layout.overBy > 0;
+
+  const renderLetterBoxes = (
+    placements: Place[],
+    baseGuideLine: Pt[],
+    bandArcLen: number,
+    bandHeightMM: number,
+    keyPrefix: string,
+  ) => placements.map((pl, i) => {
+    const sMid = Math.min(bandArcLen, Math.max(0, pl.sMid));
+    const halfW = pl.w / 2;
+    const h = script === 'Copperplate' ? xHeightMM : bandHeightMM;
+
+    const sL = Math.max(0, Math.min(bandArcLen, sMid - halfW));
+    const sR = Math.max(0, Math.min(bandArcLen, sMid + halfW));
+
+    const isCopper = script === 'Copperplate';
+    const SLANT_FROM_BASELINE_DEG = 55;
+    const steps = Math.max(16, Math.ceil((sR - sL) / 2));
+
+    const basePts: { x: number; y: number }[] = [];
+    const waistPts: { x: number; y: number }[] = [];
+
+    for (let k = 0; k <= steps; k++) {
+      const u = k / steps;
+      const s = sL + (sR - sL) * u;
+
+      const C = pointAt(baseGuideLine, s)
+      const p = C.p;
+      const n = C.n;
+
+      basePts.push({ x: p.x, y: p.y });
+
+      const dx = isCopper ? (h / Math.tan((SLANT_FROM_BASELINE_DEG * Math.PI) / 180)) : 0;
+      const sTop = Math.max(0, Math.min(bandArcLen, isCopper ? (s + dx) : s));
+
+      const Ct = pointAt(baseGuideLine, sTop);
+      waistPts.push({ x: Ct.p.x - Ct.n.x * h, y: Ct.p.y - Ct.n.y * h });
+    }
+
+    const isCap = pl.ch >= 'A' && pl.ch <= 'Z';
+    const fillCol = isCap ? 'rgba(99,102,241,0.10)' : 'rgba(16,185,129,0.10)';
+    const strokeCol = isCap ? '#6366f1' : '#10b981';
+    const boxPathD = (() => {
+      const top = waistPts.map((pt) => `${pt.x},${pt.y}`).join(' L ');
+      const bot = [...basePts].reverse().map((pt) => `${pt.x},${pt.y}`).join(' L ');
+      return `M ${top} L ${bot} Z`;
+    })();
+
+    return (
+      <g key={`${keyPrefix}-${i}`}>
+        <path
+          d={boxPathD}
+          fill={fillCol}
+          stroke={strokeCol}
+          strokeWidth={swThin}
+          vectorEffect="non-scaling-stroke"
+        />
+      </g>
+    );
+  });
 
   const getGuideCenter = () => {
     const pts = [
@@ -1604,6 +1760,42 @@ export default function CurvedTitlePage() {
                   }}
                 />
 
+                {topBandEnabled && (
+                  <GuideOverlay
+                    guideSet={topGuideSet}
+                    style={{
+                      thin: swBold,
+                      bold: swBold,
+                      colors: {
+                        thin: isCurveDragging ? '#7c3aed' : '#111827',
+                        bold: isCurveDragging ? '#7c3aed' : '#111827',
+                        tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
+                        frame: 'transparent',
+                        base: 'transparent',
+                        desc: 'transparent',
+                      },
+                    }}
+                  />
+                )}
+
+                {bottomBandEnabled && (
+                  <GuideOverlay
+                    guideSet={bottomGuideSet}
+                    style={{
+                      thin: swBold,
+                      bold: swBold,
+                      colors: {
+                        thin: isCurveDragging ? '#7c3aed' : '#111827',
+                        bold: isCurveDragging ? '#7c3aed' : '#111827',
+                        tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
+                        frame: 'transparent',
+                        asc: 'transparent',
+                        waist: 'transparent',
+                      },
+                    }}
+                  />
+                )}
+
                 {showSpanFill && spanPoly && (
                   <>
                     <path
@@ -1633,90 +1825,9 @@ export default function CurvedTitlePage() {
                 )}
 
                 {/* Letter boxes: true rectangles */}
-                {showBoxes &&
-                  layout.placements.map((pl, i) => {
-                    const sMid = Math.min(arcLen, Math.max(0, pl.sMid));
-                    const halfW = pl.w / 2;
-                    const h = script === 'Copperplate' ? xHeightMM : xMM;
-
-
-                    // Use left/right edge frames so the box conforms to the curve across its width
-                    const sL = Math.max(0, Math.min(arcLen, sMid - halfW));
-                    const sR = Math.max(0, Math.min(arcLen, sMid + halfW));
-
-                    const CL = pointAt(baseline, sL);
-                    const CR = pointAt(baseline, sR);
-
-                    const pL = CL.p;
-                    const pR = CR.p;
-
-                    const nL = CL.n;
-                    const nR = CR.n;
-
-                    // Copperplate: slant “uprights” forward 55° relative to local baseline
-                    const isCopper = script === 'Copperplate';
-                    const SLANT_FROM_BASELINE_DEG = 55;
-
-                    // Sample the baseline and the waist (offset by -h along normal) so the fill follows the curve.
-                    const steps = Math.max(16, Math.ceil((sR - sL) / 2)); // ~1 point per 2mm, with a sensible minimum
-
-                    const basePts: { x: number; y: number }[] = [];
-                    const waistPts: { x: number; y: number }[] = [];
-
-
-
-                    for (let k = 0; k <= steps; k++) {
-                      const u = k / steps;
-                      const s = sL + (sR - sL) * u;
-
-                      const C = pointAt(guideSet.baseLine, s)
-                      const p = C.p;
-                      const n = C.n;
-
-                      // Baseline point
-                      basePts.push({ x: p.x, y: p.y });
-
-                      // Copperplate slant: move the TOP sample forward along arc-length (towards next letter)
-                      const dx = isCopper ? (h / Math.tan((SLANT_FROM_BASELINE_DEG * Math.PI) / 180)) : 0;
-                      const sTop = Math.max(0, Math.min(arcLen, isCopper ? (s + dx) : s));
-
-                      const Ct = pointAt(guideSet.baseLine, sTop);
-
-                      waistPts.push({ x: Ct.p.x - Ct.n.x * h, y: Ct.p.y - Ct.n.y * h });
-
-                    }
-
-                    // Convenience endpoints if you still want them (uprights connect these)
-                    const bottomLeft = basePts[0];
-                    const bottomRight = basePts[basePts.length - 1];
-                    const topLeft = waistPts[0];
-                    const topRight = waistPts[waistPts.length - 1];
-
-
-
-
-                    const isCap = pl.ch >= 'A' && pl.ch <= 'Z';
-                    const fillCol = isCap ? 'rgba(99,102,241,0.10)' : 'rgba(16,185,129,0.10)';
-                    const strokeCol = isCap ? '#6366f1' : '#10b981';
-                    const pathD = (() => {
-                      const top = waistPts.map((pt) => `${pt.x},${pt.y}`).join(' L ');
-                      const bot = [...basePts].reverse().map((pt) => `${pt.x},${pt.y}`).join(' L ');
-                      return `M ${top} L ${bot} Z`;
-                    })();
-
-                    return (
-                      <g key={i}>
-
-                        <path
-                          d={pathD}
-                          fill={fillCol}
-                          stroke={strokeCol}
-                          strokeWidth={swThin}
-                          vectorEffect="non-scaling-stroke"
-                        />
-                      </g>
-                    );
-                  })}
+                {showBoxes && renderLetterBoxes(layout.placements, guideSet.baseLine, arcLen, xMM, 'main')}
+                {showBoxes && topBandEnabled && renderLetterBoxes(topLayout.placements, topGuideSet.baseLine, topArcLen, topXMM, 'top')}
+                {showBoxes && bottomBandEnabled && renderLetterBoxes(bottomLayout.placements, bottomGuideSet.baseLine, bottomArcLen, bottomXMM, 'bottom')}
 
                 {/* Endpoints */}
                 <circle cx={startPt.x} cy={startPt.y} r={1} fill="#0ea5e9" />
@@ -1828,6 +1939,20 @@ export default function CurvedTitlePage() {
               <label className="font-medium text-slate-700">Title text</label>
               <input className="mt-1 w-full p-3 rounded-lg border border-slate-300 text-base" value={text} onChange={e => setText(e.target.value)} />
             </div>
+
+            {topBandEnabled && (
+              <div className="sm:col-span-2">
+                <label className="font-medium text-slate-700">Top text</label>
+                <input className="mt-1 w-full p-3 rounded-lg border border-slate-300 text-base" value={topText} onChange={e => setTopText(e.target.value)} />
+              </div>
+            )}
+
+            {bottomBandEnabled && (
+              <div className="sm:col-span-2">
+                <label className="font-medium text-slate-700">Bottom text</label>
+                <input className="mt-1 w-full p-3 rounded-lg border border-slate-300 text-base" value={bottomText} onChange={e => setBottomText(e.target.value)} />
+              </div>
+            )}
           </div>
         </div>
 
