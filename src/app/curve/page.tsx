@@ -403,8 +403,10 @@ export default function CurvedTitlePage() {
   const [nibText, setNibText] = useState('2');
   const [topBandEnabled, setTopBandEnabled] = useState(false);
   const [bottomBandEnabled, setBottomBandEnabled] = useState(false);
-  const [topNibText, setTopNibText] = useState('2');
-  const [bottomNibText, setBottomNibText] = useState('2');
+  const [topBandScript, setTopBandScript] = useState<ScriptId>('TexturaQuadrata');
+  const [bottomBandScript, setBottomBandScript] = useState<ScriptId>('TexturaQuadrata');
+  const [topBandSizeText, setTopBandSizeText] = useState('2');
+  const [bottomBandSizeText, setBottomBandSizeText] = useState('2');
   const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>('2:1:2');
   const [copperplateDescUnitsText, setCopperplateDescUnitsText] = useState('2');
   const [copperplateXUnitsText, setCopperplateXUnitsText] = useState('1');
@@ -417,14 +419,14 @@ export default function CurvedTitlePage() {
     const v = parseFloat(nibText);
     return Number.isFinite(v) ? v : 2;
   }, [nibText]);
-  const topNibMM = useMemo(() => {
-    const v = parseFloat(topNibText);
+  const topBandSizeMM = useMemo(() => {
+    const v = parseFloat(topBandSizeText);
     return Number.isFinite(v) ? v : nibMM;
-  }, [topNibText, nibMM]);
-  const bottomNibMM = useMemo(() => {
-    const v = parseFloat(bottomNibText);
+  }, [topBandSizeText, nibMM]);
+  const bottomBandSizeMM = useMemo(() => {
+    const v = parseFloat(bottomBandSizeText);
     return Number.isFinite(v) ? v : nibMM;
-  }, [bottomNibText, nibMM]);
+  }, [bottomBandSizeText, nibMM]);
   const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
 
@@ -605,8 +607,14 @@ export default function CurvedTitlePage() {
   // ---------- Derived sizes ----------
   const rad = (penAngleDeg * Math.PI) / 180;
   const effectiveNibMM = useMemo(() => (script === 'Copperplate' ? nibMM : nibMM * Math.cos(rad)), [script, nibMM, rad]);
-  const effectiveTopNibMM = useMemo(() => (script === 'Copperplate' ? topNibMM : topNibMM * Math.cos(rad)), [script, topNibMM, rad]);
-  const effectiveBottomNibMM = useMemo(() => (script === 'Copperplate' ? bottomNibMM : bottomNibMM * Math.cos(rad)), [script, bottomNibMM, rad]);
+  const effectiveTopNibMM = useMemo(
+    () => (topBandScript === 'Copperplate' ? topBandSizeMM : topBandSizeMM * Math.cos(rad)),
+    [topBandScript, topBandSizeMM, rad],
+  );
+  const effectiveBottomNibMM = useMemo(
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM : bottomBandSizeMM * Math.cos(rad)),
+    [bottomBandScript, bottomBandSizeMM, rad],
+  );
 
   const texturaXHeightMM = xNib * nibMM;
 
@@ -680,43 +688,64 @@ export default function CurvedTitlePage() {
   }, [script, copper.ctx, texturaXHeightMM, effectiveNibMM]);
 
   const run = useMemo(() => measureRun(text, SCRIPT_PROFILES[script], ctx), [text, script, ctx]);
+  const topCopper = useMemo(() => {
+    const lower = parseFloat(calWordLowerMM);
+    const dbl = parseFloat(calWordDoubleMM);
+    return buildCopperplateContext({
+      xHeightMM: topBandSizeMM,
+      capStyle,
+      calibration: {
+        enabled: useCalibration,
+        calWordLowerMM: Number.isFinite(lower) ? lower : undefined,
+        calWordDoubleMM: Number.isFinite(dbl) ? dbl : undefined,
+        userScaleFactor,
+        userSpaceFactor,
+      },
+    });
+  }, [topBandSizeMM, capStyle, useCalibration, calWordLowerMM, calWordDoubleMM, userScaleFactor, userSpaceFactor]);
+  const bottomCopper = useMemo(() => {
+    const lower = parseFloat(calWordLowerMM);
+    const dbl = parseFloat(calWordDoubleMM);
+    return buildCopperplateContext({
+      xHeightMM: bottomBandSizeMM,
+      capStyle,
+      calibration: {
+        enabled: useCalibration,
+        calWordLowerMM: Number.isFinite(lower) ? lower : undefined,
+        calWordDoubleMM: Number.isFinite(dbl) ? dbl : undefined,
+        userScaleFactor,
+        userSpaceFactor,
+      },
+    });
+  }, [bottomBandSizeMM, capStyle, useCalibration, calWordLowerMM, calWordDoubleMM, userScaleFactor, userSpaceFactor]);
+
   const topCtx = useMemo<ScriptContext>(() => {
-    if (script === 'Copperplate') {
-      return {
-        ...copper.ctx,
-        nibMM: topNibMM,
-      };
-    }
+    if (topBandScript === 'Copperplate') return topCopper.ctx;
     return {
-      xHeightMM: xNib * topNibMM,
+      xHeightMM: xNib * topBandSizeMM,
       nibMM: effectiveTopNibMM,
       scale: 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [script, copper.ctx, topNibMM, effectiveTopNibMM, xNib]);
+  }, [topBandScript, topCopper.ctx, topBandSizeMM, effectiveTopNibMM, xNib]);
   const bottomCtx = useMemo<ScriptContext>(() => {
-    if (script === 'Copperplate') {
-      return {
-        ...copper.ctx,
-        nibMM: bottomNibMM,
-      };
-    }
+    if (bottomBandScript === 'Copperplate') return bottomCopper.ctx;
     return {
-      xHeightMM: xNib * bottomNibMM,
+      xHeightMM: xNib * bottomBandSizeMM,
       nibMM: effectiveBottomNibMM,
       scale: 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [script, copper.ctx, bottomNibMM, effectiveBottomNibMM, xNib]);
+  }, [bottomBandScript, bottomCopper.ctx, bottomBandSizeMM, effectiveBottomNibMM, xNib]);
   const topRun = useMemo(
-    () => measureRun(topText, SCRIPT_PROFILES[script], topCtx),
-    [topText, script, topCtx],
+    () => measureRun(topText, SCRIPT_PROFILES[topBandScript], topCtx),
+    [topText, topBandScript, topCtx],
   );
   const bottomRun = useMemo(
-    () => measureRun(bottomText, SCRIPT_PROFILES[script], bottomCtx),
-    [bottomText, script, bottomCtx],
+    () => measureRun(bottomText, SCRIPT_PROFILES[bottomBandScript], bottomCtx),
+    [bottomText, bottomBandScript, bottomCtx],
   );
 
   // ---------- Curve geometry ----------
@@ -795,7 +824,15 @@ export default function CurvedTitlePage() {
   // ---------- Layout along the curve ----------
   type Place = { ch: string; w: number; h: number; sMid: number };
 
-  const computeLayout = (runData: ReturnType<typeof measureRun>, bandBaseline: Pt[], bandArcLen: number, bandXMM: number, bandNibMM: number) => {
+  const computeLayout = (
+    runData: ReturnType<typeof measureRun>,
+    bandBaseline: Pt[],
+    bandArcLen: number,
+    bandXMM: number,
+    bandNibMM: number,
+    bandCapMM: number,
+    scriptId: ScriptId,
+  ) => {
     const glyphs = runData.glyphs;
 
     // Pass 1: place using measured advances
@@ -817,7 +854,7 @@ export default function CurvedTitlePage() {
 
         const w = g.wMM;
         const isCap = g.ch >= 'A' && g.ch <= 'Z';
-        const h = isCap ? capMM : bandXMM;
+        const h = isCap ? bandCapMM : bandXMM;
 
         const mid = cursor + w / 2;
         placements.push({ ch: g.ch, w, h, sMid: mid });
@@ -835,7 +872,7 @@ export default function CurvedTitlePage() {
       return { placements: pass1.placements, needed: pass1.totalAdvance, overBy: overBy0 };
     }
 
-    if (script === 'Copperplate') {
+    if (scriptId === 'Copperplate') {
       const overBy = Math.max(0, pass1.totalAdvance - bandArcLen);
       return { placements: pass1.placements, needed: pass1.totalAdvance, overBy };
     }
@@ -885,10 +922,7 @@ export default function CurvedTitlePage() {
     return { placements: pass2.placements, needed: pass2.totalAdvance, overBy };
   };
 
-  const layout = useMemo(
-    () => computeLayout(run, baseline, arcLen, xMM, effectiveNibMM),
-    [run, baseline, arcLen, xMM, effectiveNibMM, align, capMM, script],
-  );
+  const layout = useMemo(() => computeLayout(run, baseline, arcLen, xMM, effectiveNibMM, capMM, script), [run, baseline, arcLen, xMM, effectiveNibMM, capMM, script, align]);
 
   const span = useMemo(() => {
     if (!layout.placements.length) return null;
@@ -915,15 +949,27 @@ export default function CurvedTitlePage() {
 
   const topBaseline = useMemo(() => guideSet.ascLine, [guideSet.ascLine]);
   const topArcLen = useMemo(() => lengthPoly(topBaseline), [topBaseline]);
-  const topXMM = useMemo(() => topNibMM * xNib, [topNibMM, xNib]);
-  const topAscMM = useMemo(() => topNibMM * ascNib, [topNibMM, ascNib]);
+  const topXMM = useMemo(
+    () => (topBandScript === 'Copperplate' ? topBandSizeMM : topBandSizeMM * xNib),
+    [topBandScript, topBandSizeMM, xNib],
+  );
+  const topAscMM = useMemo(
+    () => (topBandScript === 'Copperplate' ? topBandSizeMM * (3 / 2) : topBandSizeMM * ascNib),
+    [topBandScript, topBandSizeMM, ascNib],
+  );
+  const topCapMM = useMemo(
+    () => (topBandScript === 'Copperplate'
+      ? topXMM * 1.05
+      : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * topBandSizeMM),
+    [topBandScript, topXMM, topBandSizeMM],
+  );
   const topTickStepMM = useMemo(
-    () => (script === 'Copperplate' ? Math.max(topXMM * 0.9, 3) : effectiveTopNibMM),
-    [script, topXMM, effectiveTopNibMM],
+    () => (topBandScript === 'Copperplate' ? Math.max(topXMM * 0.9, 3) : effectiveTopNibMM),
+    [topBandScript, topXMM, effectiveTopNibMM],
   );
   const topLayout = useMemo(
-    () => computeLayout(topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM),
-    [topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM, align, capMM, script],
+    () => computeLayout(topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM, topCapMM, topBandScript),
+    [topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM, topCapMM, topBandScript, align],
   );
   const topSpan = useMemo(() => {
     if (!topLayout.placements.length) return null;
@@ -934,29 +980,41 @@ export default function CurvedTitlePage() {
     return { sStart, sEnd };
   }, [topLayout, topArcLen]);
   const topGuideSet = useMemo(
-    () => buildGuideSet(guideTemplate, {
+    () => buildGuideSet(topBandScript === 'Copperplate' ? 'copperplate' : 'blackletter', {
       baseline: topBaseline,
       xMM: topXMM,
       ascMM: topAscMM,
       descMM: 0,
       tickStepMM: topTickStepMM,
       tickAnchorS: topSpan ? topSpan.sStart : undefined,
-      actualNibMM: topNibMM,
+      actualNibMM: topBandSizeMM,
     }),
-    [guideTemplate, topBaseline, topXMM, topAscMM, topTickStepMM, topSpan, topNibMM],
+    [topBandScript, topBaseline, topXMM, topAscMM, topTickStepMM, topSpan, topBandSizeMM],
   );
 
-  const bottomXMM = useMemo(() => bottomNibMM * xNib, [bottomNibMM, xNib]);
-  const bottomDescMM = useMemo(() => bottomNibMM * descNib, [bottomNibMM, descNib]);
+  const bottomXMM = useMemo(
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM : bottomBandSizeMM * xNib),
+    [bottomBandScript, bottomBandSizeMM, xNib],
+  );
+  const bottomDescMM = useMemo(
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM * (3 / 2) : bottomBandSizeMM * descNib),
+    [bottomBandScript, bottomBandSizeMM, descNib],
+  );
+  const bottomCapMM = useMemo(
+    () => (bottomBandScript === 'Copperplate'
+      ? bottomXMM * 1.05
+      : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * bottomBandSizeMM),
+    [bottomBandScript, bottomXMM, bottomBandSizeMM],
+  );
   const bottomBaseline = useMemo(() => offset(guideSet.descLine, bottomXMM), [guideSet.descLine, bottomXMM]);
   const bottomArcLen = useMemo(() => lengthPoly(bottomBaseline), [bottomBaseline]);
   const bottomTickStepMM = useMemo(
-    () => (script === 'Copperplate' ? Math.max(bottomXMM * 0.9, 3) : effectiveBottomNibMM),
-    [script, bottomXMM, effectiveBottomNibMM],
+    () => (bottomBandScript === 'Copperplate' ? Math.max(bottomXMM * 0.9, 3) : effectiveBottomNibMM),
+    [bottomBandScript, bottomXMM, effectiveBottomNibMM],
   );
   const bottomLayout = useMemo(
-    () => computeLayout(bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM),
-    [bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM, align, capMM, script],
+    () => computeLayout(bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM, bottomCapMM, bottomBandScript),
+    [bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM, bottomCapMM, bottomBandScript, align],
   );
   const bottomSpan = useMemo(() => {
     if (!bottomLayout.placements.length) return null;
@@ -967,16 +1025,16 @@ export default function CurvedTitlePage() {
     return { sStart, sEnd };
   }, [bottomLayout, bottomArcLen]);
   const bottomGuideSet = useMemo(
-    () => buildGuideSet(guideTemplate, {
+    () => buildGuideSet(bottomBandScript === 'Copperplate' ? 'copperplate' : 'blackletter', {
       baseline: bottomBaseline,
       xMM: bottomXMM,
       ascMM: 0,
       descMM: bottomDescMM,
       tickStepMM: bottomTickStepMM,
       tickAnchorS: bottomSpan ? bottomSpan.sStart : undefined,
-      actualNibMM: bottomNibMM,
+      actualNibMM: bottomBandSizeMM,
     }),
-    [guideTemplate, bottomBaseline, bottomXMM, bottomDescMM, bottomTickStepMM, bottomSpan, bottomNibMM],
+    [bottomBandScript, bottomBaseline, bottomXMM, bottomDescMM, bottomTickStepMM, bottomSpan, bottomBandSizeMM],
   );
 
   const midAscPts = useMemo(() => {
@@ -1020,7 +1078,7 @@ export default function CurvedTitlePage() {
 
   const topSpanPoly = useMemo(() => {
     if (!topSpan || !topBandEnabled || !topHasText || !topLayout.placements.length) return null;
-    const ds = script === 'Copperplate' ? Math.max(0.5, topXMM * 0.2) : Math.max(0.5, topNibMM * 0.5);
+    const ds = topBandScript === 'Copperplate' ? Math.max(0.5, topXMM * 0.2) : Math.max(0.5, effectiveTopNibMM * 0.5);
     const waistPts: Pt[] = [];
     const basePts: Pt[] = [];
     for (let s = topSpan.sStart; s <= topSpan.sEnd + 0.0001; s += ds) {
@@ -1029,11 +1087,11 @@ export default function CurvedTitlePage() {
       basePts.push({ x: p.x, y: p.y });
     }
     return { waistPts, basePts };
-  }, [topSpan, topBandEnabled, topHasText, topLayout.placements.length, script, topXMM, topNibMM, topGuideSet.baseLine, topArcLen]);
+  }, [topSpan, topBandEnabled, topHasText, topLayout.placements.length, topBandScript, topXMM, effectiveTopNibMM, topGuideSet.baseLine, topArcLen]);
 
   const bottomSpanPoly = useMemo(() => {
     if (!bottomSpan || !bottomBandEnabled || !bottomHasText || !bottomLayout.placements.length) return null;
-    const ds = script === 'Copperplate' ? Math.max(0.5, bottomXMM * 0.2) : Math.max(0.5, bottomNibMM * 0.5);
+    const ds = bottomBandScript === 'Copperplate' ? Math.max(0.5, bottomXMM * 0.2) : Math.max(0.5, effectiveBottomNibMM * 0.5);
     const waistPts: Pt[] = [];
     const basePts: Pt[] = [];
     for (let s = bottomSpan.sStart; s <= bottomSpan.sEnd + 0.0001; s += ds) {
@@ -1042,7 +1100,7 @@ export default function CurvedTitlePage() {
       basePts.push({ x: p.x, y: p.y });
     }
     return { waistPts, basePts };
-  }, [bottomSpan, bottomBandEnabled, bottomHasText, bottomLayout.placements.length, script, bottomXMM, bottomNibMM, bottomGuideSet.baseLine, bottomArcLen]);
+  }, [bottomSpan, bottomBandEnabled, bottomHasText, bottomLayout.placements.length, bottomBandScript, bottomXMM, effectiveBottomNibMM, bottomGuideSet.baseLine, bottomArcLen]);
 
   const bandPolyBetween = (aPts: Pt[], bPts: Pt[]) => `M ${aPts.map(pt => `${pt.x},${pt.y}`).join(' L ')} L ${[...bPts].reverse().map(pt => `${pt.x},${pt.y}`).join(' L ')} Z`;
 
@@ -1064,16 +1122,17 @@ export default function CurvedTitlePage() {
     baseGuideLine: Pt[],
     bandArcLen: number,
     bandHeightMM: number,
+    scriptId: ScriptId,
     keyPrefix: string,
   ) => placements.map((pl, i) => {
     const sMid = Math.min(bandArcLen, Math.max(0, pl.sMid));
     const halfW = pl.w / 2;
-    const h = script === 'Copperplate' ? xHeightMM : bandHeightMM;
+    const h = bandHeightMM;
 
     const sL = Math.max(0, Math.min(bandArcLen, sMid - halfW));
     const sR = Math.max(0, Math.min(bandArcLen, sMid + halfW));
 
-    const isCopper = script === 'Copperplate';
+    const isCopper = scriptId === 'Copperplate';
     const SLANT_FROM_BASELINE_DEG = 55;
     const steps = Math.max(16, Math.ceil((sR - sL) / 2));
 
@@ -1921,9 +1980,9 @@ export default function CurvedTitlePage() {
                 )}
 
                 {/* Letter boxes: true rectangles */}
-                {showBoxes && renderLetterBoxes(layout.placements, guideSet.baseLine, arcLen, xMM, 'main')}
-                {showBoxes && topBandEnabled && renderLetterBoxes(topLayout.placements, topGuideSet.baseLine, topArcLen, topXMM, 'top')}
-                {showBoxes && bottomBandEnabled && renderLetterBoxes(bottomLayout.placements, bottomGuideSet.baseLine, bottomArcLen, bottomXMM, 'bottom')}
+                {showBoxes && renderLetterBoxes(layout.placements, guideSet.baseLine, arcLen, xMM, script, 'main')}
+                {showBoxes && topBandEnabled && renderLetterBoxes(topLayout.placements, topGuideSet.baseLine, topArcLen, topXMM, topBandScript, 'top')}
+                {showBoxes && bottomBandEnabled && renderLetterBoxes(bottomLayout.placements, bottomGuideSet.baseLine, bottomArcLen, bottomXMM, bottomBandScript, 'bottom')}
 
                 {/* Endpoints */}
                 <circle cx={startPt.x} cy={startPt.y} r={1} fill="#0ea5e9" />
@@ -2505,59 +2564,83 @@ export default function CurvedTitlePage() {
 
           <div className="mt-4 space-y-3">
             <div className="space-y-2">
-              <div className="text-sm font-medium text-slate-700">Top band</div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="text-sm font-medium text-slate-700">Top band</div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={topBandEnabled}
-                    onChange={e => setTopBandEnabled(e.target.checked)}
-                    aria-label="Top band"
-                  />
-                  <span className="w-10 h-6 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
-                  <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
+                  <input type="checkbox" className="sr-only peer" checked={topBandEnabled} onChange={e => setTopBandEnabled(e.target.checked)} aria-label="Top band" />
+                  <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
+                  <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
                 </label>
-                <div className="relative flex-1 min-w-0">
-                  <input
-                    type="number"
-                    step="any"
-                    min={0.2}
-                    className="w-full p-2 pr-10 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
-                    value={topNibText}
-                    onChange={e => setTopNibText(e.target.value)}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-500">Script</label>
+                  <select
+                    className="mt-1 w-full p-2 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                    value={topBandScript}
+                    onChange={e => setTopBandScript(e.target.value as ScriptId)}
                     disabled={!topBandEnabled}
-                  />
-                  <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
+                  >
+                    <option value="TexturaQuadrata">TexturaQuadrata</option>
+                    <option value="Fraktur">Fraktur</option>
+                    <option value="Copperplate">Copperplate</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-500">{topBandScript === 'Copperplate' ? 'x-height' : 'Nib size'}</label>
+                  <div className="relative mt-1">
+                    <input
+                      type="number"
+                      step="any"
+                      min={0.2}
+                      className="w-full p-2 pr-10 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                      value={topBandSizeText}
+                      onChange={e => setTopBandSizeText(e.target.value)}
+                      disabled={!topBandEnabled}
+                    />
+                    <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
+                  </div>
                 </div>
               </div>
             </div>
 
             <div className="space-y-2">
-              <div className="text-sm font-medium text-slate-700">Bottom band</div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="text-sm font-medium text-slate-700">Bottom band</div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={bottomBandEnabled}
-                    onChange={e => setBottomBandEnabled(e.target.checked)}
-                    aria-label="Bottom band"
-                  />
-                  <span className="w-10 h-6 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
-                  <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
+                  <input type="checkbox" className="sr-only peer" checked={bottomBandEnabled} onChange={e => setBottomBandEnabled(e.target.checked)} aria-label="Bottom band" />
+                  <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
+                  <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
                 </label>
-                <div className="relative flex-1 min-w-0">
-                  <input
-                    type="number"
-                    step="any"
-                    min={0.2}
-                    className="w-full p-2 pr-10 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
-                    value={bottomNibText}
-                    onChange={e => setBottomNibText(e.target.value)}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-500">Script</label>
+                  <select
+                    className="mt-1 w-full p-2 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                    value={bottomBandScript}
+                    onChange={e => setBottomBandScript(e.target.value as ScriptId)}
                     disabled={!bottomBandEnabled}
-                  />
-                  <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
+                  >
+                    <option value="TexturaQuadrata">TexturaQuadrata</option>
+                    <option value="Fraktur">Fraktur</option>
+                    <option value="Copperplate">Copperplate</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-500">{bottomBandScript === 'Copperplate' ? 'x-height' : 'Nib size'}</label>
+                  <div className="relative mt-1">
+                    <input
+                      type="number"
+                      step="any"
+                      min={0.2}
+                      className="w-full p-2 pr-10 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                      value={bottomBandSizeText}
+                      onChange={e => setBottomBandSizeText(e.target.value)}
+                      disabled={!bottomBandEnabled}
+                    />
+                    <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
+                  </div>
                 </div>
               </div>
             </div>
