@@ -146,6 +146,35 @@ function InfoTip({ title, children, className = '', side = 'right' }: InfoTipPro
   );
 }
 
+type InsetLabeledFieldProps = {
+  label: string;
+  disabled?: boolean;
+  className?: string;
+  rightAdornment?: React.ReactNode;
+  adornmentClassName?: string;
+  children: React.ReactNode;
+};
+
+function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, adornmentClassName = 'right-3', children }: InsetLabeledFieldProps) {
+  return (
+    <div className={`relative rounded-lg border border-slate-300 overflow-hidden ${disabled ? 'bg-slate-50' : 'bg-white'} ${className}`}>
+      <div className="absolute inset-x-0 top-0 h-5 bg-slate-50/80 border-b border-slate-300 px-3 flex items-center z-10 pointer-events-none">
+        <span className="text-[11px] font-medium text-slate-600">{label}</span>
+      </div>
+      <div className="relative">{children}</div>
+      {rightAdornment && (
+        <span className={`pointer-events-none select-none absolute ${adornmentClassName} top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500`}>
+          {rightAdornment}
+        </span>
+      )}
+    </div>
+  );
+}
+
+
+const INSET_CONTROL_BASE = 'w-full h-14 border-0 rounded-none pt-6 pb-2 px-3 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed';
+const INSET_CONTROL_MM = `${INSET_CONTROL_BASE} pr-10`;
+const INSET_CONTROL_WIDE = `${INSET_CONTROL_BASE} pr-14`;
 /* ---------------- Export helpers ---------------- */
 function stripNoExport(svg: SVGSVGElement) {
   // Remove any elements marked as non-export (green indicators etc.)
@@ -403,8 +432,10 @@ export default function CurvedTitlePage() {
   const [nibText, setNibText] = useState('2');
   const [topBandEnabled, setTopBandEnabled] = useState(false);
   const [bottomBandEnabled, setBottomBandEnabled] = useState(false);
-  const [topNibText, setTopNibText] = useState('2');
-  const [bottomNibText, setBottomNibText] = useState('2');
+  const [topBandScript, setTopBandScript] = useState<ScriptId>('TexturaQuadrata');
+  const [bottomBandScript, setBottomBandScript] = useState<ScriptId>('TexturaQuadrata');
+  const [topBandSizeText, setTopBandSizeText] = useState('2');
+  const [bottomBandSizeText, setBottomBandSizeText] = useState('2');
   const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>('2:1:2');
   const [copperplateDescUnitsText, setCopperplateDescUnitsText] = useState('2');
   const [copperplateXUnitsText, setCopperplateXUnitsText] = useState('1');
@@ -417,14 +448,14 @@ export default function CurvedTitlePage() {
     const v = parseFloat(nibText);
     return Number.isFinite(v) ? v : 2;
   }, [nibText]);
-  const topNibMM = useMemo(() => {
-    const v = parseFloat(topNibText);
+  const topBandSizeMM = useMemo(() => {
+    const v = parseFloat(topBandSizeText);
     return Number.isFinite(v) ? v : nibMM;
-  }, [topNibText, nibMM]);
-  const bottomNibMM = useMemo(() => {
-    const v = parseFloat(bottomNibText);
+  }, [topBandSizeText, nibMM]);
+  const bottomBandSizeMM = useMemo(() => {
+    const v = parseFloat(bottomBandSizeText);
     return Number.isFinite(v) ? v : nibMM;
-  }, [bottomNibText, nibMM]);
+  }, [bottomBandSizeText, nibMM]);
   const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
 
@@ -605,8 +636,14 @@ export default function CurvedTitlePage() {
   // ---------- Derived sizes ----------
   const rad = (penAngleDeg * Math.PI) / 180;
   const effectiveNibMM = useMemo(() => (script === 'Copperplate' ? nibMM : nibMM * Math.cos(rad)), [script, nibMM, rad]);
-  const effectiveTopNibMM = useMemo(() => (script === 'Copperplate' ? topNibMM : topNibMM * Math.cos(rad)), [script, topNibMM, rad]);
-  const effectiveBottomNibMM = useMemo(() => (script === 'Copperplate' ? bottomNibMM : bottomNibMM * Math.cos(rad)), [script, bottomNibMM, rad]);
+  const effectiveTopNibMM = useMemo(
+    () => (topBandScript === 'Copperplate' ? topBandSizeMM : topBandSizeMM * Math.cos(rad)),
+    [topBandScript, topBandSizeMM, rad],
+  );
+  const effectiveBottomNibMM = useMemo(
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM : bottomBandSizeMM * Math.cos(rad)),
+    [bottomBandScript, bottomBandSizeMM, rad],
+  );
 
   const texturaXHeightMM = xNib * nibMM;
 
@@ -680,43 +717,64 @@ export default function CurvedTitlePage() {
   }, [script, copper.ctx, texturaXHeightMM, effectiveNibMM]);
 
   const run = useMemo(() => measureRun(text, SCRIPT_PROFILES[script], ctx), [text, script, ctx]);
+  const topCopper = useMemo(() => {
+    const lower = parseFloat(calWordLowerMM);
+    const dbl = parseFloat(calWordDoubleMM);
+    return buildCopperplateContext({
+      xHeightMM: topBandSizeMM,
+      capStyle,
+      calibration: {
+        enabled: useCalibration,
+        calWordLowerMM: Number.isFinite(lower) ? lower : undefined,
+        calWordDoubleMM: Number.isFinite(dbl) ? dbl : undefined,
+        userScaleFactor,
+        userSpaceFactor,
+      },
+    });
+  }, [topBandSizeMM, capStyle, useCalibration, calWordLowerMM, calWordDoubleMM, userScaleFactor, userSpaceFactor]);
+  const bottomCopper = useMemo(() => {
+    const lower = parseFloat(calWordLowerMM);
+    const dbl = parseFloat(calWordDoubleMM);
+    return buildCopperplateContext({
+      xHeightMM: bottomBandSizeMM,
+      capStyle,
+      calibration: {
+        enabled: useCalibration,
+        calWordLowerMM: Number.isFinite(lower) ? lower : undefined,
+        calWordDoubleMM: Number.isFinite(dbl) ? dbl : undefined,
+        userScaleFactor,
+        userSpaceFactor,
+      },
+    });
+  }, [bottomBandSizeMM, capStyle, useCalibration, calWordLowerMM, calWordDoubleMM, userScaleFactor, userSpaceFactor]);
+
   const topCtx = useMemo<ScriptContext>(() => {
-    if (script === 'Copperplate') {
-      return {
-        ...copper.ctx,
-        nibMM: topNibMM,
-      };
-    }
+    if (topBandScript === 'Copperplate') return topCopper.ctx;
     return {
-      xHeightMM: xNib * topNibMM,
+      xHeightMM: xNib * topBandSizeMM,
       nibMM: effectiveTopNibMM,
       scale: 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [script, copper.ctx, topNibMM, effectiveTopNibMM, xNib]);
+  }, [topBandScript, topCopper.ctx, topBandSizeMM, effectiveTopNibMM, xNib]);
   const bottomCtx = useMemo<ScriptContext>(() => {
-    if (script === 'Copperplate') {
-      return {
-        ...copper.ctx,
-        nibMM: bottomNibMM,
-      };
-    }
+    if (bottomBandScript === 'Copperplate') return bottomCopper.ctx;
     return {
-      xHeightMM: xNib * bottomNibMM,
+      xHeightMM: xNib * bottomBandSizeMM,
       nibMM: effectiveBottomNibMM,
       scale: 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [script, copper.ctx, bottomNibMM, effectiveBottomNibMM, xNib]);
+  }, [bottomBandScript, bottomCopper.ctx, bottomBandSizeMM, effectiveBottomNibMM, xNib]);
   const topRun = useMemo(
-    () => measureRun(topText, SCRIPT_PROFILES[script], topCtx),
-    [topText, script, topCtx],
+    () => measureRun(topText, SCRIPT_PROFILES[topBandScript], topCtx),
+    [topText, topBandScript, topCtx],
   );
   const bottomRun = useMemo(
-    () => measureRun(bottomText, SCRIPT_PROFILES[script], bottomCtx),
-    [bottomText, script, bottomCtx],
+    () => measureRun(bottomText, SCRIPT_PROFILES[bottomBandScript], bottomCtx),
+    [bottomText, bottomBandScript, bottomCtx],
   );
 
   // ---------- Curve geometry ----------
@@ -795,7 +853,15 @@ export default function CurvedTitlePage() {
   // ---------- Layout along the curve ----------
   type Place = { ch: string; w: number; h: number; sMid: number };
 
-  const computeLayout = (runData: ReturnType<typeof measureRun>, bandBaseline: Pt[], bandArcLen: number, bandXMM: number, bandNibMM: number) => {
+  const computeLayout = (
+    runData: ReturnType<typeof measureRun>,
+    bandBaseline: Pt[],
+    bandArcLen: number,
+    bandXMM: number,
+    bandNibMM: number,
+    bandCapMM: number,
+    scriptId: ScriptId,
+  ) => {
     const glyphs = runData.glyphs;
 
     // Pass 1: place using measured advances
@@ -817,7 +883,7 @@ export default function CurvedTitlePage() {
 
         const w = g.wMM;
         const isCap = g.ch >= 'A' && g.ch <= 'Z';
-        const h = isCap ? capMM : bandXMM;
+        const h = isCap ? bandCapMM : bandXMM;
 
         const mid = cursor + w / 2;
         placements.push({ ch: g.ch, w, h, sMid: mid });
@@ -835,7 +901,7 @@ export default function CurvedTitlePage() {
       return { placements: pass1.placements, needed: pass1.totalAdvance, overBy: overBy0 };
     }
 
-    if (script === 'Copperplate') {
+    if (scriptId === 'Copperplate') {
       const overBy = Math.max(0, pass1.totalAdvance - bandArcLen);
       return { placements: pass1.placements, needed: pass1.totalAdvance, overBy };
     }
@@ -885,10 +951,7 @@ export default function CurvedTitlePage() {
     return { placements: pass2.placements, needed: pass2.totalAdvance, overBy };
   };
 
-  const layout = useMemo(
-    () => computeLayout(run, baseline, arcLen, xMM, effectiveNibMM),
-    [run, baseline, arcLen, xMM, effectiveNibMM, align, capMM, script],
-  );
+  const layout = useMemo(() => computeLayout(run, baseline, arcLen, xMM, effectiveNibMM, capMM, script), [run, baseline, arcLen, xMM, effectiveNibMM, capMM, script, align]);
 
   const span = useMemo(() => {
     if (!layout.placements.length) return null;
@@ -915,15 +978,27 @@ export default function CurvedTitlePage() {
 
   const topBaseline = useMemo(() => guideSet.ascLine, [guideSet.ascLine]);
   const topArcLen = useMemo(() => lengthPoly(topBaseline), [topBaseline]);
-  const topXMM = useMemo(() => topNibMM * xNib, [topNibMM, xNib]);
-  const topAscMM = useMemo(() => topNibMM * ascNib, [topNibMM, ascNib]);
+  const topXMM = useMemo(
+    () => (topBandScript === 'Copperplate' ? topBandSizeMM : topBandSizeMM * xNib),
+    [topBandScript, topBandSizeMM, xNib],
+  );
+  const topAscMM = useMemo(
+    () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * ascNib),
+    [topBandScript, topBandSizeMM, ascNib],
+  );
+  const topCapMM = useMemo(
+    () => (topBandScript === 'Copperplate'
+      ? topXMM * 1.05
+      : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * topBandSizeMM),
+    [topBandScript, topXMM, topBandSizeMM],
+  );
   const topTickStepMM = useMemo(
-    () => (script === 'Copperplate' ? Math.max(topXMM * 0.9, 3) : effectiveTopNibMM),
-    [script, topXMM, effectiveTopNibMM],
+    () => (topBandScript === 'Copperplate' ? Math.max(topXMM * 0.9, 3) : effectiveTopNibMM),
+    [topBandScript, topXMM, effectiveTopNibMM],
   );
   const topLayout = useMemo(
-    () => computeLayout(topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM),
-    [topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM, align, capMM, script],
+    () => computeLayout(topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM, topCapMM, topBandScript),
+    [topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM, topCapMM, topBandScript, align],
   );
   const topSpan = useMemo(() => {
     if (!topLayout.placements.length) return null;
@@ -934,29 +1009,41 @@ export default function CurvedTitlePage() {
     return { sStart, sEnd };
   }, [topLayout, topArcLen]);
   const topGuideSet = useMemo(
-    () => buildGuideSet(guideTemplate, {
+    () => buildGuideSet(topBandScript === 'Copperplate' ? 'copperplate' : 'blackletter', {
       baseline: topBaseline,
       xMM: topXMM,
       ascMM: topAscMM,
       descMM: 0,
       tickStepMM: topTickStepMM,
       tickAnchorS: topSpan ? topSpan.sStart : undefined,
-      actualNibMM: topNibMM,
+      actualNibMM: topBandSizeMM,
     }),
-    [guideTemplate, topBaseline, topXMM, topAscMM, topTickStepMM, topSpan, topNibMM],
+    [topBandScript, topBaseline, topXMM, topAscMM, topTickStepMM, topSpan, topBandSizeMM],
   );
 
-  const bottomXMM = useMemo(() => bottomNibMM * xNib, [bottomNibMM, xNib]);
-  const bottomDescMM = useMemo(() => bottomNibMM * descNib, [bottomNibMM, descNib]);
+  const bottomXMM = useMemo(
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM : bottomBandSizeMM * xNib),
+    [bottomBandScript, bottomBandSizeMM, xNib],
+  );
+  const bottomDescMM = useMemo(
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM * (2.5 / 2) : bottomBandSizeMM * descNib),
+    [bottomBandScript, bottomBandSizeMM, descNib],
+  );
+  const bottomCapMM = useMemo(
+    () => (bottomBandScript === 'Copperplate'
+      ? bottomXMM * 1.05
+      : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * bottomBandSizeMM),
+    [bottomBandScript, bottomXMM, bottomBandSizeMM],
+  );
   const bottomBaseline = useMemo(() => offset(guideSet.descLine, bottomXMM), [guideSet.descLine, bottomXMM]);
   const bottomArcLen = useMemo(() => lengthPoly(bottomBaseline), [bottomBaseline]);
   const bottomTickStepMM = useMemo(
-    () => (script === 'Copperplate' ? Math.max(bottomXMM * 0.9, 3) : effectiveBottomNibMM),
-    [script, bottomXMM, effectiveBottomNibMM],
+    () => (bottomBandScript === 'Copperplate' ? Math.max(bottomXMM * 0.9, 3) : effectiveBottomNibMM),
+    [bottomBandScript, bottomXMM, effectiveBottomNibMM],
   );
   const bottomLayout = useMemo(
-    () => computeLayout(bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM),
-    [bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM, align, capMM, script],
+    () => computeLayout(bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM, bottomCapMM, bottomBandScript),
+    [bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM, bottomCapMM, bottomBandScript, align],
   );
   const bottomSpan = useMemo(() => {
     if (!bottomLayout.placements.length) return null;
@@ -967,16 +1054,16 @@ export default function CurvedTitlePage() {
     return { sStart, sEnd };
   }, [bottomLayout, bottomArcLen]);
   const bottomGuideSet = useMemo(
-    () => buildGuideSet(guideTemplate, {
+    () => buildGuideSet(bottomBandScript === 'Copperplate' ? 'copperplate' : 'blackletter', {
       baseline: bottomBaseline,
       xMM: bottomXMM,
       ascMM: 0,
       descMM: bottomDescMM,
       tickStepMM: bottomTickStepMM,
       tickAnchorS: bottomSpan ? bottomSpan.sStart : undefined,
-      actualNibMM: bottomNibMM,
+      actualNibMM: bottomBandSizeMM,
     }),
-    [guideTemplate, bottomBaseline, bottomXMM, bottomDescMM, bottomTickStepMM, bottomSpan, bottomNibMM],
+    [bottomBandScript, bottomBaseline, bottomXMM, bottomDescMM, bottomTickStepMM, bottomSpan, bottomBandSizeMM],
   );
 
   const midAscPts = useMemo(() => {
@@ -1020,7 +1107,7 @@ export default function CurvedTitlePage() {
 
   const topSpanPoly = useMemo(() => {
     if (!topSpan || !topBandEnabled || !topHasText || !topLayout.placements.length) return null;
-    const ds = script === 'Copperplate' ? Math.max(0.5, topXMM * 0.2) : Math.max(0.5, topNibMM * 0.5);
+    const ds = topBandScript === 'Copperplate' ? Math.max(0.5, topXMM * 0.2) : Math.max(0.5, effectiveTopNibMM * 0.5);
     const waistPts: Pt[] = [];
     const basePts: Pt[] = [];
     for (let s = topSpan.sStart; s <= topSpan.sEnd + 0.0001; s += ds) {
@@ -1029,11 +1116,11 @@ export default function CurvedTitlePage() {
       basePts.push({ x: p.x, y: p.y });
     }
     return { waistPts, basePts };
-  }, [topSpan, topBandEnabled, topHasText, topLayout.placements.length, script, topXMM, topNibMM, topGuideSet.baseLine, topArcLen]);
+  }, [topSpan, topBandEnabled, topHasText, topLayout.placements.length, topBandScript, topXMM, effectiveTopNibMM, topGuideSet.baseLine, topArcLen]);
 
   const bottomSpanPoly = useMemo(() => {
     if (!bottomSpan || !bottomBandEnabled || !bottomHasText || !bottomLayout.placements.length) return null;
-    const ds = script === 'Copperplate' ? Math.max(0.5, bottomXMM * 0.2) : Math.max(0.5, bottomNibMM * 0.5);
+    const ds = bottomBandScript === 'Copperplate' ? Math.max(0.5, bottomXMM * 0.2) : Math.max(0.5, effectiveBottomNibMM * 0.5);
     const waistPts: Pt[] = [];
     const basePts: Pt[] = [];
     for (let s = bottomSpan.sStart; s <= bottomSpan.sEnd + 0.0001; s += ds) {
@@ -1042,7 +1129,7 @@ export default function CurvedTitlePage() {
       basePts.push({ x: p.x, y: p.y });
     }
     return { waistPts, basePts };
-  }, [bottomSpan, bottomBandEnabled, bottomHasText, bottomLayout.placements.length, script, bottomXMM, bottomNibMM, bottomGuideSet.baseLine, bottomArcLen]);
+  }, [bottomSpan, bottomBandEnabled, bottomHasText, bottomLayout.placements.length, bottomBandScript, bottomXMM, effectiveBottomNibMM, bottomGuideSet.baseLine, bottomArcLen]);
 
   const bandPolyBetween = (aPts: Pt[], bPts: Pt[]) => `M ${aPts.map(pt => `${pt.x},${pt.y}`).join(' L ')} L ${[...bPts].reverse().map(pt => `${pt.x},${pt.y}`).join(' L ')} Z`;
 
@@ -1064,16 +1151,17 @@ export default function CurvedTitlePage() {
     baseGuideLine: Pt[],
     bandArcLen: number,
     bandHeightMM: number,
+    scriptId: ScriptId,
     keyPrefix: string,
   ) => placements.map((pl, i) => {
     const sMid = Math.min(bandArcLen, Math.max(0, pl.sMid));
     const halfW = pl.w / 2;
-    const h = script === 'Copperplate' ? xHeightMM : bandHeightMM;
+    const h = bandHeightMM;
 
     const sL = Math.max(0, Math.min(bandArcLen, sMid - halfW));
     const sR = Math.max(0, Math.min(bandArcLen, sMid + halfW));
 
-    const isCopper = script === 'Copperplate';
+    const isCopper = scriptId === 'Copperplate';
     const SLANT_FROM_BASELINE_DEG = 55;
     const steps = Math.max(16, Math.ceil((sR - sL) / 2));
 
@@ -1606,10 +1694,9 @@ export default function CurvedTitlePage() {
                   Drag anywhere to pan. Zoom with ±. Drag any guideline to move the curve guide (sticky centering on X).
                 </InfoTip>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500">View:</span>
+              <InsetLabeledField label="View" className="w-44">
                 <select
-                  className="p-1.5 text-sm rounded-lg border border-slate-300"
+                  className="w-full h-11 border-0 rounded-none pt-5 pb-1 px-3 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   value={view}
                   onChange={e => {
                     applyViewPreset(e.target.value as ViewMode);
@@ -1619,7 +1706,7 @@ export default function CurvedTitlePage() {
                   <option value="fullpage">Full page / envelope</option>
                   <option value="custom">Custom</option>
                 </select>
-              </div>
+              </InsetLabeledField>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 ml-auto">
@@ -1921,9 +2008,9 @@ export default function CurvedTitlePage() {
                 )}
 
                 {/* Letter boxes: true rectangles */}
-                {showBoxes && renderLetterBoxes(layout.placements, guideSet.baseLine, arcLen, xMM, 'main')}
-                {showBoxes && topBandEnabled && renderLetterBoxes(topLayout.placements, topGuideSet.baseLine, topArcLen, topXMM, 'top')}
-                {showBoxes && bottomBandEnabled && renderLetterBoxes(bottomLayout.placements, bottomGuideSet.baseLine, bottomArcLen, bottomXMM, 'bottom')}
+                {showBoxes && renderLetterBoxes(layout.placements, guideSet.baseLine, arcLen, xMM, script, 'main')}
+                {showBoxes && topBandEnabled && renderLetterBoxes(topLayout.placements, topGuideSet.baseLine, topArcLen, topXMM, topBandScript, 'top')}
+                {showBoxes && bottomBandEnabled && renderLetterBoxes(bottomLayout.placements, bottomGuideSet.baseLine, bottomArcLen, bottomXMM, bottomBandScript, 'bottom')}
 
                 {/* Endpoints */}
                 <circle cx={startPt.x} cy={startPt.y} r={1} fill="#0ea5e9" />
@@ -1975,29 +2062,31 @@ export default function CurvedTitlePage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
             <div>
-              <label className="font-medium text-slate-700">Script</label>
-              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={script} onChange={e => setScript(e.target.value as ScriptId)}>
+              <InsetLabeledField label="Script">
+              <select className={INSET_CONTROL_BASE} value={script} onChange={e => setScript(e.target.value as ScriptId)}>
                 <option value="Copperplate">Copperplate</option>
                 <option value="Fraktur">Fraktur</option>
                 <option value="TexturaQuadrata">Textura Quadrata</option>
               </select>
+              </InsetLabeledField>
             </div>
 
             <div>
-              <label className="font-medium text-slate-700">Curve</label>
-              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={curve} onChange={e => setCurve(e.target.value as CurvePresetId)}>
+              <InsetLabeledField label="Curve">
+              <select className={INSET_CONTROL_BASE} value={curve} onChange={e => setCurve(e.target.value as CurvePresetId)}>
                 <option value="simpleArch">Simple Arch</option>
                 <option value="highArch">High Arch</option>
                 <option value="shallowArch">Shallow Arch</option>
                 <option value="compoundArch">Compound Arch</option>
                 <option value="zanerian">Zanerian Resolution</option>
               </select>
+              </InsetLabeledField>
             </div>
 
             <div>
-              <label className="font-medium text-slate-700">Paper size</label>
+              <InsetLabeledField label="Paper size">
               <select
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                className={INSET_CONTROL_BASE}
                 value={paper}
                 onChange={e => {
                   const id = e.target.value as PaperId;
@@ -2012,32 +2101,41 @@ export default function CurvedTitlePage() {
                   </option>
                 ))}
               </select>
+              </InsetLabeledField>
             </div>
 
             <div>
-              <label className="font-medium text-slate-700">Orientation</label>
-              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={orientation} onChange={e => setOrientation(e.target.value as Orientation)}>
+              <InsetLabeledField label="Orientation">
+              <select className={INSET_CONTROL_BASE} value={orientation} onChange={e => setOrientation(e.target.value as Orientation)}>
                 <option value="portrait">Portrait</option>
                 <option value="landscape">Landscape</option>
               </select>
+              </InsetLabeledField>
             </div>
 
             <div className="sm:col-span-2">
-              <label className="font-medium text-slate-700">Title text</label>
-              <input className="mt-1 w-full p-3 rounded-lg border border-slate-300 text-sm" value={text} onChange={e => setText(e.target.value)} />
+              <div className="my-2 border-t border-slate-200/70" />
+            </div>
+
+            <div className="sm:col-span-2">
+              <InsetLabeledField label="Title text">
+              <input className={INSET_CONTROL_BASE} value={text} onChange={e => setText(e.target.value)} />
+              </InsetLabeledField>
             </div>
 
             {topBandEnabled && (
               <div className="sm:col-span-2">
-                <label className="font-medium text-slate-700">Top text</label>
-                <input className="mt-1 w-full p-3 rounded-lg border border-slate-300 text-sm" value={topText} onChange={e => setTopText(e.target.value)} />
+                <InsetLabeledField label="Top text">
+                <input className={INSET_CONTROL_BASE} value={topText} onChange={e => setTopText(e.target.value)} />
+                </InsetLabeledField>
               </div>
             )}
 
             {bottomBandEnabled && (
               <div className="sm:col-span-2">
-                <label className="font-medium text-slate-700">Bottom text</label>
-                <input className="mt-1 w-full p-3 rounded-lg border border-slate-300 text-sm" value={bottomText} onChange={e => setBottomText(e.target.value)} />
+                <InsetLabeledField label="Bottom text">
+                <input className={INSET_CONTROL_BASE} value={bottomText} onChange={e => setBottomText(e.target.value)} />
+                </InsetLabeledField>
               </div>
             )}
           </div>
@@ -2058,40 +2156,40 @@ export default function CurvedTitlePage() {
             <div className="mt-3 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="font-medium text-slate-700">X-height</label>
-                  <select
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                    value={xHeightMM}
-                    onChange={(e) => setXHeightMM(parseFloat(e.target.value))}
-                  >
-                    {X_OPTIONS.map((v) => (
-                      <option key={v} value={v}>
-                        {v.toFixed(1)}
-                      </option>
-                    ))}
-                  </select>
+                  <InsetLabeledField label="X-height" rightAdornment="mm">
+                    <select
+                      className={INSET_CONTROL_MM}
+                      value={xHeightMM}
+                      onChange={(e) => setXHeightMM(parseFloat(e.target.value))}
+                    >
+                      {X_OPTIONS.map((v) => (
+                        <option key={v} value={v}>
+                          {v.toFixed(1)}
+                        </option>
+                      ))}
+                    </select>
+                  </InsetLabeledField>
                 </div>
                 <div>
-
-
-                  <label className="font-medium text-slate-700">Capitals</label>
-                  <select
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
-                    value={capStyle}
-                    onChange={(e) => setCapStyle(e.target.value as 'simple' | 'flourished')}
-                    disabled={useCalibration}
-                  >
-                    <option value="simple">Simple (body widths)</option>
-                    <option value="flourished">Flourished (full widths)</option>
-                  </select>
+                  <InsetLabeledField label="Capitals" disabled={useCalibration}>
+                    <select
+                      className={INSET_CONTROL_BASE}
+                      value={capStyle}
+                      onChange={(e) => setCapStyle(e.target.value as 'simple' | 'flourished')}
+                      disabled={useCalibration}
+                    >
+                      <option value="simple">Simple (body widths)</option>
+                      <option value="flourished">Flourished (full widths)</option>
+                    </select>
+                  </InsetLabeledField>
                   {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
                 </div>
               </div>
 
               <div>
-                <label className="font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
+                <InsetLabeledField label="Guideline ratio (desc : x : asc)">
                 <select
-                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  className={INSET_CONTROL_BASE}
                   value={copperplateRatioPreset}
                   onChange={(e) => setCopperplateRatioPreset(e.target.value as CopperplateRatioPreset)}
                 >
@@ -2100,6 +2198,7 @@ export default function CurvedTitlePage() {
                   <option value="1:1:1">1 : 1 : 1</option>
                   <option value="custom">Custom…</option>
                 </select>
+                </InsetLabeledField>
                 <p className="mt-1 text-[11px] text-slate-400">Ascender/descender scale from x-height.</p>
               </div>
 
@@ -2141,35 +2240,31 @@ export default function CurvedTitlePage() {
                 <div className="border-t border-slate-200 pt-3">
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                     <div className="flex flex-col gap-1">
-                      <span className="text-xs font-mono text-indigo-500">{CAL_WORD}</span>
-                      <div className="relative w-full">
+                      <InsetLabeledField label={CAL_WORD} rightAdornment="mm">
                         <input
                           type="number"
                           step="0.1"
                           min="0"
-                          className="w-full p-2 pr-10 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          className={INSET_CONTROL_MM}
                           placeholder="Lowercase word"
                           value={calWordLowerMM}
                           onChange={(e) => setCalWordLowerMM(e.target.value)}
                         />
-                        <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
-                      </div>
+                      </InsetLabeledField>
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <span className="text-xs font-mono text-indigo-500">{CAL_WORD_DOUBLE}</span>
-                      <div className="relative w-full">
+                      <InsetLabeledField label={CAL_WORD_DOUBLE} rightAdornment="mm">
                         <input
                           type="number"
                           step="0.1"
                           min="0"
-                          className="w-full p-2 pr-10 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          className={INSET_CONTROL_MM}
                           placeholder="Double word"
                           value={calWordDoubleMM}
                           onChange={(e) => setCalWordDoubleMM(e.target.value)}
                         />
-                        <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
-                      </div>
+                      </InsetLabeledField>
                     </div>
                   </div>
 
@@ -2187,35 +2282,37 @@ export default function CurvedTitlePage() {
                     {showAdvanced && (
                       <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                         <div className="flex flex-col gap-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium text-slate-700">Overall scale</span>
+                          <div className="flex items-center justify-end">
                             <span className="font-mono text-slate-500">×{userScaleFactor.toFixed(2)}</span>
                           </div>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0.7"
-                            max="1.3"
-                            className="w-full p-2 rounded-lg border border-slate-300 text-sm"
-                            value={userScaleFactor}
-                            onChange={(e) => setUserScaleFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.7, 1.3))}
-                          />
+                          <InsetLabeledField label="Overall scale">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0.7"
+                              max="1.3"
+                              className={INSET_CONTROL_BASE}
+                              value={userScaleFactor}
+                              onChange={(e) => setUserScaleFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.7, 1.3))}
+                            />
+                          </InsetLabeledField>
                         </div>
 
                         <div className="flex flex-col gap-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium text-slate-700">Spacing factor</span>
+                          <div className="flex items-center justify-end">
                             <span className="font-mono text-slate-500">×{userSpaceFactor.toFixed(2)}</span>
                           </div>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0.5"
-                            max="1.5"
-                            className="w-full p-2 rounded-lg border border-slate-300 text-sm"
-                            value={userSpaceFactor}
-                            onChange={(e) => setUserSpaceFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.5, 1.5))}
-                          />
+                          <InsetLabeledField label="Spacing factor">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0.5"
+                              max="1.5"
+                              className={INSET_CONTROL_BASE}
+                              value={userSpaceFactor}
+                              onChange={(e) => setUserSpaceFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.5, 1.5))}
+                            />
+                          </InsetLabeledField>
                         </div>
                       </div>
                     )}
@@ -2228,12 +2325,12 @@ export default function CurvedTitlePage() {
               {copperplateRatioPreset === 'custom' && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="font-medium text-slate-700">Desc units</label>
+                    <InsetLabeledField label="Desc units">
                     <input
                       type="number"
                       min={0}
                       step="0.5"
-                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                      className={INSET_CONTROL_BASE}
                       value={copperplateDescUnitsText}
                       onWheel={(e) => {
                         (e.currentTarget as HTMLInputElement).blur();
@@ -2270,14 +2367,15 @@ export default function CurvedTitlePage() {
                         setCopperplateDescUnits(next);
                       }}
                     />
+                    </InsetLabeledField>
                   </div>
                   <div>
-                    <label className="font-medium text-slate-700">X units</label>
+                    <InsetLabeledField label="X units">
                     <input
                       type="number"
                       min={0.5}
                       step="0.5"
-                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                      className={INSET_CONTROL_BASE}
                       value={copperplateXUnitsText}
                       onWheel={(e) => {
                         (e.currentTarget as HTMLInputElement).blur();
@@ -2314,14 +2412,15 @@ export default function CurvedTitlePage() {
                         setCopperplateXUnits(next);
                       }}
                     />
+                    </InsetLabeledField>
                   </div>
                   <div>
-                    <label className="font-medium text-slate-700">Asc units</label>
+                    <InsetLabeledField label="Asc units">
                     <input
                       type="number"
                       min={0}
                       step="0.5"
-                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                      className={INSET_CONTROL_BASE}
                       value={copperplateAscUnitsText}
                       onWheel={(e) => {
                         (e.currentTarget as HTMLInputElement).blur();
@@ -2358,6 +2457,7 @@ export default function CurvedTitlePage() {
                         setCopperplateAscUnits(next);
                       }}
                     />
+                    </InsetLabeledField>
                   </div>
                 </div>
               )}
@@ -2367,13 +2467,12 @@ export default function CurvedTitlePage() {
           ) : (
             <div className="grid grid-cols-2 gap-4 mt-3">
               <div>
-                <label className="font-medium text-slate-700">Nib size</label>
-                <div className="relative mt-1">
+                <InsetLabeledField label="Nib size" rightAdornment="mm">
                   <input
                     type="number"
                     step="any"
                     min={0.2}
-                    className="w-full p-2 pr-10 rounded-lg border border-slate-300"
+                    className={INSET_CONTROL_MM}
                     value={nibText}
                     onWheel={(e) => {
                       // Prevent mouse wheel from stepping this number input
@@ -2404,25 +2503,27 @@ export default function CurvedTitlePage() {
                       setNibText(String(Math.max(0.2, v)));
                     }}
                   />
-                  <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
-                </div>
+                </InsetLabeledField>
               </div>
               <div>
-                <label className="font-medium text-slate-700">x-height (nibs)</label>
-                <input type="number" step={0.5} min={1} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={xNib} onChange={e => setXNib(parseFloat(e.target.value || '5'))} />
+                <InsetLabeledField label="x-height (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
+                  <input type="number" step={0.5} min={1} max={8} className={INSET_CONTROL_WIDE} value={xNib} onChange={e => setXNib(parseFloat(e.target.value || '5'))} />
+                </InsetLabeledField>
               </div>
               <div>
-                <label className="font-medium text-slate-700">Ascender (nibs)</label>
-                <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={ascNib} onChange={e => setAscNib(parseFloat(e.target.value || '3'))} />
+                <InsetLabeledField label="Ascender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
+                  <input type="number" step={0.5} min={0} max={8} className={INSET_CONTROL_WIDE} value={ascNib} onChange={e => setAscNib(parseFloat(e.target.value || '3'))} />
+                </InsetLabeledField>
               </div>
               <div>
-                <label className="font-medium text-slate-700">Descender (nibs)</label>
-                <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={descNib} onChange={e => setDescNib(parseFloat(e.target.value || '2'))} />
+                <InsetLabeledField label="Descender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
+                  <input type="number" step={0.5} min={0} max={8} className={INSET_CONTROL_WIDE} value={descNib} onChange={e => setDescNib(parseFloat(e.target.value || '2'))} />
+                </InsetLabeledField>
               </div>
               <div className="col-span-2">
-                <label className="font-medium text-slate-700">Nib angle (°)</label>
+                <InsetLabeledField label="Nib angle (°)">
                 <select
-                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  className={INSET_CONTROL_BASE}
                   value={penAngleDeg}
                   onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
                 >
@@ -2430,30 +2531,85 @@ export default function CurvedTitlePage() {
                   <option value={40}>40°</option>
                   <option value={45}>45°</option>
                 </select>
+                </InsetLabeledField>
               </div>
             </div>
           )}
 
-          <div className="mt-4 flex items-center gap-4">
-            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                checked={showBoxes}
-                onChange={e => setShowBoxes(e.target.checked)}
-              />
-              Show letter bounding boxes
-            </label>
+          <div className="my-3 border-t border-slate-200/70" />
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="text-sm font-medium text-slate-700">Top band</div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={topBandEnabled} onChange={e => setTopBandEnabled(e.target.checked)} aria-label="Top band" />
+                  <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
+                  <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
+                </label>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <InsetLabeledField label="Script" disabled={!topBandEnabled}>
+                  <select
+                    className={INSET_CONTROL_BASE}
+                    value={topBandScript}
+                    onChange={e => setTopBandScript(e.target.value as ScriptId)}
+                    disabled={!topBandEnabled}
+                  >
+                    <option value="TexturaQuadrata">TexturaQuadrata</option>
+                    <option value="Fraktur">Fraktur</option>
+                    <option value="Copperplate">Copperplate</option>
+                  </select>
+                </InsetLabeledField>
+                <InsetLabeledField label={topBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} disabled={!topBandEnabled} rightAdornment="mm">
+                    <input
+                      type="number"
+                      step="any"
+                      min={0.2}
+                      className={INSET_CONTROL_MM}
+                      value={topBandSizeText}
+                      onChange={e => setTopBandSizeText(e.target.value)}
+                      disabled={!topBandEnabled}
+                    />
+                </InsetLabeledField>
+              </div>
+            </div>
 
-            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                checked={showSpanFill}
-                onChange={e => setShowSpanFill(e.target.checked)}
-              />
-              Show title span fill
-            </label>
+            <div className="my-3 border-t border-slate-200/70" />
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="text-sm font-medium text-slate-700">Bottom band</div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={bottomBandEnabled} onChange={e => setBottomBandEnabled(e.target.checked)} aria-label="Bottom band" />
+                  <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
+                  <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
+                </label>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <InsetLabeledField label="Script" disabled={!bottomBandEnabled}>
+                  <select
+                    className={INSET_CONTROL_BASE}
+                    value={bottomBandScript}
+                    onChange={e => setBottomBandScript(e.target.value as ScriptId)}
+                    disabled={!bottomBandEnabled}
+                  >
+                    <option value="TexturaQuadrata">TexturaQuadrata</option>
+                    <option value="Fraktur">Fraktur</option>
+                    <option value="Copperplate">Copperplate</option>
+                  </select>
+                </InsetLabeledField>
+                <InsetLabeledField label={bottomBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} disabled={!bottomBandEnabled} rightAdornment="mm">
+                    <input
+                      type="number"
+                      step="any"
+                      min={0.2}
+                      className={INSET_CONTROL_MM}
+                      value={bottomBandSizeText}
+                      onChange={e => setBottomBandSizeText(e.target.value)}
+                      disabled={!bottomBandEnabled}
+                    />
+                </InsetLabeledField>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -2467,26 +2623,27 @@ export default function CurvedTitlePage() {
 
           <div className="grid grid-cols-1 gap-4 mt-3 select-none">
             <div>
-              <label className="font-medium text-slate-700">Text alignment</label>
-              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
+              <InsetLabeledField label="Text alignment">
+              <select className={INSET_CONTROL_BASE} value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
                 <option value="start">Start</option>
                 <option value="center">Centered</option>
                 <option value="end">End</option>
               </select>
+              </InsetLabeledField>
+            </div>
+
+            <div className="my-2 border-t border-slate-200/70" />
+            <div>
+              <label className="font-medium text-slate-700">Rotation (°) <span className="text-indigo-600">{rotDeg}°</span></label>
+              <input type="range" min={-180} max={180} step={1} value={rotDeg} onChange={e => setRotDeg(parseInt(e.target.value, 10))} className="w-full" />
             </div>
 
             <div>
-              <label className="font-medium text-slate-700">Rotation (°)</label>
-              <input type="range" min={-30} max={30} step={1} value={rotDeg} onChange={e => setRotDeg(parseInt(e.target.value, 10))} className="w-full" />
-              <div className="text-xs text-slate-500 mt-1">{rotDeg}°</div>
-            </div>
-
-            <div>
-              <label className="font-medium text-slate-700">Scale (%)</label>
+              <label className="font-medium text-slate-700">Scale (%) <span className="text-indigo-600">{scalePct}%</span></label>
               <input type="range" min={60} max={140} step={1} value={scalePct} onChange={e => setScalePct(parseInt(e.target.value, 10))} className="w-full" />
-              <div className="text-xs text-slate-500 mt-1">{scalePct}%</div>
             </div>
 
+            <div className="my-2 border-t border-slate-200/70" />
             <div className="flex flex-wrap items-center gap-3">
               <button onMouseDown={e => e.preventDefault()} onClick={resetTransform} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
                 Reset rotation &amp; scale
@@ -2503,64 +2660,27 @@ export default function CurvedTitlePage() {
             </div>
           </div>
 
-          <div className="mt-4 space-y-3">
-            <div className="space-y-2">
-              <div className="text-sm font-medium text-slate-700">Top band</div>
-              <div className="flex items-center gap-3">
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={topBandEnabled}
-                    onChange={e => setTopBandEnabled(e.target.checked)}
-                    aria-label="Top band"
-                  />
-                  <span className="w-10 h-6 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
-                  <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
-                </label>
-                <div className="relative flex-1 min-w-0">
-                  <input
-                    type="number"
-                    step="any"
-                    min={0.2}
-                    className="w-full p-2 pr-10 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
-                    value={topNibText}
-                    onChange={e => setTopNibText(e.target.value)}
-                    disabled={!topBandEnabled}
-                  />
-                  <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
-                </div>
-              </div>
-            </div>
+            <div className="my-3 border-t border-slate-200/70" />
+          <div className="mt-4 flex items-center gap-4">
+            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                checked={showBoxes}
+                onChange={e => setShowBoxes(e.target.checked)}
+              />
+              Letter bounding boxes
+            </label>
 
-            <div className="space-y-2">
-              <div className="text-sm font-medium text-slate-700">Bottom band</div>
-              <div className="flex items-center gap-3">
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={bottomBandEnabled}
-                    onChange={e => setBottomBandEnabled(e.target.checked)}
-                    aria-label="Bottom band"
-                  />
-                  <span className="w-10 h-6 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
-                  <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
-                </label>
-                <div className="relative flex-1 min-w-0">
-                  <input
-                    type="number"
-                    step="any"
-                    min={0.2}
-                    className="w-full p-2 pr-10 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
-                    value={bottomNibText}
-                    onChange={e => setBottomNibText(e.target.value)}
-                    disabled={!bottomBandEnabled}
-                  />
-                  <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
-                </div>
-              </div>
-            </div>
+            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                checked={showSpanFill}
+                onChange={e => setShowSpanFill(e.target.checked)}
+              />
+              Title span fill
+            </label>
           </div>
         </div>
       </section>
