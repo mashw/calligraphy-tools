@@ -154,8 +154,8 @@ type InsetLabeledFieldProps = {
 
 function InsetLabeledField({ label, disabled = false, children }: InsetLabeledFieldProps) {
   return (
-    <div className="relative">
-      <div className="absolute inset-x-0 top-0 h-5 rounded-t-lg bg-slate-50/80 border-b border-slate-200 px-3 flex items-center z-10 pointer-events-none">
+    <div className={`relative rounded-lg border border-slate-300 overflow-hidden ${disabled ? 'bg-slate-50' : 'bg-white'}`}>
+      <div className="absolute inset-x-0 top-0 h-5 bg-slate-50/80 border-b border-slate-300 px-3 flex items-center z-10 pointer-events-none">
         <span className="text-[11px] font-medium text-slate-600">{label}</span>
       </div>
       {children}
@@ -2540,7 +2540,7 @@ export default function CurvedTitlePage() {
               <div className="grid grid-cols-2 gap-3">
                 <InsetLabeledField label="Script" disabled={!topBandEnabled}>
                   <select
-                    className="w-full h-14 pt-6 pb-2 px-3 rounded-lg border border-t-transparent border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                    className="w-full h-14 border-0 rounded-none pt-6 pb-2 px-3 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed"
                     value={topBandScript}
                     onChange={e => setTopBandScript(e.target.value as ScriptId)}
                     disabled={!topBandEnabled}
@@ -2556,7 +2556,7 @@ export default function CurvedTitlePage() {
                       type="number"
                       step="any"
                       min={0.2}
-                      className="w-full h-14 pt-6 pb-2 pl-3 pr-10 rounded-lg border border-t-transparent border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                      className="w-full h-14 border-0 rounded-none pt-6 pb-2 pl-3 pr-10 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed"
                       value={topBandSizeText}
                       onChange={e => setTopBandSizeText(e.target.value)}
                       disabled={!topBandEnabled}
@@ -2580,7 +2580,7 @@ export default function CurvedTitlePage() {
               <div className="grid grid-cols-2 gap-3">
                 <InsetLabeledField label="Script" disabled={!bottomBandEnabled}>
                   <select
-                    className="w-full h-14 pt-6 pb-2 px-3 rounded-lg border border-t-transparent border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                    className="w-full h-14 border-0 rounded-none pt-6 pb-2 px-3 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed"
                     value={bottomBandScript}
                     onChange={e => setBottomBandScript(e.target.value as ScriptId)}
                     disabled={!bottomBandEnabled}
@@ -2596,7 +2596,7 @@ export default function CurvedTitlePage() {
                       type="number"
                       step="any"
                       min={0.2}
-                      className="w-full h-14 pt-6 pb-2 pl-3 pr-10 rounded-lg border border-t-transparent border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                      className="w-full h-14 border-0 rounded-none pt-6 pb-2 pl-3 pr-10 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed"
                       value={bottomBandSizeText}
                       onChange={e => setBottomBandSizeText(e.target.value)}
                       disabled={!bottomBandEnabled}
