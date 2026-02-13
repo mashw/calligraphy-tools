@@ -149,20 +149,34 @@ function InfoTip({ title, children, className = '', side = 'right' }: InfoTipPro
 type InsetLabeledFieldProps = {
   label: string;
   disabled?: boolean;
+  className?: string;
+  rightAdornment?: React.ReactNode;
+  adornmentClassName?: string;
   children: React.ReactNode;
 };
 
-function InsetLabeledField({ label, disabled = false, children }: InsetLabeledFieldProps) {
+function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, adornmentClassName = 'right-3', children }: InsetLabeledFieldProps) {
   return (
-    <div className={`relative rounded-lg border border-slate-300 overflow-hidden ${disabled ? 'bg-slate-50' : 'bg-white'}`}>
+    <div className={`relative rounded-lg border border-slate-300 overflow-hidden ${disabled ? 'bg-slate-50' : 'bg-white'} ${className}`}>
       <div className="absolute inset-x-0 top-0 h-5 bg-slate-50/80 border-b border-slate-300 px-3 flex items-center z-10 pointer-events-none">
         <span className="text-[11px] font-medium text-slate-600">{label}</span>
       </div>
-      {children}
+      <div className="relative pt-5">
+        {children}
+        {rightAdornment && (
+          <span className={`pointer-events-none select-none absolute ${adornmentClassName} top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500`}>
+            {rightAdornment}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
 
+
+const INSET_CONTROL_BASE = 'w-full border-0 rounded-none px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed';
+const INSET_CONTROL_MM = `${INSET_CONTROL_BASE} pr-10`;
+const INSET_CONTROL_WIDE = `${INSET_CONTROL_BASE} pr-14`;
 /* ---------------- Export helpers ---------------- */
 function stripNoExport(svg: SVGSVGElement) {
   // Remove any elements marked as non-export (green indicators etc.)
@@ -1683,19 +1697,20 @@ export default function CurvedTitlePage() {
                 </InfoTip>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500">View:</span>
-                <select
-                  className="p-1.5 text-sm rounded-lg border border-slate-300"
-                  value={view}
-                  onChange={e => {
-                    applyViewPreset(e.target.value as ViewMode);
-                  }}
-                >
-                  <option value="autofit">Auto-fit curve</option>
-                  <option value="fullpage">Full page / envelope</option>
-                  <option value="custom">Custom</option>
-                </select>
-              </div>
+  
+  <select
+    className="p-1.5 text-sm rounded-lg border border-slate-300"
+    value={view}
+    onChange={e => {
+      applyViewPreset(e.target.value as ViewMode);
+    }}
+  >
+    <option value="autofit">Auto-fit curve</option>
+    <option value="fullpage">Full page / envelope</option>
+    <option value="custom">Custom</option>
+  </select>
+</div>
+
             </div>
 
             <div className="flex flex-wrap items-center gap-2 ml-auto">
@@ -2050,52 +2065,56 @@ export default function CurvedTitlePage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
-            <div>
-              <label className="font-medium text-slate-700">Script</label>
-              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={script} onChange={e => setScript(e.target.value as ScriptId)}>
-                <option value="Copperplate">Copperplate</option>
-                <option value="Fraktur">Fraktur</option>
-                <option value="TexturaQuadrata">Textura Quadrata</option>
-              </select>
+            <div className="sm:col-span-2">
+              <InsetLabeledField label="Script">
+                <select className={INSET_CONTROL_BASE} value={script} onChange={e => setScript(e.target.value as ScriptId)}>
+                  <option value="Copperplate">Copperplate</option>
+                  <option value="Fraktur">Fraktur</option>
+                  <option value="TexturaQuadrata">Textura Quadrata</option>
+                </select>
+              </InsetLabeledField>
             </div>
 
             <div>
-              <label className="font-medium text-slate-700">Curve</label>
-              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={curve} onChange={e => setCurve(e.target.value as CurvePresetId)}>
-                <option value="simpleArch">Simple Arch</option>
-                <option value="highArch">High Arch</option>
-                <option value="shallowArch">Shallow Arch</option>
-                <option value="compoundArch">Compound Arch</option>
-                <option value="zanerian">Zanerian Resolution</option>
-              </select>
+              <InsetLabeledField label="Paper size">
+                <select
+                  className={INSET_CONTROL_BASE}
+                  value={paper}
+                  onChange={e => {
+                    const id = e.target.value as PaperId;
+                    setPaper(id);
+                    setOrientation(PAPERS_MM[id].defaultOrientation);
+                    setPan({ x: 0, y: 0 });
+                  }}
+                >
+                  {Object.entries(PAPERS_MM).map(([id, p]) => (
+                    <option key={id} value={id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </InsetLabeledField>
             </div>
 
             <div>
-              <label className="font-medium text-slate-700">Paper size</label>
-              <select
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                value={paper}
-                onChange={e => {
-                  const id = e.target.value as PaperId;
-                  setPaper(id);
-                  setOrientation(PAPERS_MM[id].defaultOrientation);
-                  setPan({ x: 0, y: 0 });
-                }}
-              >
-                {Object.entries(PAPERS_MM).map(([id, p]) => (
-                  <option key={id} value={id}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
+              <InsetLabeledField label="Orientation">
+                <select className={INSET_CONTROL_BASE} value={orientation} onChange={e => setOrientation(e.target.value as Orientation)}>
+                  <option value="portrait">Portrait</option>
+                  <option value="landscape">Landscape</option>
+                </select>
+              </InsetLabeledField>
             </div>
 
-            <div>
-              <label className="font-medium text-slate-700">Orientation</label>
-              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={orientation} onChange={e => setOrientation(e.target.value as Orientation)}>
-                <option value="portrait">Portrait</option>
-                <option value="landscape">Landscape</option>
-              </select>
+            <div className="sm:col-span-2">
+              <InsetLabeledField label="Curve">
+                <select className={INSET_CONTROL_BASE} value={curve} onChange={e => setCurve(e.target.value as CurvePresetId)}>
+                  <option value="simpleArch">Simple Arch</option>
+                  <option value="highArch">High Arch</option>
+                  <option value="shallowArch">Shallow Arch</option>
+                  <option value="compoundArch">Compound Arch</option>
+                  <option value="zanerian">Zanerian Resolution</option>
+                </select>
+              </InsetLabeledField>
             </div>
 
             <div className="sm:col-span-2">
@@ -2103,21 +2122,24 @@ export default function CurvedTitlePage() {
             </div>
 
             <div className="sm:col-span-2">
-              <label className="font-medium text-slate-700">Title text</label>
-              <input className="mt-1 w-full p-3 rounded-lg border border-slate-300 text-sm" value={text} onChange={e => setText(e.target.value)} />
+              <InsetLabeledField label="Title text">
+              <input className={INSET_CONTROL_BASE} value={text} onChange={e => setText(e.target.value)} />
+              </InsetLabeledField>
             </div>
 
             {topBandEnabled && (
               <div className="sm:col-span-2">
-                <label className="font-medium text-slate-700">Top text</label>
-                <input className="mt-1 w-full p-3 rounded-lg border border-slate-300 text-sm" value={topText} onChange={e => setTopText(e.target.value)} />
+                <InsetLabeledField label="Top text">
+                <input className={INSET_CONTROL_BASE} value={topText} onChange={e => setTopText(e.target.value)} />
+                </InsetLabeledField>
               </div>
             )}
 
             {bottomBandEnabled && (
               <div className="sm:col-span-2">
-                <label className="font-medium text-slate-700">Bottom text</label>
-                <input className="mt-1 w-full p-3 rounded-lg border border-slate-300 text-sm" value={bottomText} onChange={e => setBottomText(e.target.value)} />
+                <InsetLabeledField label="Bottom text">
+                <input className={INSET_CONTROL_BASE} value={bottomText} onChange={e => setBottomText(e.target.value)} />
+                </InsetLabeledField>
               </div>
             )}
           </div>
@@ -2138,10 +2160,9 @@ export default function CurvedTitlePage() {
             <div className="mt-3 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="font-medium text-slate-700">X-height</label>
-                  <div className="relative mt-1">
+                  <InsetLabeledField label="X-height" rightAdornment="mm">
                     <select
-                      className="w-full p-2 pr-10 rounded-lg border border-slate-300"
+                      className={INSET_CONTROL_MM}
                       value={xHeightMM}
                       onChange={(e) => setXHeightMM(parseFloat(e.target.value))}
                     >
@@ -2151,30 +2172,28 @@ export default function CurvedTitlePage() {
                         </option>
                       ))}
                     </select>
-                    <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
-                  </div>
+                  </InsetLabeledField>
                 </div>
                 <div>
-
-
-                  <label className="font-medium text-slate-700">Capitals</label>
-                  <select
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
-                    value={capStyle}
-                    onChange={(e) => setCapStyle(e.target.value as 'simple' | 'flourished')}
-                    disabled={useCalibration}
-                  >
-                    <option value="simple">Simple (body widths)</option>
-                    <option value="flourished">Flourished (full widths)</option>
-                  </select>
+                  <InsetLabeledField label="Capitals" disabled={useCalibration}>
+                    <select
+                      className={INSET_CONTROL_BASE}
+                      value={capStyle}
+                      onChange={(e) => setCapStyle(e.target.value as 'simple' | 'flourished')}
+                      disabled={useCalibration}
+                    >
+                      <option value="simple">Simple (body widths)</option>
+                      <option value="flourished">Flourished (full widths)</option>
+                    </select>
+                  </InsetLabeledField>
                   {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
                 </div>
               </div>
 
               <div>
-                <label className="font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
+                <InsetLabeledField label="Guideline ratio (desc : x : asc)">
                 <select
-                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  className={INSET_CONTROL_BASE}
                   value={copperplateRatioPreset}
                   onChange={(e) => setCopperplateRatioPreset(e.target.value as CopperplateRatioPreset)}
                 >
@@ -2183,6 +2202,7 @@ export default function CurvedTitlePage() {
                   <option value="1:1:1">1 : 1 : 1</option>
                   <option value="custom">Custom…</option>
                 </select>
+                </InsetLabeledField>
                 <p className="mt-1 text-[11px] text-slate-400">Ascender/descender scale from x-height.</p>
               </div>
 
@@ -2224,35 +2244,31 @@ export default function CurvedTitlePage() {
                 <div className="border-t border-slate-200 pt-3">
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                     <div className="flex flex-col gap-1">
-                      <span className="text-xs font-mono text-indigo-500">{CAL_WORD}</span>
-                      <div className="relative w-full">
+                      <InsetLabeledField label={CAL_WORD} rightAdornment="mm">
                         <input
                           type="number"
                           step="0.1"
                           min="0"
-                          className="w-full p-2 pr-10 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          className={INSET_CONTROL_MM}
                           placeholder="Lowercase word"
                           value={calWordLowerMM}
                           onChange={(e) => setCalWordLowerMM(e.target.value)}
                         />
-                        <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
-                      </div>
+                      </InsetLabeledField>
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <span className="text-xs font-mono text-indigo-500">{CAL_WORD_DOUBLE}</span>
-                      <div className="relative w-full">
+                      <InsetLabeledField label={CAL_WORD_DOUBLE} rightAdornment="mm">
                         <input
                           type="number"
                           step="0.1"
                           min="0"
-                          className="w-full p-2 pr-10 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          className={INSET_CONTROL_MM}
                           placeholder="Double word"
                           value={calWordDoubleMM}
                           onChange={(e) => setCalWordDoubleMM(e.target.value)}
                         />
-                        <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
-                      </div>
+                      </InsetLabeledField>
                     </div>
                   </div>
 
@@ -2270,35 +2286,37 @@ export default function CurvedTitlePage() {
                     {showAdvanced && (
                       <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                         <div className="flex flex-col gap-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium text-slate-700">Overall scale</span>
+                          <div className="flex items-center justify-end">
                             <span className="font-mono text-slate-500">×{userScaleFactor.toFixed(2)}</span>
                           </div>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0.7"
-                            max="1.3"
-                            className="w-full p-2 rounded-lg border border-slate-300 text-sm"
-                            value={userScaleFactor}
-                            onChange={(e) => setUserScaleFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.7, 1.3))}
-                          />
+                          <InsetLabeledField label="Overall scale">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0.7"
+                              max="1.3"
+                              className={INSET_CONTROL_BASE}
+                              value={userScaleFactor}
+                              onChange={(e) => setUserScaleFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.7, 1.3))}
+                            />
+                          </InsetLabeledField>
                         </div>
 
                         <div className="flex flex-col gap-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium text-slate-700">Spacing factor</span>
+                          <div className="flex items-center justify-end">
                             <span className="font-mono text-slate-500">×{userSpaceFactor.toFixed(2)}</span>
                           </div>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0.5"
-                            max="1.5"
-                            className="w-full p-2 rounded-lg border border-slate-300 text-sm"
-                            value={userSpaceFactor}
-                            onChange={(e) => setUserSpaceFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.5, 1.5))}
-                          />
+                          <InsetLabeledField label="Spacing factor">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0.5"
+                              max="1.5"
+                              className={INSET_CONTROL_BASE}
+                              value={userSpaceFactor}
+                              onChange={(e) => setUserSpaceFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.5, 1.5))}
+                            />
+                          </InsetLabeledField>
                         </div>
                       </div>
                     )}
@@ -2311,12 +2329,12 @@ export default function CurvedTitlePage() {
               {copperplateRatioPreset === 'custom' && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="font-medium text-slate-700">Desc units</label>
+                    <InsetLabeledField label="Desc units">
                     <input
                       type="number"
                       min={0}
                       step="0.5"
-                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                      className={INSET_CONTROL_BASE}
                       value={copperplateDescUnitsText}
                       onWheel={(e) => {
                         (e.currentTarget as HTMLInputElement).blur();
@@ -2353,14 +2371,15 @@ export default function CurvedTitlePage() {
                         setCopperplateDescUnits(next);
                       }}
                     />
+                    </InsetLabeledField>
                   </div>
                   <div>
-                    <label className="font-medium text-slate-700">X units</label>
+                    <InsetLabeledField label="X units">
                     <input
                       type="number"
                       min={0.5}
                       step="0.5"
-                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                      className={INSET_CONTROL_BASE}
                       value={copperplateXUnitsText}
                       onWheel={(e) => {
                         (e.currentTarget as HTMLInputElement).blur();
@@ -2397,14 +2416,15 @@ export default function CurvedTitlePage() {
                         setCopperplateXUnits(next);
                       }}
                     />
+                    </InsetLabeledField>
                   </div>
                   <div>
-                    <label className="font-medium text-slate-700">Asc units</label>
+                    <InsetLabeledField label="Asc units">
                     <input
                       type="number"
                       min={0}
                       step="0.5"
-                      className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                      className={INSET_CONTROL_BASE}
                       value={copperplateAscUnitsText}
                       onWheel={(e) => {
                         (e.currentTarget as HTMLInputElement).blur();
@@ -2441,6 +2461,7 @@ export default function CurvedTitlePage() {
                         setCopperplateAscUnits(next);
                       }}
                     />
+                    </InsetLabeledField>
                   </div>
                 </div>
               )}
@@ -2450,13 +2471,12 @@ export default function CurvedTitlePage() {
           ) : (
             <div className="grid grid-cols-2 gap-4 mt-3">
               <div>
-                <label className="font-medium text-slate-700">Nib size</label>
-                <div className="relative mt-1">
+                <InsetLabeledField label="Nib size" rightAdornment="mm">
                   <input
                     type="number"
                     step="any"
                     min={0.2}
-                    className="w-full p-2 pr-10 rounded-lg border border-slate-300"
+                    className={INSET_CONTROL_MM}
                     value={nibText}
                     onWheel={(e) => {
                       // Prevent mouse wheel from stepping this number input
@@ -2487,34 +2507,27 @@ export default function CurvedTitlePage() {
                       setNibText(String(Math.max(0.2, v)));
                     }}
                   />
-                  <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
-                </div>
+                </InsetLabeledField>
               </div>
               <div>
-                <label className="font-medium text-slate-700">x-height (nibs)</label>
-                <div className="relative mt-1">
-                  <input type="number" step={0.5} min={1} max={8} className="w-full p-2 pr-14 rounded-lg border border-slate-300" value={xNib} onChange={e => setXNib(parseFloat(e.target.value || '5'))} />
-                  <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">nibs</span>
-                </div>
+                <InsetLabeledField label="x-height (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
+                  <input type="number" step={0.5} min={1} max={8} className={INSET_CONTROL_WIDE} value={xNib} onChange={e => setXNib(parseFloat(e.target.value || '5'))} />
+                </InsetLabeledField>
               </div>
               <div>
-                <label className="font-medium text-slate-700">Ascender (nibs)</label>
-                <div className="relative mt-1">
-                  <input type="number" step={0.5} min={0} max={8} className="w-full p-2 pr-14 rounded-lg border border-slate-300" value={ascNib} onChange={e => setAscNib(parseFloat(e.target.value || '3'))} />
-                  <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">nibs</span>
-                </div>
+                <InsetLabeledField label="Ascender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
+                  <input type="number" step={0.5} min={0} max={8} className={INSET_CONTROL_WIDE} value={ascNib} onChange={e => setAscNib(parseFloat(e.target.value || '3'))} />
+                </InsetLabeledField>
               </div>
               <div>
-                <label className="font-medium text-slate-700">Descender (nibs)</label>
-                <div className="relative mt-1">
-                  <input type="number" step={0.5} min={0} max={8} className="w-full p-2 pr-14 rounded-lg border border-slate-300" value={descNib} onChange={e => setDescNib(parseFloat(e.target.value || '2'))} />
-                  <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">nibs</span>
-                </div>
+                <InsetLabeledField label="Descender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
+                  <input type="number" step={0.5} min={0} max={8} className={INSET_CONTROL_WIDE} value={descNib} onChange={e => setDescNib(parseFloat(e.target.value || '2'))} />
+                </InsetLabeledField>
               </div>
               <div className="col-span-2">
-                <label className="font-medium text-slate-700">Nib angle (°)</label>
+                <InsetLabeledField label="Nib angle (°)">
                 <select
-                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  className={INSET_CONTROL_BASE}
                   value={penAngleDeg}
                   onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
                 >
@@ -2522,6 +2535,7 @@ export default function CurvedTitlePage() {
                   <option value={40}>40°</option>
                   <option value={45}>45°</option>
                 </select>
+                </InsetLabeledField>
               </div>
             </div>
           )}
@@ -2540,7 +2554,7 @@ export default function CurvedTitlePage() {
               <div className="grid grid-cols-2 gap-3">
                 <InsetLabeledField label="Script" disabled={!topBandEnabled}>
                   <select
-                    className="w-full h-14 border-0 rounded-none pt-6 pb-2 px-3 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed"
+                    className={INSET_CONTROL_BASE}
                     value={topBandScript}
                     onChange={e => setTopBandScript(e.target.value as ScriptId)}
                     disabled={!topBandEnabled}
@@ -2550,19 +2564,16 @@ export default function CurvedTitlePage() {
                     <option value="Copperplate">Copperplate</option>
                   </select>
                 </InsetLabeledField>
-                <InsetLabeledField label={topBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} disabled={!topBandEnabled}>
-                  <div className="relative">
+                <InsetLabeledField label={topBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} disabled={!topBandEnabled} rightAdornment="mm">
                     <input
                       type="number"
                       step="any"
                       min={0.2}
-                      className="w-full h-14 border-0 rounded-none pt-6 pb-2 pl-3 pr-10 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed"
+                      className={INSET_CONTROL_MM}
                       value={topBandSizeText}
                       onChange={e => setTopBandSizeText(e.target.value)}
                       disabled={!topBandEnabled}
                     />
-                    <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
-                  </div>
                 </InsetLabeledField>
               </div>
             </div>
@@ -2580,7 +2591,7 @@ export default function CurvedTitlePage() {
               <div className="grid grid-cols-2 gap-3">
                 <InsetLabeledField label="Script" disabled={!bottomBandEnabled}>
                   <select
-                    className="w-full h-14 border-0 rounded-none pt-6 pb-2 px-3 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed"
+                    className={INSET_CONTROL_BASE}
                     value={bottomBandScript}
                     onChange={e => setBottomBandScript(e.target.value as ScriptId)}
                     disabled={!bottomBandEnabled}
@@ -2590,19 +2601,16 @@ export default function CurvedTitlePage() {
                     <option value="Copperplate">Copperplate</option>
                   </select>
                 </InsetLabeledField>
-                <InsetLabeledField label={bottomBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} disabled={!bottomBandEnabled}>
-                  <div className="relative">
+                <InsetLabeledField label={bottomBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} disabled={!bottomBandEnabled} rightAdornment="mm">
                     <input
                       type="number"
                       step="any"
                       min={0.2}
-                      className="w-full h-14 border-0 rounded-none pt-6 pb-2 pl-3 pr-10 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed"
+                      className={INSET_CONTROL_MM}
                       value={bottomBandSizeText}
                       onChange={e => setBottomBandSizeText(e.target.value)}
                       disabled={!bottomBandEnabled}
                     />
-                    <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
-                  </div>
                 </InsetLabeledField>
               </div>
             </div>
@@ -2618,19 +2626,12 @@ export default function CurvedTitlePage() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 mt-3 select-none">
-            <div>
-              <label className="font-medium text-slate-700">Text alignment</label>
-              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
-                <option value="start">Start</option>
-                <option value="center">Centered</option>
-                <option value="end">End</option>
-              </select>
-            </div>
+          
 
-            <div className="my-2 border-t border-slate-200/70" />
+
             <div>
               <label className="font-medium text-slate-700">Rotation (°) <span className="text-indigo-600">{rotDeg}°</span></label>
-              <input type="range" min={-30} max={30} step={1} value={rotDeg} onChange={e => setRotDeg(parseInt(e.target.value, 10))} className="w-full" />
+              <input type="range" min={-180} max={180} step={1} value={rotDeg} onChange={e => setRotDeg(parseInt(e.target.value, 10))} className="w-full" />
             </div>
 
             <div>
@@ -2638,7 +2639,7 @@ export default function CurvedTitlePage() {
               <input type="range" min={60} max={140} step={1} value={scalePct} onChange={e => setScalePct(parseInt(e.target.value, 10))} className="w-full" />
             </div>
 
-            <div className="my-2 border-t border-slate-200/70" />
+
             <div className="flex flex-wrap items-center gap-3">
               <button onMouseDown={e => e.preventDefault()} onClick={resetTransform} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
                 Reset rotation &amp; scale
@@ -2656,6 +2657,15 @@ export default function CurvedTitlePage() {
           </div>
 
             <div className="my-3 border-t border-slate-200/70" />
+              <div>
+              <InsetLabeledField label="Text alignment">
+                <select className={INSET_CONTROL_BASE} value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
+                <option value="start">Start</option>
+                <option value="center">Centered</option>
+                <option value="end">End</option>
+              </select>
+              </InsetLabeledField>
+            </div>
           <div className="mt-4 flex items-center gap-4">
             <label className="inline-flex items-center gap-2 text-sm text-slate-800">
               <input
