@@ -154,7 +154,7 @@ type InsetLabeledFieldProps = {
 
 function InsetLabeledField({ label, disabled = false, children }: InsetLabeledFieldProps) {
   return (
-    <div className={`relative ${disabled ? 'opacity-70' : ''}`}>
+    <div className="relative">
       <div className="absolute inset-x-0 top-0 h-5 rounded-t-lg bg-slate-50/80 border-b border-slate-200 px-3 flex items-center z-10 pointer-events-none">
         <span className="text-[11px] font-medium text-slate-600">{label}</span>
       </div>
@@ -2540,7 +2540,7 @@ export default function CurvedTitlePage() {
               <div className="grid grid-cols-2 gap-3">
                 <InsetLabeledField label="Script" disabled={!topBandEnabled}>
                   <select
-                    className="w-full h-14 pt-6 pb-2 px-3 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                    className="w-full h-14 pt-6 pb-2 px-3 rounded-lg border border-t-transparent border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
                     value={topBandScript}
                     onChange={e => setTopBandScript(e.target.value as ScriptId)}
                     disabled={!topBandEnabled}
@@ -2556,7 +2556,7 @@ export default function CurvedTitlePage() {
                       type="number"
                       step="any"
                       min={0.2}
-                      className="w-full h-14 pt-6 pb-2 pl-3 pr-10 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                      className="w-full h-14 pt-6 pb-2 pl-3 pr-10 rounded-lg border border-t-transparent border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
                       value={topBandSizeText}
                       onChange={e => setTopBandSizeText(e.target.value)}
                       disabled={!topBandEnabled}
@@ -2580,7 +2580,7 @@ export default function CurvedTitlePage() {
               <div className="grid grid-cols-2 gap-3">
                 <InsetLabeledField label="Script" disabled={!bottomBandEnabled}>
                   <select
-                    className="w-full h-14 pt-6 pb-2 px-3 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                    className="w-full h-14 pt-6 pb-2 px-3 rounded-lg border border-t-transparent border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
                     value={bottomBandScript}
                     onChange={e => setBottomBandScript(e.target.value as ScriptId)}
                     disabled={!bottomBandEnabled}
@@ -2596,7 +2596,7 @@ export default function CurvedTitlePage() {
                       type="number"
                       step="any"
                       min={0.2}
-                      className="w-full h-14 pt-6 pb-2 pl-3 pr-10 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
+                      className="w-full h-14 pt-6 pb-2 pl-3 pr-10 rounded-lg border border-t-transparent border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
                       value={bottomBandSizeText}
                       onChange={e => setBottomBandSizeText(e.target.value)}
                       disabled={!bottomBandEnabled}
@@ -2629,15 +2629,13 @@ export default function CurvedTitlePage() {
 
             <div className="my-2 border-t border-slate-200/70" />
             <div>
-              <label className="font-medium text-slate-700">Rotation (°)</label>
+              <label className="font-medium text-slate-700">Rotation (°) <span className="text-indigo-600">{rotDeg}°</span></label>
               <input type="range" min={-30} max={30} step={1} value={rotDeg} onChange={e => setRotDeg(parseInt(e.target.value, 10))} className="w-full" />
-              <div className="text-xs text-slate-500 mt-1">{rotDeg}°</div>
             </div>
 
             <div>
-              <label className="font-medium text-slate-700">Scale (%)</label>
+              <label className="font-medium text-slate-700">Scale (%) <span className="text-indigo-600">{scalePct}%</span></label>
               <input type="range" min={60} max={140} step={1} value={scalePct} onChange={e => setScalePct(parseInt(e.target.value, 10))} className="w-full" />
-              <div className="text-xs text-slate-500 mt-1">{scalePct}%</div>
             </div>
 
             <div className="my-2 border-t border-slate-200/70" />
@@ -2666,7 +2664,7 @@ export default function CurvedTitlePage() {
                 checked={showBoxes}
                 onChange={e => setShowBoxes(e.target.checked)}
               />
-              Show letter bounding boxes
+              Letter bounding boxes
             </label>
 
             <label className="inline-flex items-center gap-2 text-sm text-slate-800">
@@ -2676,7 +2674,7 @@ export default function CurvedTitlePage() {
                 checked={showSpanFill}
                 onChange={e => setShowSpanFill(e.target.checked)}
               />
-              Show title span fill
+              Title span fill
             </label>
           </div>
         </div>
