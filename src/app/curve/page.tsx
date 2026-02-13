@@ -1696,19 +1696,21 @@ export default function CurvedTitlePage() {
                   Drag anywhere to pan. Zoom with ±. Drag any guideline to move the curve guide (sticky centering on X).
                 </InfoTip>
               </div>
-              <InsetLabeledField label="View" className="w-44">
-                <select
-                  className={INSET_CONTROL_BASE}
-                  value={view}
-                  onChange={e => {
-                    applyViewPreset(e.target.value as ViewMode);
-                  }}
-                >
-                  <option value="autofit">Auto-fit curve</option>
-                  <option value="fullpage">Full page / envelope</option>
-                  <option value="custom">Custom</option>
-                </select>
-              </InsetLabeledField>
+              <div className="flex items-center gap-2">
+  
+  <select
+    className="p-1.5 text-sm rounded-lg border border-slate-300"
+    value={view}
+    onChange={e => {
+      applyViewPreset(e.target.value as ViewMode);
+    }}
+  >
+    <option value="autofit">Auto-fit curve</option>
+    <option value="fullpage">Full page / envelope</option>
+    <option value="custom">Custom</option>
+  </select>
+</div>
+
             </div>
 
             <div className="flex flex-wrap items-center gap-2 ml-auto">
@@ -2624,17 +2626,9 @@ export default function CurvedTitlePage() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 mt-3 select-none">
-            <div>
-              <InsetLabeledField label="Text alignment">
-                <select className={INSET_CONTROL_BASE} value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
-                <option value="start">Start</option>
-                <option value="center">Centered</option>
-                <option value="end">End</option>
-              </select>
-              </InsetLabeledField>
-            </div>
+          
 
-            <div className="my-2 border-t border-slate-200/70" />
+
             <div>
               <label className="font-medium text-slate-700">Rotation (°) <span className="text-indigo-600">{rotDeg}°</span></label>
               <input type="range" min={-180} max={180} step={1} value={rotDeg} onChange={e => setRotDeg(parseInt(e.target.value, 10))} className="w-full" />
@@ -2645,7 +2639,7 @@ export default function CurvedTitlePage() {
               <input type="range" min={60} max={140} step={1} value={scalePct} onChange={e => setScalePct(parseInt(e.target.value, 10))} className="w-full" />
             </div>
 
-            <div className="my-2 border-t border-slate-200/70" />
+
             <div className="flex flex-wrap items-center gap-3">
               <button onMouseDown={e => e.preventDefault()} onClick={resetTransform} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
                 Reset rotation &amp; scale
@@ -2663,6 +2657,15 @@ export default function CurvedTitlePage() {
           </div>
 
             <div className="my-3 border-t border-slate-200/70" />
+              <div>
+              <InsetLabeledField label="Text alignment">
+                <select className={INSET_CONTROL_BASE} value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
+                <option value="start">Start</option>
+                <option value="center">Centered</option>
+                <option value="end">End</option>
+              </select>
+              </InsetLabeledField>
+            </div>
           <div className="mt-4 flex items-center gap-4">
             <label className="inline-flex items-center gap-2 text-sm text-slate-800">
               <input
