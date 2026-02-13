@@ -1575,7 +1575,7 @@ export default function CurvedTitlePage() {
 
 
   return (
-    <main className="min-h-screen text-slate-900 relative">
+    <main className="min-h-screen text-sm text-slate-900 relative">
       {/* FULL-VIEWPORT “PAINT OVER” LAYER */}
       <div className="fixed inset-0 -z-10 bg-slate-100" style={{ backgroundImage: 'none' }} />
 
@@ -2033,20 +2033,20 @@ export default function CurvedTitlePage() {
 
             <div className="sm:col-span-2">
               <label className="font-medium text-slate-700">Title text</label>
-              <input className="mt-1 w-full p-3 rounded-lg border border-slate-300 text-base" value={text} onChange={e => setText(e.target.value)} />
+              <input className="mt-1 w-full p-3 rounded-lg border border-slate-300 text-sm" value={text} onChange={e => setText(e.target.value)} />
             </div>
 
             {topBandEnabled && (
               <div className="sm:col-span-2">
                 <label className="font-medium text-slate-700">Top text</label>
-                <input className="mt-1 w-full p-3 rounded-lg border border-slate-300 text-base" value={topText} onChange={e => setTopText(e.target.value)} />
+                <input className="mt-1 w-full p-3 rounded-lg border border-slate-300 text-sm" value={topText} onChange={e => setTopText(e.target.value)} />
               </div>
             )}
 
             {bottomBandEnabled && (
               <div className="sm:col-span-2">
                 <label className="font-medium text-slate-700">Bottom text</label>
-                <input className="mt-1 w-full p-3 rounded-lg border border-slate-300 text-base" value={bottomText} onChange={e => setBottomText(e.target.value)} />
+                <input className="mt-1 w-full p-3 rounded-lg border border-slate-300 text-sm" value={bottomText} onChange={e => setBottomText(e.target.value)} />
               </div>
             )}
           </div>
@@ -2406,21 +2406,6 @@ export default function CurvedTitlePage() {
                     setNibText(String(Math.max(0.2, v)));
                   }}
                 />
-
-
-                <div>
-                  <label className="font-medium text-slate-700">Pen angle (°)</label>
-                  <select
-                    className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                    value={penAngleDeg}
-                    onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
-                  >
-                    <option value={35}>35°</option>
-                    <option value={40}>40°</option>
-                    <option value={45}>45°</option>
-                  </select>
-                </div>
-
               </div>
               <div>
                 <label className="font-medium text-slate-700">x-height (nibs)</label>
@@ -2433,6 +2418,18 @@ export default function CurvedTitlePage() {
               <div>
                 <label className="font-medium text-slate-700">Descender (nibs)</label>
                 <input type="number" step={0.5} min={0} max={8} className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={descNib} onChange={e => setDescNib(parseFloat(e.target.value || '2'))} />
+              </div>
+              <div className="col-span-2">
+                <label className="font-medium text-slate-700">Nib angle (°)</label>
+                <select
+                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  value={penAngleDeg}
+                  onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
+                >
+                  <option value={35}>35°</option>
+                  <option value={40}>40°</option>
+                  <option value={45}>45°</option>
+                </select>
               </div>
             </div>
           )}
@@ -2481,70 +2478,72 @@ export default function CurvedTitlePage() {
               <div className="text-xs text-slate-500 mt-1">{scalePct}%</div>
             </div>
 
-            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                checked={flipCurve}
-                onChange={e => setFlipCurve(e.target.checked)}
-              />
-              Flip curve
-            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                  checked={flipCurve}
+                  onChange={e => setFlipCurve(e.target.checked)}
+                />
+                Flip curve
+              </label>
+              <button onMouseDown={e => e.preventDefault()} onClick={resetTransform} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
+                Reset rotation &amp; scale
+              </button>
+            </div>
           </div>
 
-
-          <div className="mt-4">
-            <button onMouseDown={e => e.preventDefault()} onClick={resetTransform} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
-              Reset rotation &amp; scale
-            </button>
-          </div>
-
-          <div className="mt-4 grid grid-cols-1 gap-3">
-            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                checked={topBandEnabled}
-                onChange={e => setTopBandEnabled(e.target.checked)}
-              />
-              Enable top band
-            </label>
-            {topBandEnabled && (
-              <div>
-                <label className="font-medium text-slate-700">Top nib (mm)</label>
+          <div className="mt-4 space-y-3">
+            <div className="space-y-2">
+              <label className="inline-flex items-center gap-2 text-sm text-slate-800">
                 <input
-                  type="number"
-                  step="any"
-                  min={0.2}
-                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                  value={topNibText}
-                  onChange={e => setTopNibText(e.target.value)}
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                  checked={topBandEnabled}
+                  onChange={e => setTopBandEnabled(e.target.checked)}
                 />
-              </div>
-            )}
+                Enable top band
+              </label>
+              {topBandEnabled && (
+                <div className="flex items-center gap-3">
+                  <label className="font-medium text-slate-700">Top nib (mm)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    min={0.2}
+                    className="w-full p-2 rounded-lg border border-slate-300"
+                    value={topNibText}
+                    onChange={e => setTopNibText(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
 
-            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                checked={bottomBandEnabled}
-                onChange={e => setBottomBandEnabled(e.target.checked)}
-              />
-              Enable bottom band
-            </label>
-            {bottomBandEnabled && (
-              <div>
-                <label className="font-medium text-slate-700">Bottom nib (mm)</label>
+            <div className="space-y-2">
+              <label className="inline-flex items-center gap-2 text-sm text-slate-800">
                 <input
-                  type="number"
-                  step="any"
-                  min={0.2}
-                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                  value={bottomNibText}
-                  onChange={e => setBottomNibText(e.target.value)}
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                  checked={bottomBandEnabled}
+                  onChange={e => setBottomBandEnabled(e.target.checked)}
                 />
-              </div>
-            )}
+                Enable bottom band
+              </label>
+              {bottomBandEnabled && (
+                <div className="flex items-center gap-3">
+                  <label className="font-medium text-slate-700">Bottom nib (mm)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    min={0.2}
+                    className="w-full p-2 rounded-lg border border-slate-300"
+                    value={bottomNibText}
+                    onChange={e => setBottomNibText(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </section>
