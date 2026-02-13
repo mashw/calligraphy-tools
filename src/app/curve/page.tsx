@@ -2022,15 +2022,6 @@ export default function CurvedTitlePage() {
               </select>
             </div>
 
-            <div>
-              <label className="font-medium text-slate-700">Text alignment</label>
-              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
-                <option value="start">Start</option>
-                <option value="center">Centered</option>
-                <option value="end">End</option>
-              </select>
-            </div>
-
             <div className="sm:col-span-2">
               <label className="font-medium text-slate-700">Title text</label>
               <input className="mt-1 w-full p-3 rounded-lg border border-slate-300 text-sm" value={text} onChange={e => setText(e.target.value)} />
@@ -2067,7 +2058,7 @@ export default function CurvedTitlePage() {
             <div className="mt-3 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="font-medium text-slate-700">X-height (mm)</label>
+                  <label className="font-medium text-slate-700">X-height</label>
                   <select
                     className="mt-1 w-full p-2 rounded-lg border border-slate-300"
                     value={xHeightMM}
@@ -2151,28 +2142,34 @@ export default function CurvedTitlePage() {
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                     <div className="flex flex-col gap-1">
                       <span className="text-xs font-mono text-indigo-500">{CAL_WORD}</span>
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        className="w-full p-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        placeholder="Lowercase word (mm)"
-                        value={calWordLowerMM}
-                        onChange={(e) => setCalWordLowerMM(e.target.value)}
-                      />
+                      <div className="relative w-full">
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          className="w-full p-2 pr-10 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          placeholder="Lowercase word"
+                          value={calWordLowerMM}
+                          onChange={(e) => setCalWordLowerMM(e.target.value)}
+                        />
+                        <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
+                      </div>
                     </div>
 
                     <div className="flex flex-col gap-1">
                       <span className="text-xs font-mono text-indigo-500">{CAL_WORD_DOUBLE}</span>
-                      <input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        className="w-full p-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        placeholder="Double word (mm)"
-                        value={calWordDoubleMM}
-                        onChange={(e) => setCalWordDoubleMM(e.target.value)}
-                      />
+                      <div className="relative w-full">
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          className="w-full p-2 pr-10 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          placeholder="Double word"
+                          value={calWordDoubleMM}
+                          onChange={(e) => setCalWordDoubleMM(e.target.value)}
+                        />
+                        <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
+                      </div>
                     </div>
                   </div>
 
@@ -2370,42 +2367,45 @@ export default function CurvedTitlePage() {
           ) : (
             <div className="grid grid-cols-2 gap-4 mt-3">
               <div>
-                <label className="font-medium text-slate-700">Nib size (mm)</label>
-                <input
-                  type="number"
-                  step="any"
-                  min={0.2}
-                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                  value={nibText}
-                  onWheel={(e) => {
-                    // Prevent mouse wheel from stepping this number input
-                    (e.currentTarget as HTMLInputElement).blur();
-                  }}
-                  onChange={(e) => {
-                    // Allow free typing (e.g. "3.8", "2.", "")
-                    setNibText(e.target.value);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-                    e.preventDefault();
+                <label className="font-medium text-slate-700">Nib size</label>
+                <div className="relative mt-1">
+                  <input
+                    type="number"
+                    step="any"
+                    min={0.2}
+                    className="w-full p-2 pr-10 rounded-lg border border-slate-300"
+                    value={nibText}
+                    onWheel={(e) => {
+                      // Prevent mouse wheel from stepping this number input
+                      (e.currentTarget as HTMLInputElement).blur();
+                    }}
+                    onChange={(e) => {
+                      // Allow free typing (e.g. "3.8", "2.", "")
+                      setNibText(e.target.value);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                      e.preventDefault();
 
-                    const current = parseFloat(nibText);
-                    const safe = Number.isFinite(current) ? current : 2;
-                    const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
+                      const current = parseFloat(nibText);
+                      const safe = Number.isFinite(current) ? current : 2;
+                      const dir: 1 | -1 = e.key === 'ArrowUp' ? 1 : -1;
 
-                    const stepped = stepHalfFrom(safe, dir);
-                    setNibText(String(Math.max(0.2, stepped)));
-                  }}
-                  onBlur={() => {
-                    // Validate only (NO snapping)
-                    const v = parseFloat(nibText);
-                    if (!Number.isFinite(v)) {
-                      setNibText('2');
-                      return;
-                    }
-                    setNibText(String(Math.max(0.2, v)));
-                  }}
-                />
+                      const stepped = stepHalfFrom(safe, dir);
+                      setNibText(String(Math.max(0.2, stepped)));
+                    }}
+                    onBlur={() => {
+                      // Validate only (NO snapping)
+                      const v = parseFloat(nibText);
+                      if (!Number.isFinite(v)) {
+                        setNibText('2');
+                        return;
+                      }
+                      setNibText(String(Math.max(0.2, v)));
+                    }}
+                  />
+                  <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
+                </div>
               </div>
               <div>
                 <label className="font-medium text-slate-700">x-height (nibs)</label>
@@ -2467,6 +2467,15 @@ export default function CurvedTitlePage() {
 
           <div className="grid grid-cols-1 gap-4 mt-3 select-none">
             <div>
+              <label className="font-medium text-slate-700">Text alignment</label>
+              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
+                <option value="start">Start</option>
+                <option value="center">Centered</option>
+                <option value="end">End</option>
+              </select>
+            </div>
+
+            <div>
               <label className="font-medium text-slate-700">Rotation (°)</label>
               <input type="range" min={-30} max={30} step={1} value={rotDeg} onChange={e => setRotDeg(parseInt(e.target.value, 10))} className="w-full" />
               <div className="text-xs text-slate-500 mt-1">{rotDeg}°</div>
@@ -2479,6 +2488,9 @@ export default function CurvedTitlePage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
+              <button onMouseDown={e => e.preventDefault()} onClick={resetTransform} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
+                Reset rotation &amp; scale
+              </button>
               <label className="inline-flex items-center gap-2 text-sm text-slate-800">
                 <input
                   type="checkbox"
@@ -2488,61 +2500,66 @@ export default function CurvedTitlePage() {
                 />
                 Flip curve
               </label>
-              <button onMouseDown={e => e.preventDefault()} onClick={resetTransform} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
-                Reset rotation &amp; scale
-              </button>
             </div>
           </div>
 
           <div className="mt-4 space-y-3">
             <div className="space-y-2">
-              <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                  checked={topBandEnabled}
-                  onChange={e => setTopBandEnabled(e.target.checked)}
-                />
-                Enable top band
-              </label>
-              {topBandEnabled && (
-                <div className="flex items-center gap-3">
-                  <label className="font-medium text-slate-700">Top nib (mm)</label>
+              <div className="text-sm font-medium text-slate-700">Top band</div>
+              <div className="flex items-center gap-3">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={topBandEnabled}
+                    onChange={e => setTopBandEnabled(e.target.checked)}
+                    aria-label="Top band"
+                  />
+                  <span className="w-10 h-6 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
+                  <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
+                </label>
+                <div className="relative flex-1 min-w-0">
                   <input
                     type="number"
                     step="any"
                     min={0.2}
-                    className="w-full p-2 rounded-lg border border-slate-300"
+                    className="w-full p-2 pr-10 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
                     value={topNibText}
                     onChange={e => setTopNibText(e.target.value)}
+                    disabled={!topBandEnabled}
                   />
+                  <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
                 </div>
-              )}
+              </div>
             </div>
 
             <div className="space-y-2">
-              <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                  checked={bottomBandEnabled}
-                  onChange={e => setBottomBandEnabled(e.target.checked)}
-                />
-                Enable bottom band
-              </label>
-              {bottomBandEnabled && (
-                <div className="flex items-center gap-3">
-                  <label className="font-medium text-slate-700">Bottom nib (mm)</label>
+              <div className="text-sm font-medium text-slate-700">Bottom band</div>
+              <div className="flex items-center gap-3">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={bottomBandEnabled}
+                    onChange={e => setBottomBandEnabled(e.target.checked)}
+                    aria-label="Bottom band"
+                  />
+                  <span className="w-10 h-6 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
+                  <span className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
+                </label>
+                <div className="relative flex-1 min-w-0">
                   <input
                     type="number"
                     step="any"
                     min={0.2}
-                    className="w-full p-2 rounded-lg border border-slate-300"
+                    className="w-full p-2 pr-10 rounded-lg border border-slate-300 disabled:bg-slate-50 disabled:text-slate-400"
                     value={bottomNibText}
                     onChange={e => setBottomNibText(e.target.value)}
+                    disabled={!bottomBandEnabled}
                   />
+                  <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
