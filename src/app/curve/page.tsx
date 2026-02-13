@@ -161,18 +161,20 @@ function InsetLabeledField({ label, disabled = false, className = '', rightAdorn
       <div className="absolute inset-x-0 top-0 h-5 bg-slate-50/80 border-b border-slate-300 px-3 flex items-center z-10 pointer-events-none">
         <span className="text-[11px] font-medium text-slate-600">{label}</span>
       </div>
-      <div className="relative">{children}</div>
-      {rightAdornment && (
-        <span className={`pointer-events-none select-none absolute ${adornmentClassName} top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500`}>
-          {rightAdornment}
-        </span>
-      )}
+      <div className="relative pt-5">
+        {children}
+        {rightAdornment && (
+          <span className={`pointer-events-none select-none absolute ${adornmentClassName} top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500`}>
+            {rightAdornment}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
 
 
-const INSET_CONTROL_BASE = 'w-full h-14 border-0 rounded-none pt-6 pb-2 px-3 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed';
+const INSET_CONTROL_BASE = 'w-full border-0 rounded-none px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed';
 const INSET_CONTROL_MM = `${INSET_CONTROL_BASE} pr-10`;
 const INSET_CONTROL_WIDE = `${INSET_CONTROL_BASE} pr-14`;
 /* ---------------- Export helpers ---------------- */
@@ -1696,7 +1698,7 @@ export default function CurvedTitlePage() {
               </div>
               <InsetLabeledField label="View" className="w-44">
                 <select
-                  className="w-full h-11 border-0 rounded-none pt-5 pb-1 px-3 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className={INSET_CONTROL_BASE}
                   value={view}
                   onChange={e => {
                     applyViewPreset(e.target.value as ViewMode);
@@ -2061,55 +2063,55 @@ export default function CurvedTitlePage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
-            <div>
+            <div className="sm:col-span-2">
               <InsetLabeledField label="Script">
-              <select className={INSET_CONTROL_BASE} value={script} onChange={e => setScript(e.target.value as ScriptId)}>
-                <option value="Copperplate">Copperplate</option>
-                <option value="Fraktur">Fraktur</option>
-                <option value="TexturaQuadrata">Textura Quadrata</option>
-              </select>
-              </InsetLabeledField>
-            </div>
-
-            <div>
-              <InsetLabeledField label="Curve">
-              <select className={INSET_CONTROL_BASE} value={curve} onChange={e => setCurve(e.target.value as CurvePresetId)}>
-                <option value="simpleArch">Simple Arch</option>
-                <option value="highArch">High Arch</option>
-                <option value="shallowArch">Shallow Arch</option>
-                <option value="compoundArch">Compound Arch</option>
-                <option value="zanerian">Zanerian Resolution</option>
-              </select>
+                <select className={INSET_CONTROL_BASE} value={script} onChange={e => setScript(e.target.value as ScriptId)}>
+                  <option value="Copperplate">Copperplate</option>
+                  <option value="Fraktur">Fraktur</option>
+                  <option value="TexturaQuadrata">Textura Quadrata</option>
+                </select>
               </InsetLabeledField>
             </div>
 
             <div>
               <InsetLabeledField label="Paper size">
-              <select
-                className={INSET_CONTROL_BASE}
-                value={paper}
-                onChange={e => {
-                  const id = e.target.value as PaperId;
-                  setPaper(id);
-                  setOrientation(PAPERS_MM[id].defaultOrientation);
-                  setPan({ x: 0, y: 0 });
-                }}
-              >
-                {Object.entries(PAPERS_MM).map(([id, p]) => (
-                  <option key={id} value={id}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
+                <select
+                  className={INSET_CONTROL_BASE}
+                  value={paper}
+                  onChange={e => {
+                    const id = e.target.value as PaperId;
+                    setPaper(id);
+                    setOrientation(PAPERS_MM[id].defaultOrientation);
+                    setPan({ x: 0, y: 0 });
+                  }}
+                >
+                  {Object.entries(PAPERS_MM).map(([id, p]) => (
+                    <option key={id} value={id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
               </InsetLabeledField>
             </div>
 
             <div>
               <InsetLabeledField label="Orientation">
-              <select className={INSET_CONTROL_BASE} value={orientation} onChange={e => setOrientation(e.target.value as Orientation)}>
-                <option value="portrait">Portrait</option>
-                <option value="landscape">Landscape</option>
-              </select>
+                <select className={INSET_CONTROL_BASE} value={orientation} onChange={e => setOrientation(e.target.value as Orientation)}>
+                  <option value="portrait">Portrait</option>
+                  <option value="landscape">Landscape</option>
+                </select>
+              </InsetLabeledField>
+            </div>
+
+            <div className="sm:col-span-2">
+              <InsetLabeledField label="Curve">
+                <select className={INSET_CONTROL_BASE} value={curve} onChange={e => setCurve(e.target.value as CurvePresetId)}>
+                  <option value="simpleArch">Simple Arch</option>
+                  <option value="highArch">High Arch</option>
+                  <option value="shallowArch">Shallow Arch</option>
+                  <option value="compoundArch">Compound Arch</option>
+                  <option value="zanerian">Zanerian Resolution</option>
+                </select>
               </InsetLabeledField>
             </div>
 
@@ -2624,7 +2626,7 @@ export default function CurvedTitlePage() {
           <div className="grid grid-cols-1 gap-4 mt-3 select-none">
             <div>
               <InsetLabeledField label="Text alignment">
-              <select className={INSET_CONTROL_BASE} value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
+                <select className={INSET_CONTROL_BASE} value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
                 <option value="start">Start</option>
                 <option value="center">Centered</option>
                 <option value="end">End</option>
