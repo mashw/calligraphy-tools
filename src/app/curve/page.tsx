@@ -2099,7 +2099,7 @@ export default function CurvedTitlePage() {
             </div>
 
             <div className="sm:col-span-2">
-              <div className="my-3 border-t border-slate-200/70" />
+              <div className="my-2 border-t border-slate-200/70" />
             </div>
 
             <div className="sm:col-span-2">
@@ -2527,79 +2527,7 @@ export default function CurvedTitlePage() {
           )}
 
           <div className="my-3 border-t border-slate-200/70" />
-          <div className="mt-4 flex items-center gap-4">
-            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                checked={showBoxes}
-                onChange={e => setShowBoxes(e.target.checked)}
-              />
-              Show letter bounding boxes
-            </label>
-
-            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                checked={showSpanFill}
-                onChange={e => setShowSpanFill(e.target.checked)}
-              />
-              Show title span fill
-            </label>
-          </div>
-        </div>
-
-
-        {/* Step 3 */}
-        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-slate-800">Step 3 — Curve & Guides</h2>
-            <InfoTip side="right">Rotate and scale the curve.</InfoTip>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 mt-3 select-none">
-            <div>
-              <label className="font-medium text-slate-700">Text alignment</label>
-              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
-                <option value="start">Start</option>
-                <option value="center">Centered</option>
-                <option value="end">End</option>
-              </select>
-            </div>
-
-            <div className="my-3 border-t border-slate-200/70" />
-            <div>
-              <label className="font-medium text-slate-700">Rotation (°)</label>
-              <input type="range" min={-30} max={30} step={1} value={rotDeg} onChange={e => setRotDeg(parseInt(e.target.value, 10))} className="w-full" />
-              <div className="text-xs text-slate-500 mt-1">{rotDeg}°</div>
-            </div>
-
-            <div>
-              <label className="font-medium text-slate-700">Scale (%)</label>
-              <input type="range" min={60} max={140} step={1} value={scalePct} onChange={e => setScalePct(parseInt(e.target.value, 10))} className="w-full" />
-              <div className="text-xs text-slate-500 mt-1">{scalePct}%</div>
-            </div>
-
-            <div className="my-3 border-t border-slate-200/70" />
-            <div className="flex flex-wrap items-center gap-3">
-              <button onMouseDown={e => e.preventDefault()} onClick={resetTransform} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
-                Reset rotation &amp; scale
-              </button>
-              <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                  checked={flipCurve}
-                  onChange={e => setFlipCurve(e.target.checked)}
-                />
-                Flip curve
-              </label>
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            <div className="my-3 border-t border-slate-200/70" />
+          <div className="space-y-3">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="text-sm font-medium text-slate-700">Top band</div>
@@ -2678,6 +2606,78 @@ export default function CurvedTitlePage() {
                 </InsetLabeledField>
               </div>
             </div>
+          </div>
+        </div>
+
+
+        {/* Step 3 */}
+        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-slate-800">Step 3 — Curve & Guides</h2>
+            <InfoTip side="right">Rotate and scale the curve.</InfoTip>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 mt-3 select-none">
+            <div>
+              <label className="font-medium text-slate-700">Text alignment</label>
+              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
+                <option value="start">Start</option>
+                <option value="center">Centered</option>
+                <option value="end">End</option>
+              </select>
+            </div>
+
+            <div className="my-2 border-t border-slate-200/70" />
+            <div>
+              <label className="font-medium text-slate-700">Rotation (°)</label>
+              <input type="range" min={-30} max={30} step={1} value={rotDeg} onChange={e => setRotDeg(parseInt(e.target.value, 10))} className="w-full" />
+              <div className="text-xs text-slate-500 mt-1">{rotDeg}°</div>
+            </div>
+
+            <div>
+              <label className="font-medium text-slate-700">Scale (%)</label>
+              <input type="range" min={60} max={140} step={1} value={scalePct} onChange={e => setScalePct(parseInt(e.target.value, 10))} className="w-full" />
+              <div className="text-xs text-slate-500 mt-1">{scalePct}%</div>
+            </div>
+
+            <div className="my-2 border-t border-slate-200/70" />
+            <div className="flex flex-wrap items-center gap-3">
+              <button onMouseDown={e => e.preventDefault()} onClick={resetTransform} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
+                Reset rotation &amp; scale
+              </button>
+              <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                  checked={flipCurve}
+                  onChange={e => setFlipCurve(e.target.checked)}
+                />
+                Flip curve
+              </label>
+            </div>
+          </div>
+
+            <div className="my-3 border-t border-slate-200/70" />
+          <div className="mt-4 flex items-center gap-4">
+            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                checked={showBoxes}
+                onChange={e => setShowBoxes(e.target.checked)}
+              />
+              Show letter bounding boxes
+            </label>
+
+            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                checked={showSpanFill}
+                onChange={e => setShowSpanFill(e.target.checked)}
+              />
+              Show title span fill
+            </label>
           </div>
         </div>
       </section>
