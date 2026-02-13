@@ -225,12 +225,6 @@ function b64ToUint8(base64: string): Uint8Array {
   return bytes;
 }
 
-function nibBasisMM(actualNibMM: number, penAngleDeg: number, useEffective: boolean): number {
-  if (!useEffective) return actualNibMM;
-  const rad = (penAngleDeg * Math.PI) / 180;
-  return actualNibMM * Math.cos(rad);
-}
-
 function flipCubicVertically(c: PtCubic, boxH: number): PtCubic {
   const flipPt = (p: Pt): Pt => ({ x: p.x, y: boxH - p.y });
 
@@ -407,7 +401,6 @@ export default function CurvedTitlePage() {
   const [xHeightMM, setXHeightMM] = useState(6);
   const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
   const [nibText, setNibText] = useState('2');
-  const [useEffectiveNibWidth, setUseEffectiveNibWidth] = useState(true);
   const [topBandEnabled, setTopBandEnabled] = useState(false);
   const [bottomBandEnabled, setBottomBandEnabled] = useState(false);
   const [topNibText, setTopNibText] = useState('2');
@@ -610,11 +603,12 @@ export default function CurvedTitlePage() {
   }, [raw, orientation]);
 
   // ---------- Derived sizes ----------
-  const basisMain = useMemo(() => nibBasisMM(nibMM, penAngleDeg, useEffectiveNibWidth), [nibMM, penAngleDeg, useEffectiveNibWidth]);
-  const basisTop = useMemo(() => nibBasisMM(topNibMM, penAngleDeg, useEffectiveNibWidth), [topNibMM, penAngleDeg, useEffectiveNibWidth]);
-  const basisBottom = useMemo(() => nibBasisMM(bottomNibMM, penAngleDeg, useEffectiveNibWidth), [bottomNibMM, penAngleDeg, useEffectiveNibWidth]);
+  const rad = (penAngleDeg * Math.PI) / 180;
+  const effectiveNibMM = useMemo(() => (script === 'Copperplate' ? nibMM : nibMM * Math.cos(rad)), [script, nibMM, rad]);
+  const effectiveTopNibMM = useMemo(() => (script === 'Copperplate' ? topNibMM : topNibMM * Math.cos(rad)), [script, topNibMM, rad]);
+  const effectiveBottomNibMM = useMemo(() => (script === 'Copperplate' ? bottomNibMM : bottomNibMM * Math.cos(rad)), [script, bottomNibMM, rad]);
 
-  const texturaXHeightMM = xNib * basisMain;
+  const texturaXHeightMM = xNib * nibMM;
 
   const blackletterHeights = useMemo(
     () => ({ xMM: texturaXHeightMM, ascMM: ascNib * nibMM, descMM: descNib * nibMM }),
@@ -678,12 +672,12 @@ export default function CurvedTitlePage() {
     if (script === 'Copperplate') return copper.ctx;
     return {
       xHeightMM: texturaXHeightMM,
-      nibMM: basisMain,
+      nibMM: effectiveNibMM,
       scale: 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [script, copper.ctx, texturaXHeightMM, basisMain]);
+  }, [script, copper.ctx, texturaXHeightMM, effectiveNibMM]);
 
   const run = useMemo(() => measureRun(text, SCRIPT_PROFILES[script], ctx), [text, script, ctx]);
   const topCtx = useMemo<ScriptContext>(() => {
@@ -694,13 +688,13 @@ export default function CurvedTitlePage() {
       };
     }
     return {
-      xHeightMM: xNib * basisTop,
-      nibMM: basisTop,
+      xHeightMM: xNib * topNibMM,
+      nibMM: effectiveTopNibMM,
       scale: 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [script, copper.ctx, basisTop, xNib]);
+  }, [script, copper.ctx, topNibMM, effectiveTopNibMM, xNib]);
   const bottomCtx = useMemo<ScriptContext>(() => {
     if (script === 'Copperplate') {
       return {
@@ -709,13 +703,13 @@ export default function CurvedTitlePage() {
       };
     }
     return {
-      xHeightMM: xNib * basisBottom,
-      nibMM: basisBottom,
+      xHeightMM: xNib * bottomNibMM,
+      nibMM: effectiveBottomNibMM,
       scale: 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [script, copper.ctx, basisBottom, xNib]);
+  }, [script, copper.ctx, bottomNibMM, effectiveBottomNibMM, xNib]);
   const topRun = useMemo(
     () => measureRun(topText, SCRIPT_PROFILES[script], topCtx),
     [topText, script, topCtx],
@@ -791,8 +785,8 @@ export default function CurvedTitlePage() {
     () =>
       script === 'Copperplate'
         ? Math.max(xMM * 0.9, 3)
-        : basisMain,
-    [script, xMM, basisMain],
+        : effectiveNibMM,
+    [script, xMM, effectiveNibMM],
   );
 
 
@@ -892,8 +886,8 @@ export default function CurvedTitlePage() {
   };
 
   const layout = useMemo(
-    () => computeLayout(run, baseline, arcLen, xMM, basisMain),
-    [run, baseline, arcLen, xMM, basisMain, align, capMM, script],
+    () => computeLayout(run, baseline, arcLen, xMM, effectiveNibMM),
+    [run, baseline, arcLen, xMM, effectiveNibMM, align, capMM, script],
   );
 
   const span = useMemo(() => {
@@ -921,16 +915,15 @@ export default function CurvedTitlePage() {
 
   const topBaseline = useMemo(() => guideSet.ascLine, [guideSet.ascLine]);
   const topArcLen = useMemo(() => lengthPoly(topBaseline), [topBaseline]);
-  const topXMM = useMemo(() => basisTop * xNib, [basisTop, xNib]);
+  const topXMM = useMemo(() => topNibMM * xNib, [topNibMM, xNib]);
   const topAscMM = useMemo(() => topNibMM * ascNib, [topNibMM, ascNib]);
-  const topDescMMFixed = useMemo(() => ascMM, [ascMM]);
   const topTickStepMM = useMemo(
-    () => (script === 'Copperplate' ? Math.max(topXMM * 0.9, 3) : topNibMM),
-    [script, topXMM, topNibMM],
+    () => (script === 'Copperplate' ? Math.max(topXMM * 0.9, 3) : effectiveTopNibMM),
+    [script, topXMM, effectiveTopNibMM],
   );
   const topLayout = useMemo(
-    () => computeLayout(topRun, topBaseline, topArcLen, topXMM, basisTop),
-    [topRun, topBaseline, topArcLen, topXMM, basisTop, align, capMM, script],
+    () => computeLayout(topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM),
+    [topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM, align, capMM, script],
   );
   const topSpan = useMemo(() => {
     if (!topLayout.placements.length) return null;
@@ -945,26 +938,25 @@ export default function CurvedTitlePage() {
       baseline: topBaseline,
       xMM: topXMM,
       ascMM: topAscMM,
-      descMM: topDescMMFixed,
+      descMM: 0,
       tickStepMM: topTickStepMM,
       tickAnchorS: topSpan ? topSpan.sStart : undefined,
       actualNibMM: topNibMM,
     }),
-    [guideTemplate, topBaseline, topXMM, topAscMM, topDescMMFixed, topTickStepMM, topSpan, topNibMM],
+    [guideTemplate, topBaseline, topXMM, topAscMM, topTickStepMM, topSpan, topNibMM],
   );
 
-  const bottomXMM = useMemo(() => basisBottom * xNib, [basisBottom, xNib]);
-  const bottomAscMMFixed = useMemo(() => descMM, [descMM]);
+  const bottomXMM = useMemo(() => bottomNibMM * xNib, [bottomNibMM, xNib]);
   const bottomDescMM = useMemo(() => bottomNibMM * descNib, [bottomNibMM, descNib]);
   const bottomBaseline = useMemo(() => offset(guideSet.descLine, bottomXMM), [guideSet.descLine, bottomXMM]);
   const bottomArcLen = useMemo(() => lengthPoly(bottomBaseline), [bottomBaseline]);
   const bottomTickStepMM = useMemo(
-    () => (script === 'Copperplate' ? Math.max(bottomXMM * 0.9, 3) : bottomNibMM),
-    [script, bottomXMM, bottomNibMM],
+    () => (script === 'Copperplate' ? Math.max(bottomXMM * 0.9, 3) : effectiveBottomNibMM),
+    [script, bottomXMM, effectiveBottomNibMM],
   );
   const bottomLayout = useMemo(
-    () => computeLayout(bottomRun, bottomBaseline, bottomArcLen, bottomXMM, basisBottom),
-    [bottomRun, bottomBaseline, bottomArcLen, bottomXMM, basisBottom, align, capMM, script],
+    () => computeLayout(bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM),
+    [bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM, align, capMM, script],
   );
   const bottomSpan = useMemo(() => {
     if (!bottomLayout.placements.length) return null;
@@ -978,13 +970,13 @@ export default function CurvedTitlePage() {
     () => buildGuideSet(guideTemplate, {
       baseline: bottomBaseline,
       xMM: bottomXMM,
-      ascMM: bottomAscMMFixed,
+      ascMM: 0,
       descMM: bottomDescMM,
       tickStepMM: bottomTickStepMM,
       tickAnchorS: bottomSpan ? bottomSpan.sStart : undefined,
       actualNibMM: bottomNibMM,
     }),
-    [guideTemplate, bottomBaseline, bottomXMM, bottomAscMMFixed, bottomDescMM, bottomTickStepMM, bottomSpan, bottomNibMM],
+    [guideTemplate, bottomBaseline, bottomXMM, bottomDescMM, bottomTickStepMM, bottomSpan, bottomNibMM],
   );
 
   const midAscPts = useMemo(() => {
@@ -1012,7 +1004,7 @@ export default function CurvedTitlePage() {
 
   const spanPoly = useMemo(() => {
     if (!span) return null;
-    const ds = script === 'Copperplate' ? Math.max(0.5, xMM * 0.2) : Math.max(0.5, basisMain * 0.5);
+    const ds = script === 'Copperplate' ? Math.max(0.5, xMM * 0.2) : Math.max(0.5, effectiveNibMM * 0.5);
     const waistPts: Pt[] = [];
     const basePts: Pt[] = [];
     for (let s = span.sStart; s <= span.sEnd + 0.0001; s += ds) {
@@ -1021,7 +1013,7 @@ export default function CurvedTitlePage() {
       basePts.push({ x: p.x, y: p.y });
     }
     return { waistPts, basePts };
-  }, [span, baseline, arcLen, xMM, basisMain]);
+  }, [span, baseline, arcLen, xMM, effectiveNibMM]);
 
   const topHasText = topText.trim().length > 0;
   const bottomHasText = bottomText.trim().length > 0;
@@ -1056,7 +1048,8 @@ export default function CurvedTitlePage() {
 
   const topBandClipT1 = useMemo(() => bandPolyBetween(topGuideSet.baseLine, topGuideSet.waistLine), [topGuideSet.baseLine, topGuideSet.waistLine]);
   const topBandClipT2 = useMemo(() => bandPolyBetween(topGuideSet.waistLine, topGuideSet.ascLine), [topGuideSet.waistLine, topGuideSet.ascLine]);
-  const bottomBandClipB2 = useMemo(() => bandPolyBetween(bottomGuideSet.baseLine, bottomGuideSet.descLine), [bottomGuideSet.baseLine, bottomGuideSet.descLine]);
+  const bottomBandClipX = useMemo(() => bandPolyBetween(bottomGuideSet.waistLine, bottomGuideSet.baseLine), [bottomGuideSet.waistLine, bottomGuideSet.baseLine]);
+  const bottomBandClipD = useMemo(() => bandPolyBetween(bottomGuideSet.baseLine, bottomGuideSet.descLine), [bottomGuideSet.baseLine, bottomGuideSet.descLine]);
 
   const startPt = baseline[0];
   const endPt = baseline[baseline.length - 1];
@@ -1713,7 +1706,8 @@ export default function CurvedTitlePage() {
                   <path d={topBandClipT2} />
                 </clipPath>
                 <clipPath id="bottomBandClip">
-                  <path d={bottomBandClipB2} />
+                  <path d={bottomBandClipX} />
+                  <path d={bottomBandClipD} />
                 </clipPath>
               </defs>
 
@@ -2426,28 +2420,6 @@ export default function CurvedTitlePage() {
                     <option value={45}>45°</option>
                   </select>
                 </div>
-
-                {(script === 'TexturaQuadrata' || script === 'Fraktur') && (
-                  <div className="mt-3">
-                    <label className="font-medium text-slate-700">Nib width basis</label>
-                    <div className="mt-1 inline-flex rounded-lg border border-slate-300 overflow-hidden">
-                      <button
-                        type="button"
-                        className={`px-3 py-1.5 text-sm ${useEffectiveNibWidth ? 'bg-indigo-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'}`}
-                        onClick={() => setUseEffectiveNibWidth(true)}
-                      >
-                        Effective (recommended)
-                      </button>
-                      <button
-                        type="button"
-                        className={`px-3 py-1.5 text-sm border-l border-slate-300 ${!useEffectiveNibWidth ? 'bg-indigo-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'}`}
-                        onClick={() => setUseEffectiveNibWidth(false)}
-                      >
-                        Actual
-                      </button>
-                    </div>
-                  </div>
-                )}
 
               </div>
               <div>
