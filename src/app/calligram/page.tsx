@@ -5,7 +5,6 @@ import {
   PAPERS_MM,
   SCRIPT_DEFAULTS,
   Pt,
-  lengthPoly,
   pointAt,
   offset,
   pathD,
@@ -363,9 +362,10 @@ export default function CalligramPage() {
 
   const [script, setScript] = useState<ScriptId>('TexturaQuadrata');
   const [radiusMM, setRadiusMM] = useState(70);
-  const [startAngleDeg, setStartAngleDeg] = useState(-90);
+  const [circleMarginMM, setCircleMarginMM] = useState(8);
+  const [startAngleDeg, setStartAngleDeg] = useState(0);
   const [direction, setDirection] = useState<'ccw' | 'cw'>('cw');
-  const [align, setAlign] = useState<AlignMode>('center');
+  const [align, setAlign] = useState<AlignMode>('start');
   const [text, setText] = useState('Merry Christmas');
   const [topText, setTopText] = useState('');
   const [bottomText, setBottomText] = useState('');
@@ -424,10 +424,6 @@ export default function CalligramPage() {
   const DEFAULT_AUTOFIT_ZOOM = 4;
   const [pan, setPan] = useState({ x: 0, y: 0 });
 
-  const [savedViewBeforeCurveDrag, setSavedViewBeforeCurveDrag] = useState<ViewMode | null>(null);
-  const [savedZoomBeforeCurveDrag, setSavedZoomBeforeCurveDrag] = useState<number | null>(null);
-
-  const [curveOffset, setCurveOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isCurveDragging, setIsCurveDragging] = useState(false);
 
   const dragRef = useRef<{
@@ -435,23 +431,11 @@ export default function CalligramPage() {
     py: number;
     panX: number;
     panY: number;
-    mode?: 'pan' | 'curve';
-    ox?: number;
-    oy?: number;
+    mode?: 'pan';
   } | null>(null);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [previewPxH, setPreviewPxH] = useState(0);
-
-  // Sticky centering: snap + hysteresis
-  const snapStateRef = useRef<{ snapped: boolean }>({ snapped: true });
-
-  const didInitPlacementRef = useRef(false);
-
-  // Sensible feel in mm (snap in, release further out)
-  const SNAP_IN_MM = 6;    // if within 6mm of center, snap
-  const RELEASE_MM = 12;   // if snapped, must move beyond 12mm to release
-  const CENTER_EPS_MM = 0.5; // considered "centered" for showing indicator
 
   // Full-viewport paint layer to hide any layout decorations behind this route
   useLayoutEffect(() => {
@@ -723,37 +707,22 @@ export default function CalligramPage() {
   const dirSign = direction === 'ccw' ? 1 : -1;
   const startAngleRad = (startAngleDeg * Math.PI) / 180;
 
-  const baselineBase = useMemo<Pt[]>(() => {
-    const r = Math.max(1, radiusMM);
-    const L = 2 * Math.PI * r;
+  const buildCircleBaseline = (r: number): Pt[] => {
+    const radius = Math.max(1, r);
+    const L = 2 * Math.PI * radius;
     const N = Math.max(180, Math.min(1440, Math.round(L)));
     const cx = box.w / 2;
     const cy = box.h / 2;
     const pts: Pt[] = [];
     for (let i = 0; i < N; i++) {
       const s = (i / N) * L;
-      const theta = startAngleRad + dirSign * (s / r);
-      pts.push({ x: cx + r * Math.cos(theta), y: cy + r * Math.sin(theta) });
+      const theta = startAngleRad + dirSign * (s / radius);
+      pts.push({ x: cx + radius * Math.cos(theta), y: cy + radius * Math.sin(theta) });
     }
     return pts;
-  }, [box, radiusMM, startAngleRad, dirSign]);
+  };
 
-  const baselineBaseCenterX = useMemo(() => {
-    if (!baselineBase.length) return box.w / 2;
-    const xs = baselineBase.map(p => p.x);
-    return (Math.min(...xs) + Math.max(...xs)) / 2;
-  }, [baselineBase, box.w]);
-
-  // The curveOffset.x that makes the curve horizontally centered
-  const centerDx = useMemo(() => box.w / 2 - baselineBaseCenterX, [box.w, baselineBaseCenterX]);
-
-  // Determine if currently centered (for showing indicator)
-  const centeredDistMM = useMemo(() => (baselineBaseCenterX + curveOffset.x) - box.w / 2, [baselineBaseCenterX, curveOffset.x, box.w]);
-  const isCenteredHorizontally = Math.abs(centeredDistMM) <= CENTER_EPS_MM;
-
-  const translatePoly = (poly: Pt[], dx: number, dy: number) => poly.map(p => ({ x: p.x + dx, y: p.y + dy }));
-
-  const baseline = useMemo(() => translatePoly(baselineBase, curveOffset.x, curveOffset.y), [baselineBase, curveOffset]);
+  const baseline = useMemo<Pt[]>(() => buildCircleBaseline(radiusMM), [box, radiusMM, startAngleRad, dirSign]);
 
   const arcLen = circumference;
   const wrapLength = (s: number, L: number) => (L > 0 ? ((s % L) + L) % L : 0);
@@ -897,8 +866,11 @@ export default function CalligramPage() {
     [baseline, guideTemplate, xMM, ascMM, descMM, tickStepMM, nibMM, span],
   );
 
-  const topBaseline = useMemo(() => guideSet.ascLine, [guideSet.ascLine]);
-  const topArcLen = useMemo(() => lengthPoly(topBaseline), [topBaseline]);
+  const innerRadiusMM = useMemo(() => Math.max(1, radiusMM - circleMarginMM), [radiusMM, circleMarginMM]);
+  const outerRadiusMM = useMemo(() => Math.max(1, radiusMM + circleMarginMM), [radiusMM, circleMarginMM]);
+
+  const topBaseline = useMemo<Pt[]>(() => buildCircleBaseline(innerRadiusMM), [box, innerRadiusMM, startAngleRad, dirSign]);
+  const topArcLen = useMemo(() => 2 * Math.PI * innerRadiusMM, [innerRadiusMM]);
   const topXMM = useMemo(
     () => (topBandScript === 'Copperplate' ? topBandSizeMM : topBandSizeMM * xNib),
     [topBandScript, topBandSizeMM, xNib],
@@ -906,6 +878,10 @@ export default function CalligramPage() {
   const topAscMM = useMemo(
     () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * ascNib),
     [topBandScript, topBandSizeMM, ascNib],
+  );
+  const topDescMM = useMemo(
+    () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * descNib),
+    [topBandScript, topBandSizeMM, descNib],
   );
   const topCapMM = useMemo(
     () => (topBandScript === 'Copperplate'
@@ -934,17 +910,21 @@ export default function CalligramPage() {
       baseline: topBaseline,
       xMM: topXMM,
       ascMM: topAscMM,
-      descMM: 0,
+      descMM: topDescMM,
       tickStepMM: topTickStepMM,
       tickAnchorS: topSpan ? topSpan.sStart : undefined,
       actualNibMM: topBandSizeMM,
     }),
-    [topBandScript, topBaseline, topXMM, topAscMM, topTickStepMM, topSpan, topBandSizeMM],
+    [topBandScript, topBaseline, topXMM, topAscMM, topDescMM, topTickStepMM, topSpan, topBandSizeMM],
   );
 
   const bottomXMM = useMemo(
     () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM : bottomBandSizeMM * xNib),
     [bottomBandScript, bottomBandSizeMM, xNib],
+  );
+  const bottomAscMM = useMemo(
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM * (2.5 / 2) : bottomBandSizeMM * ascNib),
+    [bottomBandScript, bottomBandSizeMM, ascNib],
   );
   const bottomDescMM = useMemo(
     () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM * (2.5 / 2) : bottomBandSizeMM * descNib),
@@ -956,8 +936,8 @@ export default function CalligramPage() {
       : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * bottomBandSizeMM),
     [bottomBandScript, bottomXMM, bottomBandSizeMM],
   );
-  const bottomBaseline = useMemo(() => offset(guideSet.descLine, bottomXMM), [guideSet.descLine, bottomXMM]);
-  const bottomArcLen = useMemo(() => lengthPoly(bottomBaseline), [bottomBaseline]);
+  const bottomBaseline = useMemo<Pt[]>(() => buildCircleBaseline(outerRadiusMM), [box, outerRadiusMM, startAngleRad, dirSign]);
+  const bottomArcLen = useMemo(() => 2 * Math.PI * outerRadiusMM, [outerRadiusMM]);
   const bottomTickStepMM = useMemo(
     () => (bottomBandScript === 'Copperplate' ? Math.max(bottomXMM * 0.9, 3) : effectiveBottomNibMM),
     [bottomBandScript, bottomXMM, effectiveBottomNibMM],
@@ -978,13 +958,13 @@ export default function CalligramPage() {
     () => buildGuideSet(bottomBandScript === 'Copperplate' ? 'copperplate' : 'blackletter', {
       baseline: bottomBaseline,
       xMM: bottomXMM,
-      ascMM: 0,
+      ascMM: bottomAscMM,
       descMM: bottomDescMM,
       tickStepMM: bottomTickStepMM,
       tickAnchorS: bottomSpan ? bottomSpan.sStart : undefined,
       actualNibMM: bottomBandSizeMM,
     }),
-    [bottomBandScript, bottomBaseline, bottomXMM, bottomDescMM, bottomTickStepMM, bottomSpan, bottomBandSizeMM],
+    [bottomBandScript, bottomBaseline, bottomXMM, bottomAscMM, bottomDescMM, bottomTickStepMM, bottomSpan, bottomBandSizeMM],
   );
 
   const midAscPts = useMemo(() => {
@@ -1063,8 +1043,6 @@ export default function CalligramPage() {
   const endPt = baseline[baseline.length - 1];
   const endpointsDistance = Math.hypot(endPt.x - startPt.x, endPt.y - startPt.y);
   const baselineLength = arcLen;
-  const pageCenter = { x: box.w / 2, y: box.h / 2 };
-  const radiusToStart = Math.hypot(pageCenter.x - startPt.x, pageCenter.y - startPt.y);
   const overWarn = layout.overBy > 0;
 
   const renderLetterBoxes = (
@@ -1352,46 +1330,6 @@ export default function CalligramPage() {
     const mmPerPxX = vb.vw / rect.width;
     const mmPerPxY = vb.vh / rect.height;
 
-    if (dragRef.current.mode === 'curve') {
-      const proposedX = (dragRef.current.ox ?? curveOffset.x) + (e.clientX - dragRef.current.px) * mmPerPxX;
-      const proposedY = (dragRef.current.oy ?? curveOffset.y) + (e.clientY - dragRef.current.py) * mmPerPxY;
-
-      // Clamp
-      const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-      const nx = clamp(proposedX, -box.w, box.w);
-      const ny = clamp(proposedY, -box.h, box.h);
-
-      // Sticky horizontal centre:
-      // target x offset that centers curve = centerDx
-      const diffToCenter = nx - centerDx;
-      const snapped = snapStateRef.current.snapped;
-
-      let finalX = nx;
-      let nextSnapped = snapped;
-
-      if (snapped) {
-        // Keep snapped until user drags far enough to "break free"
-        if (Math.abs(diffToCenter) > RELEASE_MM) {
-          nextSnapped = false;
-          finalX = nx;
-        } else {
-          finalX = centerDx;
-        }
-      } else {
-        // Not snapped: snap in if close enough (gives that “magnetic” feel)
-        if (Math.abs(diffToCenter) < SNAP_IN_MM) {
-          nextSnapped = true;
-          finalX = centerDx;
-        } else {
-          finalX = nx;
-        }
-      }
-
-      snapStateRef.current.snapped = nextSnapped;
-      setCurveOffset({ x: finalX, y: ny });
-      return;
-    }
-
     // Pan stage
     const nx = dragRef.current.panX - (e.clientX - dragRef.current.px) * mmPerPxX;
     const ny = dragRef.current.panY - (e.clientY - dragRef.current.py) * mmPerPxY;
@@ -1401,7 +1339,6 @@ export default function CalligramPage() {
   function onPointerUp(e: React.PointerEvent<SVGSVGElement>) {
     const svg = svgRef.current;
     if (!svg) return;
-    const wasCurve = dragRef.current?.mode === 'curve';
     try {
       svg.releasePointerCapture(e.pointerId);
     } catch {
@@ -1410,27 +1347,11 @@ export default function CalligramPage() {
     dragRef.current = null;
     setIsCurveDragging(false);
 
-    if (wasCurve && savedViewBeforeCurveDrag) {
-      setView(savedViewBeforeCurveDrag);
-      setSavedViewBeforeCurveDrag(null);
-
-      if (savedZoomBeforeCurveDrag != null) {
-        setZoom(savedZoomBeforeCurveDrag);
-        setSavedZoomBeforeCurveDrag(null);
-      }
-
-      setPan({ x: 0, y: 0 });
-    }
   }
 
   function applyViewPreset(nextView: ViewMode) {
     setView(nextView);
     setPan({ x: 0, y: 0 });
-  }
-
-  function resetView() {
-    applyViewPreset('autofit');
-    setZoom(DEFAULT_ZOOM);
   }
 
   function adjustZoom(direction: 'in' | 'out') {
@@ -1470,114 +1391,6 @@ export default function CalligramPage() {
   }
 
 
-  function defaultGuideOffset() {
-    // Use the current guideSet (which is built from baseline including curveOffset)
-    // but compute the offset as if we were centered on X and at y=0.
-    // We do that by measuring current guide center and shifting it to a target Y.
-    const pts = [
-      ...guideSet.ascLine,
-      ...guideSet.waistLine,
-      ...guideSet.baseLine,
-      ...guideSet.descLine,
-    ];
-
-    const ys = pts.map(p => p.y);
-    const guideCy = (Math.min(...ys) + Math.max(...ys)) / 2;
-
-    // Closer to top than before. Tune if needed.
-    const targetCy = box.h * 0.22;
-
-    // Because guideSet already includes the current curveOffset,
-    // return the delta needed from the current y.
-    return targetCy - guideCy;
-  }
-
-  function resetGuidePlacement() {
-    // Same placement as initial load: centered X, and guide center nearer the top.
-    const pts = [
-      ...guideSet.ascLine,
-      ...guideSet.waistLine,
-      ...guideSet.baseLine,
-      ...guideSet.descLine,
-    ];
-    const ys = pts.map(p => p.y);
-    const guideCy = (Math.min(...ys) + Math.max(...ys)) / 2;
-
-    const targetCy = box.h * 0.22;
-    const dy = targetCy - guideCy;
-
-    snapStateRef.current.snapped = true;
-
-    setCurveOffset(prev => ({
-      x: centerDx,
-      y: prev.y + dy,
-    }));
-  }
-
-
-
-  function centerCurveHorizontally() {
-    snapStateRef.current.snapped = true;
-    setCurveOffset(prev => ({ x: centerDx, y: prev.y }));
-  }
-
-  function onGuidePointerDown(e: React.PointerEvent<SVGPathElement | SVGLineElement>) {
-    e.stopPropagation();
-    const svg = svgRef.current;
-    if (!svg) return;
-    svg.setPointerCapture(e.pointerId);
-
-    if (view !== 'fullpage') {
-      setSavedViewBeforeCurveDrag(prev => (prev === null ? view : prev));
-      setSavedZoomBeforeCurveDrag(prev => (prev === null ? zoom : prev));
-      setView('fullpage');
-      setZoom(1);
-      setPan({ x: 0, y: 0 });
-    }
-
-    dragRef.current = {
-      px: e.clientX,
-      py: e.clientY,
-      panX: pan.x,
-      panY: pan.y,
-      mode: 'curve',
-      ox: curveOffset.x,
-      oy: curveOffset.y,
-    };
-    setIsCurveDragging(true);
-  }
-
-  useLayoutEffect(() => {
-    // On first mount only: center horizontally and move the curve nearer the top (A4 default feel).
-    // After that, do not fight the user.
-    if (didInitPlacementRef.current) return;
-    didInitPlacementRef.current = true;
-
-    // Compute current guide bounds center (with current curveOffset)
-    const pts = [
-      ...guideSet.ascLine,
-      ...guideSet.waistLine,
-      ...guideSet.baseLine,
-      ...guideSet.descLine,
-    ];
-    const ys = pts.map(p => p.y);
-    const guideCy = (Math.min(...ys) + Math.max(...ys)) / 2;
-
-    // Target: closer to the top (tune to match screenshot)
-    const targetCy = box.h * 0.22;
-
-
-    snapStateRef.current.snapped = true;
-
-    // Set X to true center, set Y so the guide center hits targetCy.
-    // We compute the needed delta in page-mm coordinates.
-    const dy = targetCy - guideCy;
-    setCurveOffset(prev => ({ x: centerDx, y: prev.y + dy }));
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-
   return (
     <main className="min-h-screen text-sm text-slate-900 relative">
       {/* FULL-VIEWPORT “PAINT OVER” LAYER */}
@@ -1607,7 +1420,7 @@ export default function CalligramPage() {
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-slate-800">Preview</h3>
                 <InfoTip side="right">
-                  Drag anywhere to pan. Zoom with ±. Drag any guideline to move the circle guide (sticky centering on X).
+                  Drag anywhere to pan. Zoom with ±.
                 </InfoTip>
               </div>
               <div className="flex items-center gap-2">
@@ -1651,21 +1464,6 @@ export default function CalligramPage() {
               </button>
               <button
                 onMouseDown={e => e.preventDefault()}
-                onClick={resetGuidePlacement}
-                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
-              >
-                Reset guide
-              </button>
-              <button
-                onMouseDown={e => e.preventDefault()}
-                onClick={centerCurveHorizontally}
-                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
-              >
-                Center horizontally
-              </button>
-
-              <button
-                onMouseDown={e => e.preventDefault()}
                 onClick={downloadSVG}
                 className="shrink-0 ml-2 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
@@ -1694,7 +1492,7 @@ export default function CalligramPage() {
             <svg
               ref={svgRef}
               viewBox={vb.str}
-              className={`block mx-auto w-full h-[38vh] sm:h-[44vh] md:h-[50vh] touch-none ${isCurveDragging ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
+              className="block mx-auto w-full h-[38vh] sm:h-[44vh] md:h-[50vh] touch-none cursor-grab active:cursor-grabbing"
               style={{ background: '#cbd5e1' }}
               preserveAspectRatio={(view === 'fullpage' || (view === 'custom' && customOrigin === 'fullpage')) ? 'xMidYMid meet' : 'xMidYMin meet'}
               onPointerDown={onPointerDown}
@@ -1796,10 +1594,6 @@ export default function CalligramPage() {
                       frame: '#cbd5e1',
                     },
                   }}
-                  interactive={{
-                    onGuidePointerDown,
-                    hitStrokeWidthMM: Math.max(8, swBold * 8),
-                  }}
                 />
 
                 {topBandEnabled && (
@@ -1864,8 +1658,6 @@ export default function CalligramPage() {
                       fill="rgba(0,0,0,0.0001)"
                       stroke="none"
                       pointerEvents="fill"
-                      className="cursor-move"
-                      onPointerDown={onGuidePointerDown}
                     />
                   </>
                 )}
@@ -1891,8 +1683,6 @@ export default function CalligramPage() {
                       fill="rgba(0,0,0,0.0001)"
                       stroke="none"
                       pointerEvents="fill"
-                      className="cursor-move"
-                      onPointerDown={onGuidePointerDown}
                     />
                   </>
                 )}
@@ -1919,8 +1709,6 @@ export default function CalligramPage() {
                       fill="rgba(0,0,0,0.0001)"
                       stroke="none"
                       pointerEvents="fill"
-                      className="cursor-move"
-                      onPointerDown={onGuidePointerDown}
                     />
                   </>
                 )}
@@ -1934,28 +1722,7 @@ export default function CalligramPage() {
                 <circle cx={startPt.x} cy={startPt.y} r={1} fill="#0ea5e9" />
                 <circle cx={endPt.x} cy={endPt.y} r={1} fill="#0ea5e9" />
 
-                {/* GREEN CENTER INDICATOR:
-                    - Visible whenever horizontally centered (even if moved)
-                    - NOT exported/printed
-                */}
-                {isCenteredHorizontally && (
-                  <g data-no-export="true">
-                    <circle cx={box.w / 2} cy={box.h / 2} r={1.1} fill="#22c55e" />
-                    <line
-                      x1={pageCenter.x}
-                      y1={pageCenter.y}
-                      x2={startPt.x}
-                      y2={startPt.y}
-                      stroke="#94a3b8"
-                      strokeDasharray="4 3"
-                      strokeWidth={swThin}
-                      vectorEffect="non-scaling-stroke"
-                    />
-                    <text x={pageCenter.x} y={pageCenter.y + 6} textAnchor="middle" fontSize={fs(3)} fill="#64748b">
-                      Centre → start {radiusToStart.toFixed(1)} mm
-                    </text>
-                  </g>
-                )}
+                <circle cx={box.w / 2} cy={box.h / 2} r={1.6} fill="#000000" />
               </g>
             </svg>
 
@@ -1975,7 +1742,7 @@ export default function CalligramPage() {
         <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold text-slate-800">Step 1 — Basics</h2>
-            <InfoTip side="right">Circle guide movement snaps to horizontal centre unless you pull far enough to release.</InfoTip>
+            <InfoTip side="right">Circle is fixed at page center.</InfoTip>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
@@ -2020,8 +1787,25 @@ export default function CalligramPage() {
             </div>
 
             <div className="sm:col-span-2">
-              <InsetLabeledField label="Radius" rightAdornment="mm">
-                <input type="number" min={1} step={1} className={INSET_CONTROL_MM} value={radiusMM} onChange={e => setRadiusMM(Math.max(1, Number(e.target.value) || 1))} />
+              <InsetLabeledField label="Radius">
+                <div className="px-3 py-2">
+                  <input
+                    type="range"
+                    min={10}
+                    max={Math.max(10, Math.floor(Math.min(box.w, box.h) / 2) - 4)}
+                    step={1}
+                    value={radiusMM}
+                    onChange={e => setRadiusMM(Math.max(10, Number(e.target.value) || 10))}
+                    className="w-full"
+                  />
+                  <div className="text-xs font-medium text-slate-500 mt-1">{radiusMM} mm</div>
+                </div>
+              </InsetLabeledField>
+            </div>
+
+            <div className="sm:col-span-2">
+              <InsetLabeledField label="Circle margin" rightAdornment="mm">
+                <input type="number" min={0} step={1} className={INSET_CONTROL_MM} value={circleMarginMM} onChange={e => setCircleMarginMM(Math.max(0, Number(e.target.value) || 0))} />
               </InsetLabeledField>
             </div>
 
@@ -2037,7 +1821,7 @@ export default function CalligramPage() {
 
             {topBandEnabled && (
               <div className="sm:col-span-2">
-                <InsetLabeledField label="Top text">
+                <InsetLabeledField label="Inner text">
                 <input className={INSET_CONTROL_BASE} value={topText} onChange={e => setTopText(e.target.value)} />
                 </InsetLabeledField>
               </div>
@@ -2045,7 +1829,7 @@ export default function CalligramPage() {
 
             {bottomBandEnabled && (
               <div className="sm:col-span-2">
-                <InsetLabeledField label="Bottom text">
+                <InsetLabeledField label="Outer text">
                 <input className={INSET_CONTROL_BASE} value={bottomText} onChange={e => setBottomText(e.target.value)} />
                 </InsetLabeledField>
               </div>
@@ -2452,9 +2236,9 @@ export default function CalligramPage() {
           <div className="space-y-3">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <div className="text-sm font-medium text-slate-700">Top band</div>
+                <div className="text-sm font-medium text-slate-700">Inner circle</div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" checked={topBandEnabled} onChange={e => setTopBandEnabled(e.target.checked)} aria-label="Top band" />
+                  <input type="checkbox" className="sr-only peer" checked={topBandEnabled} onChange={e => setTopBandEnabled(e.target.checked)} aria-label="Inner circle" />
                   <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
                   <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
                 </label>
@@ -2489,9 +2273,9 @@ export default function CalligramPage() {
             <div className="my-3 border-t border-slate-200/70" />
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <div className="text-sm font-medium text-slate-700">Bottom band</div>
+                <div className="text-sm font-medium text-slate-700">Outer circle</div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" checked={bottomBandEnabled} onChange={e => setBottomBandEnabled(e.target.checked)} aria-label="Bottom band" />
+                  <input type="checkbox" className="sr-only peer" checked={bottomBandEnabled} onChange={e => setBottomBandEnabled(e.target.checked)} aria-label="Outer circle" />
                   <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
                   <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
                 </label>
