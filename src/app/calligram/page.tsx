@@ -362,7 +362,8 @@ export default function CalligramPage() {
 
   const [script, setScript] = useState<ScriptId>('TexturaQuadrata');
   const [radiusMM, setRadiusMM] = useState(70);
-  const [circleMarginMM, setCircleMarginMM] = useState(8);
+  const [innerOffsetMM, setInnerOffsetMM] = useState(20);
+  const [outerOffsetMM, setOuterOffsetMM] = useState(20);
 
   const [startAngleDeg, setStartAngleDeg] = useState(0);
   const [direction, setDirection] = useState<'ccw' | 'cw'>('cw');
@@ -720,7 +721,6 @@ export default function CalligramPage() {
       const theta = startAngleRad + dirSign * (s / radius);
       pts.push({ x: cx + radius * Math.cos(theta), y: cy + radius * Math.sin(theta) });
     }
-    if (pts.length) pts.push(pts[0]);
     return pts;
   };
 
@@ -868,15 +868,45 @@ export default function CalligramPage() {
     [baseline, guideTemplate, xMM, ascMM, descMM, tickStepMM, nibMM, span],
   );
 
-  const innerRadiusMM = useMemo(() => Math.max(5, radiusMM - circleMarginMM), [radiusMM, circleMarginMM]);
-  const outerRadiusMM = useMemo(() => Math.max(1, radiusMM + circleMarginMM), [radiusMM, circleMarginMM]);
+  const avgRadiusFromCenter = (pts: Pt[]) => {
+    if (!pts.length) return radiusMM;
+    const cx = box.w / 2;
+    const cy = box.h / 2;
+    return pts.reduce((sum, p) => sum + Math.hypot(p.x - cx, p.y - cy), 0) / pts.length;
+  };
 
-  const topBaseline = useMemo<Pt[]>(() => buildCircleBaseline(innerRadiusMM), [box, innerRadiusMM, startAngleRad, dirSign]);
-  const topArcLen = useMemo(() => 2 * Math.PI * innerRadiusMM, [innerRadiusMM]);
+  const mainAscTopOffsetMM = useMemo(
+    () => Math.abs(avgRadiusFromCenter(guideSet.ascLine) - avgRadiusFromCenter(guideSet.baseLine)),
+    [guideSet.ascLine, guideSet.baseLine, box, radiusMM],
+  );
+  const mainDescBottomOffsetMM = useMemo(
+    () => Math.abs(avgRadiusFromCenter(guideSet.descLine) - avgRadiusFromCenter(guideSet.baseLine)),
+    [guideSet.descLine, guideSet.baseLine, box, radiusMM],
+  );
+
+  const outerOffsetMinMM = useMemo(() => Math.max(0, Math.ceil(mainAscTopOffsetMM)), [mainAscTopOffsetMM]);
+  const outerOffsetMaxMM = 200;
+  const clampedOuterOffsetMM = Math.max(outerOffsetMinMM, Math.min(outerOffsetMaxMM, outerOffsetMM));
+
   const topXMM = useMemo(
     () => (topBandScript === 'Copperplate' ? topBandSizeMM : topBandSizeMM * xNib),
     [topBandScript, topBandSizeMM, xNib],
   );
+  const innerOffsetMaxMM = useMemo(() => Math.max(0, Math.floor(topXMM + mainDescBottomOffsetMM)), [topXMM, mainDescBottomOffsetMM]);
+  const clampedInnerOffsetMM = Math.max(0, Math.min(innerOffsetMM, innerOffsetMaxMM));
+
+  useEffect(() => {
+    setInnerOffsetMM(prev => Math.max(0, Math.min(prev, innerOffsetMaxMM)));
+  }, [innerOffsetMaxMM]);
+  useEffect(() => {
+    setOuterOffsetMM(prev => Math.max(outerOffsetMinMM, Math.min(prev, outerOffsetMaxMM)));
+  }, [outerOffsetMinMM, outerOffsetMaxMM]);
+
+  const innerRadiusMM = useMemo(() => Math.max(5, radiusMM - clampedInnerOffsetMM), [radiusMM, clampedInnerOffsetMM]);
+  const outerRadiusMM = useMemo(() => Math.max(1, radiusMM + clampedOuterOffsetMM), [radiusMM, clampedOuterOffsetMM]);
+
+  const topBaseline = useMemo<Pt[]>(() => buildCircleBaseline(innerRadiusMM), [box, innerRadiusMM, startAngleRad, dirSign]);
+  const topArcLen = useMemo(() => 2 * Math.PI * innerRadiusMM, [innerRadiusMM]);
   const topAscMM = useMemo(
     () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * ascNib),
     [topBandScript, topBandSizeMM, ascNib],
@@ -1723,27 +1753,10 @@ export default function CalligramPage() {
                     max={Math.max(10, Math.floor(Math.min(box.w, box.h) / 2) - 4)}
                     step={1}
                     value={radiusMM}
-                    onChange={e => { const next = Math.max(10, Number(e.target.value) || 10); setRadiusMM(next); setCircleMarginMM(prev => Math.min(prev, Math.max(0, Math.min(60, next - 5)))); }}
+                    onChange={e => setRadiusMM(Math.max(10, Number(e.target.value) || 10))}
                     className="w-full"
                   />
                   <div className="text-xs font-medium text-slate-500 mt-1">{radiusMM} mm</div>
-                </div>
-              </InsetLabeledField>
-            </div>
-
-            <div className="sm:col-span-2">
-              <InsetLabeledField label="Circle margin">
-                <div className="px-3 py-2">
-                  <input
-                    type="range"
-                    min={0}
-                    max={Math.max(0, Math.min(60, radiusMM - 5))}
-                    step={1}
-                    value={circleMarginMM}
-                    onChange={e => setCircleMarginMM(Math.max(0, Number(e.target.value) || 0))}
-                    className="w-full"
-                  />
-                  <div className="text-xs font-medium text-slate-500 mt-1">{circleMarginMM} mm</div>
                 </div>
               </InsetLabeledField>
             </div>
@@ -2181,6 +2194,20 @@ export default function CalligramPage() {
                   <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
                   <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
                 </label>
+                <div className="ml-auto flex items-center gap-2 min-w-[14rem]">
+                  <span className="text-xs text-slate-600">Size</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={Math.max(0, innerOffsetMaxMM)}
+                    step={1}
+                    value={Math.max(0, Math.min(innerOffsetMM, innerOffsetMaxMM))}
+                    onChange={e => setInnerOffsetMM(Math.max(0, Math.min(Number(e.target.value) || 0, innerOffsetMaxMM)))}
+                    disabled={!topBandEnabled}
+                    className="w-full disabled:opacity-50"
+                  />
+                  <span className="text-xs font-medium text-slate-500 w-[3.5rem] text-right">{Math.round(clampedInnerOffsetMM)} mm</span>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <InsetLabeledField label="Script" disabled={!topBandEnabled}>
@@ -2218,6 +2245,20 @@ export default function CalligramPage() {
                   <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
                   <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
                 </label>
+                <div className="ml-auto flex items-center gap-2 min-w-[14rem]">
+                  <span className="text-xs text-slate-600">Size</span>
+                  <input
+                    type="range"
+                    min={Math.max(0, outerOffsetMinMM)}
+                    max={outerOffsetMaxMM}
+                    step={1}
+                    value={Math.max(outerOffsetMinMM, Math.min(outerOffsetMM, outerOffsetMaxMM))}
+                    onChange={e => setOuterOffsetMM(Math.max(outerOffsetMinMM, Math.min(Number(e.target.value) || outerOffsetMinMM, outerOffsetMaxMM)))}
+                    disabled={!bottomBandEnabled}
+                    className="w-full disabled:opacity-50"
+                  />
+                  <span className="text-xs font-medium text-slate-500 w-[3.5rem] text-right">{Math.round(clampedOuterOffsetMM)} mm</span>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <InsetLabeledField label="Script" disabled={!bottomBandEnabled}>
