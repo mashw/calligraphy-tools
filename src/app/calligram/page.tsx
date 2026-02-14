@@ -345,7 +345,7 @@ function makeSimplePdfFromJpeg(
 export default function CalligramPage() {
   // ---------- State ----------
   const [paper, setPaper] = useState<PaperId>('A4');
-  const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
+  const [orientation, setOrientation] = useState<Orientation>('landscape');
   const [view, setView] = useState<ViewMode>('autofit');
   const [customOrigin, setCustomOrigin] = useState<'autofit' | 'fullpage'>('autofit');
 
@@ -363,6 +363,7 @@ export default function CalligramPage() {
   const [script, setScript] = useState<ScriptId>('TexturaQuadrata');
   const [radiusMM, setRadiusMM] = useState(70);
   const [circleMarginMM, setCircleMarginMM] = useState(8);
+
   const [startAngleDeg, setStartAngleDeg] = useState(0);
   const [direction, setDirection] = useState<'ccw' | 'cw'>('cw');
   const [align, setAlign] = useState<AlignMode>('start');
@@ -719,6 +720,7 @@ export default function CalligramPage() {
       const theta = startAngleRad + dirSign * (s / radius);
       pts.push({ x: cx + radius * Math.cos(theta), y: cy + radius * Math.sin(theta) });
     }
+    if (pts.length) pts.push(pts[0]);
     return pts;
   };
 
@@ -866,7 +868,7 @@ export default function CalligramPage() {
     [baseline, guideTemplate, xMM, ascMM, descMM, tickStepMM, nibMM, span],
   );
 
-  const innerRadiusMM = useMemo(() => Math.max(1, radiusMM - circleMarginMM), [radiusMM, circleMarginMM]);
+  const innerRadiusMM = useMemo(() => Math.max(5, radiusMM - circleMarginMM), [radiusMM, circleMarginMM]);
   const outerRadiusMM = useMemo(() => Math.max(1, radiusMM + circleMarginMM), [radiusMM, circleMarginMM]);
 
   const topBaseline = useMemo<Pt[]>(() => buildCircleBaseline(innerRadiusMM), [box, innerRadiusMM, startAngleRad, dirSign]);
@@ -977,14 +979,6 @@ export default function CalligramPage() {
     return offset(baseline, descMM * 0.5);
   }, [script, baseline, descMM]);
 
-  const topBandWaistLine = useMemo(() => (topBandEnabled ? topGuideSet.waistLine : null), [topBandEnabled, topGuideSet.waistLine]);
-
-  const topBandAscLine = useMemo(() => (topBandEnabled ? topGuideSet.ascLine : null), [topBandEnabled, topGuideSet.ascLine]);
-
-  const bottomBandBaseLine = useMemo(() => (bottomBandEnabled ? bottomGuideSet.baseLine : null), [bottomBandEnabled, bottomGuideSet.baseLine]);
-
-  const bottomBandDescLine = useMemo(() => (bottomBandEnabled ? bottomGuideSet.descLine : null), [bottomBandEnabled, bottomGuideSet.descLine]);
-
 
 
 
@@ -1032,16 +1026,6 @@ export default function CalligramPage() {
     return { waistPts, basePts };
   }, [bottomSpan, bottomBandEnabled, bottomHasText, bottomLayout.placements.length, bottomBandScript, bottomXMM, effectiveBottomNibMM, bottomGuideSet.baseLine, bottomArcLen]);
 
-  const bandPolyBetween = (aPts: Pt[], bPts: Pt[]) => `M ${aPts.map(pt => `${pt.x},${pt.y}`).join(' L ')} L ${[...bPts].reverse().map(pt => `${pt.x},${pt.y}`).join(' L ')} Z`;
-
-  const topBandClipT1 = useMemo(() => bandPolyBetween(topGuideSet.baseLine, topGuideSet.waistLine), [topGuideSet.baseLine, topGuideSet.waistLine]);
-  const topBandClipT2 = useMemo(() => bandPolyBetween(topGuideSet.waistLine, topGuideSet.ascLine), [topGuideSet.waistLine, topGuideSet.ascLine]);
-  const bottomBandClipX = useMemo(() => bandPolyBetween(bottomGuideSet.waistLine, bottomGuideSet.baseLine), [bottomGuideSet.waistLine, bottomGuideSet.baseLine]);
-  const bottomBandClipD = useMemo(() => bandPolyBetween(bottomGuideSet.baseLine, bottomGuideSet.descLine), [bottomGuideSet.baseLine, bottomGuideSet.descLine]);
-
-  const startPt = baseline[0];
-  const endPt = baseline[baseline.length - 1];
-  const endpointsDistance = Math.hypot(endPt.x - startPt.x, endPt.y - startPt.y);
   const baselineLength = arcLen;
   const overWarn = layout.overBy > 0;
 
@@ -1504,14 +1488,6 @@ export default function CalligramPage() {
                 <clipPath id="pageClip">
                   <rect x={0} y={0} width={box.w} height={box.h} />
                 </clipPath>
-                <clipPath id="topBandClip">
-                  <path d={topBandClipT1} />
-                  <path d={topBandClipT2} />
-                </clipPath>
-                <clipPath id="bottomBandClip">
-                  <path d={bottomBandClipX} />
-                  <path d={bottomBandClipD} />
-                </clipPath>
               </defs>
 
               {/* stage bg (kept only for on-screen; removed in export) */}
@@ -1545,42 +1521,6 @@ export default function CalligramPage() {
                     shapeRendering="geometricPrecision"
                   />
                 )}
-                {topBandWaistLine && (
-                  <path
-                    d={pathD(topBandWaistLine)}
-                    fill="none"
-                    stroke={isCurveDragging ? '#7c3aed' : '#111827'}
-                    strokeWidth={swBold}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                )}
-                {topBandAscLine && (
-                  <path
-                    d={pathD(topBandAscLine)}
-                    fill="none"
-                    stroke={isCurveDragging ? '#7c3aed' : '#111827'}
-                    strokeWidth={swThin}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                )}
-                {bottomBandBaseLine && (
-                  <path
-                    d={pathD(bottomBandBaseLine)}
-                    fill="none"
-                    stroke={isCurveDragging ? '#7c3aed' : '#111827'}
-                    strokeWidth={swBold}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                )}
-                {bottomBandDescLine && (
-                  <path
-                    d={pathD(bottomBandDescLine)}
-                    fill="none"
-                    stroke={isCurveDragging ? '#7c3aed' : '#111827'}
-                    strokeWidth={swThin}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                )}
                 {/* Guides */}
                 <GuideOverlay
                   guideSet={guideSet}
@@ -1597,43 +1537,35 @@ export default function CalligramPage() {
                 />
 
                 {topBandEnabled && (
-                  <g clipPath="url(#topBandClip)">
-                    <GuideOverlay
-                      guideSet={topGuideSet}
-                      style={{
-                        thin: swBold,
-                        bold: swBold,
-                        colors: {
-                          thin: isCurveDragging ? '#7c3aed' : '#111827',
-                          bold: isCurveDragging ? '#7c3aed' : '#111827',
-                          tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
-                          frame: 'transparent',
-                          base: 'transparent',
-                          desc: 'transparent',
-                        },
-                      }}
-                    />
-                  </g>
+                  <GuideOverlay
+                    guideSet={topGuideSet}
+                    style={{
+                      thin: swBold,
+                      bold: swBold,
+                      colors: {
+                        thin: isCurveDragging ? '#7c3aed' : '#111827',
+                        bold: isCurveDragging ? '#7c3aed' : '#111827',
+                        tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
+                        frame: '#cbd5e1',
+                      },
+                    }}
+                  />
                 )}
 
                 {bottomBandEnabled && (
-                  <g clipPath="url(#bottomBandClip)">
-                    <GuideOverlay
-                      guideSet={bottomGuideSet}
-                      style={{
-                        thin: swBold,
-                        bold: swBold,
-                        colors: {
-                          thin: isCurveDragging ? '#7c3aed' : '#111827',
-                          bold: isCurveDragging ? '#7c3aed' : '#111827',
-                          tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
-                          frame: 'transparent',
-                          asc: 'transparent',
-                          waist: 'transparent',
-                        },
-                      }}
-                    />
-                  </g>
+                  <GuideOverlay
+                    guideSet={bottomGuideSet}
+                    style={{
+                      thin: swBold,
+                      bold: swBold,
+                      colors: {
+                        thin: isCurveDragging ? '#7c3aed' : '#111827',
+                        bold: isCurveDragging ? '#7c3aed' : '#111827',
+                        tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
+                        frame: '#cbd5e1',
+                      },
+                    }}
+                  />
                 )}
 
                 {showSpanFill && spanPoly && (
@@ -1718,10 +1650,6 @@ export default function CalligramPage() {
                 {showBoxes && topBandEnabled && renderLetterBoxes(topLayout.placements, topGuideSet.baseLine, topArcLen, topXMM, topBandScript, 'top')}
                 {showBoxes && bottomBandEnabled && renderLetterBoxes(bottomLayout.placements, bottomGuideSet.baseLine, bottomArcLen, bottomXMM, bottomBandScript, 'bottom')}
 
-                {/* Endpoints */}
-                <circle cx={startPt.x} cy={startPt.y} r={1} fill="#0ea5e9" />
-                <circle cx={endPt.x} cy={endPt.y} r={1} fill="#0ea5e9" />
-
                 <circle cx={box.w / 2} cy={box.h / 2} r={1.6} fill="#000000" />
               </g>
             </svg>
@@ -1795,7 +1723,7 @@ export default function CalligramPage() {
                     max={Math.max(10, Math.floor(Math.min(box.w, box.h) / 2) - 4)}
                     step={1}
                     value={radiusMM}
-                    onChange={e => setRadiusMM(Math.max(10, Number(e.target.value) || 10))}
+                    onChange={e => { const next = Math.max(10, Number(e.target.value) || 10); setRadiusMM(next); setCircleMarginMM(prev => Math.min(prev, Math.max(0, Math.min(60, next - 5)))); }}
                     className="w-full"
                   />
                   <div className="text-xs font-medium text-slate-500 mt-1">{radiusMM} mm</div>
@@ -1804,8 +1732,19 @@ export default function CalligramPage() {
             </div>
 
             <div className="sm:col-span-2">
-              <InsetLabeledField label="Circle margin" rightAdornment="mm">
-                <input type="number" min={0} step={1} className={INSET_CONTROL_MM} value={circleMarginMM} onChange={e => setCircleMarginMM(Math.max(0, Number(e.target.value) || 0))} />
+              <InsetLabeledField label="Circle margin">
+                <div className="px-3 py-2">
+                  <input
+                    type="range"
+                    min={0}
+                    max={Math.max(0, Math.min(60, radiusMM - 5))}
+                    step={1}
+                    value={circleMarginMM}
+                    onChange={e => setCircleMarginMM(Math.max(0, Number(e.target.value) || 0))}
+                    className="w-full"
+                  />
+                  <div className="text-xs font-medium text-slate-500 mt-1">{circleMarginMM} mm</div>
+                </div>
               </InsetLabeledField>
             </div>
 
