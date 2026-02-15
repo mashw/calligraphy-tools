@@ -83,7 +83,7 @@ const CIRCLE_DEFAULTS: Record<ScriptKey, {
     innerRadiusMM: 22,
     innerScript: 'Fraktur',
     innerNibMMText: '2',
-    outerRadiusMM: 22,
+    outerRadiusMM: 32,
     outerScript: 'Fraktur',
     outerNibMMText: '2',
   },
@@ -91,7 +91,7 @@ const CIRCLE_DEFAULTS: Record<ScriptKey, {
     innerRadiusMM: 22,
     innerScript: 'Fraktur',
     innerNibMMText: '2',
-    outerRadiusMM: 22,
+    outerRadiusMM: 32,
     outerScript: 'Fraktur',
     outerNibMMText: '2',
   },
@@ -1889,6 +1889,10 @@ const innerRadiusMaxMM = useMemo(
             </div>
 
             <div className="sm:col-span-2">
+              <div className="my-3 border-t border-slate-200/70" />
+            </div>
+
+            <div className="sm:col-span-2">
               <InsetLabeledField label="Radius">
                 <div className="px-3 py-2">
                   <input
@@ -2336,7 +2340,7 @@ const innerRadiusMaxMM = useMemo(
             <h2 className="text-lg font-semibold text-slate-800">Step 3 – Text Fit Guide</h2>
             <InfoTip side="right">Use this section to estimate text fit for each circle.</InfoTip>
           </div>
-          <p className="mt-2 text-sm text-slate-500">Use these fields to preview how much text fits around each circle.</p>
+          <p className="mt-2 text-sm text-slate-500">Preview how much text fits on each circle.</p>
 
           <div className="grid grid-cols-1 gap-4 mt-3 select-none">
             <InsetLabeledField label="Title text">
