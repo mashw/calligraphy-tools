@@ -959,6 +959,22 @@ export default function CalligramPage() {
     return { sStart, sEnd };
   }, [layout, arcLen]);
 
+  const avgRadiusFromCenter = (pts: Pt[]) => {
+    if (!pts.length) return radiusMM;
+    const cx = box.w / 2;
+    const cy = box.h / 2;
+    return pts.reduce((sum, p) => sum + Math.hypot(p.x - cx, p.y - cy), 0) / pts.length;
+  };
+
+  const normalSignForBaseline = (pts: Pt[]) => {
+    const test = offset(pts, -1);
+    const r0 = avgRadiusFromCenter(pts);
+    const r1 = avgRadiusFromCenter(test);
+    return (r1 > r0 ? 1 : -1) as 1 | -1;
+  };
+
+  const mainNormalSign = useMemo(() => normalSignForBaseline(baseline), [baseline]);
+
   const guideSet = useMemo(
     () =>
       buildGuideSet(guideTemplate, {
@@ -969,16 +985,10 @@ export default function CalligramPage() {
         tickStepMM,
         tickAnchorS: span ? span.sStart : undefined,
         actualNibMM: nibMM,
+        normalSign: mainNormalSign,
       }),
-    [baseline, guideTemplate, xMM, ascMM, descMM, tickStepMM, nibMM, span],
+    [baseline, guideTemplate, xMM, ascMM, descMM, tickStepMM, nibMM, span, mainNormalSign],
   );
-
-  const avgRadiusFromCenter = (pts: Pt[]) => {
-    if (!pts.length) return radiusMM;
-    const cx = box.w / 2;
-    const cy = box.h / 2;
-    return pts.reduce((sum, p) => sum + Math.hypot(p.x - cx, p.y - cy), 0) / pts.length;
-  };
 
   const mainAscTopOffsetMM = useMemo(
     () => Math.abs(avgRadiusFromCenter(guideSet.ascLine) - avgRadiusFromCenter(guideSet.baseLine)),
@@ -1036,6 +1046,7 @@ const innerRadiusMaxMM = useMemo(
   const outerRadiusMM = useMemo(() => Math.max(1, radiusMM + clampedOuterOffsetMM), [radiusMM, clampedOuterOffsetMM]);
 
   const topBaseline = useMemo<Pt[]>(() => buildCircleBaseline(innerRadiusMM), [box, innerRadiusMM, startAngleRad, dirSign]);
+  const innerNormalSign = useMemo(() => normalSignForBaseline(topBaseline), [topBaseline]);
   const topArcLen = useMemo(() => 2 * Math.PI * innerRadiusMM, [innerRadiusMM]);
   const topAscMM = useMemo(
     () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * ascNib),
@@ -1076,8 +1087,9 @@ const innerRadiusMaxMM = useMemo(
       tickStepMM: topTickStepMM,
       tickAnchorS: topSpan ? topSpan.sStart : undefined,
       actualNibMM: topBandSizeMM,
+      normalSign: innerNormalSign,
     }),
-    [topBandScript, topBaseline, topXMM, topAscMM, topDescMM, topTickStepMM, topSpan, topBandSizeMM],
+    [topBandScript, topBaseline, topXMM, topAscMM, topDescMM, topTickStepMM, topSpan, topBandSizeMM, innerNormalSign],
   );
 
   const bottomXMM = useMemo(
@@ -1099,6 +1111,7 @@ const innerRadiusMaxMM = useMemo(
     [bottomBandScript, bottomXMM, bottomBandSizeMM],
   );
   const bottomBaseline = useMemo<Pt[]>(() => buildCircleBaseline(outerRadiusMM), [box, outerRadiusMM, startAngleRad, dirSign]);
+  const outerNormalSign = useMemo(() => normalSignForBaseline(bottomBaseline), [bottomBaseline]);
   const bottomArcLen = useMemo(() => 2 * Math.PI * outerRadiusMM, [outerRadiusMM]);
   const bottomTickStepMM = useMemo(
     () => (bottomBandScript === 'Copperplate' ? Math.max(bottomXMM * 0.9, 3) : effectiveBottomNibMM),
@@ -1125,8 +1138,9 @@ const innerRadiusMaxMM = useMemo(
       tickStepMM: bottomTickStepMM,
       tickAnchorS: bottomSpan ? bottomSpan.sStart : undefined,
       actualNibMM: bottomBandSizeMM,
+      normalSign: outerNormalSign,
     }),
-    [bottomBandScript, bottomBaseline, bottomXMM, bottomAscMM, bottomDescMM, bottomTickStepMM, bottomSpan, bottomBandSizeMM],
+    [bottomBandScript, bottomBaseline, bottomXMM, bottomAscMM, bottomDescMM, bottomTickStepMM, bottomSpan, bottomBandSizeMM, outerNormalSign],
   );
 
   const midAscPts = useMemo(() => {
