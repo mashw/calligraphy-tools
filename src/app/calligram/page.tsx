@@ -736,6 +736,23 @@ export default function CalligramPage() {
 
   const baseline = useMemo<Pt[]>(() => buildCircleBaseline(radiusMM), [box, radiusMM, startAngleRad, dirSign]);
 
+  const avgRadiusFromCenter = (pts: Pt[]) => {
+    if (!pts.length) return radiusMM;
+    const cx = box.w / 2;
+    const cy = box.h / 2;
+    return pts.reduce((sum, p) => sum + Math.hypot(p.x - cx, p.y - cy), 0) / pts.length;
+  };
+
+  const normalSignForBaseline = (pts: Pt[]) => {
+    // We want NEGATIVE offsets to move OUTWARD (bigger radius).
+    const test = offset(pts, -1);
+    const r0 = avgRadiusFromCenter(pts);
+    const r1 = avgRadiusFromCenter(test);
+    return (r1 > r0 ? 1 : -1) as 1 | -1;
+  };
+
+  const mainNormalSign = useMemo(() => normalSignForBaseline(baseline), [baseline]);
+
   const arcLen = circumference;
   const wrapLength = (s: number, L: number) => (L > 0 ? ((s % L) + L) % L : 0);
   const pointAtWrapped = (pts: Pt[], s: number, L: number) => pointAt(pts, wrapLength(s, L));
@@ -871,19 +888,13 @@ export default function CalligramPage() {
         xMM,
         ascMM,
         descMM,
+        normalSign: mainNormalSign,
         tickStepMM,
         tickAnchorS: span ? span.sStart : undefined,
         actualNibMM: nibMM,
       }),
-    [baseline, guideTemplate, xMM, ascMM, descMM, tickStepMM, nibMM, span],
+    [baseline, guideTemplate, xMM, ascMM, descMM, mainNormalSign, tickStepMM, nibMM, span],
   );
-
-  const avgRadiusFromCenter = (pts: Pt[]) => {
-    if (!pts.length) return radiusMM;
-    const cx = box.w / 2;
-    const cy = box.h / 2;
-    return pts.reduce((sum, p) => sum + Math.hypot(p.x - cx, p.y - cy), 0) / pts.length;
-  };
 
   const mainAscTopOffsetMM = useMemo(
     () => Math.abs(avgRadiusFromCenter(guideSet.ascLine) - avgRadiusFromCenter(guideSet.baseLine)),
@@ -941,6 +952,7 @@ const innerRadiusMaxMM = useMemo(
   const outerRadiusMM = useMemo(() => Math.max(1, radiusMM + clampedOuterOffsetMM), [radiusMM, clampedOuterOffsetMM]);
 
   const topBaseline = useMemo<Pt[]>(() => buildCircleBaseline(innerRadiusMM), [box, innerRadiusMM, startAngleRad, dirSign]);
+  const innerNormalSign = useMemo(() => normalSignForBaseline(topBaseline), [topBaseline]);
   const topArcLen = useMemo(() => 2 * Math.PI * innerRadiusMM, [innerRadiusMM]);
   const topAscMM = useMemo(
     () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * ascNib),
@@ -978,11 +990,12 @@ const innerRadiusMaxMM = useMemo(
       xMM: topXMM,
       ascMM: topAscMM,
       descMM: topDescMM,
+      normalSign: innerNormalSign,
       tickStepMM: topTickStepMM,
       tickAnchorS: topSpan ? topSpan.sStart : undefined,
       actualNibMM: topBandSizeMM,
     }),
-    [topBandScript, topBaseline, topXMM, topAscMM, topDescMM, topTickStepMM, topSpan, topBandSizeMM],
+    [topBandScript, topBaseline, topXMM, topAscMM, topDescMM, innerNormalSign, topTickStepMM, topSpan, topBandSizeMM],
   );
 
   const bottomXMM = useMemo(
@@ -1004,6 +1017,7 @@ const innerRadiusMaxMM = useMemo(
     [bottomBandScript, bottomXMM, bottomBandSizeMM],
   );
   const bottomBaseline = useMemo<Pt[]>(() => buildCircleBaseline(outerRadiusMM), [box, outerRadiusMM, startAngleRad, dirSign]);
+  const outerNormalSign = useMemo(() => normalSignForBaseline(bottomBaseline), [bottomBaseline]);
   const bottomArcLen = useMemo(() => 2 * Math.PI * outerRadiusMM, [outerRadiusMM]);
   const bottomTickStepMM = useMemo(
     () => (bottomBandScript === 'Copperplate' ? Math.max(bottomXMM * 0.9, 3) : effectiveBottomNibMM),
@@ -1027,12 +1041,40 @@ const innerRadiusMaxMM = useMemo(
       xMM: bottomXMM,
       ascMM: bottomAscMM,
       descMM: bottomDescMM,
+      normalSign: outerNormalSign,
       tickStepMM: bottomTickStepMM,
       tickAnchorS: bottomSpan ? bottomSpan.sStart : undefined,
       actualNibMM: bottomBandSizeMM,
     }),
-    [bottomBandScript, bottomBaseline, bottomXMM, bottomAscMM, bottomDescMM, bottomTickStepMM, bottomSpan, bottomBandSizeMM],
+    [bottomBandScript, bottomBaseline, bottomXMM, bottomAscMM, bottomDescMM, outerNormalSign, bottomTickStepMM, bottomSpan, bottomBandSizeMM],
   );
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+    const rBase = avgRadiusFromCenter(guideSet.baseLine);
+    const rWaist = avgRadiusFromCenter(guideSet.waistLine);
+    const rAsc = avgRadiusFromCenter(guideSet.ascLine);
+    const rDesc = avgRadiusFromCenter(guideSet.descLine);
+    console.log('main radii', { rDesc, rBase, rWaist, rAsc });
+  }, [guideSet]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+    const rBase = avgRadiusFromCenter(topGuideSet.baseLine);
+    const rWaist = avgRadiusFromCenter(topGuideSet.waistLine);
+    const rAsc = avgRadiusFromCenter(topGuideSet.ascLine);
+    const rDesc = avgRadiusFromCenter(topGuideSet.descLine);
+    console.log('inner radii', { rDesc, rBase, rWaist, rAsc });
+  }, [topGuideSet]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+    const rBase = avgRadiusFromCenter(bottomGuideSet.baseLine);
+    const rWaist = avgRadiusFromCenter(bottomGuideSet.waistLine);
+    const rAsc = avgRadiusFromCenter(bottomGuideSet.ascLine);
+    const rDesc = avgRadiusFromCenter(bottomGuideSet.descLine);
+    console.log('outer radii', { rDesc, rBase, rWaist, rAsc });
+  }, [bottomGuideSet]);
 
   const midAscPts = useMemo(() => {
     if (script !== 'Copperplate' || ascMM <= 0) return null;
@@ -2130,7 +2172,7 @@ const innerRadiusMaxMM = useMemo(
                   <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
                 </label>
                 <div className="ml-auto flex items-center gap-2 min-w-[14rem]">
-                  <span className="text-xs text-slate-600">Size</span>
+                  <span className="text-xs text-slate-600">Radius</span>
                   <input
   type="range"
   min={innerRadiusMinMM}
@@ -2185,18 +2227,22 @@ const innerRadiusMaxMM = useMemo(
                   <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
                 </label>
                 <div className="ml-auto flex items-center gap-2 min-w-[14rem]">
-                  <span className="text-xs text-slate-600">Size</span>
+                  <span className="text-xs text-slate-600">Radius</span>
                   <input
                     type="range"
-                    min={Math.max(0, outerOffsetMinMM)}
-                    max={outerOffsetMaxMM}
+                    min={radiusMM + outerOffsetMinMM}
+                    max={radiusMM + outerOffsetMaxMM}
                     step={0.5}
-                    value={clampedOuterOffsetMM}
-                    onChange={e => setOuterOffsetMM(Math.max(outerOffsetMinMM, Math.min(Number(e.target.value) || outerOffsetMinMM, outerOffsetMaxMM)))}
+                    value={outerRadiusMM}
+                    onChange={e => {
+                      const r = Number(e.target.value) || radiusMM + outerOffsetMinMM;
+                      const nextOffset = r - radiusMM;
+                      setOuterOffsetMM(Math.max(outerOffsetMinMM, Math.min(nextOffset, outerOffsetMaxMM)));
+                    }}
                     disabled={!bottomBandEnabled}
                     className="w-full disabled:opacity-50"
                   />
-                  <span className="text-xs font-medium text-slate-500 w-[3.5rem] text-right">{clampedOuterOffsetMM.toFixed(1)} mm
+                  <span className="text-xs font-medium text-slate-500 w-[3.5rem] text-right">{outerRadiusMM.toFixed(1)} mm
                   </span>
                 </div>
               </div>
