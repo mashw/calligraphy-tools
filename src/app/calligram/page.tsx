@@ -27,12 +27,83 @@ type Orientation = 'portrait' | 'landscape';
 type AlignMode = 'start' | 'center' | 'end';
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
+type ScriptKey = 'Copperplate' | 'TexturaQuadrata' | 'Fraktur';
 
 const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0.5);
 const MIDLINE_DASH_GAP = 12;
 
 const CAL_STORAGE_KEY_PREFIX = 'ct_calligramplanner_calibration_v2_xh_';
 const keyForXHeight = (x: number) => `${CAL_STORAGE_KEY_PREFIX}${x.toFixed(1)}`;
+
+
+const MAIN_DEFAULTS: Record<ScriptKey, {
+  radiusMM: number;
+  nibMM: string;
+  nibAngleDeg: number;
+  xNib?: number;
+  ascNib?: number;
+  descNib?: number;
+  xHeightMM?: string;
+  ratioId?: '3:2:3' | string;
+}> = {
+  Fraktur: {
+    radiusMM: 45,
+    nibMM: '4',
+    nibAngleDeg: 40,
+    xNib: 4.5,
+    ascNib: 2,
+    descNib: 2,
+  },
+  TexturaQuadrata: {
+    radiusMM: 45,
+    nibMM: '4',
+    nibAngleDeg: 45,
+    xNib: 5,
+    ascNib: 2,
+    descNib: 2,
+  },
+  Copperplate: {
+    radiusMM: 45,
+    nibMM: '4',
+    nibAngleDeg: 45,
+    xHeightMM: '6.0',
+    ratioId: '3:2:3',
+  },
+};
+
+const CIRCLE_DEFAULTS: Record<ScriptKey, {
+  innerRadiusMM: number;
+  innerScript: ScriptKey;
+  innerNibMM: string;
+  outerRadiusMM: number;
+  outerScript: ScriptKey;
+  outerNibMM: string;
+}> = {
+  Fraktur: {
+    innerRadiusMM: 22,
+    innerScript: 'Fraktur',
+    innerNibMM: '2',
+    outerRadiusMM: 22,
+    outerScript: 'Fraktur',
+    outerNibMM: '2',
+  },
+  TexturaQuadrata: {
+    innerRadiusMM: 22,
+    innerScript: 'Fraktur',
+    innerNibMM: '2',
+    outerRadiusMM: 22,
+    outerScript: 'Fraktur',
+    outerNibMM: '2',
+  },
+  Copperplate: {
+    innerRadiusMM: 26,
+    innerScript: 'Copperplate',
+    innerNibMM: '3.5',
+    outerRadiusMM: 22,
+    outerScript: 'Copperplate',
+    outerNibMM: '3.5',
+  },
+};
 
 /* ---------------- Reusable InfoTip ---------------- */
 type InfoTipProps = {
@@ -360,10 +431,14 @@ export default function CalligramPage() {
   };
   const snap05 = (v: number) => Math.round(v / 0.5) * 0.5;
 
-  const [script, setScript] = useState<ScriptId>('Fraktur');
-  const [radiusMM, setRadiusMM] = useState(70);
-  const [innerOffsetMM, setInnerOffsetMM] = useState(20);
-  const [outerOffsetMM, setOuterOffsetMM] = useState(20);
+  const initialScript: ScriptKey = 'Fraktur';
+  const initialMain = MAIN_DEFAULTS[initialScript];
+  const initialCircles = CIRCLE_DEFAULTS[initialScript];
+
+  const [script, setScript] = useState<ScriptId>(initialScript);
+  const [radiusMM, setRadiusMM] = useState(initialMain.radiusMM);
+  const [innerOffsetMM, setInnerOffsetMM] = useState(initialCircles.innerRadiusMM);
+  const [outerOffsetMM, setOuterOffsetMM] = useState(initialCircles.outerRadiusMM);
 
   const [startAngleDeg, setStartAngleDeg] = useState(0);
   const [direction, setDirection] = useState<'ccw' | 'cw'>('cw');
@@ -372,16 +447,22 @@ export default function CalligramPage() {
   const [topText, setTopText] = useState('');
   const [bottomText, setBottomText] = useState('');
 
-  const [xHeightMM, setXHeightMM] = useState(6);
+  const [xHeightMM, setXHeightMM] = useState(
+    initialScript === 'Copperplate' ? parseFloat(initialMain.xHeightMM ?? '6.0') : 6,
+  );
   const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
-  const [nibText, setNibText] = useState('6');
+  const [nibText, setNibText] = useState(initialMain.nibMM);
   const [topBandEnabled, setTopBandEnabled] = useState(false);
   const [bottomBandEnabled, setBottomBandEnabled] = useState(false);
-  const [topBandScript, setTopBandScript] = useState<ScriptId>('TexturaQuadrata');
-  const [bottomBandScript, setBottomBandScript] = useState<ScriptId>('TexturaQuadrata');
-  const [topBandSizeText, setTopBandSizeText] = useState('2');
-  const [bottomBandSizeText, setBottomBandSizeText] = useState('2');
-  const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>('2:1:2');
+  const [topBandScript, setTopBandScript] = useState<ScriptId>(initialCircles.innerScript);
+  const [bottomBandScript, setBottomBandScript] = useState<ScriptId>(initialCircles.outerScript);
+  const [topBandSizeText, setTopBandSizeText] = useState(initialCircles.innerNibMM);
+  const [bottomBandSizeText, setBottomBandSizeText] = useState(initialCircles.outerNibMM);
+  const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>(
+    initialScript === 'Copperplate'
+      ? (initialMain.ratioId as CopperplateRatioPreset)
+      : '2:1:2',
+  );
   const [copperplateDescUnitsText, setCopperplateDescUnitsText] = useState('2');
   const [copperplateXUnitsText, setCopperplateXUnitsText] = useState('1');
   const [copperplateAscUnitsText, setCopperplateAscUnitsText] = useState('2');
@@ -401,11 +482,11 @@ export default function CalligramPage() {
     const v = parseFloat(bottomBandSizeText);
     return Number.isFinite(v) ? v : nibMM;
   }, [bottomBandSizeText, nibMM]);
-  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
-  const [xNib, setXNib] = useState(4.5);
+  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(initialMain.nibAngleDeg as 35 | 40 | 45);
+  const [xNib, setXNib] = useState(initialMain.xNib ?? 5);
 
-  const [ascNib, setAscNib] = useState(2);
-  const [descNib, setDescNib] = useState(2);
+  const [ascNib, setAscNib] = useState(initialMain.ascNib ?? 2);
+  const [descNib, setDescNib] = useState(initialMain.descNib ?? 2);
 
   const [useCalibration, setUseCalibration] = useState(false);
   const [calWordLowerMM, setCalWordLowerMM] = useState('');
@@ -416,6 +497,36 @@ export default function CalligramPage() {
 
   const [showBoxes, setShowBoxes] = useState(false);
   const [showSpanFill, setShowSpanFill] = useState(true);
+
+  const applyDefaultsForScript = (next: ScriptKey) => {
+    const main = MAIN_DEFAULTS[next];
+    const circles = CIRCLE_DEFAULTS[next];
+
+    setScript(next);
+
+    setRadiusMM(main.radiusMM);
+    setNibText(main.nibMM);
+    setPenAngleDeg(main.nibAngleDeg as 35 | 40 | 45);
+
+    if (next === 'Fraktur' || next === 'TexturaQuadrata') {
+      setXNib(main.xNib!);
+      setAscNib(main.ascNib!);
+      setDescNib(main.descNib!);
+    }
+
+    if (next === 'Copperplate') {
+      setXHeightMM(parseFloat(main.xHeightMM!));
+      setCopperplateRatioPreset(main.ratioId as CopperplateRatioPreset);
+    }
+
+    setInnerOffsetMM(circles.innerRadiusMM);
+    setTopBandScript(circles.innerScript);
+    setTopBandSizeText(circles.innerNibMM);
+
+    setOuterOffsetMM(circles.outerRadiusMM);
+    setBottomBandScript(circles.outerScript);
+    setBottomBandSizeText(circles.outerNibMM);
+  };
 
 
   const [isNarrow, setIsNarrow] = useState(() => (typeof window !== 'undefined'
@@ -1734,7 +1845,7 @@ const innerRadiusMaxMM = useMemo(
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
             <div className="sm:col-span-2">
               <InsetLabeledField label="Script">
-                <select className={INSET_CONTROL_BASE} value={script} onChange={e => setScript(e.target.value as ScriptId)}>
+                <select className={INSET_CONTROL_BASE} value={script} onChange={e => applyDefaultsForScript(e.target.value as ScriptKey)}>
                   <option value="Copperplate">Copperplate</option>
                   <option value="Fraktur">Fraktur</option>
                   <option value="TexturaQuadrata">Textura Quadrata</option>
@@ -1830,8 +1941,8 @@ const innerRadiusMaxMM = useMemo(
 
           {script === 'Copperplate' ? (
             <div className="mt-3 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
+              <div className="grid grid-cols-1 gap-4 w-full">
+                <div className="w-full">
                   <InsetLabeledField label="X-height" rightAdornment="mm">
                     <select
                       className={INSET_CONTROL_MM}
@@ -1846,20 +1957,22 @@ const innerRadiusMaxMM = useMemo(
                     </select>
                   </InsetLabeledField>
                 </div>
-                <div>
-                  <InsetLabeledField label="Capitals" disabled={useCalibration}>
-                    <select
-                      className={INSET_CONTROL_BASE}
-                      value={capStyle}
-                      onChange={(e) => setCapStyle(e.target.value as 'simple' | 'flourished')}
-                      disabled={useCalibration}
-                    >
-                      <option value="simple">Simple (body widths)</option>
-                      <option value="flourished">Flourished (full widths)</option>
-                    </select>
-                  </InsetLabeledField>
-                  {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
-                </div>
+                {script !== 'Copperplate' && (
+                  <div>
+                    <InsetLabeledField label="Capitals" disabled={useCalibration}>
+                      <select
+                        className={INSET_CONTROL_BASE}
+                        value={capStyle}
+                        onChange={(e) => setCapStyle(e.target.value as 'simple' | 'flourished')}
+                        disabled={useCalibration}
+                      >
+                        <option value="simple">Simple (body widths)</option>
+                        <option value="flourished">Flourished (full widths)</option>
+                      </select>
+                    </InsetLabeledField>
+                    {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1878,7 +1991,9 @@ const innerRadiusMaxMM = useMemo(
                 <p className="mt-1 text-[11px] text-slate-400">Ascender/descender scale from x-height.</p>
               </div>
 
-              <hr className="mt-4 mb-3 border-t border-slate-200" />
+              {script !== 'Copperplate' && (
+                <>
+                  <div className="my-3 border-t border-slate-200/70" />
               <div className="mt-2 flex items-center gap-4">
   <div className="flex-1">
     <div className="text-sm font-medium text-slate-700">Calibration (optional)</div>
@@ -1995,8 +2110,8 @@ const innerRadiusMaxMM = useMemo(
                   </div>
                 </div>
               )}
-
-
+                </>
+              )}
 
               {copperplateRatioPreset === 'custom' && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
