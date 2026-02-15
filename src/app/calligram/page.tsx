@@ -34,6 +34,77 @@ const MIDLINE_DASH_GAP = 12;
 const CAL_STORAGE_KEY_PREFIX = 'ct_curveplanner_calibration_v2_xh_';
 const keyForXHeight = (x: number) => `${CAL_STORAGE_KEY_PREFIX}${x.toFixed(1)}`;
 
+type ScriptKey = 'Copperplate' | 'TexturaQuadrata' | 'Fraktur';
+
+const MAIN_DEFAULTS: Record<ScriptKey, {
+  radiusMM: number;
+  nibMMText: string;
+  nibAngleDeg: 35 | 40 | 45;
+  xNib?: number;
+  ascNib?: number;
+  descNib?: number;
+  xHeightMMText?: string;
+  ratioId?: CopperplateRatioPreset;
+}> = {
+  Fraktur: {
+    radiusMM: 45,
+    nibMMText: '4',
+    nibAngleDeg: 40,
+    xNib: 4.5,
+    ascNib: 2,
+    descNib: 2,
+  },
+  TexturaQuadrata: {
+    radiusMM: 45,
+    nibMMText: '4',
+    nibAngleDeg: 45,
+    xNib: 5,
+    ascNib: 2,
+    descNib: 2,
+  },
+  Copperplate: {
+    radiusMM: 45,
+    nibMMText: '4',
+    nibAngleDeg: 45,
+    xHeightMMText: '6.0',
+    ratioId: '3:2:3',
+  },
+};
+
+const CIRCLE_DEFAULTS: Record<ScriptKey, {
+  innerRadiusMM: number;
+  innerScript: ScriptKey;
+  innerNibMMText: string;
+  outerRadiusMM: number;
+  outerScript: ScriptKey;
+  outerNibMMText: string;
+}> = {
+  Fraktur: {
+    innerRadiusMM: 22,
+    innerScript: 'Fraktur',
+    innerNibMMText: '2',
+    outerRadiusMM: 22,
+    outerScript: 'Fraktur',
+    outerNibMMText: '2',
+  },
+  TexturaQuadrata: {
+    innerRadiusMM: 22,
+    innerScript: 'Fraktur',
+    innerNibMMText: '2',
+    outerRadiusMM: 22,
+    outerScript: 'Fraktur',
+    outerNibMMText: '2',
+  },
+  Copperplate: {
+    innerRadiusMM: 26,
+    innerScript: 'Copperplate',
+    innerNibMMText: '3.5',
+    outerRadiusMM: 22,
+    outerScript: 'Copperplate',
+    outerNibMMText: '3.5',
+  },
+};
+
 /* ---------------- Reusable InfoTip ---------------- */
 type InfoTipProps = {
   title?: string;
@@ -360,10 +431,14 @@ export default function CalligramPage() {
   };
   const snap05 = (v: number) => Math.round(v / 0.5) * 0.5;
 
-  const [script, setScript] = useState<ScriptId>('TexturaQuadrata');
-  const [radiusMM, setRadiusMM] = useState(70);
-  const [innerOffsetMM, setInnerOffsetMM] = useState(20);
-  const [outerOffsetMM, setOuterOffsetMM] = useState(20);
+  const initialScript: ScriptKey = 'Fraktur';
+  const initialMain = MAIN_DEFAULTS[initialScript];
+  const initialCircles = CIRCLE_DEFAULTS[initialScript];
+
+  const [script, setScript] = useState<ScriptId>(initialScript);
+  const [radiusMM, setRadiusMM] = useState(initialMain.radiusMM);
+  const [innerOffsetMM, setInnerOffsetMM] = useState(Math.max(0, initialMain.radiusMM - initialCircles.innerRadiusMM));
+  const [outerOffsetMM, setOuterOffsetMM] = useState(Math.max(0, initialCircles.outerRadiusMM));
 
   const [startAngleDeg, setStartAngleDeg] = useState(0);
   const [direction, setDirection] = useState<'ccw' | 'cw'>('cw');
@@ -372,16 +447,16 @@ export default function CalligramPage() {
   const [topText, setTopText] = useState('');
   const [bottomText, setBottomText] = useState('');
 
-  const [xHeightMM, setXHeightMM] = useState(6);
+  const [xHeightMM, setXHeightMM] = useState(parseFloat(initialMain.xHeightMMText ?? '6'));
   const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
-  const [nibText, setNibText] = useState('2');
+  const [nibText, setNibText] = useState(initialMain.nibMMText);
   const [topBandEnabled, setTopBandEnabled] = useState(false);
   const [bottomBandEnabled, setBottomBandEnabled] = useState(false);
-  const [topBandScript, setTopBandScript] = useState<ScriptId>('TexturaQuadrata');
-  const [bottomBandScript, setBottomBandScript] = useState<ScriptId>('TexturaQuadrata');
-  const [topBandSizeText, setTopBandSizeText] = useState('2');
-  const [bottomBandSizeText, setBottomBandSizeText] = useState('2');
-  const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>('2:1:2');
+  const [topBandScript, setTopBandScript] = useState<ScriptId>(initialCircles.innerScript);
+  const [bottomBandScript, setBottomBandScript] = useState<ScriptId>(initialCircles.outerScript);
+  const [topBandSizeText, setTopBandSizeText] = useState(initialCircles.innerNibMMText);
+  const [bottomBandSizeText, setBottomBandSizeText] = useState(initialCircles.outerNibMMText);
+  const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>(initialMain.ratioId ?? '2:1:2');
   const [copperplateDescUnitsText, setCopperplateDescUnitsText] = useState('2');
   const [copperplateXUnitsText, setCopperplateXUnitsText] = useState('1');
   const [copperplateAscUnitsText, setCopperplateAscUnitsText] = useState('2');
@@ -401,11 +476,11 @@ export default function CalligramPage() {
     const v = parseFloat(bottomBandSizeText);
     return Number.isFinite(v) ? v : nibMM;
   }, [bottomBandSizeText, nibMM]);
-  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
-  const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
+  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(initialMain.nibAngleDeg);
+  const [xNib, setXNib] = useState(initialMain.xNib ?? BLACKLETTER_GUIDE_DEFAULTS.xNib);
 
-  const [ascNib, setAscNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.ascNib);
-  const [descNib, setDescNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.descNib);
+  const [ascNib, setAscNib] = useState(initialMain.ascNib ?? BLACKLETTER_GUIDE_DEFAULTS.ascNib);
+  const [descNib, setDescNib] = useState(initialMain.descNib ?? BLACKLETTER_GUIDE_DEFAULTS.descNib);
 
   const [useCalibration, setUseCalibration] = useState(false);
   const [calWordLowerMM, setCalWordLowerMM] = useState('');
@@ -416,6 +491,36 @@ export default function CalligramPage() {
 
   const [showBoxes, setShowBoxes] = useState(false);
   const [showSpanFill, setShowSpanFill] = useState(true);
+
+  const applyDefaultsForScript = (next: ScriptKey) => {
+    const main = MAIN_DEFAULTS[next];
+    const circles = CIRCLE_DEFAULTS[next];
+
+    setScript(next);
+
+    setRadiusMM(main.radiusMM);
+    setNibText(main.nibMMText);
+    setPenAngleDeg(main.nibAngleDeg);
+
+    if (next === 'Fraktur' || next === 'TexturaQuadrata') {
+      setXNib(main.xNib ?? BLACKLETTER_GUIDE_DEFAULTS.xNib);
+      setAscNib(main.ascNib ?? BLACKLETTER_GUIDE_DEFAULTS.ascNib);
+      setDescNib(main.descNib ?? BLACKLETTER_GUIDE_DEFAULTS.descNib);
+    }
+
+    if (next === 'Copperplate') {
+      setXHeightMM(parseFloat(main.xHeightMMText ?? '6'));
+      setCopperplateRatioPreset(main.ratioId ?? '2:1:2');
+    }
+
+    setInnerOffsetMM(Math.max(0, main.radiusMM - circles.innerRadiusMM));
+    setTopBandScript(circles.innerScript);
+    setTopBandSizeText(circles.innerNibMMText);
+
+    setOuterOffsetMM(Math.max(0, circles.outerRadiusMM));
+    setBottomBandScript(circles.outerScript);
+    setBottomBandSizeText(circles.outerNibMMText);
+  };
 
 
   const [isNarrow, setIsNarrow] = useState(() => (typeof window !== 'undefined'
@@ -1731,7 +1836,7 @@ const innerRadiusMaxMM = useMemo(
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
             <div className="sm:col-span-2">
               <InsetLabeledField label="Script">
-                <select className={INSET_CONTROL_BASE} value={script} onChange={e => setScript(e.target.value as ScriptId)}>
+                <select className={INSET_CONTROL_BASE} value={script} onChange={e => applyDefaultsForScript(e.target.value as ScriptKey)}>
                   <option value="Copperplate">Copperplate</option>
                   <option value="Fraktur">Fraktur</option>
                   <option value="TexturaQuadrata">Textura Quadrata</option>
@@ -1829,8 +1934,8 @@ const innerRadiusMaxMM = useMemo(
 
           {script === 'Copperplate' ? (
             <div className="mt-3 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
+              <div className="grid grid-cols-1 gap-4">
+                <div className="w-full flex-1">
                   <InsetLabeledField label="X-height" rightAdornment="mm">
                     <select
                       className={INSET_CONTROL_MM}
@@ -1845,20 +1950,22 @@ const innerRadiusMaxMM = useMemo(
                     </select>
                   </InsetLabeledField>
                 </div>
-                <div>
-                  <InsetLabeledField label="Capitals" disabled={useCalibration}>
-                    <select
-                      className={INSET_CONTROL_BASE}
-                      value={capStyle}
-                      onChange={(e) => setCapStyle(e.target.value as 'simple' | 'flourished')}
-                      disabled={useCalibration}
-                    >
-                      <option value="simple">Simple (body widths)</option>
-                      <option value="flourished">Flourished (full widths)</option>
-                    </select>
-                  </InsetLabeledField>
-                  {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
-                </div>
+                {script !== 'Copperplate' && (
+                  <div>
+                    <InsetLabeledField label="Capitals" disabled={useCalibration}>
+                      <select
+                        className={INSET_CONTROL_BASE}
+                        value={capStyle}
+                        onChange={(e) => setCapStyle(e.target.value as 'simple' | 'flourished')}
+                        disabled={useCalibration}
+                      >
+                        <option value="simple">Simple (body widths)</option>
+                        <option value="flourished">Flourished (full widths)</option>
+                      </select>
+                    </InsetLabeledField>
+                    {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1877,125 +1984,12 @@ const innerRadiusMaxMM = useMemo(
                 <p className="mt-1 text-[11px] text-slate-400">Ascender/descender scale from x-height.</p>
               </div>
 
-              <hr className="mt-4 mb-3 border-t border-slate-200" />
-              <div className="mt-2 flex items-center gap-4">
-  <div className="flex-1">
-    <div className="text-sm font-medium text-slate-700">Calibration (optional)</div>
-    <p className="text-xs text-slate-500">
-      Stored per x-height. Adjusts lowercase scale + spacing.
-    </p>
-  </div>
-
-  <button
-    type="button"
-    onMouseDown={(e) => e.preventDefault()}
-    onClick={() =>
-      setUseCalibration((v) => {
-        const next = !v;
-        if (!next) setShowAdvanced(false);
-        return next;
-      })
-    }
-    className={`shrink-0 inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-      ${useCalibration
-        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-        : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-  >
-    <span
-      className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
-        ${useCalibration ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}
-    >
-      <span className="h-3 w-3 rounded-full bg-white shadow" />
-    </span>
-    {useCalibration ? 'Calibration: On' : 'Calibration: Off'}
-  </button>
-</div>
-
-              {useCalibration && (
-                <div className="border-t border-slate-200 pt-3">
-                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                    <div className="flex flex-col gap-1">
-                      <InsetLabeledField label={CAL_WORD} rightAdornment="mm">
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          className={INSET_CONTROL_MM}
-                          placeholder="Lowercase word"
-                          value={calWordLowerMM}
-                          onChange={(e) => setCalWordLowerMM(e.target.value)}
-                        />
-                      </InsetLabeledField>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <InsetLabeledField label={CAL_WORD_DOUBLE} rightAdornment="mm">
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          className={INSET_CONTROL_MM}
-                          placeholder="Double word"
-                          value={calWordDoubleMM}
-                          onChange={(e) => setCalWordDoubleMM(e.target.value)}
-                        />
-                      </InsetLabeledField>
-                    </div>
-                  </div>
-
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => setShowAdvanced((v) => !v)}
-                      className="flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-indigo-600 select-none"
-                    >
-                      <span className={`inline-block transform transition-transform ${showAdvanced ? 'rotate-90' : 'rotate-0'}`}>▶</span>
-                      <span>Advanced tweaks</span>
-                    </button>
-
-                    {showAdvanced && (
-                      <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center justify-end">
-                            <span className="font-mono text-slate-500">×{userScaleFactor.toFixed(2)}</span>
-                          </div>
-                          <InsetLabeledField label="Overall scale">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0.7"
-                              max="1.3"
-                              className={INSET_CONTROL_BASE}
-                              value={userScaleFactor}
-                              onChange={(e) => setUserScaleFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.7, 1.3))}
-                            />
-                          </InsetLabeledField>
-                        </div>
-
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center justify-end">
-                            <span className="font-mono text-slate-500">×{userSpaceFactor.toFixed(2)}</span>
-                          </div>
-                          <InsetLabeledField label="Spacing factor">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0.5"
-                              max="1.5"
-                              className={INSET_CONTROL_BASE}
-                              value={userSpaceFactor}
-                              onChange={(e) => setUserSpaceFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.5, 1.5))}
-                            />
-                          </InsetLabeledField>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+              {script !== 'Copperplate' && (
+                <>
+                  <hr className="mt-4 mb-3 border-t border-slate-200" />
+                  <div className="my-3 border-t border-slate-200/70" />
+                </>
               )}
-
-
 
               {copperplateRatioPreset === 'custom' && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
