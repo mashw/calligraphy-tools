@@ -864,8 +864,9 @@ export default function CalligramPage() {
         tickStepMM,
         tickAnchorS: span ? span.sStart : undefined,
         actualNibMM: nibMM,
+        normalSign: direction === 'cw' ? -1 : 1,
       }),
-    [baseline, guideTemplate, xMM, ascMM, descMM, tickStepMM, nibMM, span],
+    [baseline, guideTemplate, xMM, ascMM, descMM, tickStepMM, nibMM, span, direction],
   );
 
   const avgRadiusFromCenter = (pts: Pt[]) => {
@@ -971,8 +972,9 @@ const innerRadiusMaxMM = useMemo(
       tickStepMM: topTickStepMM,
       tickAnchorS: topSpan ? topSpan.sStart : undefined,
       actualNibMM: topBandSizeMM,
+      normalSign: direction === 'cw' ? -1 : 1,
     }),
-    [topBandScript, topBaseline, topXMM, topAscMM, topDescMM, topTickStepMM, topSpan, topBandSizeMM],
+    [topBandScript, topBaseline, topXMM, topAscMM, topDescMM, topTickStepMM, topSpan, topBandSizeMM, direction],
   );
 
   const bottomXMM = useMemo(
@@ -1020,8 +1022,9 @@ const innerRadiusMaxMM = useMemo(
       tickStepMM: bottomTickStepMM,
       tickAnchorS: bottomSpan ? bottomSpan.sStart : undefined,
       actualNibMM: bottomBandSizeMM,
+      normalSign: direction === 'cw' ? -1 : 1,
     }),
-    [bottomBandScript, bottomBaseline, bottomXMM, bottomAscMM, bottomDescMM, bottomTickStepMM, bottomSpan, bottomBandSizeMM],
+    [bottomBandScript, bottomBaseline, bottomXMM, bottomAscMM, bottomDescMM, bottomTickStepMM, bottomSpan, bottomBandSizeMM, direction],
   );
 
   const midAscPts = useMemo(() => {

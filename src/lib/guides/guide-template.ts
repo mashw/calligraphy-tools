@@ -25,6 +25,7 @@ export type GuideTemplateParams = {
   tickStepMM?: number;     // used for vertical ticks
   tickAnchorS?: number;    // phase anchor along baseline arc-length (mm)
   actualNibMM?: number;    // used for horizontal tick spacing
+  normalSign?: 1 | -1;
 };
 
 
@@ -46,10 +47,11 @@ export function blackletterGuideHeightsMM(nibMM: number) {
 
 function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
   const { baseline, xMM, ascMM, descMM, tickStepMM, tickAnchorS, actualNibMM } = params;
+  const ns = params.normalSign ?? 1;
   const baseLine = baseline;
-  const waistLine = offset(baseline, -xMM);
-  const ascLine = offset(baseline, -(xMM + ascMM));
-  const descLine = offset(baseline, descMM);
+  const waistLine = offset(baseline, ns * (-xMM));
+  const ascLine = offset(baseline, ns * (-(xMM + ascMM)));
+  const descLine = offset(baseline, ns * (descMM));
 
   const step = Math.max(0.0001, tickStepMM ?? 1);
   const ticks: { a: Pt; b: Pt }[] = [];
@@ -68,8 +70,8 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
     const { p, n } = pointAt(baseline, sClamped);
 
     ticks.push({
-      a: { x: p.x - n.x * (xMM + ascMM), y: p.y - n.y * (xMM + ascMM) },
-      b: { x: p.x + n.x * descMM, y: p.y + n.y * descMM },
+      a: { x: p.x - n.x * (ns * (xMM + ascMM)), y: p.y - n.y * (ns * (xMM + ascMM)) },
+      b: { x: p.x + n.x * (ns * descMM), y: p.y + n.y * (ns * descMM) },
     });
   }
 
@@ -83,10 +85,10 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
   const hGuides: Pt[][] = [];
 
   if (actualNibMM != null && actualNibMM > 0) {
-    const topOff = -(xMM + ascMM); // ascLine offset from baseline
-    const waistOff = -xMM;         // waistLine offset from baseline
+    const topOff = ns * (-(xMM + ascMM)); // ascLine offset from baseline
+    const waistOff = ns * (-xMM);         // waistLine offset from baseline
     const baseOff = 0;             // baseLine offset from baseline
-    const descOff = descMM;        // descLine offset from baseline
+    const descOff = ns * (descMM);        // descLine offset from baseline
 
     const EPS = 1e-2; // 0.01mm tolerance
 
@@ -130,11 +132,14 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
 
     const pushBand = (bandTopOff: number, bandMM: number, placement: HalfPlacement) => {
       const offs = internalOffsetsFromTopMM(bandMM, placement);
+      const bandBottomOff = bandTopOff + ns * bandMM;
+      const lo = Math.min(bandTopOff, bandBottomOff);
+      const hi = Math.max(bandTopOff, bandBottomOff);
       for (const dTop of offs) {
-        const d = bandTopOff + dTop; // convert band-local offset to baseline-relative offset
+        const d = bandTopOff + ns * dTop; // convert band-local offset to baseline-relative offset
         // Keep inside the band (avoid named lines and avoid floating edge collisions)
-        if (d <= bandTopOff + EPS) continue;
-        if (d >= bandTopOff + bandMM - EPS) continue;
+        if (d <= lo + EPS) continue;
+        if (d >= hi - EPS) continue;
         if (isNearNamedOff(d)) continue;
         hGuides.push(offset(baseline, d));
       }
@@ -157,11 +162,12 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
 
 function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
   const { baseline, xMM, ascMM, descMM, tickStepMM, tickAnchorS } = params;
+  const ns = params.normalSign ?? 1;
 
-  const ascLine = offset(baseline, -(xMM + ascMM));
-  const waistLine = offset(baseline, -xMM);
+  const ascLine = offset(baseline, ns * (-(xMM + ascMM)));
+  const waistLine = offset(baseline, ns * (-xMM));
   const baseLine = baseline;
-  const descLine = offset(baseline, descMM);
+  const descLine = offset(baseline, ns * (descMM));
 
   const step = Math.max(0.5, tickStepMM ?? 100);
   const ticks: { a: Pt; b: Pt }[] = [];
@@ -195,8 +201,8 @@ for (let k = kMin; k <= kMax; k += 1) {
   const Cb = pointAtExtended(baseline, sBot);
 
   ticks.push({
-    a: { x: Ct.p.x - Ct.n.x * topOff, y: Ct.p.y - Ct.n.y * topOff },
-    b: { x: Cb.p.x + Cb.n.x * botOff, y: Cb.p.y + Cb.n.y * botOff },
+    a: { x: Ct.p.x - Ct.n.x * (ns * topOff), y: Ct.p.y - Ct.n.y * (ns * topOff) },
+    b: { x: Cb.p.x + Cb.n.x * (ns * botOff), y: Cb.p.y + Cb.n.y * (ns * botOff) },
   });
 }
 
