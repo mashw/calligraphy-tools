@@ -31,7 +31,7 @@ type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0.5);
 const MIDLINE_DASH_GAP = 12;
 
-const CAL_STORAGE_KEY_PREFIX = 'ct_curveplanner_calibration_v2_xh_';
+const CAL_STORAGE_KEY_PREFIX = 'ct_calligramplanner_calibration_v2_xh_';
 const keyForXHeight = (x: number) => `${CAL_STORAGE_KEY_PREFIX}${x.toFixed(1)}`;
 
 /* ---------------- Reusable InfoTip ---------------- */
@@ -346,8 +346,8 @@ export default function CalligramPage() {
   // ---------- State ----------
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>('landscape');
-  const [view, setView] = useState<ViewMode>('autofit');
-  const [customOrigin, setCustomOrigin] = useState<'autofit' | 'fullpage'>('autofit');
+  const [view, setView] = useState<ViewMode>('fullpage');
+  const [customOrigin, setCustomOrigin] = useState<'autofit' | 'fullpage'>('fullpage');
 
   const snapHalf = (v: number) => Math.round(v * 2) / 2;
 
@@ -360,7 +360,7 @@ export default function CalligramPage() {
   };
   const snap05 = (v: number) => Math.round(v / 0.5) * 0.5;
 
-  const [script, setScript] = useState<ScriptId>('TexturaQuadrata');
+  const [script, setScript] = useState<ScriptId>('Fraktur');
   const [radiusMM, setRadiusMM] = useState(70);
   const [innerOffsetMM, setInnerOffsetMM] = useState(20);
   const [outerOffsetMM, setOuterOffsetMM] = useState(20);
@@ -374,7 +374,7 @@ export default function CalligramPage() {
 
   const [xHeightMM, setXHeightMM] = useState(6);
   const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
-  const [nibText, setNibText] = useState('2');
+  const [nibText, setNibText] = useState('6');
   const [topBandEnabled, setTopBandEnabled] = useState(false);
   const [bottomBandEnabled, setBottomBandEnabled] = useState(false);
   const [topBandScript, setTopBandScript] = useState<ScriptId>('TexturaQuadrata');
@@ -402,10 +402,10 @@ export default function CalligramPage() {
     return Number.isFinite(v) ? v : nibMM;
   }, [bottomBandSizeText, nibMM]);
   const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
-  const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
+  const [xNib, setXNib] = useState(4.5);
 
-  const [ascNib, setAscNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.ascNib);
-  const [descNib, setDescNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.descNib);
+  const [ascNib, setAscNib] = useState(2);
+  const [descNib, setDescNib] = useState(2);
 
   const [useCalibration, setUseCalibration] = useState(false);
   const [calWordLowerMM, setCalWordLowerMM] = useState('');
@@ -1279,7 +1279,7 @@ const innerRadiusMaxMM = useMemo(
     stripNoExport(clone);
 
     const blob = new Blob([clone.outerHTML], { type: 'image/svg+xml;charset=utf-8' });
-    downloadBlob(blob, 'curved-title.svg');
+    downloadBlob(blob, 'calligram.svg');
   }
 
   async function downloadPDF() {
@@ -1320,7 +1320,7 @@ const innerRadiusMaxMM = useMemo(
     });
 
     const pdfBlob = makeSimplePdfFromJpeg(dataUrl, box.w * MM_TO_PT, box.h * MM_TO_PT, wpx, hpx);
-    downloadBlob(pdfBlob, 'curved-title.pdf');
+    downloadBlob(pdfBlob, 'calligram.pdf');
   }
 
   function printToScale() {
@@ -1442,7 +1442,7 @@ const innerRadiusMaxMM = useMemo(
             Calligraphy Tools <span className="text-indigo-600">— Calligram Planner</span>
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Plan circular calligrams for Copperplate and Textura Quadrata. Letters stay upright; guides follow the circle.
+            Plan circular calligrams for Copperplate, Fraktur, and Textura Quadrata. Letters stay upright; guides follow the circle.
           </p>
         </div>
       </header>
