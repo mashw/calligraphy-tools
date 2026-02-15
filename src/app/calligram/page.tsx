@@ -346,8 +346,8 @@ export default function CalligramPage() {
   // ---------- State ----------
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>('landscape');
-  const [view, setView] = useState<ViewMode>('autofit');
-  const [customOrigin, setCustomOrigin] = useState<'autofit' | 'fullpage'>('autofit');
+  const [view, setView] = useState<ViewMode>('fullpage');
+  const [customOrigin, setCustomOrigin] = useState<'autofit' | 'fullpage'>('fullpage');
 
   const snapHalf = (v: number) => Math.round(v * 2) / 2;
 

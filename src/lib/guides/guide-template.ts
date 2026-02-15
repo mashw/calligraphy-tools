@@ -169,36 +169,70 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
   const cot = 1 / Math.tan((COPPERPLATE_SLANT_DEG * Math.PI) / 180);
   const topOff = xMM + ascMM;
   const botOff = descMM;
+  const isClosed = (() => {
+    if (baseline.length < 3) return false;
+    const a = baseline[0];
+    const b = baseline[baseline.length - 1];
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return (dx * dx + dy * dy) < 1e-6; // ~0.001mm^2 tolerance
+  })();
+
+  const wrap = (s: number) => {
+    if (arcLen <= 0) return 0;
+    const m = s % arcLen;
+    return m < 0 ? m + arcLen : m;
+  };
 
   // Phase anchor: ticks at s = anchor + k * step, guaranteeing a tick at anchor.
   const anchor = Number.isFinite(tickAnchorS as number) ? (tickAnchorS as number) : 0;
 
-// We must NOT clamp the slants to [0, arcLen], otherwise the first/last ticks
-// become "special" and look broken at the ends.
-// Instead: over-generate beyond both ends and sample with pointAtExtended.
+  if (isClosed) {
+    const kMin = Math.floor((0 - anchor) / step);
+    const kMax = Math.ceil((arcLen - anchor) / step);
 
-const slantPad = Math.max(topOff * cot, botOff * cot);
-const uMin = -slantPad - step * 2;
-const uMax = arcLen + slantPad + step * 2;
+    for (let k = kMin; k <= kMax; k += 1) {
+      const s = anchor + k * step;
 
-const kMin = Math.floor((uMin - anchor) / step);
-const kMax = Math.ceil((uMax - anchor) / step);
+      const sTop = s + topOff * cot;
+      const sBot = s - botOff * cot;
 
-for (let k = kMin; k <= kMax; k += 1) {
-  const s = anchor + k * step;
+      const Ct = pointAt(baseline, wrap(sTop));
+      const Cb = pointAt(baseline, wrap(sBot));
 
-  // Top of tick occurs "later" along the curve than the bottom for forward slant
-  const sTop = s + topOff * cot;
-  const sBot = s - botOff * cot;
+      ticks.push({
+        a: { x: Ct.p.x - Ct.n.x * topOff, y: Ct.p.y - Ct.n.y * topOff },
+        b: { x: Cb.p.x + Cb.n.x * botOff, y: Cb.p.y + Cb.n.y * botOff },
+      });
+    }
+  } else {
+    // We must NOT clamp the slants to [0, arcLen], otherwise the first/last ticks
+    // become "special" and look broken at the ends.
+    // Instead: over-generate beyond both ends and sample with pointAtExtended.
 
-  const Ct = pointAtExtended(baseline, sTop);
-  const Cb = pointAtExtended(baseline, sBot);
+    const slantPad = Math.max(topOff * cot, botOff * cot);
+    const uMin = -slantPad - step * 2;
+    const uMax = arcLen + slantPad + step * 2;
 
-  ticks.push({
-    a: { x: Ct.p.x - Ct.n.x * topOff, y: Ct.p.y - Ct.n.y * topOff },
-    b: { x: Cb.p.x + Cb.n.x * botOff, y: Cb.p.y + Cb.n.y * botOff },
-  });
-}
+    const kMin = Math.floor((uMin - anchor) / step);
+    const kMax = Math.ceil((uMax - anchor) / step);
+
+    for (let k = kMin; k <= kMax; k += 1) {
+      const s = anchor + k * step;
+
+      // Top of tick occurs "later" along the curve than the bottom for forward slant
+      const sTop = s + topOff * cot;
+      const sBot = s - botOff * cot;
+
+      const Ct = pointAtExtended(baseline, sTop);
+      const Cb = pointAtExtended(baseline, sBot);
+
+      ticks.push({
+        a: { x: Ct.p.x - Ct.n.x * topOff, y: Ct.p.y - Ct.n.y * topOff },
+        b: { x: Cb.p.x + Cb.n.x * botOff, y: Cb.p.y + Cb.n.y * botOff },
+      });
+    }
+  }
 
 
 
