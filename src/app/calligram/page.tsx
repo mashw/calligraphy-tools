@@ -1855,6 +1855,10 @@ const innerRadiusMaxMM = useMemo(
             </div>
 
             <div className="sm:col-span-2">
+              <div className="my-3 border-t border-slate-200/70" />
+            </div>
+
+            <div className="sm:col-span-2">
               <InsetLabeledField label="Radius">
                 <div className="px-3 py-2">
                   <input
@@ -1870,32 +1874,6 @@ const innerRadiusMaxMM = useMemo(
                 </div>
               </InsetLabeledField>
             </div>
-
-            <div className="sm:col-span-2">
-              <div className="my-2 border-t border-slate-200/70" />
-            </div>
-
-            <div className="sm:col-span-2">
-              <InsetLabeledField label="Title text">
-              <input className={INSET_CONTROL_BASE} value={text} onChange={e => setText(e.target.value)} />
-              </InsetLabeledField>
-            </div>
-
-            {topBandEnabled && (
-              <div className="sm:col-span-2">
-                <InsetLabeledField label="Inner text">
-                <input className={INSET_CONTROL_BASE} value={topText} onChange={e => setTopText(e.target.value)} />
-                </InsetLabeledField>
-              </div>
-            )}
-
-            {bottomBandEnabled && (
-              <div className="sm:col-span-2">
-                <InsetLabeledField label="Outer text">
-                <input className={INSET_CONTROL_BASE} value={bottomText} onChange={e => setBottomText(e.target.value)} />
-                </InsetLabeledField>
-              </div>
-            )}
           </div>
         </div>
 
@@ -1912,8 +1890,8 @@ const innerRadiusMaxMM = useMemo(
 
           {script === 'Copperplate' ? (
             <div className="mt-3 space-y-4">
-              <div className="grid grid-cols-1 gap-4">
-                <div className="w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
                   <InsetLabeledField label="X-height" rightAdornment="mm">
                     <select
                       className={INSET_CONTROL_MM}
@@ -1928,9 +1906,6 @@ const innerRadiusMaxMM = useMemo(
                     </select>
                   </InsetLabeledField>
                 </div>
-              </div>
-
-              <div>
                 <InsetLabeledField label="Guideline ratio (desc : x : asc)">
                 <select
                   className={INSET_CONTROL_BASE}
@@ -1943,7 +1918,6 @@ const innerRadiusMaxMM = useMemo(
                   <option value="custom">Custom…</option>
                 </select>
                 </InsetLabeledField>
-                <p className="mt-1 text-[11px] text-slate-400">Ascender/descender scale from x-height.</p>
               </div>
 
 
@@ -2279,34 +2253,29 @@ const innerRadiusMaxMM = useMemo(
         {/* Step 3 */}
         <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-slate-800">Step 3 — Circle & Guides</h2>
-            <InfoTip side="right">Set circle start and direction.</InfoTip>
+            <h2 className="text-lg font-semibold text-slate-800">Step 3 — Text Fit Guide</h2>
+            <InfoTip side="right">Check text fit and preview overlays.</InfoTip>
           </div>
 
           <div className="grid grid-cols-1 gap-4 mt-3 select-none">
-          
-            <InsetLabeledField label="Start angle" rightAdornment="deg">
-              <input type="number" step={1} className={INSET_CONTROL_WIDE} value={startAngleDeg} onChange={e => setStartAngleDeg(Number(e.target.value) || 0)} />
+            <InsetLabeledField label="Title text">
+              <input className={INSET_CONTROL_BASE} value={text} onChange={e => setText(e.target.value)} />
             </InsetLabeledField>
 
-            <InsetLabeledField label="Direction">
-              <select className={INSET_CONTROL_BASE} value={direction} onChange={e => setDirection(e.target.value as 'ccw' | 'cw')}>
-                <option value="cw">CW</option>
-                <option value="ccw">CCW</option>
-              </select>
-            </InsetLabeledField>
+            {topBandEnabled && (
+              <InsetLabeledField label="Inner text">
+                <input className={INSET_CONTROL_BASE} value={topText} onChange={e => setTopText(e.target.value)} />
+              </InsetLabeledField>
+            )}
+
+            {bottomBandEnabled && (
+              <InsetLabeledField label="Outer text">
+                <input className={INSET_CONTROL_BASE} value={bottomText} onChange={e => setBottomText(e.target.value)} />
+              </InsetLabeledField>
+            )}
           </div>
 
-            <div className="my-3 border-t border-slate-200/70" />
-              <div>
-              <InsetLabeledField label="Text alignment">
-                <select className={INSET_CONTROL_BASE} value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
-                <option value="start">Start</option>
-                <option value="center">Centered</option>
-                <option value="end">End</option>
-              </select>
-              </InsetLabeledField>
-            </div>
+          <div className="my-3 border-t border-slate-200/70" />
           <div className="mt-4 flex items-center gap-4">
             <label className="inline-flex items-center gap-2 text-sm text-slate-800">
               <input
