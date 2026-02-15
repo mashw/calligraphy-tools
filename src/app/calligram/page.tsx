@@ -1791,26 +1791,28 @@ const innerRadiusMaxMM = useMemo(
             </div>
 
             <div className="sm:col-span-2">
-              <InsetLabeledField label="Title text">
-              <input className={INSET_CONTROL_BASE} value={text} onChange={e => setText(e.target.value)} />
-              </InsetLabeledField>
+              <div className="mt-1 flex items-center gap-4">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                    checked={showBoxes}
+                    onChange={e => setShowBoxes(e.target.checked)}
+                  />
+                  Letter bounding boxes
+                </label>
+
+                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                    checked={showSpanFill}
+                    onChange={e => setShowSpanFill(e.target.checked)}
+                  />
+                  Title span fill
+                </label>
+              </div>
             </div>
-
-            {topBandEnabled && (
-              <div className="sm:col-span-2">
-                <InsetLabeledField label="Inner text">
-                <input className={INSET_CONTROL_BASE} value={topText} onChange={e => setTopText(e.target.value)} />
-                </InsetLabeledField>
-              </div>
-            )}
-
-            {bottomBandEnabled && (
-              <div className="sm:col-span-2">
-                <InsetLabeledField label="Outer text">
-                <input className={INSET_CONTROL_BASE} value={bottomText} onChange={e => setBottomText(e.target.value)} />
-                </InsetLabeledField>
-              </div>
-            )}
           </div>
         </div>
 
@@ -2323,54 +2325,27 @@ const innerRadiusMaxMM = useMemo(
         {/* Step 3 */}
         <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-slate-800">Step 3 — Circle & Guides</h2>
-            <InfoTip side="right">Set circle start and direction.</InfoTip>
+            <h2 className="text-lg font-semibold text-slate-800">Step 3 – Text Fit Guide</h2>
+            <InfoTip side="right">Use this section to estimate text fit for each circle.</InfoTip>
           </div>
+          <p className="mt-2 text-sm text-slate-500">Use these fields to preview how much text fits around each circle.</p>
 
           <div className="grid grid-cols-1 gap-4 mt-3 select-none">
-          
-            <InsetLabeledField label="Start angle" rightAdornment="deg">
-              <input type="number" step={1} className={INSET_CONTROL_WIDE} value={startAngleDeg} onChange={e => setStartAngleDeg(Number(e.target.value) || 0)} />
+            <InsetLabeledField label="Title text">
+              <input className={INSET_CONTROL_BASE} value={text} onChange={e => setText(e.target.value)} />
             </InsetLabeledField>
 
-            <InsetLabeledField label="Direction">
-              <select className={INSET_CONTROL_BASE} value={direction} onChange={e => setDirection(e.target.value as 'ccw' | 'cw')}>
-                <option value="cw">CW</option>
-                <option value="ccw">CCW</option>
-              </select>
-            </InsetLabeledField>
-          </div>
-
-            <div className="my-3 border-t border-slate-200/70" />
-              <div>
-              <InsetLabeledField label="Text alignment">
-                <select className={INSET_CONTROL_BASE} value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
-                <option value="start">Start</option>
-                <option value="center">Centered</option>
-                <option value="end">End</option>
-              </select>
+            {topBandEnabled && (
+              <InsetLabeledField label="Inner text">
+                <input className={INSET_CONTROL_BASE} value={topText} onChange={e => setTopText(e.target.value)} />
               </InsetLabeledField>
-            </div>
-          <div className="mt-4 flex items-center gap-4">
-            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                checked={showBoxes}
-                onChange={e => setShowBoxes(e.target.checked)}
-              />
-              Letter bounding boxes
-            </label>
+            )}
 
-            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                checked={showSpanFill}
-                onChange={e => setShowSpanFill(e.target.checked)}
-              />
-              Title span fill
-            </label>
+            {bottomBandEnabled && (
+              <InsetLabeledField label="Outer text">
+                <input className={INSET_CONTROL_BASE} value={bottomText} onChange={e => setBottomText(e.target.value)} />
+              </InsetLabeledField>
+            )}
           </div>
         </div>
       </section>
