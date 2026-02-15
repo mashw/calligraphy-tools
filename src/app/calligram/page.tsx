@@ -884,25 +884,50 @@ export default function CalligramPage() {
     [guideSet.descLine, guideSet.baseLine, box, radiusMM],
   );
 
-  const outerOffsetMinMM = useMemo(() => Math.max(0, Math.ceil(mainAscTopOffsetMM)), [mainAscTopOffsetMM]);
+  const outerOffsetMinMM = useMemo(() => Math.max(0, mainAscTopOffsetMM), [mainAscTopOffsetMM]);
   const outerOffsetMaxMM = 200;
   const clampedOuterOffsetMM = Math.max(outerOffsetMinMM, Math.min(outerOffsetMaxMM, outerOffsetMM));
 
-  const topXMM = useMemo(
-    () => (topBandScript === 'Copperplate' ? topBandSizeMM : topBandSizeMM * xNib),
-    [topBandScript, topBandSizeMM, xNib],
-  );
-  const innerOffsetMaxMM = useMemo(() => Math.max(0, Math.floor(topXMM + mainDescBottomOffsetMM)), [topXMM, mainDescBottomOffsetMM]);
-  const clampedInnerOffsetMM = Math.max(0, Math.min(innerOffsetMM, innerOffsetMaxMM));
+const topXMM = useMemo(
+  () => (topBandScript === 'Copperplate' ? topBandSizeMM : topBandSizeMM * xNib),
+  [topBandScript, topBandSizeMM, xNib],
+);
 
-  useEffect(() => {
-    setInnerOffsetMM(prev => Math.max(0, Math.min(prev, innerOffsetMaxMM)));
-  }, [innerOffsetMaxMM]);
+// Minimum inward offset so that INNER waistline (baseline + topXMM) cannot exceed
+// the MAIN descender-bottom ring (most inner ring of main guides).
+// Constraint: (innerRadius + topXMM) <= (radiusMM - mainDescBottomOffsetMM)
+// where innerRadius = radiusMM - innerOffset
+// => radiusMM - innerOffset + topXMM <= radiusMM - mainDescBottomOffsetMM
+// => innerOffset >= topXMM + mainDescBottomOffsetMM
+const innerOffsetMinMM = useMemo(
+  () => Math.max(0, topXMM + mainDescBottomOffsetMM),
+  [topXMM, mainDescBottomOffsetMM],
+);
+
+// Maximum inward offset so the inner circle baseline never collapses past a small radius
+const innerOffsetMaxMM = useMemo(
+  () => Math.max(innerOffsetMinMM, radiusMM - 5),
+  [innerOffsetMinMM, radiusMM],
+);
+
+const clampedInnerOffsetMM = Math.max(innerOffsetMinMM, Math.min(innerOffsetMM, innerOffsetMaxMM));
+
+useEffect(() => {
+  setInnerOffsetMM(prev => Math.max(innerOffsetMinMM, Math.min(prev, innerOffsetMaxMM)));
+}, [innerOffsetMinMM, innerOffsetMaxMM]);
+
   useEffect(() => {
     setOuterOffsetMM(prev => Math.max(outerOffsetMinMM, Math.min(prev, outerOffsetMaxMM)));
   }, [outerOffsetMinMM, outerOffsetMaxMM]);
 
   const innerRadiusMM = useMemo(() => Math.max(5, radiusMM - clampedInnerOffsetMM), [radiusMM, clampedInnerOffsetMM]);
+  const innerRadiusMinMM = 5;
+const innerRadiusMaxMM = useMemo(
+  () => Math.max(innerRadiusMinMM, radiusMM - innerOffsetMinMM),
+  [radiusMM, innerOffsetMinMM],
+);
+
+  
   const outerRadiusMM = useMemo(() => Math.max(1, radiusMM + clampedOuterOffsetMM), [radiusMM, clampedOuterOffsetMM]);
 
   const topBaseline = useMemo<Pt[]>(() => buildCircleBaseline(innerRadiusMM), [box, innerRadiusMM, startAngleRad, dirSign]);
@@ -2197,16 +2222,20 @@ export default function CalligramPage() {
                 <div className="ml-auto flex items-center gap-2 min-w-[14rem]">
                   <span className="text-xs text-slate-600">Size</span>
                   <input
-                    type="range"
-                    min={0}
-                    max={Math.max(0, innerOffsetMaxMM)}
-                    step={1}
-                    value={Math.max(0, Math.min(innerOffsetMM, innerOffsetMaxMM))}
-                    onChange={e => setInnerOffsetMM(Math.max(0, Math.min(Number(e.target.value) || 0, innerOffsetMaxMM)))}
-                    disabled={!topBandEnabled}
-                    className="w-full disabled:opacity-50"
-                  />
-                  <span className="text-xs font-medium text-slate-500 w-[3.5rem] text-right">{Math.round(clampedInnerOffsetMM)} mm</span>
+  type="range"
+  min={innerRadiusMinMM}
+  max={innerRadiusMaxMM}
+  step={0.5}
+  value={innerRadiusMM}
+  onChange={e => {
+    const r = Number(e.target.value) || innerRadiusMinMM;
+    const nextOffset = radiusMM - r; // larger radius => smaller inward offset
+    setInnerOffsetMM(Math.max(innerOffsetMinMM, Math.min(nextOffset, innerOffsetMaxMM)));
+  }}
+  disabled={!topBandEnabled}
+  className="w-full disabled:opacity-50"
+/>
+<span className="text-xs font-medium text-slate-500 w-[3.5rem] text-right">{innerRadiusMM.toFixed(1)} mm</span>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -2251,13 +2280,14 @@ export default function CalligramPage() {
                     type="range"
                     min={Math.max(0, outerOffsetMinMM)}
                     max={outerOffsetMaxMM}
-                    step={1}
-                    value={Math.max(outerOffsetMinMM, Math.min(outerOffsetMM, outerOffsetMaxMM))}
+                    step={0.5}
+                    value={clampedOuterOffsetMM}
                     onChange={e => setOuterOffsetMM(Math.max(outerOffsetMinMM, Math.min(Number(e.target.value) || outerOffsetMinMM, outerOffsetMaxMM)))}
                     disabled={!bottomBandEnabled}
                     className="w-full disabled:opacity-50"
                   />
-                  <span className="text-xs font-medium text-slate-500 w-[3.5rem] text-right">{Math.round(clampedOuterOffsetMM)} mm</span>
+                  <span className="text-xs font-medium text-slate-500 w-[3.5rem] text-right">{clampedOuterOffsetMM.toFixed(1)} mm
+                  </span>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
