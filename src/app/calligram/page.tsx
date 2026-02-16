@@ -4,6 +4,7 @@ import React, { useMemo, useRef, useState, useLayoutEffect, useEffect } from 're
 import {
   PAPERS_MM,
   SCRIPT_DEFAULTS,
+  lengthPoly,
   Pt,
   pointAt,
   offset,
@@ -758,6 +759,12 @@ export default function CalligramPage() {
   const arcLen = circumference;
   const wrapLength = (s: number, L: number) => (L > 0 ? ((s % L) + L) % L : 0);
   const pointAtWrapped = (pts: Pt[], s: number, L: number) => pointAt(pts, wrapLength(s, L));
+  const lineLen = (pts: Pt[]) => lengthPoly(pts);
+  const wrapS = (s: number, L: number) => (L > 0 ? ((s % L) + L) % L : 0);
+  const pointAtByU = (pts: Pt[], u: number) => {
+    const L = lineLen(pts);
+    return pointAt(pts, wrapS(u * L, L));
+  };
   const guideTemplate = script === 'Copperplate' ? 'copperplate' : 'blackletter';
 
   const tickStepMM = useMemo(
@@ -1106,23 +1113,18 @@ const innerRadiusMaxMM = useMemo(
     const basePts: Pt[] = [];
 
     for (let s = span.sStart; s <= span.sEnd + 0.0001; s += ds) {
-      const { p, n } = pointAtWrapped(baseline, s, arcLen);
-
-      // baseline is the band’s bottom edge
-      basePts.push({ x: p.x, y: p.y });
-
-      // waistline is offset from baseline by xMM, using the correct normalSign
-      waistPts.push({
-        x: p.x - n.x * xMM * mainNormalSign,
-        y: p.y - n.y * xMM * mainNormalSign,
-      });
+      const u = s / arcLen;
+      const wb = pointAtByU(guideSet.baseLine, u).p;
+      const ww = pointAtByU(guideSet.waistLine, u).p;
+      basePts.push(wb);
+      waistPts.push(ww);
     }
 
     if (basePts.length < 2 || waistPts.length < 2) return null;
 
     // polygon: waist forward, baseline back
     return [...waistPts, ...basePts.reverse()];
-  }, [span, script, xMM, effectiveNibMM, baseline, arcLen, mainNormalSign]);
+  }, [span, script, xMM, effectiveNibMM, guideSet.baseLine, guideSet.waistLine, arcLen]);
 
   const topHasText = topText.trim().length > 0;
   const bottomHasText = bottomText.trim().length > 0;
@@ -1133,12 +1135,12 @@ const innerRadiusMaxMM = useMemo(
     const waistPts: Pt[] = [];
     const basePts: Pt[] = [];
     for (let s = topSpan.sStart; s <= topSpan.sEnd + 0.0001; s += ds) {
-      const { p, n } = pointAtWrapped(topGuideSet.baseLine, s, topArcLen);
-      waistPts.push({ x: p.x - n.x * topXMM * innerNormalSign, y: p.y - n.y * topXMM * innerNormalSign });
-      basePts.push({ x: p.x, y: p.y });
+      const u = s / topArcLen;
+      basePts.push(pointAtByU(topGuideSet.baseLine, u).p);
+      waistPts.push(pointAtByU(topGuideSet.waistLine, u).p);
     }
     return { waistPts, basePts };
-  }, [topSpan, topBandEnabled, topHasText, topLayout.placements.length, topBandScript, topXMM, innerNormalSign, effectiveTopNibMM, topGuideSet.baseLine, topArcLen]);
+  }, [topSpan, topBandEnabled, topHasText, topLayout.placements.length, topBandScript, topXMM, effectiveTopNibMM, topGuideSet.baseLine, topGuideSet.waistLine, topArcLen]);
 
   const bottomSpanPoly = useMemo(() => {
     if (!bottomSpan || !bottomBandEnabled || !bottomHasText || !bottomLayout.placements.length) return null;
@@ -1146,12 +1148,12 @@ const innerRadiusMaxMM = useMemo(
     const waistPts: Pt[] = [];
     const basePts: Pt[] = [];
     for (let s = bottomSpan.sStart; s <= bottomSpan.sEnd + 0.0001; s += ds) {
-      const { p, n } = pointAtWrapped(bottomGuideSet.baseLine, s, bottomArcLen);
-      waistPts.push({ x: p.x - n.x * bottomXMM * outerNormalSign, y: p.y - n.y * bottomXMM * outerNormalSign });
-      basePts.push({ x: p.x, y: p.y });
+      const u = s / bottomArcLen;
+      basePts.push(pointAtByU(bottomGuideSet.baseLine, u).p);
+      waistPts.push(pointAtByU(bottomGuideSet.waistLine, u).p);
     }
     return { waistPts, basePts };
-  }, [bottomSpan, bottomBandEnabled, bottomHasText, bottomLayout.placements.length, bottomBandScript, bottomXMM, outerNormalSign, effectiveBottomNibMM, bottomGuideSet.baseLine, bottomArcLen]);
+  }, [bottomSpan, bottomBandEnabled, bottomHasText, bottomLayout.placements.length, bottomBandScript, bottomXMM, effectiveBottomNibMM, bottomGuideSet.baseLine, bottomGuideSet.waistLine, bottomArcLen]);
 
   const baselineLength = arcLen;
   const overWarn = layout.overBy > 0;
@@ -1159,6 +1161,7 @@ const innerRadiusMaxMM = useMemo(
   const renderLetterBoxes = (
     placements: Place[],
     baseGuideLine: Pt[],
+    waistGuideLine: Pt[],
     bandArcLen: number,
     bandHeightMM: number,
     scriptId: ScriptId,
@@ -1171,8 +1174,6 @@ const innerRadiusMaxMM = useMemo(
     const sL = Math.max(0, Math.min(bandArcLen, sMid - halfW));
     const sR = Math.max(0, Math.min(bandArcLen, sMid + halfW));
 
-    const isCopper = scriptId === 'Copperplate';
-    const SLANT_FROM_BASELINE_DEG = 55;
     const steps = Math.max(16, Math.ceil((sR - sL) / 2));
 
     const basePts: { x: number; y: number }[] = [];
@@ -1181,18 +1182,10 @@ const innerRadiusMaxMM = useMemo(
     for (let k = 0; k <= steps; k++) {
       const u = k / steps;
       const s = sL + (sR - sL) * u;
+      const lineU = s / bandArcLen;
 
-      const C = pointAtWrapped(baseGuideLine, s, bandArcLen)
-      const p = C.p;
-      const n = C.n;
-
-      basePts.push({ x: p.x, y: p.y });
-
-      const dx = isCopper ? (h / Math.tan((SLANT_FROM_BASELINE_DEG * Math.PI) / 180)) : 0;
-      const sTop = wrapLength(isCopper ? (s + dx) : s, bandArcLen);
-
-      const Ct = pointAt(baseGuideLine, sTop);
-      waistPts.push({ x: Ct.p.x - Ct.n.x * h, y: Ct.p.y - Ct.n.y * h });
+      basePts.push(pointAtByU(baseGuideLine, lineU).p);
+      waistPts.push(pointAtByU(waistGuideLine, lineU).p);
     }
 
     const isCap = pl.ch >= 'A' && pl.ch <= 'Z';
@@ -1798,9 +1791,9 @@ const innerRadiusMaxMM = useMemo(
                 )}
 
                 {/* Letter boxes: true rectangles */}
-                {showBoxes && renderLetterBoxes(layout.placements, guideSet.baseLine, arcLen, xMM, script, 'main')}
-                {showBoxes && topBandEnabled && renderLetterBoxes(topLayout.placements, topGuideSet.baseLine, topArcLen, topXMM, topBandScript, 'top')}
-                {showBoxes && bottomBandEnabled && renderLetterBoxes(bottomLayout.placements, bottomGuideSet.baseLine, bottomArcLen, bottomXMM, bottomBandScript, 'bottom')}
+                {showBoxes && renderLetterBoxes(layout.placements, guideSet.baseLine, guideSet.waistLine, arcLen, xMM, script, 'main')}
+                {showBoxes && topBandEnabled && renderLetterBoxes(topLayout.placements, topGuideSet.baseLine, topGuideSet.waistLine, topArcLen, topXMM, topBandScript, 'top')}
+                {showBoxes && bottomBandEnabled && renderLetterBoxes(bottomLayout.placements, bottomGuideSet.baseLine, bottomGuideSet.waistLine, bottomArcLen, bottomXMM, bottomBandScript, 'bottom')}
 
                 <circle cx={box.w / 2} cy={box.h / 2} r={1.6} fill="#000000" />
               </g>
