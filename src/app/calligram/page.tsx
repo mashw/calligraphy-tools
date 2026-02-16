@@ -1095,16 +1095,30 @@ const innerRadiusMaxMM = useMemo(
 
   const spanPoly = useMemo(() => {
     if (!span) return null;
-    const ds = script === 'Copperplate' ? Math.max(0.5, xMM * 0.2) : Math.max(0.5, effectiveNibMM * 0.5);
+
+    // sample density (mm along arc)
+    const ds =
+      script === 'Copperplate'
+        ? Math.max(0.5, xMM * 0.2)
+        : Math.max(0.5, effectiveNibMM * 0.5);
+
     const waistPts: Pt[] = [];
     const basePts: Pt[] = [];
+
+    // IMPORTANT: use the already-built guide lines so "between baseline and waistline"
+    // is correct regardless of winding / normalSign.
     for (let s = span.sStart; s <= span.sEnd + 0.0001; s += ds) {
-      const { p, n } = pointAtWrapped(baseline, s, arcLen);
-      waistPts.push({ x: p.x - n.x * xMM, y: p.y - n.y * xMM });
-      basePts.push({ x: p.x, y: p.y });
+      const wb = pointAtWrapped(guideSet.baseLine, s, arcLen).p;
+      const ww = pointAtWrapped(guideSet.waistLine, s, arcLen).p;
+      basePts.push(wb);
+      waistPts.push(ww);
     }
-    return { waistPts, basePts };
-  }, [span, baseline, arcLen, xMM, effectiveNibMM]);
+
+    if (basePts.length < 2 || waistPts.length < 2) return null;
+
+    // polygon: waist forward, baseline back
+    return [...waistPts, ...basePts.reverse()];
+  }, [span, script, xMM, effectiveNibMM, guideSet.baseLine, guideSet.waistLine, arcLen]);
 
   const topHasText = topText.trim().length > 0;
   const bottomHasText = bottomText.trim().length > 0;
@@ -1713,22 +1727,14 @@ const innerRadiusMaxMM = useMemo(
                 {showSpanFill && spanPoly && (
                   <>
                     <path
-                      d={`M ${spanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${spanPoly.basePts
-                        .slice()
-                        .reverse()
-                        .map(p => `${p.x},${p.y}`)
-                        .join(' L ')} Z`}
+                      d={pathD(spanPoly)}
                       fill="rgba(148,163,184,0.18)"
                       stroke={isCurveDragging ? '#7c3aed' : 'rgba(100,116,139,0.55)'}
                       strokeWidth={swThin}
                       vectorEffect="non-scaling-stroke"
                     />
                     <path
-                      d={`M ${spanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${spanPoly.basePts
-                        .slice()
-                        .reverse()
-                        .map(p => `${p.x},${p.y}`)
-                        .join(' L ')} Z`}
+                      d={pathD(spanPoly)}
                       fill="rgba(0,0,0,0.0001)"
                       stroke="none"
                       pointerEvents="fill"
