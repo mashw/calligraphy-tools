@@ -1105,20 +1105,24 @@ const innerRadiusMaxMM = useMemo(
     const waistPts: Pt[] = [];
     const basePts: Pt[] = [];
 
-    // IMPORTANT: use the already-built guide lines so "between baseline and waistline"
-    // is correct regardless of winding / normalSign.
     for (let s = span.sStart; s <= span.sEnd + 0.0001; s += ds) {
-      const wb = pointAtWrapped(guideSet.baseLine, s, arcLen).p;
-      const ww = pointAtWrapped(guideSet.waistLine, s, arcLen).p;
-      basePts.push(wb);
-      waistPts.push(ww);
+      const { p, n } = pointAtWrapped(baseline, s, arcLen);
+
+      // baseline is the band’s bottom edge
+      basePts.push({ x: p.x, y: p.y });
+
+      // waistline is offset from baseline by xMM, using the correct normalSign
+      waistPts.push({
+        x: p.x - n.x * xMM * mainNormalSign,
+        y: p.y - n.y * xMM * mainNormalSign,
+      });
     }
 
     if (basePts.length < 2 || waistPts.length < 2) return null;
 
     // polygon: waist forward, baseline back
     return [...waistPts, ...basePts.reverse()];
-  }, [span, script, xMM, effectiveNibMM, guideSet.baseLine, guideSet.waistLine, arcLen]);
+  }, [span, script, xMM, effectiveNibMM, baseline, arcLen, mainNormalSign]);
 
   const topHasText = topText.trim().length > 0;
   const bottomHasText = bottomText.trim().length > 0;
@@ -1130,11 +1134,11 @@ const innerRadiusMaxMM = useMemo(
     const basePts: Pt[] = [];
     for (let s = topSpan.sStart; s <= topSpan.sEnd + 0.0001; s += ds) {
       const { p, n } = pointAtWrapped(topGuideSet.baseLine, s, topArcLen);
-      waistPts.push({ x: p.x - n.x * topXMM, y: p.y - n.y * topXMM });
+      waistPts.push({ x: p.x - n.x * topXMM * innerNormalSign, y: p.y - n.y * topXMM * innerNormalSign });
       basePts.push({ x: p.x, y: p.y });
     }
     return { waistPts, basePts };
-  }, [topSpan, topBandEnabled, topHasText, topLayout.placements.length, topBandScript, topXMM, effectiveTopNibMM, topGuideSet.baseLine, topArcLen]);
+  }, [topSpan, topBandEnabled, topHasText, topLayout.placements.length, topBandScript, topXMM, innerNormalSign, effectiveTopNibMM, topGuideSet.baseLine, topArcLen]);
 
   const bottomSpanPoly = useMemo(() => {
     if (!bottomSpan || !bottomBandEnabled || !bottomHasText || !bottomLayout.placements.length) return null;
@@ -1143,11 +1147,11 @@ const innerRadiusMaxMM = useMemo(
     const basePts: Pt[] = [];
     for (let s = bottomSpan.sStart; s <= bottomSpan.sEnd + 0.0001; s += ds) {
       const { p, n } = pointAtWrapped(bottomGuideSet.baseLine, s, bottomArcLen);
-      waistPts.push({ x: p.x - n.x * bottomXMM, y: p.y - n.y * bottomXMM });
+      waistPts.push({ x: p.x - n.x * bottomXMM * outerNormalSign, y: p.y - n.y * bottomXMM * outerNormalSign });
       basePts.push({ x: p.x, y: p.y });
     }
     return { waistPts, basePts };
-  }, [bottomSpan, bottomBandEnabled, bottomHasText, bottomLayout.placements.length, bottomBandScript, bottomXMM, effectiveBottomNibMM, bottomGuideSet.baseLine, bottomArcLen]);
+  }, [bottomSpan, bottomBandEnabled, bottomHasText, bottomLayout.placements.length, bottomBandScript, bottomXMM, outerNormalSign, effectiveBottomNibMM, bottomGuideSet.baseLine, bottomArcLen]);
 
   const baselineLength = arcLen;
   const overWarn = layout.overBy > 0;
