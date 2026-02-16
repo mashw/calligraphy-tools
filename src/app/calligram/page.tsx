@@ -4,6 +4,7 @@ import React, { useMemo, useRef, useState, useLayoutEffect, useEffect } from 're
 import {
   PAPERS_MM,
   SCRIPT_DEFAULTS,
+  lengthPoly,
   Pt,
   pointAt,
   offset,
@@ -11,15 +12,13 @@ import {
 } from '@/lib/curve-helpers';
 
 import {
-  CAL_WORD,
-  CAL_WORD_DOUBLE,
   clamp,
 } from '@/lib/line-widths';
 import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
 import type { ScriptContext } from '@/lib/scripts/types';
 import { measureRun } from '@/lib/measure/measure-run';
 import { buildCopperplateContext } from '@/lib/copperplate/context';
-import { buildGuideSet, BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/guide-template';
+import { buildGuideSet } from '@/lib/guides/guide-template';
 import GuideOverlay from '@/components/preview/GuideOverlay';
 
 type PaperId = keyof typeof PAPERS_MM;
@@ -27,83 +26,24 @@ type Orientation = 'portrait' | 'landscape';
 type AlignMode = 'start' | 'center' | 'end';
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
-type ScriptKey = 'Copperplate' | 'TexturaQuadrata' | 'Fraktur';
+
+const MAIN_DEFAULTS = {
+  Fraktur: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 40 as const, xNib: 4.5, ascNib: 2, descNib: 2 },
+  TexturaQuadrata: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 45 as const, xNib: 5, ascNib: 2, descNib: 2 },
+  Copperplate: { radiusMM: 70, nibMMText: '4', nibAngleDeg: 45 as const, xHeightMMText: '6.0', ratioId: '3:2:3' as const },
+};
+
+const CIRCLE_DEFAULTS = {
+  Fraktur: { innerRadiusMM: 21, innerScript: 'Fraktur' as const, innerNibMMText: '2', outerRadiusMM: 78, outerScript: 'Fraktur' as const, outerNibMMText: '2' },
+  TexturaQuadrata: { innerRadiusMM: 21, innerScript: 'Fraktur' as const, innerNibMMText: '2', outerRadiusMM: 80, outerScript: 'Fraktur' as const, outerNibMMText: '2' },
+  Copperplate: { innerRadiusMM: 50, innerScript: 'Copperplate' as const, innerNibMMText: '3.5', outerRadiusMM: 92, outerScript: 'Copperplate' as const, outerNibMMText: '3.5' },
+};
 
 const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0.5);
 const MIDLINE_DASH_GAP = 12;
 
-const CAL_STORAGE_KEY_PREFIX = 'ct_calligramplanner_calibration_v2_xh_';
+const CAL_STORAGE_KEY_PREFIX = 'ct_curveplanner_calibration_v2_xh_';
 const keyForXHeight = (x: number) => `${CAL_STORAGE_KEY_PREFIX}${x.toFixed(1)}`;
-
-
-const MAIN_DEFAULTS: Record<ScriptKey, {
-  radiusMM: number;
-  nibMM: string;
-  nibAngleDeg: number;
-  xNib?: number;
-  ascNib?: number;
-  descNib?: number;
-  xHeightMM?: string;
-  ratioId?: '3:2:3' | string;
-}> = {
-  Fraktur: {
-    radiusMM: 45,
-    nibMM: '4',
-    nibAngleDeg: 40,
-    xNib: 4.5,
-    ascNib: 2,
-    descNib: 2,
-  },
-  TexturaQuadrata: {
-    radiusMM: 45,
-    nibMM: '4',
-    nibAngleDeg: 45,
-    xNib: 5,
-    ascNib: 2,
-    descNib: 2,
-  },
-  Copperplate: {
-    radiusMM: 45,
-    nibMM: '4',
-    nibAngleDeg: 45,
-    xHeightMM: '6.0',
-    ratioId: '3:2:3',
-  },
-};
-
-const CIRCLE_DEFAULTS: Record<ScriptKey, {
-  innerRadiusMM: number;
-  innerScript: ScriptKey;
-  innerNibMM: string;
-  outerRadiusMM: number;
-  outerScript: ScriptKey;
-  outerNibMM: string;
-}> = {
-  Fraktur: {
-    innerRadiusMM: 22,
-    innerScript: 'Fraktur',
-    innerNibMM: '2',
-    outerRadiusMM: 22,
-    outerScript: 'Fraktur',
-    outerNibMM: '2',
-  },
-  TexturaQuadrata: {
-    innerRadiusMM: 22,
-    innerScript: 'Fraktur',
-    innerNibMM: '2',
-    outerRadiusMM: 22,
-    outerScript: 'Fraktur',
-    outerNibMM: '2',
-  },
-  Copperplate: {
-    innerRadiusMM: 26,
-    innerScript: 'Copperplate',
-    innerNibMM: '3.5',
-    outerRadiusMM: 22,
-    outerScript: 'Copperplate',
-    outerNibMM: '3.5',
-  },
-};
 
 /* ---------------- Reusable InfoTip ---------------- */
 type InfoTipProps = {
@@ -431,38 +371,30 @@ export default function CalligramPage() {
   };
   const snap05 = (v: number) => Math.round(v / 0.5) * 0.5;
 
-  const initialScript: ScriptKey = 'Fraktur';
-  const initialMain = MAIN_DEFAULTS[initialScript];
-  const initialCircles = CIRCLE_DEFAULTS[initialScript];
+  const [script, setScript] = useState<ScriptId>('TexturaQuadrata');
+  const [radiusMM, setRadiusMM] = useState(MAIN_DEFAULTS.TexturaQuadrata.radiusMM);
+  const [innerOffsetMM, setInnerOffsetMM] = useState(MAIN_DEFAULTS.TexturaQuadrata.radiusMM - CIRCLE_DEFAULTS.TexturaQuadrata.innerRadiusMM);
+  const [outerOffsetMM, setOuterOffsetMM] = useState(
+    Math.max(0, CIRCLE_DEFAULTS.TexturaQuadrata.outerRadiusMM - MAIN_DEFAULTS.TexturaQuadrata.radiusMM),
+  );
 
-  const [script, setScript] = useState<ScriptId>(initialScript);
-  const [radiusMM, setRadiusMM] = useState(initialMain.radiusMM);
-  const [innerOffsetMM, setInnerOffsetMM] = useState(initialCircles.innerRadiusMM);
-  const [outerOffsetMM, setOuterOffsetMM] = useState(initialCircles.outerRadiusMM);
-
-  const [startAngleDeg, setStartAngleDeg] = useState(0);
+  const [startAngleDeg, setStartAngleDeg] = useState(-90);
   const [direction, setDirection] = useState<'ccw' | 'cw'>('cw');
   const [align, setAlign] = useState<AlignMode>('start');
   const [text, setText] = useState('Merry Christmas');
   const [topText, setTopText] = useState('');
   const [bottomText, setBottomText] = useState('');
 
-  const [xHeightMM, setXHeightMM] = useState(
-    initialScript === 'Copperplate' ? parseFloat(initialMain.xHeightMM ?? '6.0') : 6,
-  );
-  const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
-  const [nibText, setNibText] = useState(initialMain.nibMM);
+  const [xHeightMM, setXHeightMM] = useState(parseFloat(MAIN_DEFAULTS.Copperplate.xHeightMMText));
+  const [capStyle] = useState<'simple' | 'flourished'>('flourished');
+  const [nibText, setNibText] = useState(MAIN_DEFAULTS.TexturaQuadrata.nibMMText);
   const [topBandEnabled, setTopBandEnabled] = useState(false);
   const [bottomBandEnabled, setBottomBandEnabled] = useState(false);
-  const [topBandScript, setTopBandScript] = useState<ScriptId>(initialCircles.innerScript);
-  const [bottomBandScript, setBottomBandScript] = useState<ScriptId>(initialCircles.outerScript);
-  const [topBandSizeText, setTopBandSizeText] = useState(initialCircles.innerNibMM);
-  const [bottomBandSizeText, setBottomBandSizeText] = useState(initialCircles.outerNibMM);
-  const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>(
-    initialScript === 'Copperplate'
-      ? (initialMain.ratioId as CopperplateRatioPreset)
-      : '2:1:2',
-  );
+  const [topBandScript, setTopBandScript] = useState<ScriptId>(CIRCLE_DEFAULTS.TexturaQuadrata.innerScript);
+  const [bottomBandScript, setBottomBandScript] = useState<ScriptId>(CIRCLE_DEFAULTS.TexturaQuadrata.outerScript);
+  const [topBandSizeText, setTopBandSizeText] = useState(CIRCLE_DEFAULTS.TexturaQuadrata.innerNibMMText);
+  const [bottomBandSizeText, setBottomBandSizeText] = useState(CIRCLE_DEFAULTS.TexturaQuadrata.outerNibMMText);
+  const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>(MAIN_DEFAULTS.Copperplate.ratioId);
   const [copperplateDescUnitsText, setCopperplateDescUnitsText] = useState('2');
   const [copperplateXUnitsText, setCopperplateXUnitsText] = useState('1');
   const [copperplateAscUnitsText, setCopperplateAscUnitsText] = useState('2');
@@ -482,11 +414,11 @@ export default function CalligramPage() {
     const v = parseFloat(bottomBandSizeText);
     return Number.isFinite(v) ? v : nibMM;
   }, [bottomBandSizeText, nibMM]);
-  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(initialMain.nibAngleDeg as 35 | 40 | 45);
-  const [xNib, setXNib] = useState(initialMain.xNib ?? 5);
+  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(MAIN_DEFAULTS.TexturaQuadrata.nibAngleDeg);
+  const [xNib, setXNib] = useState(MAIN_DEFAULTS.TexturaQuadrata.xNib);
 
-  const [ascNib, setAscNib] = useState(initialMain.ascNib ?? 2);
-  const [descNib, setDescNib] = useState(initialMain.descNib ?? 2);
+  const [ascNib, setAscNib] = useState(MAIN_DEFAULTS.TexturaQuadrata.ascNib);
+  const [descNib, setDescNib] = useState(MAIN_DEFAULTS.TexturaQuadrata.descNib);
 
   const [useCalibration, setUseCalibration] = useState(false);
   const [calWordLowerMM, setCalWordLowerMM] = useState('');
@@ -497,36 +429,6 @@ export default function CalligramPage() {
 
   const [showBoxes, setShowBoxes] = useState(false);
   const [showSpanFill, setShowSpanFill] = useState(true);
-
-  const applyDefaultsForScript = (next: ScriptKey) => {
-    const main = MAIN_DEFAULTS[next];
-    const circles = CIRCLE_DEFAULTS[next];
-
-    setScript(next);
-
-    setRadiusMM(main.radiusMM);
-    setNibText(main.nibMM);
-    setPenAngleDeg(main.nibAngleDeg as 35 | 40 | 45);
-
-    if (next === 'Fraktur' || next === 'TexturaQuadrata') {
-      setXNib(main.xNib!);
-      setAscNib(main.ascNib!);
-      setDescNib(main.descNib!);
-    }
-
-    if (next === 'Copperplate') {
-      setXHeightMM(parseFloat(main.xHeightMM!));
-      setCopperplateRatioPreset(main.ratioId as CopperplateRatioPreset);
-    }
-
-    setInnerOffsetMM(circles.innerRadiusMM);
-    setTopBandScript(circles.innerScript);
-    setTopBandSizeText(circles.innerNibMM);
-
-    setOuterOffsetMM(circles.outerRadiusMM);
-    setBottomBandScript(circles.outerScript);
-    setBottomBandSizeText(circles.outerNibMM);
-  };
 
 
   const [isNarrow, setIsNarrow] = useState(() => (typeof window !== 'undefined'
@@ -817,7 +719,8 @@ export default function CalligramPage() {
 
   // ---------- Circle geometry ----------
   const circumference = useMemo(() => 2 * Math.PI * Math.max(1, radiusMM), [radiusMM]);
-  const dirSign = direction === 'ccw' ? 1 : -1;
+  // Force +theta to move clockwise on screen (y grows downward)
+  const dirSign = direction === 'cw' ? 1 : -1;
   const startAngleRad = (startAngleDeg * Math.PI) / 180;
 
   const buildCircleBaseline = (r: number): Pt[] => {
@@ -836,6 +739,23 @@ export default function CalligramPage() {
   };
 
   const baseline = useMemo<Pt[]>(() => buildCircleBaseline(radiusMM), [box, radiusMM, startAngleRad, dirSign]);
+
+  const avgRadiusFromCenter = (pts: Pt[]) => {
+    if (!pts.length) return radiusMM;
+    const cx = box.w / 2;
+    const cy = box.h / 2;
+    return pts.reduce((sum, p) => sum + Math.hypot(p.x - cx, p.y - cy), 0) / pts.length;
+  };
+
+  const normalSignForBaseline = (pts: Pt[]) => {
+    // We want NEGATIVE offsets to move OUTWARD (bigger radius).
+    const test = offset(pts, -1);
+    const r0 = avgRadiusFromCenter(pts);
+    const r1 = avgRadiusFromCenter(test);
+    return (r1 > r0 ? 1 : -1) as 1 | -1;
+  };
+
+  const mainNormalSign = useMemo(() => normalSignForBaseline(baseline), [baseline]);
 
   const arcLen = circumference;
   const wrapLength = (s: number, L: number) => (L > 0 ? ((s % L) + L) % L : 0);
@@ -972,20 +892,13 @@ export default function CalligramPage() {
         xMM,
         ascMM,
         descMM,
+        normalSign: mainNormalSign,
         tickStepMM,
         tickAnchorS: span ? span.sStart : undefined,
         actualNibMM: nibMM,
-        normalSign: direction === 'cw' ? -1 : 1,
       }),
-    [baseline, guideTemplate, xMM, ascMM, descMM, tickStepMM, nibMM, span, direction],
+    [baseline, guideTemplate, xMM, ascMM, descMM, mainNormalSign, tickStepMM, nibMM, span],
   );
-
-  const avgRadiusFromCenter = (pts: Pt[]) => {
-    if (!pts.length) return radiusMM;
-    const cx = box.w / 2;
-    const cy = box.h / 2;
-    return pts.reduce((sum, p) => sum + Math.hypot(p.x - cx, p.y - cy), 0) / pts.length;
-  };
 
   const mainAscTopOffsetMM = useMemo(
     () => Math.abs(avgRadiusFromCenter(guideSet.ascLine) - avgRadiusFromCenter(guideSet.baseLine)),
@@ -1043,6 +956,7 @@ const innerRadiusMaxMM = useMemo(
   const outerRadiusMM = useMemo(() => Math.max(1, radiusMM + clampedOuterOffsetMM), [radiusMM, clampedOuterOffsetMM]);
 
   const topBaseline = useMemo<Pt[]>(() => buildCircleBaseline(innerRadiusMM), [box, innerRadiusMM, startAngleRad, dirSign]);
+  const innerNormalSign = useMemo(() => normalSignForBaseline(topBaseline), [topBaseline]);
   const topArcLen = useMemo(() => 2 * Math.PI * innerRadiusMM, [innerRadiusMM]);
   const topAscMM = useMemo(
     () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * ascNib),
@@ -1080,12 +994,12 @@ const innerRadiusMaxMM = useMemo(
       xMM: topXMM,
       ascMM: topAscMM,
       descMM: topDescMM,
+      normalSign: innerNormalSign,
       tickStepMM: topTickStepMM,
       tickAnchorS: topSpan ? topSpan.sStart : undefined,
       actualNibMM: topBandSizeMM,
-      normalSign: direction === 'cw' ? -1 : 1,
     }),
-    [topBandScript, topBaseline, topXMM, topAscMM, topDescMM, topTickStepMM, topSpan, topBandSizeMM, direction],
+    [topBandScript, topBaseline, topXMM, topAscMM, topDescMM, innerNormalSign, topTickStepMM, topSpan, topBandSizeMM],
   );
 
   const bottomXMM = useMemo(
@@ -1107,6 +1021,7 @@ const innerRadiusMaxMM = useMemo(
     [bottomBandScript, bottomXMM, bottomBandSizeMM],
   );
   const bottomBaseline = useMemo<Pt[]>(() => buildCircleBaseline(outerRadiusMM), [box, outerRadiusMM, startAngleRad, dirSign]);
+  const outerNormalSign = useMemo(() => normalSignForBaseline(bottomBaseline), [bottomBaseline]);
   const bottomArcLen = useMemo(() => 2 * Math.PI * outerRadiusMM, [outerRadiusMM]);
   const bottomTickStepMM = useMemo(
     () => (bottomBandScript === 'Copperplate' ? Math.max(bottomXMM * 0.9, 3) : effectiveBottomNibMM),
@@ -1130,13 +1045,40 @@ const innerRadiusMaxMM = useMemo(
       xMM: bottomXMM,
       ascMM: bottomAscMM,
       descMM: bottomDescMM,
+      normalSign: outerNormalSign,
       tickStepMM: bottomTickStepMM,
       tickAnchorS: bottomSpan ? bottomSpan.sStart : undefined,
       actualNibMM: bottomBandSizeMM,
-      normalSign: direction === 'cw' ? -1 : 1,
     }),
-    [bottomBandScript, bottomBaseline, bottomXMM, bottomAscMM, bottomDescMM, bottomTickStepMM, bottomSpan, bottomBandSizeMM, direction],
+    [bottomBandScript, bottomBaseline, bottomXMM, bottomAscMM, bottomDescMM, outerNormalSign, bottomTickStepMM, bottomSpan, bottomBandSizeMM],
   );
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+    const rBase = avgRadiusFromCenter(guideSet.baseLine);
+    const rWaist = avgRadiusFromCenter(guideSet.waistLine);
+    const rAsc = avgRadiusFromCenter(guideSet.ascLine);
+    const rDesc = avgRadiusFromCenter(guideSet.descLine);
+    console.log('main radii', { rDesc, rBase, rWaist, rAsc });
+  }, [guideSet]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+    const rBase = avgRadiusFromCenter(topGuideSet.baseLine);
+    const rWaist = avgRadiusFromCenter(topGuideSet.waistLine);
+    const rAsc = avgRadiusFromCenter(topGuideSet.ascLine);
+    const rDesc = avgRadiusFromCenter(topGuideSet.descLine);
+    console.log('inner radii', { rDesc, rBase, rWaist, rAsc });
+  }, [topGuideSet]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+    const rBase = avgRadiusFromCenter(bottomGuideSet.baseLine);
+    const rWaist = avgRadiusFromCenter(bottomGuideSet.waistLine);
+    const rAsc = avgRadiusFromCenter(bottomGuideSet.ascLine);
+    const rDesc = avgRadiusFromCenter(bottomGuideSet.descLine);
+    console.log('outer radii', { rDesc, rBase, rWaist, rAsc });
+  }, [bottomGuideSet]);
 
   const midAscPts = useMemo(() => {
     if (script !== 'Copperplate' || ascMM <= 0) return null;
@@ -1155,16 +1097,27 @@ const innerRadiusMaxMM = useMemo(
 
   const spanPoly = useMemo(() => {
     if (!span) return null;
-    const ds = script === 'Copperplate' ? Math.max(0.5, xMM * 0.2) : Math.max(0.5, effectiveNibMM * 0.5);
+
+    // sample density (mm along arc)
+    const ds =
+      script === 'Copperplate'
+        ? Math.max(0.5, xMM * 0.2)
+        : Math.max(0.5, effectiveNibMM * 0.5);
+
     const waistPts: Pt[] = [];
     const basePts: Pt[] = [];
+
     for (let s = span.sStart; s <= span.sEnd + 0.0001; s += ds) {
       const { p, n } = pointAtWrapped(baseline, s, arcLen);
-      waistPts.push({ x: p.x - n.x * xMM, y: p.y - n.y * xMM });
       basePts.push({ x: p.x, y: p.y });
+      waistPts.push({ x: p.x - n.x * xMM * mainNormalSign, y: p.y - n.y * xMM * mainNormalSign });
     }
-    return { waistPts, basePts };
-  }, [span, baseline, arcLen, xMM, effectiveNibMM]);
+
+    if (basePts.length < 2 || waistPts.length < 2) return null;
+
+    // polygon: waist forward, baseline back
+    return [...waistPts, ...basePts.reverse()];
+  }, [span, script, xMM, effectiveNibMM, baseline, arcLen, mainNormalSign]);
 
   const topHasText = topText.trim().length > 0;
   const bottomHasText = bottomText.trim().length > 0;
@@ -1175,12 +1128,12 @@ const innerRadiusMaxMM = useMemo(
     const waistPts: Pt[] = [];
     const basePts: Pt[] = [];
     for (let s = topSpan.sStart; s <= topSpan.sEnd + 0.0001; s += ds) {
-      const { p, n } = pointAtWrapped(topGuideSet.baseLine, s, topArcLen);
-      waistPts.push({ x: p.x - n.x * topXMM, y: p.y - n.y * topXMM });
+      const { p, n } = pointAtWrapped(topBaseline, s, topArcLen);
       basePts.push({ x: p.x, y: p.y });
+      waistPts.push({ x: p.x - n.x * topXMM * innerNormalSign, y: p.y - n.y * topXMM * innerNormalSign });
     }
     return { waistPts, basePts };
-  }, [topSpan, topBandEnabled, topHasText, topLayout.placements.length, topBandScript, topXMM, effectiveTopNibMM, topGuideSet.baseLine, topArcLen]);
+  }, [topSpan, topBandEnabled, topHasText, topLayout.placements.length, topBandScript, topXMM, innerNormalSign, effectiveTopNibMM, topBaseline, topArcLen]);
 
   const bottomSpanPoly = useMemo(() => {
     if (!bottomSpan || !bottomBandEnabled || !bottomHasText || !bottomLayout.placements.length) return null;
@@ -1188,12 +1141,12 @@ const innerRadiusMaxMM = useMemo(
     const waistPts: Pt[] = [];
     const basePts: Pt[] = [];
     for (let s = bottomSpan.sStart; s <= bottomSpan.sEnd + 0.0001; s += ds) {
-      const { p, n } = pointAtWrapped(bottomGuideSet.baseLine, s, bottomArcLen);
-      waistPts.push({ x: p.x - n.x * bottomXMM, y: p.y - n.y * bottomXMM });
+      const { p, n } = pointAtWrapped(bottomBaseline, s, bottomArcLen);
       basePts.push({ x: p.x, y: p.y });
+      waistPts.push({ x: p.x - n.x * bottomXMM * outerNormalSign, y: p.y - n.y * bottomXMM * outerNormalSign });
     }
     return { waistPts, basePts };
-  }, [bottomSpan, bottomBandEnabled, bottomHasText, bottomLayout.placements.length, bottomBandScript, bottomXMM, effectiveBottomNibMM, bottomGuideSet.baseLine, bottomArcLen]);
+  }, [bottomSpan, bottomBandEnabled, bottomHasText, bottomLayout.placements.length, bottomBandScript, bottomXMM, outerNormalSign, effectiveBottomNibMM, bottomBaseline, bottomArcLen]);
 
   const baselineLength = arcLen;
   const overWarn = layout.overBy > 0;
@@ -1201,6 +1154,7 @@ const innerRadiusMaxMM = useMemo(
   const renderLetterBoxes = (
     placements: Place[],
     baseGuideLine: Pt[],
+    waistGuideLine: Pt[],
     bandArcLen: number,
     bandHeightMM: number,
     scriptId: ScriptId,
@@ -1213,9 +1167,15 @@ const innerRadiusMaxMM = useMemo(
     const sL = Math.max(0, Math.min(bandArcLen, sMid - halfW));
     const sR = Math.max(0, Math.min(bandArcLen, sMid + halfW));
 
-    const isCopper = scriptId === 'Copperplate';
-    const SLANT_FROM_BASELINE_DEG = 55;
     const steps = Math.max(16, Math.ceil((sR - sL) / 2));
+    const isCopper = scriptId === 'Copperplate';
+    const wrap01 = (u: number) => ((u % 1) + 1) % 1;
+    const SLANT_DEG = 55;
+    const dx = bandHeightMM / Math.tan((SLANT_DEG * Math.PI) / 180);
+    const pointAtByU = (pts: Pt[], u: number) => {
+      const L = lengthPoly(pts);
+      return pointAt(pts, wrapLength(u * L, L));
+    };
 
     const basePts: { x: number; y: number }[] = [];
     const waistPts: { x: number; y: number }[] = [];
@@ -1223,18 +1183,11 @@ const innerRadiusMaxMM = useMemo(
     for (let k = 0; k <= steps; k++) {
       const u = k / steps;
       const s = sL + (sR - sL) * u;
+      const uNorm = wrap01(s / bandArcLen);
+      const uTop = isCopper ? wrap01((s + dx) / bandArcLen) : wrap01(uNorm);
 
-      const C = pointAtWrapped(baseGuideLine, s, bandArcLen)
-      const p = C.p;
-      const n = C.n;
-
-      basePts.push({ x: p.x, y: p.y });
-
-      const dx = isCopper ? (h / Math.tan((SLANT_FROM_BASELINE_DEG * Math.PI) / 180)) : 0;
-      const sTop = wrapLength(isCopper ? (s + dx) : s, bandArcLen);
-
-      const Ct = pointAt(baseGuideLine, sTop);
-      waistPts.push({ x: Ct.p.x - Ct.n.x * h, y: Ct.p.y - Ct.n.y * h });
+      basePts.push(pointAtByU(baseGuideLine, wrap01(uNorm)).p);
+      waistPts.push(pointAtByU(waistGuideLine, uTop).p);
     }
 
     const isCap = pl.ch >= 'A' && pl.ch <= 'Z';
@@ -1393,7 +1346,7 @@ const innerRadiusMaxMM = useMemo(
     stripNoExport(clone);
 
     const blob = new Blob([clone.outerHTML], { type: 'image/svg+xml;charset=utf-8' });
-    downloadBlob(blob, 'calligram.svg');
+    downloadBlob(blob, 'curved-title.svg');
   }
 
   async function downloadPDF() {
@@ -1434,7 +1387,7 @@ const innerRadiusMaxMM = useMemo(
     });
 
     const pdfBlob = makeSimplePdfFromJpeg(dataUrl, box.w * MM_TO_PT, box.h * MM_TO_PT, wpx, hpx);
-    downloadBlob(pdfBlob, 'calligram.pdf');
+    downloadBlob(pdfBlob, 'curved-title.pdf');
   }
 
   function printToScale() {
@@ -1502,6 +1455,39 @@ const innerRadiusMaxMM = useMemo(
 
   }
 
+  function applyDefaultsForScript(nextScript: ScriptId) {
+    const main = MAIN_DEFAULTS[nextScript];
+    const circles = CIRCLE_DEFAULTS[nextScript];
+
+    setScript(nextScript);
+    setRadiusMM(main.radiusMM);
+    setNibText(main.nibMMText);
+    setPenAngleDeg(main.nibAngleDeg);
+
+    if (nextScript === 'Copperplate') {
+      const copper = MAIN_DEFAULTS.Copperplate;
+      setXHeightMM(parseFloat(copper.xHeightMMText));
+      setCopperplateRatioPreset(copper.ratioId);
+    } else if (nextScript === 'Fraktur') {
+      const blackletter = MAIN_DEFAULTS.Fraktur;
+      setXNib(blackletter.xNib);
+      setAscNib(blackletter.ascNib);
+      setDescNib(blackletter.descNib);
+    } else {
+      const blackletter = MAIN_DEFAULTS.TexturaQuadrata;
+      setXNib(blackletter.xNib);
+      setAscNib(blackletter.ascNib);
+      setDescNib(blackletter.descNib);
+    }
+
+    setInnerOffsetMM(Math.max(0, main.radiusMM - circles.innerRadiusMM));
+    setOuterOffsetMM(Math.max(0, circles.outerRadiusMM - main.radiusMM));
+    setTopBandScript(circles.innerScript);
+    setTopBandSizeText(circles.innerNibMMText);
+    setBottomBandScript(circles.outerScript);
+    setBottomBandSizeText(circles.outerNibMMText);
+  }
+
   function applyViewPreset(nextView: ViewMode) {
     setView(nextView);
     setPan({ x: 0, y: 0 });
@@ -1556,7 +1542,7 @@ const innerRadiusMaxMM = useMemo(
             Calligraphy Tools <span className="text-indigo-600">— Calligram Planner</span>
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Plan circular calligrams for Copperplate, Fraktur, and Textura Quadrata. Letters stay upright; guides follow the circle.
+            Plan circular calligrams for Copperplate and Textura Quadrata. Letters stay upright; guides follow the circle.
           </p>
         </div>
       </header>
@@ -1740,22 +1726,14 @@ const innerRadiusMaxMM = useMemo(
                 {showSpanFill && spanPoly && (
                   <>
                     <path
-                      d={`M ${spanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${spanPoly.basePts
-                        .slice()
-                        .reverse()
-                        .map(p => `${p.x},${p.y}`)
-                        .join(' L ')} Z`}
+                      d={pathD(spanPoly)}
                       fill="rgba(148,163,184,0.18)"
                       stroke={isCurveDragging ? '#7c3aed' : 'rgba(100,116,139,0.55)'}
                       strokeWidth={swThin}
                       vectorEffect="non-scaling-stroke"
                     />
                     <path
-                      d={`M ${spanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${spanPoly.basePts
-                        .slice()
-                        .reverse()
-                        .map(p => `${p.x},${p.y}`)
-                        .join(' L ')} Z`}
+                      d={pathD(spanPoly)}
                       fill="rgba(0,0,0,0.0001)"
                       stroke="none"
                       pointerEvents="fill"
@@ -1815,9 +1793,9 @@ const innerRadiusMaxMM = useMemo(
                 )}
 
                 {/* Letter boxes: true rectangles */}
-                {showBoxes && renderLetterBoxes(layout.placements, guideSet.baseLine, arcLen, xMM, script, 'main')}
-                {showBoxes && topBandEnabled && renderLetterBoxes(topLayout.placements, topGuideSet.baseLine, topArcLen, topXMM, topBandScript, 'top')}
-                {showBoxes && bottomBandEnabled && renderLetterBoxes(bottomLayout.placements, bottomGuideSet.baseLine, bottomArcLen, bottomXMM, bottomBandScript, 'bottom')}
+                {showBoxes && renderLetterBoxes(layout.placements, guideSet.baseLine, guideSet.waistLine, arcLen, xMM, script, 'main')}
+                {showBoxes && topBandEnabled && renderLetterBoxes(topLayout.placements, topGuideSet.baseLine, topGuideSet.waistLine, topArcLen, topXMM, topBandScript, 'top')}
+                {showBoxes && bottomBandEnabled && renderLetterBoxes(bottomLayout.placements, bottomGuideSet.baseLine, bottomGuideSet.waistLine, bottomArcLen, bottomXMM, bottomBandScript, 'bottom')}
 
                 <circle cx={box.w / 2} cy={box.h / 2} r={1.6} fill="#000000" />
               </g>
@@ -1845,7 +1823,7 @@ const innerRadiusMaxMM = useMemo(
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
             <div className="sm:col-span-2">
               <InsetLabeledField label="Script">
-                <select className={INSET_CONTROL_BASE} value={script} onChange={e => applyDefaultsForScript(e.target.value as ScriptKey)}>
+                <select className={INSET_CONTROL_BASE} value={script} onChange={e => applyDefaultsForScript(e.target.value as ScriptId)}>
                   <option value="Copperplate">Copperplate</option>
                   <option value="Fraktur">Fraktur</option>
                   <option value="TexturaQuadrata">Textura Quadrata</option>
@@ -1884,6 +1862,10 @@ const innerRadiusMaxMM = useMemo(
             </div>
 
             <div className="sm:col-span-2">
+              <div className="my-3 border-t border-slate-200/70" />
+            </div>
+
+            <div className="sm:col-span-2">
               <InsetLabeledField label="Radius">
                 <div className="px-3 py-2">
                   <input
@@ -1899,32 +1881,6 @@ const innerRadiusMaxMM = useMemo(
                 </div>
               </InsetLabeledField>
             </div>
-
-            <div className="sm:col-span-2">
-              <div className="my-2 border-t border-slate-200/70" />
-            </div>
-
-            <div className="sm:col-span-2">
-              <InsetLabeledField label="Title text">
-              <input className={INSET_CONTROL_BASE} value={text} onChange={e => setText(e.target.value)} />
-              </InsetLabeledField>
-            </div>
-
-            {topBandEnabled && (
-              <div className="sm:col-span-2">
-                <InsetLabeledField label="Inner text">
-                <input className={INSET_CONTROL_BASE} value={topText} onChange={e => setTopText(e.target.value)} />
-                </InsetLabeledField>
-              </div>
-            )}
-
-            {bottomBandEnabled && (
-              <div className="sm:col-span-2">
-                <InsetLabeledField label="Outer text">
-                <input className={INSET_CONTROL_BASE} value={bottomText} onChange={e => setBottomText(e.target.value)} />
-                </InsetLabeledField>
-              </div>
-            )}
           </div>
         </div>
 
@@ -1934,15 +1890,15 @@ const innerRadiusMaxMM = useMemo(
             <h2 className="text-lg font-semibold text-slate-800">Step 2 — Script Options</h2>
             <InfoTip side="right">
               {script === 'Copperplate'
-                ? 'Copperplate uses x-height (mm) with optional calibration for lowercase scale and spacing.'
+                ? 'Copperplate uses x-height (mm).'
                 : 'Heights are nibs × nib size (mm).'}
             </InfoTip>
           </div>
 
           {script === 'Copperplate' ? (
             <div className="mt-3 space-y-4">
-              <div className="grid grid-cols-1 gap-4 w-full">
-                <div className="w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
                   <InsetLabeledField label="X-height" rightAdornment="mm">
                     <select
                       className={INSET_CONTROL_MM}
@@ -1957,25 +1913,6 @@ const innerRadiusMaxMM = useMemo(
                     </select>
                   </InsetLabeledField>
                 </div>
-                {script !== 'Copperplate' && (
-                  <div>
-                    <InsetLabeledField label="Capitals" disabled={useCalibration}>
-                      <select
-                        className={INSET_CONTROL_BASE}
-                        value={capStyle}
-                        onChange={(e) => setCapStyle(e.target.value as 'simple' | 'flourished')}
-                        disabled={useCalibration}
-                      >
-                        <option value="simple">Simple (body widths)</option>
-                        <option value="flourished">Flourished (full widths)</option>
-                      </select>
-                    </InsetLabeledField>
-                    {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
-                  </div>
-                )}
-              </div>
-
-              <div>
                 <InsetLabeledField label="Guideline ratio (desc : x : asc)">
                 <select
                   className={INSET_CONTROL_BASE}
@@ -1988,130 +1925,8 @@ const innerRadiusMaxMM = useMemo(
                   <option value="custom">Custom…</option>
                 </select>
                 </InsetLabeledField>
-                <p className="mt-1 text-[11px] text-slate-400">Ascender/descender scale from x-height.</p>
               </div>
 
-              {script !== 'Copperplate' && (
-                <>
-                  <div className="my-3 border-t border-slate-200/70" />
-              <div className="mt-2 flex items-center gap-4">
-  <div className="flex-1">
-    <div className="text-sm font-medium text-slate-700">Calibration (optional)</div>
-    <p className="text-xs text-slate-500">
-      Stored per x-height. Adjusts lowercase scale + spacing.
-    </p>
-  </div>
-
-  <button
-    type="button"
-    onMouseDown={(e) => e.preventDefault()}
-    onClick={() =>
-      setUseCalibration((v) => {
-        const next = !v;
-        if (!next) setShowAdvanced(false);
-        return next;
-      })
-    }
-    className={`shrink-0 inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-      ${useCalibration
-        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-        : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-  >
-    <span
-      className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
-        ${useCalibration ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}
-    >
-      <span className="h-3 w-3 rounded-full bg-white shadow" />
-    </span>
-    {useCalibration ? 'Calibration: On' : 'Calibration: Off'}
-  </button>
-</div>
-
-              {useCalibration && (
-                <div className="border-t border-slate-200 pt-3">
-                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                    <div className="flex flex-col gap-1">
-                      <InsetLabeledField label={CAL_WORD} rightAdornment="mm">
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          className={INSET_CONTROL_MM}
-                          placeholder="Lowercase word"
-                          value={calWordLowerMM}
-                          onChange={(e) => setCalWordLowerMM(e.target.value)}
-                        />
-                      </InsetLabeledField>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <InsetLabeledField label={CAL_WORD_DOUBLE} rightAdornment="mm">
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          className={INSET_CONTROL_MM}
-                          placeholder="Double word"
-                          value={calWordDoubleMM}
-                          onChange={(e) => setCalWordDoubleMM(e.target.value)}
-                        />
-                      </InsetLabeledField>
-                    </div>
-                  </div>
-
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => setShowAdvanced((v) => !v)}
-                      className="flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-indigo-600 select-none"
-                    >
-                      <span className={`inline-block transform transition-transform ${showAdvanced ? 'rotate-90' : 'rotate-0'}`}>▶</span>
-                      <span>Advanced tweaks</span>
-                    </button>
-
-                    {showAdvanced && (
-                      <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center justify-end">
-                            <span className="font-mono text-slate-500">×{userScaleFactor.toFixed(2)}</span>
-                          </div>
-                          <InsetLabeledField label="Overall scale">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0.7"
-                              max="1.3"
-                              className={INSET_CONTROL_BASE}
-                              value={userScaleFactor}
-                              onChange={(e) => setUserScaleFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.7, 1.3))}
-                            />
-                          </InsetLabeledField>
-                        </div>
-
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center justify-end">
-                            <span className="font-mono text-slate-500">×{userSpaceFactor.toFixed(2)}</span>
-                          </div>
-                          <InsetLabeledField label="Spacing factor">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0.5"
-                              max="1.5"
-                              className={INSET_CONTROL_BASE}
-                              value={userSpaceFactor}
-                              onChange={(e) => setUserSpaceFactor(clamp(parseFloat(e.target.value || '1') || 1, 0.5, 1.5))}
-                            />
-                          </InsetLabeledField>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-                </>
-              )}
 
               {copperplateRatioPreset === 'custom' && (
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -2338,7 +2153,7 @@ const innerRadiusMaxMM = useMemo(
                   <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
                 </label>
                 <div className="ml-auto flex items-center gap-2 min-w-[14rem]">
-                  <span className="text-xs text-slate-600">Size</span>
+                  <span className="text-xs text-slate-600">Radius</span>
                   <input
   type="range"
   min={innerRadiusMinMM}
@@ -2393,18 +2208,22 @@ const innerRadiusMaxMM = useMemo(
                   <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
                 </label>
                 <div className="ml-auto flex items-center gap-2 min-w-[14rem]">
-                  <span className="text-xs text-slate-600">Size</span>
+                  <span className="text-xs text-slate-600">Radius</span>
                   <input
                     type="range"
-                    min={Math.max(0, outerOffsetMinMM)}
-                    max={outerOffsetMaxMM}
+                    min={radiusMM + outerOffsetMinMM}
+                    max={radiusMM + outerOffsetMaxMM}
                     step={0.5}
-                    value={clampedOuterOffsetMM}
-                    onChange={e => setOuterOffsetMM(Math.max(outerOffsetMinMM, Math.min(Number(e.target.value) || outerOffsetMinMM, outerOffsetMaxMM)))}
+                    value={outerRadiusMM}
+                    onChange={e => {
+                      const r = Number(e.target.value) || radiusMM + outerOffsetMinMM;
+                      const nextOffset = r - radiusMM;
+                      setOuterOffsetMM(Math.max(outerOffsetMinMM, Math.min(nextOffset, outerOffsetMaxMM)));
+                    }}
                     disabled={!bottomBandEnabled}
                     className="w-full disabled:opacity-50"
                   />
-                  <span className="text-xs font-medium text-slate-500 w-[3.5rem] text-right">{clampedOuterOffsetMM.toFixed(1)} mm
+                  <span className="text-xs font-medium text-slate-500 w-[3.5rem] text-right">{outerRadiusMM.toFixed(1)} mm
                   </span>
                 </div>
               </div>
@@ -2441,34 +2260,29 @@ const innerRadiusMaxMM = useMemo(
         {/* Step 3 */}
         <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-slate-800">Step 3 — Circle & Guides</h2>
-            <InfoTip side="right">Set circle start and direction.</InfoTip>
+            <h2 className="text-lg font-semibold text-slate-800">Step 3 — Text Fit Guide</h2>
+            <InfoTip side="right">Check text fit and preview overlays.</InfoTip>
           </div>
 
           <div className="grid grid-cols-1 gap-4 mt-3 select-none">
-          
-            <InsetLabeledField label="Start angle" rightAdornment="deg">
-              <input type="number" step={1} className={INSET_CONTROL_WIDE} value={startAngleDeg} onChange={e => setStartAngleDeg(Number(e.target.value) || 0)} />
+            <InsetLabeledField label="Title text">
+              <input className={INSET_CONTROL_BASE} value={text} onChange={e => setText(e.target.value)} />
             </InsetLabeledField>
 
-            <InsetLabeledField label="Direction">
-              <select className={INSET_CONTROL_BASE} value={direction} onChange={e => setDirection(e.target.value as 'ccw' | 'cw')}>
-                <option value="cw">CW</option>
-                <option value="ccw">CCW</option>
-              </select>
-            </InsetLabeledField>
+            {topBandEnabled && (
+              <InsetLabeledField label="Inner text">
+                <input className={INSET_CONTROL_BASE} value={topText} onChange={e => setTopText(e.target.value)} />
+              </InsetLabeledField>
+            )}
+
+            {bottomBandEnabled && (
+              <InsetLabeledField label="Outer text">
+                <input className={INSET_CONTROL_BASE} value={bottomText} onChange={e => setBottomText(e.target.value)} />
+              </InsetLabeledField>
+            )}
           </div>
 
-            <div className="my-3 border-t border-slate-200/70" />
-              <div>
-              <InsetLabeledField label="Text alignment">
-                <select className={INSET_CONTROL_BASE} value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
-                <option value="start">Start</option>
-                <option value="center">Centered</option>
-                <option value="end">End</option>
-              </select>
-              </InsetLabeledField>
-            </div>
+          <div className="my-3 border-t border-slate-200/70" />
           <div className="mt-4 flex items-center gap-4">
             <label className="inline-flex items-center gap-2 text-sm text-slate-800">
               <input
