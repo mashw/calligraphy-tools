@@ -4,6 +4,7 @@ import React, { useMemo, useRef, useState, useLayoutEffect, useEffect } from 're
 import {
   PAPERS_MM,
   SCRIPT_DEFAULTS,
+  lengthPoly,
   Pt,
   pointAt,
   offset,
@@ -1152,10 +1153,10 @@ const innerRadiusMaxMM = useMemo(
 
   const renderLetterBoxes = (
     placements: Place[],
-    bandBaseline: Pt[],
+    baseGuideLine: Pt[],
+    waistGuideLine: Pt[],
     bandArcLen: number,
     bandHeightMM: number,
-    normalSign: 1 | -1,
     scriptId: ScriptId,
     keyPrefix: string,
   ) => placements.map((pl, i) => {
@@ -1167,6 +1168,14 @@ const innerRadiusMaxMM = useMemo(
     const sR = Math.max(0, Math.min(bandArcLen, sMid + halfW));
 
     const steps = Math.max(16, Math.ceil((sR - sL) / 2));
+    const isCopper = scriptId === 'Copperplate';
+    const wrap01 = (u: number) => ((u % 1) + 1) % 1;
+    const SLANT_DEG = 55;
+    const dx = bandHeightMM / Math.tan((SLANT_DEG * Math.PI) / 180);
+    const pointAtByU = (pts: Pt[], u: number) => {
+      const L = lengthPoly(pts);
+      return pointAt(pts, wrapLength(u * L, L));
+    };
 
     const basePts: { x: number; y: number }[] = [];
     const waistPts: { x: number; y: number }[] = [];
@@ -1174,12 +1183,11 @@ const innerRadiusMaxMM = useMemo(
     for (let k = 0; k <= steps; k++) {
       const u = k / steps;
       const s = sL + (sR - sL) * u;
-      const C = pointAtWrapped(bandBaseline, s, bandArcLen);
-      const p = C.p;
-      const n = C.n;
+      const uNorm = wrap01(s / bandArcLen);
+      const uTop = isCopper ? wrap01((s + dx) / bandArcLen) : wrap01(uNorm);
 
-      basePts.push({ x: p.x, y: p.y });
-      waistPts.push({ x: p.x - n.x * h * normalSign, y: p.y - n.y * h * normalSign });
+      basePts.push(pointAtByU(baseGuideLine, wrap01(uNorm)).p);
+      waistPts.push(pointAtByU(waistGuideLine, uTop).p);
     }
 
     const isCap = pl.ch >= 'A' && pl.ch <= 'Z';
@@ -1785,9 +1793,9 @@ const innerRadiusMaxMM = useMemo(
                 )}
 
                 {/* Letter boxes: true rectangles */}
-                {showBoxes && renderLetterBoxes(layout.placements, baseline, arcLen, xMM, mainNormalSign, script, 'main')}
-                {showBoxes && topBandEnabled && renderLetterBoxes(topLayout.placements, topBaseline, topArcLen, topXMM, innerNormalSign, topBandScript, 'top')}
-                {showBoxes && bottomBandEnabled && renderLetterBoxes(bottomLayout.placements, bottomBaseline, bottomArcLen, bottomXMM, outerNormalSign, bottomBandScript, 'bottom')}
+                {showBoxes && renderLetterBoxes(layout.placements, guideSet.baseLine, guideSet.waistLine, arcLen, xMM, script, 'main')}
+                {showBoxes && topBandEnabled && renderLetterBoxes(topLayout.placements, topGuideSet.baseLine, topGuideSet.waistLine, topArcLen, topXMM, topBandScript, 'top')}
+                {showBoxes && bottomBandEnabled && renderLetterBoxes(bottomLayout.placements, bottomGuideSet.baseLine, bottomGuideSet.waistLine, bottomArcLen, bottomXMM, bottomBandScript, 'bottom')}
 
                 <circle cx={box.w / 2} cy={box.h / 2} r={1.6} fill="#000000" />
               </g>
