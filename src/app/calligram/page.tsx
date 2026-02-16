@@ -377,7 +377,7 @@ export default function CalligramPage() {
     Math.max(0, CIRCLE_DEFAULTS.TexturaQuadrata.outerRadiusMM - MAIN_DEFAULTS.TexturaQuadrata.radiusMM),
   );
 
-  const [startAngleDeg, setStartAngleDeg] = useState(0);
+  const [startAngleDeg, setStartAngleDeg] = useState(-90);
   const [direction, setDirection] = useState<'ccw' | 'cw'>('cw');
   const [align, setAlign] = useState<AlignMode>('start');
   const [text, setText] = useState('Merry Christmas');
@@ -718,7 +718,8 @@ export default function CalligramPage() {
 
   // ---------- Circle geometry ----------
   const circumference = useMemo(() => 2 * Math.PI * Math.max(1, radiusMM), [radiusMM]);
-  const dirSign = direction === 'ccw' ? 1 : -1;
+  // Force +theta to move clockwise on screen (y grows downward)
+  const dirSign = direction === 'cw' ? 1 : -1;
   const startAngleRad = (startAngleDeg * Math.PI) / 180;
 
   const buildCircleBaseline = (r: number): Pt[] => {
