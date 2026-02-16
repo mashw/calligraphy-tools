@@ -29,13 +29,13 @@ type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 const MAIN_DEFAULTS = {
   Fraktur: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 40 as const, xNib: 4.5, ascNib: 2, descNib: 2 },
   TexturaQuadrata: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 45 as const, xNib: 5, ascNib: 2, descNib: 2 },
-  Copperplate: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 45 as const, xHeightMMText: '6.0', ratioId: '3:2:3' as const },
+  Copperplate: { radiusMM: 70, nibMMText: '4', nibAngleDeg: 45 as const, xHeightMMText: '6.0', ratioId: '3:2:3' as const },
 };
 
 const CIRCLE_DEFAULTS = {
-  Fraktur: { innerRadiusMM: 22, innerScript: 'Fraktur' as const, innerNibMMText: '2', outerRadiusMM: 22, outerScript: 'Fraktur' as const, outerNibMMText: '2' },
-  TexturaQuadrata: { innerRadiusMM: 22, innerScript: 'Fraktur' as const, innerNibMMText: '2', outerRadiusMM: 22, outerScript: 'Fraktur' as const, outerNibMMText: '2' },
-  Copperplate: { innerRadiusMM: 26, innerScript: 'Copperplate' as const, innerNibMMText: '3.5', outerRadiusMM: 22, outerScript: 'Copperplate' as const, outerNibMMText: '3.5' },
+  Fraktur: { innerRadiusMM: 21, innerScript: 'Fraktur' as const, innerNibMMText: '2', outerRadiusMM: 78, outerScript: 'Fraktur' as const, outerNibMMText: '2' },
+  TexturaQuadrata: { innerRadiusMM: 21, innerScript: 'Fraktur' as const, innerNibMMText: '2', outerRadiusMM: 80, outerScript: 'Fraktur' as const, outerNibMMText: '2' },
+  Copperplate: { innerRadiusMM: 50, innerScript: 'Copperplate' as const, innerNibMMText: '3.5', outerRadiusMM: 92, outerScript: 'Copperplate' as const, outerNibMMText: '3.5' },
 };
 
 const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0.5);
