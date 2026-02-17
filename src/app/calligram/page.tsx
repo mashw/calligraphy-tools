@@ -73,8 +73,8 @@ const BAND_DEFAULT_RULES: Record<ScriptId, Partial<Record<BandId, Partial<Record
     },
     outer: {
       Copperplate: { radiusMM: 81, xHeightMMText: '4' },
-      Fraktur: { radiusMM: 93, nibMMText: '2' },
-      TexturaQuadrata: { radiusMM: 93, nibMMText: '2' },
+      Fraktur: { radiusMM: 82, nibMMText: '2' },
+      TexturaQuadrata: { radiusMM: 82, nibMMText: '2' },
     },
   },
   Fraktur: {
