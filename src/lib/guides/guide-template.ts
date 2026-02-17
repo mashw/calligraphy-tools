@@ -216,24 +216,17 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
   const anchor = Number.isFinite(tickAnchorS as number) ? (tickAnchorS as number) : 0;
 
   if (isClosed) {
-    const kMin = Math.floor((0 - anchor) / step);
-    const kMax = Math.ceil((arcLen - anchor) / step);
-    const anchorWrapped = wrap(anchor);
+    const count = Math.max(1, Math.round(arcLen / step));
+    const evenStep = arcLen / count;
 
-
-    for (let k = kMin; k <= kMax; k += 1) {
-      const s = anchor + k * step;
+    for (let i = 0; i < count; i += 1) {
+      const s = anchor + i * evenStep;
 
       const sTop = s + topOff * cot * normalSign;
       const sBot = s - botOff * cot * normalSign;
 
       const Ct = pointAt(baseline, wrap(sTop));
       const Cb = pointAt(baseline, wrap(sBot));
-
-      const sWrapped = wrap(s);
-      // Closed loops: avoid duplicate tick at anchor+arcLen (wraps back to anchor).
-      if (k !== kMin && Math.abs(sWrapped - anchorWrapped) < 1e-6) continue;
-
 
       ticks.push({
         a: { x: Ct.p.x - Ct.n.x * topOff * normalSign, y: Ct.p.y - Ct.n.y * topOff * normalSign },
