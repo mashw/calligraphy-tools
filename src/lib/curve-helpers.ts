@@ -214,19 +214,44 @@ export function pointAt(
   return { p: last, n: nvec, t: tvec, idx: pts.length - 1 };
 }
 
-/** Offset a polyline by distance `d` along local normals. */
 export function offset(pts: Pt[], d: number): Pt[] {
   if (pts.length === 0) return [];
   if (pts.length === 1) return [{ x: pts[0].x, y: pts[0].y - d }];
 
+  // Detect closed polyline (last ~= first)
+  const a = pts[0];
+  const b = pts[pts.length - 1];
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const isClosed = pts.length >= 3 && dx * dx + dy * dy < 1e-6;
+
+  // For closed shapes, remove the duplicate endpoint and use wrap-around normals
+  if (isClosed) {
+    const ring = pts.slice(0, -1);
+    const n = ring.length;
+
+    const out = ring.map((p, i) => {
+      const prev = ring[(i - 1 + n) % n];
+      const next = ring[(i + 1) % n];
+      const nn = normal(prev, next);
+      return { x: p.x + nn.x * d, y: p.y + nn.y * d };
+    });
+
+    // Re-close
+    out.push(out[0]);
+    return out;
+  }
+
+  // Default: open polyline behavior
   return pts.map((p, i) => {
-    let n: Pt;
-    if (i === 0) n = normal(p, pts[1]);
-    else if (i === pts.length - 1) n = normal(pts[i - 1], p);
-    else n = normal(pts[i - 1], pts[i + 1]);
-    return { x: p.x + n.x * d, y: p.y + n.y * d };
+    let nn: Pt;
+    if (i === 0) nn = normal(p, pts[1]);
+    else if (i === pts.length - 1) nn = normal(pts[i - 1], p);
+    else nn = normal(pts[i - 1], pts[i + 1]);
+    return { x: p.x + nn.x * d, y: p.y + nn.y * d };
   });
 }
+
 
 /** Build an SVG path `d` string from a polyline. */
 export function pathD(pts: Pt[]): string {
