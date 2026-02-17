@@ -41,6 +41,7 @@ const CIRCLE_DEFAULTS = {
 
 const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0.5);
 const MIDLINE_DASH_GAP = 12;
+const DEFAULT_RING_GAP_MM = 1;
 
 const CAL_STORAGE_KEY_PREFIX = 'ct_curveplanner_calibration_v2_xh_';
 const keyForXHeight = (x: number) => `${CAL_STORAGE_KEY_PREFIX}${x.toFixed(1)}`;
@@ -378,11 +379,13 @@ export default function CalligramPage() {
   };
   const snap05 = (v: number) => Math.round(v / 0.5) * 0.5;
   const [script, setScript] = useState<ScriptId>('TexturaQuadrata');
-  const [allowPartialNibWidths, setAllowPartialNibWidths] = useState(false);
+  const [allowPartialNibWidths, setAllowPartialNibWidths] = useState(true);
   const [radiusMM, setRadiusMM] = useState(MAIN_DEFAULTS.TexturaQuadrata.radiusMM);
-  const [innerOffsetMM, setInnerOffsetMM] = useState(MAIN_DEFAULTS.TexturaQuadrata.radiusMM - CIRCLE_DEFAULTS.TexturaQuadrata.innerRadiusMM);
+  const [innerOffsetMM, setInnerOffsetMM] = useState(
+    MAIN_DEFAULTS.TexturaQuadrata.radiusMM - CIRCLE_DEFAULTS.TexturaQuadrata.innerRadiusMM + DEFAULT_RING_GAP_MM,
+  );
   const [outerOffsetMM, setOuterOffsetMM] = useState(
-    Math.max(0, CIRCLE_DEFAULTS.TexturaQuadrata.outerRadiusMM - MAIN_DEFAULTS.TexturaQuadrata.radiusMM),
+    Math.max(0, CIRCLE_DEFAULTS.TexturaQuadrata.outerRadiusMM - MAIN_DEFAULTS.TexturaQuadrata.radiusMM + DEFAULT_RING_GAP_MM),
   );
 
   const [startAngleDeg, setStartAngleDeg] = useState(-90);
@@ -447,6 +450,15 @@ export default function CalligramPage() {
   const [pan, setPan] = useState({ x: 0, y: 0 });
 
   const [isCurveDragging, setIsCurveDragging] = useState(false);
+
+  const isBlackletterScript = (scriptId: ScriptId) => scriptId !== 'Copperplate';
+  const anyBlackletter = isBlackletterScript(script)
+    || (topBandEnabled && isBlackletterScript(topBandScript))
+    || (bottomBandEnabled && isBlackletterScript(bottomBandScript));
+  const mainIsCopperplate = script === 'Copperplate';
+  const blackletterOnNonMain = mainIsCopperplate
+    && ((topBandEnabled && isBlackletterScript(topBandScript))
+      || (bottomBandEnabled && isBlackletterScript(bottomBandScript)));
 
   const dragRef = useRef<{
     px: number;
@@ -769,7 +781,7 @@ export default function CalligramPage() {
   const wrapLength = (s: number, L: number) => (L > 0 ? ((s % L) + L) % L : 0);
   const pointAtWrapped = (pts: Pt[], s: number, L: number) => pointAt(pts, wrapLength(s, L));
   const guideTemplate = script === 'Copperplate' ? 'copperplate' : 'blackletter';
-  const snapWholeNibs = !allowPartialNibWidths && script !== 'Copperplate';
+  const snapWholeNibs = anyBlackletter && !allowPartialNibWidths;
   const shouldSnapMainRadius = guideTemplate === 'blackletter' && snapWholeNibs;
 
   const tickStepMM = useMemo(
@@ -786,9 +798,9 @@ export default function CalligramPage() {
   }, [shouldSnapMainRadius, tickStepMM]);
 
   useEffect(() => {
-    if (script !== 'Copperplate' || allowPartialNibWidths) return;
+    if (!blackletterOnNonMain) return;
     setAllowPartialNibWidths(true);
-  }, [script, allowPartialNibWidths]);
+  }, [blackletterOnNonMain]);
 
 
 
@@ -929,7 +941,10 @@ export default function CalligramPage() {
     [guideSet.descLine, guideSet.baseLine, box, radiusMM],
   );
 
-  const outerOffsetMinMM = useMemo(() => Math.max(0, mainAscTopOffsetMM), [mainAscTopOffsetMM]);
+  const outerOffsetMinMM = useMemo(
+    () => Math.max(DEFAULT_RING_GAP_MM, mainAscTopOffsetMM),
+    [mainAscTopOffsetMM],
+  );
   const outerOffsetMaxMM = 200;
   const clampedOuterOffsetMM = Math.max(outerOffsetMinMM, Math.min(outerOffsetMaxMM, outerOffsetMM));
 
@@ -945,7 +960,7 @@ const topXMM = useMemo(
 // => radiusMM - innerOffset + topXMM <= radiusMM - mainDescBottomOffsetMM
 // => innerOffset >= topXMM + mainDescBottomOffsetMM
 const innerOffsetMinMM = useMemo(
-  () => Math.max(0, topXMM + mainDescBottomOffsetMM),
+  () => Math.max(DEFAULT_RING_GAP_MM, topXMM + mainDescBottomOffsetMM),
   [topXMM, mainDescBottomOffsetMM],
 );
 
@@ -968,7 +983,7 @@ useEffect(() => {
   const innerRadiusMM = useMemo(() => Math.max(5, radiusMM - clampedInnerOffsetMM), [radiusMM, clampedInnerOffsetMM]);
   const innerRadiusMinMM = 5;
 const innerRadiusMaxMM = useMemo(
-  () => Math.max(innerRadiusMinMM, radiusMM - innerOffsetMinMM),
+  () => Math.max(innerRadiusMinMM, Math.min(radiusMM - innerOffsetMinMM, radiusMM - DEFAULT_RING_GAP_MM)),
   [radiusMM, innerOffsetMinMM],
 );
 
@@ -1542,8 +1557,8 @@ const innerRadiusMaxMM = useMemo(
       setDescNib(blackletter.descNib);
     }
 
-    setInnerOffsetMM(Math.max(0, main.radiusMM - circles.innerRadiusMM));
-    setOuterOffsetMM(Math.max(0, circles.outerRadiusMM - main.radiusMM));
+    setInnerOffsetMM(Math.max(DEFAULT_RING_GAP_MM, main.radiusMM - circles.innerRadiusMM + DEFAULT_RING_GAP_MM));
+    setOuterOffsetMM(Math.max(DEFAULT_RING_GAP_MM, circles.outerRadiusMM - main.radiusMM + DEFAULT_RING_GAP_MM));
     setTopBandScript(circles.innerScript);
     setTopBandSizeText(circles.innerNibMMText);
     setBottomBandScript(circles.outerScript);
@@ -1941,17 +1956,24 @@ const innerRadiusMaxMM = useMemo(
               </InsetLabeledField>
             </div>
 
-            {script !== 'Copperplate' && (
+            {anyBlackletter && (
               <div className="sm:col-span-2">
                 <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={allowPartialNibWidths}
-                    onChange={e => setAllowPartialNibWidths(e.target.checked)}
+                    checked={blackletterOnNonMain ? true : allowPartialNibWidths}
+                    onChange={e => {
+                      if (blackletterOnNonMain) return;
+                      setAllowPartialNibWidths(e.target.checked);
+                    }}
+                    disabled={blackletterOnNonMain}
                     className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                   />
                   Allow partial nib widths
                 </label>
+                {blackletterOnNonMain && (
+                  <p className="text-xs text-slate-500 mt-1">Enabled because inner/outer uses Fraktur/Textura.</p>
+                )}
               </div>
             )}
 
@@ -2279,7 +2301,27 @@ const innerRadiusMaxMM = useMemo(
               <div className="flex items-center gap-2">
                 <div className="text-sm font-medium text-slate-700">Inner circle</div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" checked={topBandEnabled} onChange={e => setTopBandEnabled(e.target.checked)} aria-label="Inner circle" />
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={topBandEnabled}
+                    onChange={e => {
+                      const enabled = e.target.checked;
+                      setTopBandEnabled(enabled);
+                      if (enabled && !topBandEnabled) {
+                        const defaultInnerOffset = Math.max(
+                          DEFAULT_RING_GAP_MM,
+                          radiusMM - CIRCLE_DEFAULTS[script].innerRadiusMM + DEFAULT_RING_GAP_MM,
+                        );
+                        setInnerOffsetMM(prev => (
+                          prev <= innerOffsetMinMM + 1e-6
+                            ? Math.max(innerOffsetMinMM, Math.min(defaultInnerOffset, innerOffsetMaxMM))
+                            : prev
+                        ));
+                      }
+                    }}
+                    aria-label="Inner circle"
+                  />
                   <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
                   <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
                 </label>
@@ -2338,7 +2380,27 @@ const innerRadiusMaxMM = useMemo(
               <div className="flex items-center gap-2">
                 <div className="text-sm font-medium text-slate-700">Outer circle</div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" checked={bottomBandEnabled} onChange={e => setBottomBandEnabled(e.target.checked)} aria-label="Outer circle" />
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={bottomBandEnabled}
+                    onChange={e => {
+                      const enabled = e.target.checked;
+                      setBottomBandEnabled(enabled);
+                      if (enabled && !bottomBandEnabled) {
+                        const defaultOuterOffset = Math.max(
+                          DEFAULT_RING_GAP_MM,
+                          CIRCLE_DEFAULTS[script].outerRadiusMM - radiusMM + DEFAULT_RING_GAP_MM,
+                        );
+                        setOuterOffsetMM(prev => (
+                          prev <= outerOffsetMinMM + 1e-6
+                            ? Math.max(outerOffsetMinMM, Math.min(defaultOuterOffset, outerOffsetMaxMM))
+                            : prev
+                        ));
+                      }
+                    }}
+                    aria-label="Outer circle"
+                  />
                   <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
                   <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
                 </label>
