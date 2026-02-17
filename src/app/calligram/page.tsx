@@ -404,8 +404,10 @@ export default function CalligramPage() {
   const [bottomBandScript, setBottomBandScript] = useState<ScriptId>(CIRCLE_DEFAULTS.TexturaQuadrata.outerScript);
   const [topBandSizeText, setTopBandSizeText] = useState(CIRCLE_DEFAULTS.TexturaQuadrata.innerNibMMText);
   const [bottomBandSizeText, setBottomBandSizeText] = useState(CIRCLE_DEFAULTS.TexturaQuadrata.outerNibMMText);
-  const [topBandSizeTouched, setTopBandSizeTouched] = useState(false);
-  const [bottomBandSizeTouched, setBottomBandSizeTouched] = useState(false);
+  const topBandSizeTouchedRef = useRef(false);
+  const bottomBandSizeTouchedRef = useRef(false);
+  const topBandRadiusTouchedRef = useRef(false);
+  const bottomBandRadiusTouchedRef = useRef(false);
   const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>(MAIN_DEFAULTS.Copperplate.ratioId);
   const [copperplateDescUnitsText, setCopperplateDescUnitsText] = useState('2');
   const [copperplateXUnitsText, setCopperplateXUnitsText] = useState('1');
@@ -1565,14 +1567,48 @@ const innerRadiusMaxMM = useMemo(
     setTopBandSizeText(circles.innerNibMMText);
     setBottomBandScript(circles.outerScript);
     setBottomBandSizeText(circles.outerNibMMText);
-    setTopBandSizeTouched(false);
-    setBottomBandSizeTouched(false);
+    topBandSizeTouchedRef.current = false;
+    bottomBandSizeTouchedRef.current = false;
+    topBandRadiusTouchedRef.current = false;
+    bottomBandRadiusTouchedRef.current = false;
   }
 
 
+  const applyTopCopperplateDefaults = () => {
+    if (topBandSizeTouchedRef.current && topBandRadiusTouchedRef.current) return;
+
+    if (!topBandSizeTouchedRef.current) {
+      setTopBandSizeText('3');
+    }
+
+    if (!topBandRadiusTouchedRef.current) {
+      const desiredInnerOffset = radiusMM - 43;
+      setInnerOffsetMM(Math.max(innerOffsetMinMM, Math.min(desiredInnerOffset, innerOffsetMaxMM)));
+    }
+  };
+
+  const applyBottomCopperplateDefaults = () => {
+    if (bottomBandSizeTouchedRef.current && bottomBandRadiusTouchedRef.current) return;
+
+    if (!bottomBandSizeTouchedRef.current) {
+      setBottomBandSizeText('4');
+    }
+
+    if (!bottomBandRadiusTouchedRef.current) {
+      const desiredOuterOffset = 81 - radiusMM;
+      setOuterOffsetMM(Math.max(outerOffsetMinMM, Math.min(desiredOuterOffset, outerOffsetMaxMM)));
+    }
+  };
+
   const handleTopBandScriptChange = (nextScript: ScriptId) => {
     setTopBandScript(nextScript);
-    if (topBandSizeTouched) return;
+
+    if (script === 'Copperplate' && nextScript === 'Copperplate' && topBandEnabled) {
+      applyTopCopperplateDefaults();
+      return;
+    }
+
+    if (topBandSizeTouchedRef.current) return;
 
     if (script === 'Copperplate' && nextScript !== 'Copperplate') {
       setTopBandSizeText('2');
@@ -1586,7 +1622,13 @@ const innerRadiusMaxMM = useMemo(
 
   const handleBottomBandScriptChange = (nextScript: ScriptId) => {
     setBottomBandScript(nextScript);
-    if (bottomBandSizeTouched) return;
+
+    if (script === 'Copperplate' && nextScript === 'Copperplate' && bottomBandEnabled) {
+      applyBottomCopperplateDefaults();
+      return;
+    }
+
+    if (bottomBandSizeTouchedRef.current) return;
 
     if (script === 'Copperplate' && nextScript !== 'Copperplate') {
       setBottomBandSizeText('2');
@@ -2343,15 +2385,19 @@ const innerRadiusMaxMM = useMemo(
                       const enabled = e.target.checked;
                       setTopBandEnabled(enabled);
                       if (enabled && !topBandEnabled) {
-                        const defaultInnerOffset = Math.max(
-                          DEFAULT_RING_GAP_MM,
-                          radiusMM - CIRCLE_DEFAULTS[script].innerRadiusMM + DEFAULT_RING_GAP_MM,
-                        );
-                        setInnerOffsetMM(prev => (
-                          prev <= innerOffsetMinMM + 1e-6
-                            ? Math.max(innerOffsetMinMM, Math.min(defaultInnerOffset, innerOffsetMaxMM))
-                            : prev
-                        ));
+                        if (script === 'Copperplate' && topBandScript === 'Copperplate') {
+                          applyTopCopperplateDefaults();
+                        } else {
+                          const defaultInnerOffset = Math.max(
+                            DEFAULT_RING_GAP_MM,
+                            radiusMM - CIRCLE_DEFAULTS[script].innerRadiusMM + DEFAULT_RING_GAP_MM,
+                          );
+                          setInnerOffsetMM(prev => (
+                            prev <= innerOffsetMinMM + 1e-6
+                              ? Math.max(innerOffsetMinMM, Math.min(defaultInnerOffset, innerOffsetMaxMM))
+                              : prev
+                          ));
+                        }
                       }
                     }}
                     aria-label="Inner circle"
@@ -2368,6 +2414,7 @@ const innerRadiusMaxMM = useMemo(
                     step={shouldSnapTopRadius ? 0.1 : 0.5}
                     value={innerRadiusMM}
                     onChange={e => {
+                      topBandRadiusTouchedRef.current = true;
                       const raw = Number(e.target.value);
                       let r = clamp(raw, innerRadiusMinMM, innerRadiusMaxMM);
                       if (shouldSnapTopRadius) {
@@ -2403,7 +2450,7 @@ const innerRadiusMaxMM = useMemo(
                       className={INSET_CONTROL_MM}
                       value={topBandSizeText}
                       onChange={e => {
-                        setTopBandSizeTouched(true);
+                        topBandSizeTouchedRef.current = true;
                         setTopBandSizeText(e.target.value);
                       }}
                       disabled={!topBandEnabled}
@@ -2425,15 +2472,19 @@ const innerRadiusMaxMM = useMemo(
                       const enabled = e.target.checked;
                       setBottomBandEnabled(enabled);
                       if (enabled && !bottomBandEnabled) {
-                        const defaultOuterOffset = Math.max(
-                          DEFAULT_RING_GAP_MM,
-                          CIRCLE_DEFAULTS[script].outerRadiusMM - radiusMM + DEFAULT_RING_GAP_MM,
-                        );
-                        setOuterOffsetMM(prev => (
-                          prev <= outerOffsetMinMM + 1e-6
-                            ? Math.max(outerOffsetMinMM, Math.min(defaultOuterOffset, outerOffsetMaxMM))
-                            : prev
-                        ));
+                        if (script === 'Copperplate' && bottomBandScript === 'Copperplate') {
+                          applyBottomCopperplateDefaults();
+                        } else {
+                          const defaultOuterOffset = Math.max(
+                            DEFAULT_RING_GAP_MM,
+                            CIRCLE_DEFAULTS[script].outerRadiusMM - radiusMM + DEFAULT_RING_GAP_MM,
+                          );
+                          setOuterOffsetMM(prev => (
+                            prev <= outerOffsetMinMM + 1e-6
+                              ? Math.max(outerOffsetMinMM, Math.min(defaultOuterOffset, outerOffsetMaxMM))
+                              : prev
+                          ));
+                        }
                       }
                     }}
                     aria-label="Outer circle"
@@ -2450,6 +2501,7 @@ const innerRadiusMaxMM = useMemo(
                     step={shouldSnapBottomRadius ? 0.1 : 0.5}
                     value={outerRadiusMM}
                     onChange={e => {
+                      bottomBandRadiusTouchedRef.current = true;
                       const min = radiusMM + outerOffsetMinMM;
                       const max = radiusMM + outerOffsetMaxMM;
                       const raw = Number(e.target.value);
@@ -2488,7 +2540,7 @@ const innerRadiusMaxMM = useMemo(
                       className={INSET_CONTROL_MM}
                       value={bottomBandSizeText}
                       onChange={e => {
-                        setBottomBandSizeTouched(true);
+                        bottomBandSizeTouchedRef.current = true;
                         setBottomBandSizeText(e.target.value);
                       }}
                       disabled={!bottomBandEnabled}
