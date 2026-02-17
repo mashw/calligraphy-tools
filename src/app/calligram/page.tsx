@@ -30,7 +30,7 @@ type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 const MAIN_DEFAULTS = {
   Fraktur: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 40 as const, xNib: 4.5, ascNib: 2, descNib: 2 },
   TexturaQuadrata: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 45 as const, xNib: 5, ascNib: 2, descNib: 2 },
-  Copperplate: { radiusMM: 70, nibMMText: '4', nibAngleDeg: 45 as const, xHeightMMText: '6.0', ratioId: '3:2:3' as const },
+  Copperplate: { radiusMM: 60, nibMMText: '4', nibAngleDeg: 45 as const, xHeightMMText: '6.0', ratioId: '3:2:3' as const },
 };
 
 const CIRCLE_DEFAULTS = {
@@ -391,7 +391,7 @@ export default function CalligramPage() {
   const [startAngleDeg, setStartAngleDeg] = useState(-90);
   const [direction, setDirection] = useState<'ccw' | 'cw'>('cw');
   const [align, setAlign] = useState<AlignMode>('start');
-  const [text, setText] = useState('Merry Christmas');
+  const [text, setText] = useState('');
   const [topText, setTopText] = useState('');
   const [bottomText, setBottomText] = useState('');
 
@@ -404,6 +404,8 @@ export default function CalligramPage() {
   const [bottomBandScript, setBottomBandScript] = useState<ScriptId>(CIRCLE_DEFAULTS.TexturaQuadrata.outerScript);
   const [topBandSizeText, setTopBandSizeText] = useState(CIRCLE_DEFAULTS.TexturaQuadrata.innerNibMMText);
   const [bottomBandSizeText, setBottomBandSizeText] = useState(CIRCLE_DEFAULTS.TexturaQuadrata.outerNibMMText);
+  const [topBandSizeTouched, setTopBandSizeTouched] = useState(false);
+  const [bottomBandSizeTouched, setBottomBandSizeTouched] = useState(false);
   const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>(MAIN_DEFAULTS.Copperplate.ratioId);
   const [copperplateDescUnitsText, setCopperplateDescUnitsText] = useState('2');
   const [copperplateXUnitsText, setCopperplateXUnitsText] = useState('1');
@@ -1563,7 +1565,38 @@ const innerRadiusMaxMM = useMemo(
     setTopBandSizeText(circles.innerNibMMText);
     setBottomBandScript(circles.outerScript);
     setBottomBandSizeText(circles.outerNibMMText);
+    setTopBandSizeTouched(false);
+    setBottomBandSizeTouched(false);
   }
+
+
+  const handleTopBandScriptChange = (nextScript: ScriptId) => {
+    setTopBandScript(nextScript);
+    if (topBandSizeTouched) return;
+
+    if (script === 'Copperplate' && nextScript !== 'Copperplate') {
+      setTopBandSizeText('2');
+      return;
+    }
+
+    if (script !== 'Copperplate' && nextScript === 'Copperplate') {
+      setTopBandSizeText('5');
+    }
+  };
+
+  const handleBottomBandScriptChange = (nextScript: ScriptId) => {
+    setBottomBandScript(nextScript);
+    if (bottomBandSizeTouched) return;
+
+    if (script === 'Copperplate' && nextScript !== 'Copperplate') {
+      setBottomBandSizeText('2');
+      return;
+    }
+
+    if (script !== 'Copperplate' && nextScript === 'Copperplate') {
+      setBottomBandSizeText('5');
+    }
+  };
 
   function applyViewPreset(nextView: ViewMode) {
     setView(nextView);
@@ -1956,27 +1989,6 @@ const innerRadiusMaxMM = useMemo(
               </InsetLabeledField>
             </div>
 
-            {anyBlackletter && (
-              <div className="sm:col-span-2">
-                <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={blackletterOnNonMain ? true : allowPartialNibWidths}
-                    onChange={e => {
-                      if (blackletterOnNonMain) return;
-                      setAllowPartialNibWidths(e.target.checked);
-                    }}
-                    disabled={blackletterOnNonMain}
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                  />
-                  Allow partial nib widths
-                </label>
-                {blackletterOnNonMain && (
-                  <p className="text-xs text-slate-500 mt-1">Enabled because inner/outer uses Fraktur/Textura.</p>
-                )}
-              </div>
-            )}
-
             <div>
               <InsetLabeledField label="Paper size">
                 <select
@@ -2034,6 +2046,28 @@ const innerRadiusMaxMM = useMemo(
                 </div>
               </InsetLabeledField>
             </div>
+
+
+            {anyBlackletter && (
+              <div className="sm:col-span-2">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={blackletterOnNonMain ? true : allowPartialNibWidths}
+                    onChange={e => {
+                      if (blackletterOnNonMain) return;
+                      setAllowPartialNibWidths(e.target.checked);
+                    }}
+                    disabled={blackletterOnNonMain}
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  Allow partial nib widths
+                </label>
+                {blackletterOnNonMain && (
+                  <p className="text-xs text-slate-500 mt-1">Enabled because inner/outer uses Fraktur/Textura.</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -2353,7 +2387,7 @@ const innerRadiusMaxMM = useMemo(
                   <select
                     className={INSET_CONTROL_BASE}
                     value={topBandScript}
-                    onChange={e => setTopBandScript(e.target.value as ScriptId)}
+                    onChange={e => handleTopBandScriptChange(e.target.value as ScriptId)}
                     disabled={!topBandEnabled}
                   >
                     <option value="TexturaQuadrata">TexturaQuadrata</option>
@@ -2368,7 +2402,10 @@ const innerRadiusMaxMM = useMemo(
                       min={0.2}
                       className={INSET_CONTROL_MM}
                       value={topBandSizeText}
-                      onChange={e => setTopBandSizeText(e.target.value)}
+                      onChange={e => {
+                        setTopBandSizeTouched(true);
+                        setTopBandSizeText(e.target.value);
+                      }}
                       disabled={!topBandEnabled}
                     />
                 </InsetLabeledField>
@@ -2435,7 +2472,7 @@ const innerRadiusMaxMM = useMemo(
                   <select
                     className={INSET_CONTROL_BASE}
                     value={bottomBandScript}
-                    onChange={e => setBottomBandScript(e.target.value as ScriptId)}
+                    onChange={e => handleBottomBandScriptChange(e.target.value as ScriptId)}
                     disabled={!bottomBandEnabled}
                   >
                     <option value="TexturaQuadrata">TexturaQuadrata</option>
@@ -2450,7 +2487,10 @@ const innerRadiusMaxMM = useMemo(
                       min={0.2}
                       className={INSET_CONTROL_MM}
                       value={bottomBandSizeText}
-                      onChange={e => setBottomBandSizeText(e.target.value)}
+                      onChange={e => {
+                        setBottomBandSizeTouched(true);
+                        setBottomBandSizeText(e.target.value);
+                      }}
                       disabled={!bottomBandEnabled}
                     />
                 </InsetLabeledField>
@@ -2469,7 +2509,7 @@ const innerRadiusMaxMM = useMemo(
 
           <div className="grid grid-cols-1 gap-4 mt-3 select-none">
             <InsetLabeledField label="Title text">
-              <input className={INSET_CONTROL_BASE} value={text} onChange={e => setText(e.target.value)} />
+              <input className={INSET_CONTROL_BASE} value={text} onChange={e => setText(e.target.value)} placeholder="Enter main text" />
             </InsetLabeledField>
 
             {topBandEnabled && (
