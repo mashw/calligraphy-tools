@@ -769,7 +769,8 @@ export default function CalligramPage() {
   const wrapLength = (s: number, L: number) => (L > 0 ? ((s % L) + L) % L : 0);
   const pointAtWrapped = (pts: Pt[], s: number, L: number) => pointAt(pts, wrapLength(s, L));
   const guideTemplate = script === 'Copperplate' ? 'copperplate' : 'blackletter';
-  const shouldSnapMainRadius = guideTemplate === 'blackletter' && !allowPartialNibWidths;
+  const snapWholeNibs = !allowPartialNibWidths && script !== 'Copperplate';
+  const shouldSnapMainRadius = guideTemplate === 'blackletter' && snapWholeNibs;
 
   const tickStepMM = useMemo(
     () =>
@@ -783,6 +784,11 @@ export default function CalligramPage() {
     if (!shouldSnapMainRadius) return;
     setRadiusMM(r => snapRadiusToWholeSteps(r, tickStepMM));
   }, [shouldSnapMainRadius, tickStepMM]);
+
+  useEffect(() => {
+    if (script !== 'Copperplate' || allowPartialNibWidths) return;
+    setAllowPartialNibWidths(true);
+  }, [script, allowPartialNibWidths]);
 
 
 
@@ -990,7 +996,7 @@ const innerRadiusMaxMM = useMemo(
     () => (topBandScript === 'Copperplate' ? Math.max(topXMM * 0.9, 3) : effectiveTopNibMM),
     [topBandScript, topXMM, effectiveTopNibMM],
   );
-  const shouldSnapTopRadius = topBandScript !== 'Copperplate' && !allowPartialNibWidths;
+  const shouldSnapTopRadius = topBandScript !== 'Copperplate' && snapWholeNibs;
   const topLayout = useMemo(
     () => computeLayout(topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM, topCapMM, topBandScript),
     [topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM, topCapMM, topBandScript, align],
@@ -1042,7 +1048,7 @@ const innerRadiusMaxMM = useMemo(
     () => (bottomBandScript === 'Copperplate' ? Math.max(bottomXMM * 0.9, 3) : effectiveBottomNibMM),
     [bottomBandScript, bottomXMM, effectiveBottomNibMM],
   );
-  const shouldSnapBottomRadius = bottomBandScript !== 'Copperplate' && !allowPartialNibWidths;
+  const shouldSnapBottomRadius = bottomBandScript !== 'Copperplate' && snapWholeNibs;
   const bottomLayout = useMemo(
     () => computeLayout(bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM, bottomCapMM, bottomBandScript),
     [bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM, bottomCapMM, bottomBandScript, align],
@@ -1125,6 +1131,26 @@ const innerRadiusMaxMM = useMemo(
     if (script !== 'Copperplate' || descMM <= 0) return null;
     return offset(baseline, descMM * 0.5);
   }, [script, baseline, descMM]);
+
+  const topMidAscPts = useMemo(() => {
+    if (!topBandEnabled || topBandScript !== 'Copperplate' || topAscMM <= 0) return null;
+    return offset(topBaseline, -(topXMM + topAscMM * 0.5) * innerNormalSign);
+  }, [topBandEnabled, topBandScript, topAscMM, topBaseline, topXMM, innerNormalSign]);
+
+  const topMidDescPts = useMemo(() => {
+    if (!topBandEnabled || topBandScript !== 'Copperplate' || topDescMM <= 0) return null;
+    return offset(topBaseline, (topDescMM * 0.5) * innerNormalSign);
+  }, [topBandEnabled, topBandScript, topDescMM, topBaseline, innerNormalSign]);
+
+  const bottomMidAscPts = useMemo(() => {
+    if (!bottomBandEnabled || bottomBandScript !== 'Copperplate' || bottomAscMM <= 0) return null;
+    return offset(bottomBaseline, -(bottomXMM + bottomAscMM * 0.5) * outerNormalSign);
+  }, [bottomBandEnabled, bottomBandScript, bottomAscMM, bottomBaseline, bottomXMM, outerNormalSign]);
+
+  const bottomMidDescPts = useMemo(() => {
+    if (!bottomBandEnabled || bottomBandScript !== 'Copperplate' || bottomDescMM <= 0) return null;
+    return offset(bottomBaseline, (bottomDescMM * 0.5) * outerNormalSign);
+  }, [bottomBandEnabled, bottomBandScript, bottomDescMM, bottomBaseline, outerNormalSign]);
 
 
 
@@ -1712,6 +1738,54 @@ const innerRadiusMaxMM = useMemo(
                     shapeRendering="geometricPrecision"
                   />
                 )}
+                {topBandEnabled && topMidAscPts && (
+                  <path
+                    d={pathD(topMidAscPts)}
+                    fill="none"
+                    stroke="rgba(17, 24, 39, 0.35)"
+                    strokeWidth={0.9}
+                    strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
+                    vectorEffect="non-scaling-stroke"
+                    strokeLinecap="round"
+                    shapeRendering="geometricPrecision"
+                  />
+                )}
+                {topBandEnabled && topMidDescPts && (
+                  <path
+                    d={pathD(topMidDescPts)}
+                    fill="none"
+                    stroke="rgba(17, 24, 39, 0.35)"
+                    strokeWidth={0.9}
+                    strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
+                    vectorEffect="non-scaling-stroke"
+                    strokeLinecap="round"
+                    shapeRendering="geometricPrecision"
+                  />
+                )}
+                {bottomBandEnabled && bottomMidAscPts && (
+                  <path
+                    d={pathD(bottomMidAscPts)}
+                    fill="none"
+                    stroke="rgba(17, 24, 39, 0.35)"
+                    strokeWidth={0.9}
+                    strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
+                    vectorEffect="non-scaling-stroke"
+                    strokeLinecap="round"
+                    shapeRendering="geometricPrecision"
+                  />
+                )}
+                {bottomBandEnabled && bottomMidDescPts && (
+                  <path
+                    d={pathD(bottomMidDescPts)}
+                    fill="none"
+                    stroke="rgba(17, 24, 39, 0.35)"
+                    strokeWidth={0.9}
+                    strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
+                    vectorEffect="non-scaling-stroke"
+                    strokeLinecap="round"
+                    shapeRendering="geometricPrecision"
+                  />
+                )}
                 {/* Guides */}
                 <GuideOverlay
                   guideSet={guideSet}
@@ -1867,17 +1941,19 @@ const innerRadiusMaxMM = useMemo(
               </InsetLabeledField>
             </div>
 
-            <div className="sm:col-span-2">
-              <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={allowPartialNibWidths}
-                  onChange={e => setAllowPartialNibWidths(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                Allow partial nib widths
-              </label>
-            </div>
+            {script !== 'Copperplate' && (
+              <div className="sm:col-span-2">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allowPartialNibWidths}
+                    onChange={e => setAllowPartialNibWidths(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  Allow partial nib widths
+                </label>
+              </div>
+            )}
 
             <div>
               <InsetLabeledField label="Paper size">
