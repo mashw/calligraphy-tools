@@ -56,6 +56,16 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
   const ticks: { a: Pt; b: Pt }[] = [];
   const arcLen = lengthPoly(baseline);
 
+  const isClosed = (() => {
+    if (baseline.length < 3) return false;
+    const a = baseline[0];
+    const b = baseline[baseline.length - 1];
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return (dx * dx + dy * dy) < 1e-6; // ~0.001mm^2 tolerance
+  })();
+
+
   // Phase anchor: we will generate ticks at s = anchor + k * step
   // so there is always a tick exactly at the anchor value.
   const anchor = Number.isFinite(tickAnchorS as number) ? (tickAnchorS as number) : 0;
@@ -66,6 +76,9 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
   for (let k = kMin; k <= kMax; k += 1) {
     const s = anchor + k * step;
     const sClamped = Math.max(0, Math.min(arcLen, s));
+        // Closed loops: avoid drawing both s=0 and s=arcLen (same physical seam).
+        if (isClosed && sClamped >= arcLen - 1e-9) continue;
+
     const { p, n } = pointAt(baseline, sClamped);
 
     ticks.push({
@@ -205,6 +218,8 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
   if (isClosed) {
     const kMin = Math.floor((0 - anchor) / step);
     const kMax = Math.ceil((arcLen - anchor) / step);
+    const anchorWrapped = wrap(anchor);
+
 
     for (let k = kMin; k <= kMax; k += 1) {
       const s = anchor + k * step;
@@ -214,6 +229,11 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
 
       const Ct = pointAt(baseline, wrap(sTop));
       const Cb = pointAt(baseline, wrap(sBot));
+
+      const sWrapped = wrap(s);
+      // Closed loops: avoid duplicate tick at anchor+arcLen (wraps back to anchor).
+      if (k !== kMin && Math.abs(sWrapped - anchorWrapped) < 1e-6) continue;
+
 
       ticks.push({
         a: { x: Ct.p.x - Ct.n.x * topOff * normalSign, y: Ct.p.y - Ct.n.y * topOff * normalSign },

@@ -730,11 +730,12 @@ export default function CalligramPage() {
     const cx = box.w / 2;
     const cy = box.h / 2;
     const pts: Pt[] = [];
-    for (let i = 0; i < N; i++) {
+    for (let i = 0; i <= N; i++) {
       const s = (i / N) * L;
       const theta = startAngleRad + dirSign * (s / radius);
       pts.push({ x: cx + radius * Math.cos(theta), y: cy + radius * Math.sin(theta) });
     }
+    
     return pts;
   };
 
