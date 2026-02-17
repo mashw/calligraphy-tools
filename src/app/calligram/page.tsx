@@ -353,6 +353,13 @@ function makeSimplePdfFromJpeg(
   return new Blob(chunks as unknown as BlobPart[], { type: 'application/pdf' });
 }
 
+function snapRadiusToWholeSteps(radiusMM: number, stepMM: number): number {
+  if (stepMM <= 0) return radiusMM;
+  const k = Math.max(1, Math.round((2 * Math.PI * radiusMM) / stepMM));
+  const snapped = (k * stepMM) / (2 * Math.PI);
+  return Number(snapped.toFixed(3));
+}
+
 export default function CalligramPage() {
   // ---------- State ----------
   const [paper, setPaper] = useState<PaperId>('A4');
@@ -370,8 +377,8 @@ export default function CalligramPage() {
     return next2 / 2;
   };
   const snap05 = (v: number) => Math.round(v / 0.5) * 0.5;
-
   const [script, setScript] = useState<ScriptId>('TexturaQuadrata');
+  const [allowPartialNibWidths, setAllowPartialNibWidths] = useState(false);
   const [radiusMM, setRadiusMM] = useState(MAIN_DEFAULTS.TexturaQuadrata.radiusMM);
   const [innerOffsetMM, setInnerOffsetMM] = useState(MAIN_DEFAULTS.TexturaQuadrata.radiusMM - CIRCLE_DEFAULTS.TexturaQuadrata.innerRadiusMM);
   const [outerOffsetMM, setOuterOffsetMM] = useState(
@@ -762,6 +769,7 @@ export default function CalligramPage() {
   const wrapLength = (s: number, L: number) => (L > 0 ? ((s % L) + L) % L : 0);
   const pointAtWrapped = (pts: Pt[], s: number, L: number) => pointAt(pts, wrapLength(s, L));
   const guideTemplate = script === 'Copperplate' ? 'copperplate' : 'blackletter';
+  const shouldSnapMainRadius = guideTemplate === 'blackletter' && !allowPartialNibWidths;
 
   const tickStepMM = useMemo(
     () =>
@@ -770,6 +778,11 @@ export default function CalligramPage() {
         : effectiveNibMM,
     [script, xMM, effectiveNibMM],
   );
+
+  useEffect(() => {
+    if (!shouldSnapMainRadius) return;
+    setRadiusMM(r => snapRadiusToWholeSteps(r, tickStepMM));
+  }, [shouldSnapMainRadius, tickStepMM]);
 
 
 
@@ -977,6 +990,7 @@ const innerRadiusMaxMM = useMemo(
     () => (topBandScript === 'Copperplate' ? Math.max(topXMM * 0.9, 3) : effectiveTopNibMM),
     [topBandScript, topXMM, effectiveTopNibMM],
   );
+  const shouldSnapTopRadius = topBandScript !== 'Copperplate' && !allowPartialNibWidths;
   const topLayout = useMemo(
     () => computeLayout(topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM, topCapMM, topBandScript),
     [topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM, topCapMM, topBandScript, align],
@@ -1028,6 +1042,7 @@ const innerRadiusMaxMM = useMemo(
     () => (bottomBandScript === 'Copperplate' ? Math.max(bottomXMM * 0.9, 3) : effectiveBottomNibMM),
     [bottomBandScript, bottomXMM, effectiveBottomNibMM],
   );
+  const shouldSnapBottomRadius = bottomBandScript !== 'Copperplate' && !allowPartialNibWidths;
   const bottomLayout = useMemo(
     () => computeLayout(bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM, bottomCapMM, bottomBandScript),
     [bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM, bottomCapMM, bottomBandScript, align],
@@ -1053,6 +1068,26 @@ const innerRadiusMaxMM = useMemo(
     }),
     [bottomBandScript, bottomBaseline, bottomXMM, bottomAscMM, bottomDescMM, outerNormalSign, bottomTickStepMM, bottomSpan, bottomBandSizeMM],
   );
+
+  useEffect(() => {
+    if (!shouldSnapTopRadius) return;
+    setInnerOffsetMM(prev => {
+      const currentRadius = Math.max(innerRadiusMinMM, Math.min(radiusMM - prev, innerRadiusMaxMM));
+      const snappedRadius = Math.max(innerRadiusMinMM, Math.min(snapRadiusToWholeSteps(currentRadius, topTickStepMM), innerRadiusMaxMM));
+      const nextOffset = Math.max(innerOffsetMinMM, Math.min(radiusMM - snappedRadius, innerOffsetMaxMM));
+      return Number(nextOffset.toFixed(3));
+    });
+  }, [shouldSnapTopRadius, topTickStepMM, radiusMM, innerRadiusMinMM, innerRadiusMaxMM, innerOffsetMinMM, innerOffsetMaxMM]);
+
+  useEffect(() => {
+    if (!shouldSnapBottomRadius) return;
+    setOuterOffsetMM(prev => {
+      const currentRadius = Math.max(radiusMM + outerOffsetMinMM, Math.min(radiusMM + prev, radiusMM + outerOffsetMaxMM));
+      const snappedRadius = Math.max(radiusMM + outerOffsetMinMM, Math.min(snapRadiusToWholeSteps(currentRadius, bottomTickStepMM), radiusMM + outerOffsetMaxMM));
+      const nextOffset = Math.max(outerOffsetMinMM, Math.min(snappedRadius - radiusMM, outerOffsetMaxMM));
+      return Number(nextOffset.toFixed(3));
+    });
+  }, [shouldSnapBottomRadius, bottomTickStepMM, radiusMM, outerOffsetMinMM, outerOffsetMaxMM]);
 
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return;
@@ -1832,6 +1867,18 @@ const innerRadiusMaxMM = useMemo(
               </InsetLabeledField>
             </div>
 
+            <div className="sm:col-span-2">
+              <label className="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={allowPartialNibWidths}
+                  onChange={e => setAllowPartialNibWidths(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                Allow partial nib widths
+              </label>
+            </div>
+
             <div>
               <InsetLabeledField label="Paper size">
                 <select
@@ -1873,9 +1920,16 @@ const innerRadiusMaxMM = useMemo(
                     type="range"
                     min={10}
                     max={Math.max(10, Math.floor(Math.min(box.w, box.h) / 2) - 4)}
-                    step={1}
+                    step={shouldSnapMainRadius ? 0.1 : 1}
                     value={radiusMM}
-                    onChange={e => setRadiusMM(Math.max(10, Number(e.target.value) || 10))}
+                    onChange={e => {
+                      const min = 10;
+                      const max = Math.max(10, Math.floor(Math.min(box.w, box.h) / 2) - 4);
+                      const raw = Number(e.target.value);
+                      let next = clamp(raw, min, max);
+                      if (shouldSnapMainRadius) next = snapRadiusToWholeSteps(next, tickStepMM);
+                      setRadiusMM(next);
+                    }}
                     className="w-full"
                   />
                   <div className="text-xs font-medium text-slate-500 mt-1">{radiusMM} mm</div>
@@ -2156,20 +2210,24 @@ const innerRadiusMaxMM = useMemo(
                 <div className="ml-auto flex items-center gap-2 min-w-[14rem]">
                   <span className="text-xs text-slate-600">Radius</span>
                   <input
-  type="range"
-  min={innerRadiusMinMM}
-  max={innerRadiusMaxMM}
-  step={0.5}
-  value={innerRadiusMM}
-  onChange={e => {
-    const r = Number(e.target.value) || innerRadiusMinMM;
-    const nextOffset = radiusMM - r; // larger radius => smaller inward offset
-    setInnerOffsetMM(Math.max(innerOffsetMinMM, Math.min(nextOffset, innerOffsetMaxMM)));
-  }}
-  disabled={!topBandEnabled}
-  className="w-full disabled:opacity-50"
-/>
-<span className="text-xs font-medium text-slate-500 w-[3.5rem] text-right">{innerRadiusMM.toFixed(1)} mm</span>
+                    type="range"
+                    min={innerRadiusMinMM}
+                    max={innerRadiusMaxMM}
+                    step={shouldSnapTopRadius ? 0.1 : 0.5}
+                    value={innerRadiusMM}
+                    onChange={e => {
+                      const raw = Number(e.target.value);
+                      let r = clamp(raw, innerRadiusMinMM, innerRadiusMaxMM);
+                      if (shouldSnapTopRadius) {
+                        r = clamp(snapRadiusToWholeSteps(r, topTickStepMM), innerRadiusMinMM, innerRadiusMaxMM);
+                      }
+                      const nextOffset = radiusMM - r; // larger radius => smaller inward offset
+                      setInnerOffsetMM(Math.max(innerOffsetMinMM, Math.min(nextOffset, innerOffsetMaxMM)));
+                    }}
+                    disabled={!topBandEnabled}
+                    className="w-full disabled:opacity-50"
+                  />
+                  <span className="text-xs font-medium text-slate-500 w-[3.5rem] text-right">{innerRadiusMM.toFixed(1)} mm</span>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -2214,10 +2272,16 @@ const innerRadiusMaxMM = useMemo(
                     type="range"
                     min={radiusMM + outerOffsetMinMM}
                     max={radiusMM + outerOffsetMaxMM}
-                    step={0.5}
+                    step={shouldSnapBottomRadius ? 0.1 : 0.5}
                     value={outerRadiusMM}
                     onChange={e => {
-                      const r = Number(e.target.value) || radiusMM + outerOffsetMinMM;
+                      const min = radiusMM + outerOffsetMinMM;
+                      const max = radiusMM + outerOffsetMaxMM;
+                      const raw = Number(e.target.value);
+                      let r = clamp(raw, min, max);
+                      if (shouldSnapBottomRadius) {
+                        r = clamp(snapRadiusToWholeSteps(r, bottomTickStepMM), min, max);
+                      }
                       const nextOffset = r - radiusMM;
                       setOuterOffsetMM(Math.max(outerOffsetMinMM, Math.min(nextOffset, outerOffsetMaxMM)));
                     }}
