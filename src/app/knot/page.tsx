@@ -330,6 +330,8 @@ function KnotPage() {
   const polylineToPath = (pts: Pt[]) =>
     pts.length ? `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)} ` + pts.slice(1).map(p => `L ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ') : '';
 
+  const fullPolylinePath = useMemo(() => polylineToPath(sampledPolyline), [sampledPolyline]);
+
   const zoomedSize = useMemo(() => ({
     w: BOX.w / zoom,
     h: BOX.h / zoom,
@@ -513,6 +515,15 @@ function KnotPage() {
               </defs>
 
               <path d={generatedPaths[0]} fill="none" stroke="#cbd5e1" strokeWidth={1} strokeDasharray="2 3" />
+
+              <path
+                d={fullPolylinePath}
+                fill="none"
+                stroke="#0f172a"
+                strokeWidth={strapWidth}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
 
               {splitSegments.map((segment, i) => (
                 <path
