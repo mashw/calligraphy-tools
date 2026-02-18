@@ -114,52 +114,71 @@ function generateKnotSkeleton(seed: number, symmetryMode: SymmetryMode, complexi
   const rng = mulberry32(seed || 1);
   const cx = BOX.w / 2;
   const cy = BOX.h / 2;
-  const h = 72 + complexity * 4;
-  const w = 58 + complexity * 3;
-  const phase = rng() * Math.PI * 2;
-  const wobble = 12 + complexity * 1.8;
-  const n = 84;
 
-  const half: Pt[] = [];
-  for (let i = 0; i <= n; i++) {
-    const u = i / n;
-    const y = cy - h + u * h * 2;
-    const x =
-      cx +
-      w * Math.sin(Math.PI * u) * Math.sin((complexity * 0.8 + 1.5) * Math.PI * u + phase) +
-      wobble * Math.sin((4 + complexity * 0.35) * Math.PI * u + phase * 0.6);
-    half.push({ x, y });
-  }
+  // Pick a “nice” (m,n) pair that yields lots of crossings but stays legible.
+  // Higher complexity → higher frequencies.
+  const pairs: Array<[number, number]> = [
+    [2, 3],
+    [3, 4],
+    [3, 5],
+    [4, 5],
+    [4, 7],
+    [5, 6],
+    [5, 8],
+    [6, 7],
+    [7, 9],
+  ];
+  const idx = Math.min(pairs.length - 1, Math.max(0, Math.round((complexity - 1) * 0.9)));
+  const [mBase, nBase] = pairs[idx];
 
-  const mirror = (p: Pt): Pt => {
-    if (symmetryMode === 'vertical') return { x: cx - (p.x - cx), y: p.y };
-    if (symmetryMode === 'horizontal') return { x: p.x, y: cy - (p.y - cy) };
-    return { x: cx - (p.x - cx), y: cy - (p.y - cy) };
-  };
+  // Add small seed-based variation without turning it into mush.
+  const m = mBase;
+  const n = nBase;
 
-  const mirrored = half
-    .slice(1, -1)
-    .reverse()
-    .map(mirror);
+  // Amplitudes: keep it inside the box with margin.
+  const margin = 18;
+  const ax = (BOX.w / 2) - margin;
+  const by = (BOX.h / 2) - margin;
 
-  const points = [...half, ...mirrored];
-  const path = pathFromPoints(points);
+  // Phase handling for “symmetry mode”
+  // - vertical: very clean symmetric (sin/sin)
+  // - horizontal: rotate the x component 90° (cos/sin) -> different symmetry feel
+  // - rotational: allow phases
+  const phi = rng() * Math.PI * 2;
+  const psi = rng() * Math.PI * 2;
 
-  const sampled: Pt[] = [];
-  const sampleN = 720;
-  for (let i = 0; i < sampleN; i++) {
-    const t = (i / sampleN) * points.length;
-    const idx = Math.floor(t) % points.length;
-    const next = (idx + 1) % points.length;
-    const local = t - Math.floor(t);
-    sampled.push({
-      x: points[idx].x + (points[next].x - points[idx].x) * local,
-      y: points[idx].y + (points[next].y - points[idx].y) * local,
+  const N = 900; // sampling density (drives crossing detection quality)
+  const pts: Pt[] = [];
+
+  for (let i = 0; i < N; i++) {
+    const t = (i / N) * Math.PI * 2;
+
+    let xUnit: number;
+    let yUnit: number;
+
+    if (symmetryMode === 'vertical') {
+      xUnit = Math.sin(m * t);
+      yUnit = Math.sin(n * t);
+    } else if (symmetryMode === 'horizontal') {
+      xUnit = Math.cos(m * t);
+      yUnit = Math.sin(n * t);
+    } else {
+      xUnit = Math.sin(m * t + phi);
+      yUnit = Math.sin(n * t + psi);
+    }
+
+    pts.push({
+      x: cx + ax * xUnit,
+      y: cy + by * yUnit,
     });
   }
 
-  return { path, sampled };
+  // Smooth path for the dashed skeleton preview; use the same points as the polyline.
+  const path = pathFromPoints(pts);
+
+  return { path, sampled: pts };
 }
+
 
 function segIntersection(a1: Pt, a2: Pt, b1: Pt, b2: Pt) {
   const dax = a2.x - a1.x;
@@ -206,7 +225,7 @@ function detectCrossings(polyline: Pt[]): Crossing[] {
       const sB = (cum[j] + hit.tb * (cum[j + 1] - cum[j])) / total;
 
       const duplicate = found.some(
-        c => Math.hypot(c.point.x - hit.point.x, c.point.y - hit.point.y) < 1,
+        c => Math.hypot(c.point.x - hit.point.x, c.point.y - hit.point.y) < 3,
       );
       if (!duplicate) {
         found.push({ point: hit.point, sA, sB });
@@ -361,7 +380,7 @@ function KnotPage() {
     }
     if (mode === 'fullpage') {
       setView(mode);
-      setZoom(0.8);
+      setZoom(0.7);
       setPan({ x: 0, y: 0 });
       return;
     }
