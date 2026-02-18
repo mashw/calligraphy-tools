@@ -1313,9 +1313,15 @@ const innerRadiusMaxMM = useMemo(
   }, [bottomSpan, bottomBandEnabled, bottomHasText, bottomLayout.placements.length, bottomBandScript, bottomXMM, outerNormalSign, effectiveBottomNibMM, bottomBaseline, bottomArcLen]);
 
   const baselineLength = arcLen;
-  const overWarn = layout.overBy > 0;
+  const mainTextExceeds = layout.overBy > 0;
   const innerTextExceeds = topBandEnabled && topLayout.overBy > 0;
   const outerTextExceeds = bottomBandEnabled && bottomLayout.overBy > 0;
+  const WARNING_STACK_GAP_PX = 22;
+  const activeOverflowWarnings = [
+    innerTextExceeds ? { key: 'inner', label: 'Text exceeds inner circle' } : null,
+    mainTextExceeds ? { key: 'main', label: 'Text exceeds main circle' } : null,
+    outerTextExceeds ? { key: 'outer', label: 'Text exceeds outer circle' } : null,
+  ].filter(Boolean) as { key: string; label: string }[];
 
   const renderLetterBoxes = (
     placements: Place[],
@@ -2080,8 +2086,19 @@ const innerRadiusMaxMM = useMemo(
               </g>
             </svg>
 
+            {activeOverflowWarnings.map((w, i) => (
+              <div
+                key={w.key}
+                className="absolute right-3 bottom-2 text-sm text-red-600 font-medium pointer-events-none"
+                style={{
+                  transform: `translateY(${-i * WARNING_STACK_GAP_PX}px)`,
+                }}
+              >
+                {w.label}
+              </div>
+            ))}
+
             <div className="pointer-events-none absolute right-3 bottom-2 text-[13px] text-slate-700 text-right space-y-0.5">
-              {overWarn && <div className="text-[13px] text-red-600 font-medium">Text exceeds main circle</div>}
               <div>
                 Circle length: {baselineLength.toFixed(1)} mm · Script length: {run.totalAdvanceMM.toFixed(1)} mm
               </div>
@@ -2529,9 +2546,6 @@ const innerRadiusMaxMM = useMemo(
                     />
                 </InsetLabeledField>
               </div>
-              {innerTextExceeds && (
-                <div className="mt-2 text-sm text-red-600">Text exceeds inner circle</div>
-              )}
             </div>
 
             <div className="my-3 border-t border-slate-200/70" />
@@ -2614,9 +2628,6 @@ const innerRadiusMaxMM = useMemo(
                     />
                 </InsetLabeledField>
               </div>
-              {outerTextExceeds && (
-                <div className="mt-2 text-sm text-red-600">Text exceeds outer circle</div>
-              )}
             </div>
           </div>
         </div>
