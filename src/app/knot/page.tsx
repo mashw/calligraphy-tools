@@ -424,7 +424,9 @@ function KnotPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
+    <main className="min-h-screen text-sm text-slate-900 relative">
+      <div className="fixed inset-0 -z-10 bg-slate-100" style={{ backgroundImage: 'none' }} />
+
       <header className="px-6 pt-8 pb-4">
         <div className="max-w-[1120px] mx-auto">
           <h1 className="text-3xl font-semibold tracking-tight">
@@ -492,14 +494,17 @@ function KnotPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto rounded-xl border border-slate-200 bg-slate-300">
             <svg
               viewBox={svgViewBox}
               onPointerDown={onPreviewPointerDown}
               onPointerMove={onPreviewPointerMove}
               onPointerUp={onPreviewPointerUp}
               onPointerCancel={onPreviewPointerUp}
-              className="block mx-auto w-full h-auto rounded-xl bg-slate-50 ring-1 ring-slate-200"
+              onPointerLeave={onPreviewPointerUp}
+              className="block mx-auto w-full h-[38vh] sm:h-[44vh] md:h-[50vh] touch-none cursor-grab active:cursor-grabbing"
+              style={{ background: '#cbd5e1' }}
+              preserveAspectRatio="xMidYMid meet"
             >
               <defs>
                 <filter id="underShadow" x="-20%" y="-20%" width="140%" height="140%">
@@ -562,123 +567,125 @@ function KnotPage() {
         </div>
       </section>
 
-      <section className="px-6 py-5 max-w-[1120px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
-          <h2 className="text-lg font-semibold text-slate-800">Step 1 — Generate</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
-            <label className="block">
-              <span className="font-medium text-slate-700">Seed</span>
-              <input
-                type="number"
-                value={seed}
-                onChange={e => {
-                  const nextSeed = Number(e.target.value) || 0;
-                  setSeed(nextSeed);
-                  regenerate(nextSeed, symmetryMode, complexity);
-                }}
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </label>
-            <label className="block">
-              <span className="font-medium text-slate-700">Symmetry</span>
-              <select
-                value={symmetryMode}
-                onChange={e => {
-                  const nextSymmetry = e.target.value as SymmetryMode;
-                  setSymmetryMode(nextSymmetry);
-                  regenerate(seed, nextSymmetry, complexity);
-                }}
-                className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="vertical">Vertical</option>
-                <option value="horizontal">Horizontal</option>
-                <option value="rotational">Rotational</option>
-              </select>
-            </label>
-            <div className="sm:col-span-2">
-              <button
-                onClick={randomizeSeed}
-                className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50"
-              >
-                Regenerate
-              </button>
-            </div>
-            <label className="block sm:col-span-2">
-              <span className="font-medium text-slate-700">Complexity</span>
-              <input
-                type="range"
-                min={1}
-                max={10}
-                value={complexity}
-                onChange={e => {
-                  const nextComplexity = Number(e.target.value);
-                  setComplexity(nextComplexity);
-                  regenerate(seed, symmetryMode, nextComplexity);
-                }}
-                className="w-full"
-              />
-              <p className="text-xs text-slate-500 mt-1">{complexity}</p>
-            </label>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
-          <h2 className="text-lg font-semibold text-slate-800">Step 2 — Strap</h2>
-          <div className="mt-3 space-y-4">
-            <label className="block">
-              <span className="font-medium text-slate-700">Strap width</span>
-              <input
-                type="range"
-                min={2}
-                max={22}
-                step={0.5}
-                value={strapWidth}
-                onChange={e => setStrapWidth(Number(e.target.value))}
-                className="w-full"
-              />
-              <p className="text-xs text-slate-500 mt-1">{strapWidth.toFixed(1)} mm</p>
-            </label>
-            <label className="block">
-              <span className="font-medium text-slate-700">Crossing gap</span>
-              <input
-                type="range"
-                min={1}
-                max={20}
-                step={0.5}
-                value={crossingGap}
-                onChange={e => setCrossingGap(Number(e.target.value))}
-                className="w-full"
-              />
-              <p className="text-xs text-slate-500 mt-1">{crossingGap.toFixed(1)} mm</p>
-            </label>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
-          <h2 className="text-lg font-semibold text-slate-800">Step 3 — Crossings</h2>
-          <div className="mt-3 space-y-2 max-h-72 overflow-auto pr-1">
-            {crossings.length === 0 ? (
-              <p className="text-sm text-slate-500">No crossings detected with the current shape.</p>
-            ) : crossings.map(c => (
-              <div
-                key={c.id}
-                className={`rounded-lg border p-3 ${selectedCrossingId === c.id ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white'}`}
-              >
-                <button
-                  onClick={() => setSelectedCrossingId(c.id)}
-                  className="w-full text-left"
+      <section className="px-6 py-5">
+        <div className="max-w-[1120px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+            <h2 className="text-lg font-semibold text-slate-800">Step 1 — Generate</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+              <label className="block">
+                <span className="font-medium text-slate-700">Seed</span>
+                <input
+                  type="number"
+                  value={seed}
+                  onChange={e => {
+                    const nextSeed = Number(e.target.value) || 0;
+                    setSeed(nextSeed);
+                    regenerate(nextSeed, symmetryMode, complexity);
+                  }}
+                  className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </label>
+              <label className="block">
+                <span className="font-medium text-slate-700">Symmetry</span>
+                <select
+                  value={symmetryMode}
+                  onChange={e => {
+                    const nextSymmetry = e.target.value as SymmetryMode;
+                    setSymmetryMode(nextSymmetry);
+                    regenerate(seed, nextSymmetry, complexity);
+                  }}
+                  className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <div className="text-sm font-medium text-slate-800">Crossing #{c.id}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">Over: Branch {c.over}</div>
-                </button>
+                  <option value="vertical">Vertical</option>
+                  <option value="horizontal">Horizontal</option>
+                  <option value="rotational">Rotational</option>
+                </select>
+              </label>
+              <div className="sm:col-span-2">
                 <button
-                  onClick={() => flipCrossing(c.id)}
-                  className="mt-2 px-2.5 py-1 text-xs rounded-md border border-slate-300 bg-white hover:bg-slate-50"
+                  onClick={randomizeSeed}
+                  className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50"
                 >
-                  Flip
+                  Regenerate
                 </button>
               </div>
-            ))}
+              <label className="block sm:col-span-2">
+                <span className="font-medium text-slate-700">Complexity</span>
+                <input
+                  type="range"
+                  min={1}
+                  max={10}
+                  value={complexity}
+                  onChange={e => {
+                    const nextComplexity = Number(e.target.value);
+                    setComplexity(nextComplexity);
+                    regenerate(seed, symmetryMode, nextComplexity);
+                  }}
+                  className="w-full"
+                />
+                <p className="text-xs text-slate-500 mt-1">{complexity}</p>
+              </label>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+            <h2 className="text-lg font-semibold text-slate-800">Step 2 — Strap</h2>
+            <div className="mt-3 space-y-4">
+              <label className="block">
+                <span className="font-medium text-slate-700">Strap width</span>
+                <input
+                  type="range"
+                  min={2}
+                  max={22}
+                  step={0.5}
+                  value={strapWidth}
+                  onChange={e => setStrapWidth(Number(e.target.value))}
+                  className="w-full"
+                />
+                <p className="text-xs text-slate-500 mt-1">{strapWidth.toFixed(1)} mm</p>
+              </label>
+              <label className="block">
+                <span className="font-medium text-slate-700">Crossing gap</span>
+                <input
+                  type="range"
+                  min={1}
+                  max={20}
+                  step={0.5}
+                  value={crossingGap}
+                  onChange={e => setCrossingGap(Number(e.target.value))}
+                  className="w-full"
+                />
+                <p className="text-xs text-slate-500 mt-1">{crossingGap.toFixed(1)} mm</p>
+              </label>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+            <h2 className="text-lg font-semibold text-slate-800">Step 3 — Crossings</h2>
+            <div className="mt-3 space-y-2 max-h-72 overflow-auto pr-1">
+              {crossings.length === 0 ? (
+                <p className="text-sm text-slate-500">No crossings detected with the current shape.</p>
+              ) : crossings.map(c => (
+                <div
+                  key={c.id}
+                  className={`rounded-lg border p-3 ${selectedCrossingId === c.id ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white'}`}
+                >
+                  <button
+                    onClick={() => setSelectedCrossingId(c.id)}
+                    className="w-full text-left"
+                  >
+                    <div className="text-sm font-medium text-slate-800">Crossing #{c.id}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">Over: Branch {c.over}</div>
+                  </button>
+                  <button
+                    onClick={() => flipCrossing(c.id)}
+                    className="mt-2 px-2.5 py-1 text-xs rounded-md border border-slate-300 bg-white hover:bg-slate-50"
+                  >
+                    Flip
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
