@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 
 type SymmetryMode = 'vertical' | 'horizontal' | 'rotational';
 type OverState = 'A' | 'B';
+type ViewMode = 'autofit' | 'fullpage' | 'custom';
 
 type Pt = { x: number; y: number };
 type Crossing = {
@@ -14,6 +15,13 @@ type Crossing = {
   over: OverState;
 };
 
+type InfoTipProps = {
+  title?: string;
+  children: React.ReactNode;
+  className?: string;
+  side?: 'top' | 'right' | 'left' | 'bottom';
+};
+
 const BOX = { w: 220, h: 220 };
 const INITIAL_SETTINGS = { seed: 12345, symmetry: 'vertical' as SymmetryMode, complexity: 5 };
 const INITIAL_GENERATION = generateKnotSkeleton(
@@ -21,6 +29,60 @@ const INITIAL_GENERATION = generateKnotSkeleton(
   INITIAL_SETTINGS.symmetry,
   INITIAL_SETTINGS.complexity,
 );
+
+function InfoTip({ title, children, className = '', side = 'right' }: InfoTipProps) {
+  const [open, setOpen] = useState(false);
+
+  const pos =
+    side === 'top'
+      ? 'bottom-full left-1/2 -translate-x-1/2 -mb-2'
+      : side === 'left'
+        ? 'right-full top-1/2 -translate-y-1/2 -mr-2'
+        : side === 'bottom'
+          ? 'top-full left-1/2 -translate-x-1/2 mt-2'
+          : 'left-full top-1/2 -translate-y-1/2 ml-2';
+
+  const arrow =
+    side === 'top'
+      ? 'top-full left-1/2 -translate-x-1/2 border-t-slate-700'
+      : side === 'left'
+        ? 'left-full top-1/2 -translate-y-1/2 border-l-slate-700'
+        : side === 'bottom'
+          ? 'bottom-full left-1/2 -translate-x-1/2 border-b-slate-700'
+          : 'right-full top-1/2 -translate-y-1/2 border-r-slate-700';
+
+  return (
+    <div
+      className={`relative inline-flex ${className}`}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onTouchStart={() => setOpen(o => !o)}
+    >
+      <span
+        aria-hidden="true"
+        className="inline-flex items-center justify-center w-6 h-6 rounded-full border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 cursor-help"
+        title={title}
+      >
+        <span className="text-[11px] font-bold select-none">i</span>
+      </span>
+
+      <div
+        role="tooltip"
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        className={`absolute ${pos} z-30
+          ${open ? 'visible opacity-100' : 'invisible opacity-0'}
+          transition-opacity duration-150
+          rounded-lg shadow-lg ring-1 ring-black/10 bg-slate-700 text-white text-[13px] leading-snug
+          px-3.5 py-2.5 whitespace-normal pointer-events-auto
+          min-w-[16rem] max-w-[34rem]`}
+      >
+        {children}
+        <span className={`absolute ${arrow} w-0 h-0 border-8 border-transparent`} aria-hidden="true" />
+      </div>
+    </div>
+  );
+}
 
 function mulberry32(seed: number) {
   let t = seed;
@@ -178,6 +240,10 @@ function mergeIntervals(intervals: Array<[number, number]>) {
   return out;
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function KnotPage() {
   const [seed, setSeed] = useState(INITIAL_SETTINGS.seed);
   const [symmetryMode, setSymmetryMode] = useState<SymmetryMode>(INITIAL_SETTINGS.symmetry);
@@ -190,6 +256,11 @@ function KnotPage() {
   const [sampledPolyline, setSampledPolyline] = useState<Pt[]>(() => INITIAL_GENERATION.sampled);
   const [crossings, setCrossings] = useState<Crossing[]>(() => detectCrossings(INITIAL_GENERATION.sampled));
   const [selectedCrossingId, setSelectedCrossingId] = useState<number | null>(null);
+
+  const [view, setView] = useState<ViewMode>('autofit');
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const dragRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
 
   const regenerate = (nextSeed: number, nextSymmetry: SymmetryMode, nextComplexity: number) => {
     const next = generateKnotSkeleton(nextSeed, nextSymmetry, nextComplexity);
@@ -259,6 +330,50 @@ function KnotPage() {
   const polylineToPath = (pts: Pt[]) =>
     pts.length ? `M ${pts[0].x.toFixed(2)} ${pts[0].y.toFixed(2)} ` + pts.slice(1).map(p => `L ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ') : '';
 
+  const zoomedSize = useMemo(() => ({
+    w: BOX.w / zoom,
+    h: BOX.h / zoom,
+  }), [zoom]);
+
+  const clampedPan = useMemo(() => {
+    const maxPanX = Math.max(0, (BOX.w - zoomedSize.w) / 2);
+    const maxPanY = Math.max(0, (BOX.h - zoomedSize.h) / 2);
+    return {
+      x: clamp(pan.x, -maxPanX, maxPanX),
+      y: clamp(pan.y, -maxPanY, maxPanY),
+    };
+  }, [pan, zoomedSize.h, zoomedSize.w]);
+
+  const svgViewBox = useMemo(() => {
+    const cx = BOX.w / 2 + clampedPan.x;
+    const cy = BOX.h / 2 + clampedPan.y;
+    return `${(cx - zoomedSize.w / 2).toFixed(3)} ${(cy - zoomedSize.h / 2).toFixed(3)} ${zoomedSize.w.toFixed(3)} ${zoomedSize.h.toFixed(3)}`;
+  }, [clampedPan.x, clampedPan.y, zoomedSize.h, zoomedSize.w]);
+
+  const applyViewPreset = (mode: ViewMode) => {
+    if (mode === 'autofit') {
+      setView(mode);
+      setZoom(1);
+      setPan({ x: 0, y: 0 });
+      return;
+    }
+    if (mode === 'fullpage') {
+      setView(mode);
+      setZoom(0.8);
+      setPan({ x: 0, y: 0 });
+      return;
+    }
+    setView(mode);
+  };
+
+  const adjustZoom = (dir: 'in' | 'out') => {
+    setZoom(prev => {
+      const next = clamp(dir === 'in' ? prev * 1.12 : prev / 1.12, 0.3, 6);
+      return next;
+    });
+    setView('custom');
+  };
+
   const randomizeSeed = () => {
     const nextSeed = Math.floor(Math.random() * 1000000);
     setSeed(nextSeed);
@@ -273,6 +388,39 @@ function KnotPage() {
           : c,
       ),
     );
+  };
+
+  const onPreviewPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId);
+    dragRef.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY };
+    setView('custom');
+  };
+
+  const onPreviewPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!dragRef.current || dragRef.current.pointerId !== e.pointerId) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    const dxPx = e.clientX - dragRef.current.x;
+    const dyPx = e.clientY - dragRef.current.y;
+    dragRef.current = { ...dragRef.current, x: e.clientX, y: e.clientY };
+
+    const dxUnits = dxPx * (zoomedSize.w / rect.width);
+    const dyUnits = dyPx * (zoomedSize.h / rect.height);
+
+    const maxPanX = Math.max(0, (BOX.w - zoomedSize.w) / 2);
+    const maxPanY = Math.max(0, (BOX.h - zoomedSize.h) / 2);
+
+    setPan(prev => ({
+      x: clamp(prev.x - dxUnits, -maxPanX, maxPanX),
+      y: clamp(prev.y - dyUnits, -maxPanY, maxPanY),
+    }));
+  };
+
+  const onPreviewPointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!dragRef.current || dragRef.current.pointerId !== e.pointerId) return;
+    dragRef.current = null;
+    (e.currentTarget as SVGSVGElement).releasePointerCapture(e.pointerId);
   };
 
   return (
@@ -290,20 +438,69 @@ function KnotPage() {
 
       <section className="px-6">
         <div className="max-w-[1120px] mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4">
-          <div className="flex items-center justify-between mb-2 gap-3">
-            <h3 className="font-semibold text-slate-800">Preview</h3>
-            <label className="inline-flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showShadow}
-                onChange={e => setShowShadow(e.target.checked)}
-                className="rounded border-slate-300"
-              />
-              <span className="font-medium text-slate-700">Under-shadow</span>
-            </label>
+          <div className="flex flex-wrap items-start gap-3 mb-2">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-slate-800">Preview</h3>
+                <InfoTip side="right">Drag to pan. Zoom with ±.</InfoTip>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <select
+                  className="p-1.5 text-sm rounded-lg border border-slate-300"
+                  value={view}
+                  onChange={(e) => applyViewPreset(e.target.value as ViewMode)}
+                >
+                  <option value="autofit">Auto-fit</option>
+                  <option value="fullpage">Full page</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 ml-auto">
+              <button
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => adjustZoom('out')}
+                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+              >
+                –
+              </button>
+              <button
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => adjustZoom('in')}
+                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+              >
+                +
+              </button>
+              <button
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => applyViewPreset('autofit')}
+                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+              >
+                Reset view
+              </button>
+              <label className="inline-flex items-center gap-2 cursor-pointer shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
+                <input
+                  type="checkbox"
+                  checked={showShadow}
+                  onChange={e => setShowShadow(e.target.checked)}
+                  className="rounded border-slate-300"
+                />
+                <span className="text-slate-700">Under-shadow</span>
+              </label>
+            </div>
           </div>
+
           <div className="overflow-x-auto">
-            <svg viewBox={`0 0 ${BOX.w} ${BOX.h}`} className="block mx-auto w-full h-auto rounded-xl bg-slate-50 ring-1 ring-slate-200">
+            <svg
+              viewBox={svgViewBox}
+              onPointerDown={onPreviewPointerDown}
+              onPointerMove={onPreviewPointerMove}
+              onPointerUp={onPreviewPointerUp}
+              onPointerCancel={onPreviewPointerUp}
+              className="block mx-auto w-full h-auto rounded-xl bg-slate-50 ring-1 ring-slate-200"
+            >
               <defs>
                 <filter id="underShadow" x="-20%" y="-20%" width="140%" height="140%">
                   <feDropShadow dx="0.5" dy="0.8" stdDeviation="1" floodColor="#0f172a" floodOpacity="0.25" />
