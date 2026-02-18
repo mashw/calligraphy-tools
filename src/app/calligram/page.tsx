@@ -1317,6 +1317,7 @@ const innerRadiusMaxMM = useMemo(
   const innerTextExceeds = topBandEnabled && topLayout.overBy > 0;
   const outerTextExceeds = bottomBandEnabled && bottomLayout.overBy > 0;
   const WARNING_STACK_GAP_PX = 22;
+  const WARNING_RAISE_PX = 24;
   const activeOverflowWarnings = [
     innerTextExceeds ? { key: 'inner', label: 'Text exceeds inner circle' } : null,
     mainTextExceeds ? { key: 'main', label: 'Text exceeds main circle' } : null,
@@ -2086,21 +2087,25 @@ const innerRadiusMaxMM = useMemo(
               </g>
             </svg>
 
-            {activeOverflowWarnings.map((w, i) => (
-              <div
-                key={w.key}
-                className="absolute right-3 bottom-2 text-sm text-red-600 font-medium pointer-events-none"
-                style={{
-                  transform: `translateY(${-i * WARNING_STACK_GAP_PX}px)`,
-                }}
-              >
-                {w.label}
-              </div>
-            ))}
+            <div className="absolute inset-0 pointer-events-none z-30">
+              {activeOverflowWarnings.map((w, i) => (
+                <div
+                  key={w.key}
+                  className="absolute right-3 bottom-2 text-sm text-red-600 font-medium"
+                  style={{
+                    transform: `translateY(${-(WARNING_RAISE_PX + i * WARNING_STACK_GAP_PX)}px)`,
+                  }}
+                >
+                  {w.label}
+                </div>
+              ))}
+            </div>
 
-            <div className="pointer-events-none absolute right-3 bottom-2 text-[13px] text-slate-700 text-right space-y-0.5">
-              <div>
-                Circle length: {baselineLength.toFixed(1)} mm · Script length: {run.totalAdvanceMM.toFixed(1)} mm
+            <div className="absolute inset-0 pointer-events-none z-10">
+              <div className="absolute right-3 bottom-2 text-[13px] text-slate-700 text-right space-y-0.5">
+                <div>
+                  Circle length: {baselineLength.toFixed(1)} mm · Script length: {run.totalAdvanceMM.toFixed(1)} mm
+                </div>
               </div>
             </div>
           </div>
