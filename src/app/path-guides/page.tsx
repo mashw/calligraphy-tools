@@ -174,6 +174,22 @@ export default function PathGuidesPage() {
   const transformedById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r.transformed])), [renderData]);
   const strapById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r])), [renderData]);
 
+  const underByStrapId = useMemo(() => {
+    const out: Record<string, { x: number; y: number; r: number }[]> = {};
+
+    crossings.forEach((crossing) => {
+      const underId = crossing.overId === crossing.aId ? crossing.bId : crossing.aId;
+      const under = strapById.get(underId);
+      if (!under) return;
+
+      const r = under.metrics.bandWidthMM / 2 + 2;
+      if (!out[underId]) out[underId] = [];
+      out[underId].push({ x: crossing.x, y: crossing.y, r });
+    });
+
+    return out;
+  }, [crossings, strapById]);
+
   const setCrossingOver = (crossingId: string, overId: string) => {
     setCrossingOverrides((prev) => ({ ...prev, [crossingId]: overId }));
     setActiveCrossingId(crossingId);
@@ -391,50 +407,82 @@ export default function PathGuidesPage() {
               onPointerUp={onSvgPointerUp}
               onPointerLeave={onSvgPointerUp}
             >
-              <rect x={vb.minX} y={vb.minY} width={vb.vw} height={vb.vh} fill="#cbd5e1" />
-              <rect x={0} y={0} width={BOX.w} height={BOX.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
-              <line x1={centerX} y1={0} x2={centerX} y2={BOX.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+              <defs>
+                {Object.entries(underByStrapId).map(([strapId, circles]) => (
+                  <mask key={`mask-${strapId}`} id={`mask-${strapId}`}>
+                    <rect x={0} y={0} width={BOX.w} height={BOX.h} fill="white" />
+                    {circles.map((c, idx) => (
+                      <circle key={`mask-${strapId}-${idx}`} cx={c.x} cy={c.y} r={c.r} fill="black" />
+                    ))}
+                  </mask>
+                ))}
+              </defs>
+              <rect x={vb.minX} y={vb.minY} width={vb.vw} height={vb.vh} fill="#cbd5e1" pointerEvents="none" />
+              <rect x={0} y={0} width={BOX.w} height={BOX.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+              <line x1={centerX} y1={0} x2={centerX} y2={BOX.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" pointerEvents="none" />
 
-              {renderData.map(({ strap, transformed, guideSet, metrics }) => (
-                <g key={strap.id}>
-                  {transformed.length > 1 && (
-                    <path
-                      d={pathD(transformed)}
-                      fill="none"
-                      stroke={strap.color}
-                      strokeWidth={simplify ? metrics.bandWidthMM : 0.9}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      vectorEffect="non-scaling-stroke"
-                      pointerEvents={simplify ? 'stroke' : 'none'}
-                      onPointerDown={simplify ? beginStrapDrag(strap.id) : undefined}
-                    />
-                  )}
-                  {!simplify && guideSet && (
-                    <GuideOverlay
-                      guideSet={guideSet}
-                      style={{
-                        thin: 0.45,
-                        bold: 0.75,
-                        colors: {
-                          thin: strap.color,
-                          bold: activeStrap?.id === strap.id ? '#7c3aed' : strap.color,
-                          tick: '#dbeafe',
-                          frame: 'transparent',
-                        },
-                      }}
-                      interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
-                    />
-                  )}
+              {renderData.map(({ strap, transformed, guideSet, metrics }) => {
+                const hasMask = !simplify && (underByStrapId[strap.id]?.length ?? 0) > 0;
+                const maskId = hasMask ? `url(#mask-${strap.id})` : undefined;
 
-                  {showDebugPoints && !simplify && transformed.map((pt, i) => (
-                    <g key={`dbg-${strap.id}-${i}`}>
-                      <circle cx={pt.x} cy={pt.y} r={0.8} fill="#ef4444" vectorEffect="non-scaling-stroke" />
-                      <text x={pt.x + 1} y={pt.y - 1} fontSize="2.6" fill="#b91c1c">{i}</text>
-                    </g>
-                  ))}
-                </g>
-              ))}
+                return (
+                  <g key={strap.id}>
+                    {simplify && transformed.length > 1 && (
+                      <path
+                        d={pathD(transformed)}
+                        fill="none"
+                        stroke={strap.color}
+                        strokeWidth={metrics.bandWidthMM}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        vectorEffect="non-scaling-stroke"
+                        pointerEvents="stroke"
+                        onPointerDown={beginStrapDrag(strap.id)}
+                      />
+                    )}
+
+                    {!simplify && (
+                      <g mask={maskId}>
+                        {transformed.length > 1 && (
+                          <path
+                            d={pathD(transformed)}
+                            fill="none"
+                            stroke={strap.color}
+                            strokeWidth={0.9}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            vectorEffect="non-scaling-stroke"
+                            pointerEvents="none"
+                          />
+                        )}
+                        {guideSet && (
+                          <GuideOverlay
+                            guideSet={guideSet}
+                            style={{
+                              thin: 0.45,
+                              bold: 0.75,
+                              colors: {
+                                thin: strap.color,
+                                bold: activeStrap?.id === strap.id ? '#7c3aed' : strap.color,
+                                tick: '#dbeafe',
+                                frame: 'transparent',
+                              },
+                            }}
+                            interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
+                          />
+                        )}
+
+                        {showDebugPoints && transformed.map((pt, i) => (
+                          <g key={`dbg-${strap.id}-${i}`}>
+                            <circle cx={pt.x} cy={pt.y} r={0.8} fill="#ef4444" vectorEffect="non-scaling-stroke" />
+                            <text x={pt.x + 1} y={pt.y - 1} fontSize="2.6" fill="#b91c1c">{i}</text>
+                          </g>
+                        ))}
+                      </g>
+                    )}
+                  </g>
+                );
+              })}
 
               {simplify && crossings.map((crossing) => {
                 const over = strapById.get(crossing.overId);
@@ -466,10 +514,10 @@ export default function PathGuidesPage() {
                   }}
                 >
                   {activeCrossingId === crossing.id && (
-                    <circle cx={crossing.x} cy={crossing.y} r={3} fill="none" stroke="#4f46e5" strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
+                    <circle cx={crossing.x} cy={crossing.y} r={4.2} fill="none" stroke="#312e81" strokeWidth={1.4} vectorEffect="non-scaling-stroke" />
                   )}
-                  <circle cx={crossing.x} cy={crossing.y} r={1.8} fill="#ffffff" stroke="#111827" strokeWidth={0.7} vectorEffect="non-scaling-stroke" />
-                  <text x={crossing.x + 2.6} y={crossing.y - 2.2} fontSize="3.2" fill="#111827" stroke="white" strokeWidth={0.15} paintOrder="stroke">{idx + 1}</text>
+                  <circle cx={crossing.x} cy={crossing.y} r={2.5} fill="#f8fafc" stroke="#0f172a" strokeWidth={0.9} vectorEffect="non-scaling-stroke" />
+                  <text x={crossing.x + 2.6} y={crossing.y - 2.2} fontSize="3.6" fontWeight="700" fill="#111827" stroke="white" strokeWidth={1.2} paintOrder="stroke fill">{idx + 1}</text>
                 </g>
               ))}
             </svg>
