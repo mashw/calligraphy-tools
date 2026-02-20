@@ -5,11 +5,14 @@ import React, { useMemo, useRef, useState } from 'react';
 import GuideOverlay from '@/components/preview/GuideOverlay';
 import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
 import { BLACKLETTER_GUIDE_DEFAULTS, buildGuideSet } from '@/lib/guides/guide-template';
+import { findCrossingsForStraps } from '@/lib/paths/intersections';
+import { polylineSubpathD } from '@/lib/paths/polyline-subpath';
 import { samplePathDToPolyline } from '@/lib/paths/sample-svg-path';
 import { transformPolyline } from '@/lib/paths/transform';
 import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
 
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
+type CrossingsFilter = 'all' | 'selected';
 
 type Strap = {
   id: string;
@@ -36,6 +39,10 @@ type StrapGroup = {
 const BOX = { w: PAPERS_MM.A4.w, h: PAPERS_MM.A4.h };
 const SNAP_IN_MM = 6;
 const RELEASE_MM = 10;
+const CROSS_EPS_MM = 1.2;
+const CROSSING_MAX_SEGMENTS = 2800;
+const CUT_MARGIN_MM = 2;
+const BACKGROUND_COLOR = '#ffffff';
 const PALETTE = ['#1d4ed8', '#ea580c', '#16a34a', '#9333ea', '#0891b2', '#dc2626', '#65a30d', '#4f46e5', '#c2410c', '#0f766e', '#be123c', '#4338ca'];
 
 function circlePathD(r = 40) {
@@ -51,16 +58,21 @@ function guideMetrics(strap: Strap) {
   const nibMM = Math.max(0.2, Number.parseFloat(strap.nibMMText) || 2.5);
   if (strap.script === 'Copperplate') {
     const xMM = Math.max(0.5, Number.parseFloat(strap.xHeightMMText ?? '6') || 6);
-    return { xMM, ascMM: xMM * 1.5, descMM: xMM * 1.5, actualNibMM: nibMM };
+    const ascMM = xMM * 1.5;
+    const descMM = xMM * 1.5;
+    return { xMM, ascMM, descMM, actualNibMM: nibMM, strapWidthMM: ascMM + descMM };
   }
 
   const angleRad = (strap.nibAngleDeg * Math.PI) / 180;
-  const effectiveNib = nibMM * Math.cos(angleRad);
+  const effectiveNib = Math.max(0.2, nibMM * Math.cos(angleRad));
+  const ascMM = BLACKLETTER_GUIDE_DEFAULTS.ascNib * nibMM;
+  const descMM = BLACKLETTER_GUIDE_DEFAULTS.descNib * nibMM;
   return {
     xMM: BLACKLETTER_GUIDE_DEFAULTS.xNib * nibMM,
-    ascMM: BLACKLETTER_GUIDE_DEFAULTS.ascNib * nibMM,
-    descMM: BLACKLETTER_GUIDE_DEFAULTS.descNib * nibMM,
-    actualNibMM: Math.max(0.2, effectiveNib),
+    ascMM,
+    descMM,
+    actualNibMM: effectiveNib,
+    strapWidthMM: ascMM + descMM,
   };
 }
 
@@ -74,6 +86,12 @@ export default function PathGuidesPage() {
   const [dragListId, setDragListId] = useState<string | null>(null);
   const [selectedForGroup, setSelectedForGroup] = useState<string[]>([]);
   const [groups, setGroups] = useState<StrapGroup[]>([]);
+  const [simplify, setSimplify] = useState(true);
+  const [showCrossings, setShowCrossings] = useState(true);
+  const [activeCrossingId, setActiveCrossingId] = useState<string | null>(null);
+  const [crossingsFilter, setCrossingsFilter] = useState<CrossingsFilter>('all');
+  const [showAllCrossings, setShowAllCrossings] = useState(false);
+  const [crossingOverrides, setCrossingOverrides] = useState<Record<string, string>>({});
 
   const [straps, setStraps] = useState<Strap[]>(() => ([{
     id: uid('strap'),
@@ -102,7 +120,7 @@ export default function PathGuidesPage() {
   const activeStrap = straps.find((s) => s.id === (activeId ?? straps[0]?.id)) ?? straps[0] ?? null;
 
   const renderData = useMemo(() => straps.map((strap) => {
-    const sampled = samplePathDToPolyline(strap.d, 1.2);
+    const sampled = samplePathDToPolyline(strap.d, 1.25);
     const transformed = transformPolyline(sampled, { scalePct: strap.scalePct, rotDeg: strap.rotDeg, offset: strap.offset });
     const metrics = guideMetrics(strap);
     const guideSet = transformed.length > 1
@@ -116,8 +134,30 @@ export default function PathGuidesPage() {
       })
       : null;
 
-    return { strap, transformed, guideSet };
+    return { strap, transformed, guideSet, metrics };
   }), [straps]);
+
+  const totalSegments = useMemo(
+    () => renderData.reduce((sum, r) => sum + Math.max(0, r.transformed.length - 1), 0),
+    [renderData],
+  );
+  const crossingPerformanceWarning = totalSegments > CROSSING_MAX_SEGMENTS;
+
+  const crossings = useMemo(() => {
+    if (crossingPerformanceWarning) return [];
+    const base = findCrossingsForStraps(
+      renderData.map((r) => ({ id: r.strap.id, pts: r.transformed })),
+      CROSS_EPS_MM,
+    );
+    return base.map((c) => ({ ...c, overId: crossingOverrides[c.id] ?? c.overId }));
+  }, [crossingOverrides, crossingPerformanceWarning, renderData]);
+
+  const crossingsDisplay = useMemo(() => {
+    const filtered = crossingsFilter === 'selected' && activeStrap
+      ? crossings.filter((c) => c.aId === activeStrap.id || c.bId === activeStrap.id)
+      : crossings;
+    return showAllCrossings ? filtered : filtered.slice(0, 50);
+  }, [activeStrap, crossings, crossingsFilter, showAllCrossings]);
 
   const vb = useMemo(() => {
     if (view === 'fullpage') return { minX: 0, minY: 0, vw: BOX.w, vh: BOX.h, str: `0 0 ${BOX.w} ${BOX.h}` };
@@ -129,6 +169,14 @@ export default function PathGuidesPage() {
     return { minX, minY, vw, vh, str: `${minX} ${minY} ${vw} ${vh}` };
   }, [pan, view, zoom]);
 
+  const transformedById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r.transformed])), [renderData]);
+  const strapById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r])), [renderData]);
+
+  const setCrossingOver = (crossingId: string, overId: string) => {
+    setCrossingOverrides((prev) => ({ ...prev, [crossingId]: overId }));
+    setActiveCrossingId(crossingId);
+  };
+
   const updateStrap = (id: string, patch: Partial<Strap>) => {
     setStraps((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   };
@@ -139,14 +187,11 @@ export default function PathGuidesPage() {
       setZoom(1.35);
       setPan({ x: 0, y: 0 });
     }
-    if (next === 'fullpage') {
-      setPan({ x: 0, y: 0 });
-    }
+    if (next === 'fullpage') setPan({ x: 0, y: 0 });
   };
 
   const onSvgPointerDown: React.PointerEventHandler<SVGSVGElement> = (e) => {
-    if (e.button !== 0) return;
-    if (e.target !== e.currentTarget) return;
+    if (e.button !== 0 || e.target !== e.currentTarget) return;
     dragRef.current = {
       mode: 'pan',
       pointerId: e.pointerId,
@@ -189,16 +234,14 @@ export default function PathGuidesPage() {
     }
 
     if (!drag.strapId || !drag.startOffset) return;
-    const start = drag.startOffset;
-    let nextX = start.x + dxMM;
-    const nextY = start.y + dyMM;
+    let nextX = drag.startOffset.x + dxMM;
+    const nextY = drag.startOffset.y + dyMM;
     let snapped = drag.startSnapped ?? false;
 
     if (snapped) {
       if (Math.abs(nextX - centerX) > RELEASE_MM) snapped = false;
       else nextX = centerX;
     }
-
     if (!snapped && Math.abs(nextX - centerX) <= SNAP_IN_MM) {
       nextX = centerX;
       snapped = true;
@@ -239,17 +282,16 @@ export default function PathGuidesPage() {
 
     for (const file of Array.from(files)) {
       const text = await file.text();
-      // v1 parser: basic path-d regex extraction; ignores nested transforms and non-path shapes.
+      // v1 parser: regex path extraction; ignores transforms and non-<path> geometry.
       const matches = [...text.matchAll(/<path\b[^>]*\bd=(['"])([\s\S]*?)\1/gi)];
       matches.forEach((m, idx) => {
         const d = m[2]?.trim();
         if (!d) return;
-        const color = PALETTE[(straps.length + created.length) % PALETTE.length];
         created.push({
           id: uid('strap'),
           name: `${file.name.replace(/\.svg$/i, '')} ${idx + 1}`,
           d,
-          color,
+          color: PALETTE[(straps.length + created.length) % PALETTE.length],
           script: 'Copperplate',
           nibMMText: '2.5',
           nibAngleDeg: 45,
@@ -304,6 +346,8 @@ export default function PathGuidesPage() {
                 <option value="fullpage">Full page</option>
                 <option value="custom">Custom</option>
               </select>
+              <button onClick={() => setSimplify((v) => !v)} className={`px-2 py-1 text-sm rounded-lg border ${simplify ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white'}`}>Simplify</button>
+              <button onClick={() => setShowCrossings((v) => !v)} className={`px-2 py-1 text-sm rounded-lg border ${showCrossings ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white'}`}>Crossings</button>
             </div>
             <div className="flex flex-wrap items-center gap-2 ml-auto">
               <button onClick={() => { setView('custom'); setZoom((z) => Math.max(0.35, z * 0.9)); }} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">–</button>
@@ -311,6 +355,12 @@ export default function PathGuidesPage() {
               <button onClick={() => applyViewPreset('autofit')} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Reset view</button>
             </div>
           </div>
+
+          {crossingPerformanceWarning && (
+            <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700">
+              Too many points; increase step size.
+            </div>
+          )}
 
           <div className="relative overflow-x-auto rounded-xl border border-slate-200 bg-slate-300">
             <svg
@@ -327,12 +377,20 @@ export default function PathGuidesPage() {
               <rect x={0} y={0} width={BOX.w} height={BOX.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
               <line x1={centerX} y1={0} x2={centerX} y2={BOX.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
 
-              {renderData.map(({ strap, transformed, guideSet }) => (
+              {renderData.map(({ strap, transformed, guideSet, metrics }) => (
                 <g key={strap.id}>
                   {transformed.length > 1 && (
-                    <path d={pathD(transformed)} fill="none" stroke={strap.color} strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
+                    <path
+                      d={pathD(transformed)}
+                      fill="none"
+                      stroke={strap.color}
+                      strokeWidth={simplify ? Math.max(1.8, metrics.strapWidthMM) : 0.9}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
                   )}
-                  {guideSet && (
+                  {!simplify && guideSet && (
                     <GuideOverlay
                       guideSet={guideSet}
                       style={{
@@ -345,12 +403,64 @@ export default function PathGuidesPage() {
                           frame: 'transparent',
                         },
                       }}
-                      interactive={{
-                        onGuidePointerDown: beginStrapDrag(strap.id),
-                        hitStrokeWidthMM: 6,
-                      }}
+                      interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
                     />
                   )}
+                  {simplify && guideSet && (
+                    <GuideOverlay
+                      guideSet={guideSet}
+                      style={{
+                        thin: 0.35,
+                        bold: 0.45,
+                        colors: { thin: 'rgba(100,116,139,0.35)', bold: 'rgba(30,41,59,0.45)', tick: 'rgba(148,163,184,0.28)', frame: 'transparent' },
+                      }}
+                      interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
+                    />
+                  )}
+                </g>
+              ))}
+
+              {simplify && crossings.map((crossing) => {
+                const over = strapById.get(crossing.overId);
+                const underId = crossing.overId === crossing.aId ? crossing.bId : crossing.aId;
+                const under = strapById.get(underId);
+                const overPts = transformedById.get(crossing.overId);
+                const underPts = transformedById.get(underId);
+                if (!over || !under || !overPts || !underPts) return null;
+
+                const overSeg = crossing.overId === crossing.aId ? crossing.aSeg : crossing.bSeg;
+                const overT = crossing.overId === crossing.aId ? crossing.aT : crossing.bT;
+                const underSeg = crossing.overId === crossing.aId ? crossing.bSeg : crossing.aSeg;
+                const underT = crossing.overId === crossing.aId ? crossing.bT : crossing.aT;
+                const halfLenMM = Math.min(14, Math.max(5, over.metrics.strapWidthMM * 0.75));
+                const dOver = polylineSubpathD(overPts, overSeg, overT, halfLenMM);
+                const dUnder = polylineSubpathD(underPts, underSeg, underT, halfLenMM);
+                if (!dOver || !dUnder) return null;
+
+                return (
+                  <g key={`weave-${crossing.id}`}>
+                    <path d={dUnder} fill="none" stroke={BACKGROUND_COLOR} strokeWidth={under.metrics.strapWidthMM + CUT_MARGIN_MM} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                    <path d={dOver} fill="none" stroke={over.strap.color} strokeWidth={over.metrics.strapWidthMM} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                  </g>
+                );
+              })}
+
+              {showCrossings && crossings.map((crossing, idx) => (
+                <g
+                  key={`marker-${crossing.id}`}
+                  style={{ cursor: 'pointer' }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const nextOver = crossing.overId === crossing.aId ? crossing.bId : crossing.aId;
+                    setCrossingOver(crossing.id, nextOver);
+                  }}
+                >
+                  {activeCrossingId === crossing.id && (
+                    <circle cx={crossing.x} cy={crossing.y} r={3} fill="none" stroke="#4f46e5" strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
+                  )}
+                  <circle cx={crossing.x} cy={crossing.y} r={1.8} fill="#ffffff" stroke="#111827" strokeWidth={0.7} vectorEffect="non-scaling-stroke" />
+                  <text x={crossing.x + 2.6} y={crossing.y - 2.2} fontSize="3.2" fill="#111827" stroke="white" strokeWidth={0.15} paintOrder="stroke">{idx + 1}</text>
                 </g>
               ))}
             </svg>
@@ -363,8 +473,7 @@ export default function PathGuidesPage() {
           <h2 className="text-lg font-semibold text-slate-800">Step 1 — Manage straps</h2>
           <div className="mt-3 flex flex-wrap gap-2">
             <button onClick={addCircle} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Add circle (test)</button>
-            <label className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer">
-              Upload SVG(s)
+            <label className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer">Upload SVG(s)
               <input type="file" accept=".svg" multiple className="hidden" onChange={(e) => parseUpload(e.target.files)} />
             </label>
           </div>
@@ -375,21 +484,14 @@ export default function PathGuidesPage() {
                 <span className="w-3 h-3 rounded-full" style={{ backgroundColor: strap.color }} />
                 <span className="flex-1 truncate">{strap.name}</span>
                 <button onClick={() => setActiveId(strap.id)} className="px-2 py-1 rounded border border-slate-300">Select</button>
-                <button
-                  onClick={() => {
-                    const duplicate = { ...strap, id: uid('strap'), name: `${strap.name} copy`, color: PALETTE[(straps.length + 1) % PALETTE.length] };
-                    setStraps((prev) => [...prev, duplicate]);
-                  }}
-                  className="px-2 py-1 rounded border border-slate-300"
-                >Duplicate</button>
-                <button
-                  disabled={straps.length <= 1}
-                  onClick={() => {
-                    setStraps((prev) => prev.filter((s) => s.id !== strap.id));
-                    if (activeId === strap.id) setActiveId(straps.find((s) => s.id !== strap.id)?.id ?? null);
-                  }}
-                  className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40"
-                >Remove</button>
+                <button onClick={() => {
+                  const duplicate = { ...strap, id: uid('strap'), name: `${strap.name} copy`, color: PALETTE[(straps.length + 1) % PALETTE.length] };
+                  setStraps((prev) => [...prev, duplicate]);
+                }} className="px-2 py-1 rounded border border-slate-300">Duplicate</button>
+                <button disabled={straps.length <= 1} onClick={() => {
+                  setStraps((prev) => prev.filter((s) => s.id !== strap.id));
+                  if (activeId === strap.id) setActiveId(straps.find((s) => s.id !== strap.id)?.id ?? null);
+                }} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40">Remove</button>
                 <input type="checkbox" checked={selectedForGroup.includes(strap.id)} onChange={(e) => setSelectedForGroup((prev) => e.target.checked ? [...new Set([...prev, strap.id])] : prev.filter((id) => id !== strap.id))} title="Select for group" />
                 <span className="text-xs text-slate-500">#{idx + 1}</span>
               </div>
@@ -447,42 +549,57 @@ export default function PathGuidesPage() {
           <p className="mt-1 text-xs text-slate-600">Order controls render stack. First = bottom, last = top.</p>
           <div className="mt-3 space-y-2">
             {straps.map((strap) => (
-              <div
-                key={strap.id}
-                draggable
-                onDragStart={() => setDragListId(strap.id)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => { if (dragListId) reorderStraps(dragListId, strap.id); setDragListId(null); }}
-                className="rounded-lg border border-slate-200 p-2 flex items-center gap-2 cursor-move"
-              >
+              <div key={strap.id} draggable onDragStart={() => setDragListId(strap.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => {
+                if (dragListId) reorderStraps(dragListId, strap.id);
+                setDragListId(null);
+              }} className="rounded-lg border border-slate-200 p-2 flex items-center gap-2 cursor-move">
                 <span className="w-3 h-3 rounded-full" style={{ backgroundColor: strap.color }} />
                 <span className="flex-1">{strap.name}</span>
-                <button
-                  onClick={() => setStraps((prev) => [...prev.filter((s) => s.id !== strap.id), strap])}
-                  className="px-2 py-1 rounded border border-slate-300"
-                >Bring to front</button>
-                <button
-                  onClick={() => setStraps((prev) => [strap, ...prev.filter((s) => s.id !== strap.id)])}
-                  className="px-2 py-1 rounded border border-slate-300"
-                >Send to back</button>
+                <button onClick={() => setStraps((prev) => [...prev.filter((s) => s.id !== strap.id), strap])} className="px-2 py-1 rounded border border-slate-300">Bring to front</button>
+                <button onClick={() => setStraps((prev) => [strap, ...prev.filter((s) => s.id !== strap.id)])} className="px-2 py-1 rounded border border-slate-300">Send to back</button>
               </div>
             ))}
           </div>
 
           <div className="mt-5 border-t border-slate-200 pt-4">
+            <h3 className="font-semibold text-slate-800">Crossings</h3>
+            <p className="mt-1 text-xs text-slate-600">Detected crossings: {crossings.length}</p>
+            <select className="mt-2 w-full rounded-lg border border-slate-300 p-2" value={crossingsFilter} onChange={(e) => setCrossingsFilter(e.target.value as CrossingsFilter)}>
+              <option value="all">All crossings</option>
+              <option value="selected" disabled={!activeStrap}>Only selected strap</option>
+            </select>
+            {crossings.length > 50 && (
+              <button onClick={() => setShowAllCrossings((v) => !v)} className="mt-2 px-2 py-1 rounded border border-slate-300">{showAllCrossings ? 'Show first 50' : 'Show all'}</button>
+            )}
+            <div className="mt-2 max-h-48 overflow-auto space-y-2">
+              {crossingsDisplay.map((crossing, idx) => {
+                const aName = strapById.get(crossing.aId)?.strap.name ?? crossing.aId;
+                const bName = strapById.get(crossing.bId)?.strap.name ?? crossing.bId;
+                return (
+                  <div key={`row-${crossing.id}`} className={`rounded-lg border p-2 ${activeCrossingId === crossing.id ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200'}`}>
+                    <p className="text-xs text-slate-700">#{idx + 1} {aName} × {bName}</p>
+                    <div className="mt-1 flex gap-1">
+                      <button onClick={() => setCrossingOver(crossing.id, crossing.aId)} className={`px-2 py-1 rounded border text-xs ${crossing.overId === crossing.aId ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-300'}`}>{aName} over</button>
+                      <button onClick={() => setCrossingOver(crossing.id, crossing.bId)} className={`px-2 py-1 rounded border text-xs ${crossing.overId === crossing.bId ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-300'}`}>{bName} over</button>
+                    </div>
+                  </div>
+                );
+              })}
+              {!crossingsDisplay.length && <p className="text-xs text-slate-500">No crossings to show.</p>}
+            </div>
+          </div>
+
+          <div className="mt-5 border-t border-slate-200 pt-4">
             <h3 className="font-semibold text-slate-800">Weave groups (coming next)</h3>
-            <button
-              onClick={() => {
-                if (selectedForGroup.length < 2) return;
-                setGroups((prev) => [...prev, { id: uid('group'), name: `Group ${prev.length + 1}`, strapIds: selectedForGroup, collapsed: false }]);
-                setSelectedForGroup([]);
-              }}
-              className="mt-2 px-2 py-1 rounded border border-slate-300"
-            >Create group from selected straps</button>
+            <button onClick={() => {
+              if (selectedForGroup.length < 2) return;
+              setGroups((prev) => [...prev, { id: uid('group'), name: `Group ${prev.length + 1}`, strapIds: selectedForGroup, collapsed: false }]);
+              setSelectedForGroup([]);
+            }} className="mt-2 px-2 py-1 rounded border border-slate-300">Create group from selected straps</button>
             <div className="mt-2 space-y-2">
               {groups.map((g) => (
                 <div key={g.id} className="rounded-lg border border-slate-200 p-2">
-                  <button className="font-medium" onClick={() => setGroups((prev) => prev.map((x) => x.id === g.id ? { ...x, collapsed: !x.collapsed } : x))}>{g.collapsed ? '▶' : '▼'} {g.name}</button>
+                  <button className="font-medium" onClick={() => setGroups((prev) => prev.map((x) => (x.id === g.id ? { ...x, collapsed: !x.collapsed } : x)))}>{g.collapsed ? '▶' : '▼'} {g.name}</button>
                   {!g.collapsed && <p className="text-xs text-slate-600 mt-1">{g.strapIds.map((id) => straps.find((s) => s.id === id)?.name ?? id).join(', ')}</p>}
                 </div>
               ))}
