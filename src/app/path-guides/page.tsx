@@ -60,19 +60,22 @@ function guideMetrics(strap: Strap) {
     const xMM = Math.max(0.5, Number.parseFloat(strap.xHeightMMText ?? '6') || 6);
     const ascMM = xMM * 1.5;
     const descMM = xMM * 1.5;
-    return { xMM, ascMM, descMM, actualNibMM: nibMM, strapWidthMM: ascMM + descMM };
+    const bandWidthMM = Math.max(ascMM + xMM + descMM, 4);
+    return { xMM, ascMM, descMM, actualNibMM: nibMM, bandWidthMM };
   }
 
   const angleRad = (strap.nibAngleDeg * Math.PI) / 180;
   const effectiveNib = Math.max(0.2, nibMM * Math.cos(angleRad));
   const ascMM = BLACKLETTER_GUIDE_DEFAULTS.ascNib * nibMM;
   const descMM = BLACKLETTER_GUIDE_DEFAULTS.descNib * nibMM;
+  const xMM = BLACKLETTER_GUIDE_DEFAULTS.xNib * nibMM;
+  const bandWidthMM = Math.max(ascMM + xMM + descMM, 4);
   return {
-    xMM: BLACKLETTER_GUIDE_DEFAULTS.xNib * nibMM,
+    xMM,
     ascMM,
     descMM,
     actualNibMM: effectiveNib,
-    strapWidthMM: ascMM + descMM,
+    bandWidthMM,
   };
 }
 
@@ -123,7 +126,7 @@ export default function PathGuidesPage() {
     const sampled = samplePathDToPolyline(strap.d, 1.25);
     const transformed = transformPolyline(sampled, { scalePct: strap.scalePct, rotDeg: strap.rotDeg, offset: strap.offset });
     const metrics = guideMetrics(strap);
-    const guideSet = transformed.length > 1
+    const guideSet = !simplify && transformed.length > 1
       ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
         baseline: transformed,
         xMM: metrics.xMM,
@@ -135,7 +138,7 @@ export default function PathGuidesPage() {
       : null;
 
     return { strap, transformed, guideSet, metrics };
-  }), [straps]);
+  }), [simplify, straps]);
 
   const totalSegments = useMemo(
     () => renderData.reduce((sum, r) => sum + Math.max(0, r.transformed.length - 1), 0),
@@ -384,7 +387,7 @@ export default function PathGuidesPage() {
                       d={pathD(transformed)}
                       fill="none"
                       stroke={strap.color}
-                      strokeWidth={simplify ? Math.max(1.8, metrics.strapWidthMM) : 0.9}
+                      strokeWidth={simplify ? metrics.bandWidthMM : 0.9}
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       vectorEffect="non-scaling-stroke"
@@ -397,22 +400,11 @@ export default function PathGuidesPage() {
                         thin: 0.45,
                         bold: 0.75,
                         colors: {
-                          thin: '#475569',
-                          bold: activeStrap?.id === strap.id ? '#7c3aed' : '#111827',
+                          thin: strap.color,
+                          bold: activeStrap?.id === strap.id ? '#7c3aed' : strap.color,
                           tick: '#dbeafe',
                           frame: 'transparent',
                         },
-                      }}
-                      interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
-                    />
-                  )}
-                  {simplify && guideSet && (
-                    <GuideOverlay
-                      guideSet={guideSet}
-                      style={{
-                        thin: 0.35,
-                        bold: 0.45,
-                        colors: { thin: 'rgba(100,116,139,0.35)', bold: 'rgba(30,41,59,0.45)', tick: 'rgba(148,163,184,0.28)', frame: 'transparent' },
                       }}
                       interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
                     />
@@ -432,15 +424,15 @@ export default function PathGuidesPage() {
                 const overT = crossing.overId === crossing.aId ? crossing.aT : crossing.bT;
                 const underSeg = crossing.overId === crossing.aId ? crossing.bSeg : crossing.aSeg;
                 const underT = crossing.overId === crossing.aId ? crossing.bT : crossing.aT;
-                const halfLenMM = Math.min(14, Math.max(5, over.metrics.strapWidthMM * 0.75));
+                const halfLenMM = Math.min(14, Math.max(5, over.metrics.bandWidthMM * 0.75));
                 const dOver = polylineSubpathD(overPts, overSeg, overT, halfLenMM);
                 const dUnder = polylineSubpathD(underPts, underSeg, underT, halfLenMM);
                 if (!dOver || !dUnder) return null;
 
                 return (
                   <g key={`weave-${crossing.id}`}>
-                    <path d={dUnder} fill="none" stroke={BACKGROUND_COLOR} strokeWidth={under.metrics.strapWidthMM + CUT_MARGIN_MM} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-                    <path d={dOver} fill="none" stroke={over.strap.color} strokeWidth={over.metrics.strapWidthMM} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                    <path d={dUnder} fill="none" stroke={BACKGROUND_COLOR} strokeWidth={under.metrics.bandWidthMM + CUT_MARGIN_MM} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                    <path d={dOver} fill="none" stroke={over.strap.color} strokeWidth={over.metrics.bandWidthMM} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
                   </g>
                 );
               })}
