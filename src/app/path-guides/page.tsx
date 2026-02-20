@@ -261,6 +261,12 @@ export default function PathGuidesPage() {
   };
 
   const addCircle = () => {
+    const i = straps.length;
+    const step = 12;
+    const offset = i === 0
+      ? { x: 0, y: 0 }
+      : { x: (i % 3) * step, y: Math.floor(i / 3) * step };
+
     const next: Strap = {
       id: uid('strap'),
       name: `Circle ${straps.length + 1}`,
@@ -270,7 +276,7 @@ export default function PathGuidesPage() {
       nibMMText: '2.5',
       nibAngleDeg: 45,
       xHeightMMText: '6',
-      offset: { x: centerX, y: centerY },
+      offset,
       scalePct: 100,
       rotDeg: 0,
       snapped: false,
