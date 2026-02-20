@@ -244,6 +244,7 @@ export default function PathGuidesPage() {
       if (!intervals.length) return;
 
       const merged = mergeIntervals(intervals, 2);
+      // Interval coverage is based on over-band reach only; stroke width still clears full under band locally.
       const strokeW = under.metrics.bandWidthMM + 3;
 
       merged.forEach((iv) => {

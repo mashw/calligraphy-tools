@@ -24,7 +24,8 @@ export function overlapIntervals(
   if (underPts.length < 2 || otherPts.length < 2) return [];
 
   const arc = polylineArcLengths(underPts);
-  const threshold = underR + otherR + fudgeMM;
+  void underR; // interval detection is based on OVER-band coverage only
+  const threshold = otherR + fudgeMM;
   const overlapV = underPts.map((p) => distPointToPolyline(p, otherPts) <= threshold);
 
   const intervals: ArcInterval[] = [];
