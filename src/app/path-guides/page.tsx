@@ -209,7 +209,8 @@ export default function PathGuidesPage() {
   };
 
   const onSvgPointerDown: React.PointerEventHandler<SVGSVGElement> = (e) => {
-    if (e.button !== 0 || e.target !== e.currentTarget) return;
+    if (e.button !== 0) return;
+    if (dragRef.current.mode === 'strap') return;
     dragRef.current = {
       mode: 'pan',
       pointerId: e.pointerId,
@@ -409,7 +410,7 @@ export default function PathGuidesPage() {
             >
               <defs>
                 {Object.entries(underByStrapId).map(([strapId, circles]) => (
-                  <mask key={`mask-${strapId}`} id={`mask-${strapId}`}>
+                  <mask key={`mask-${strapId}`} id={`mask-${strapId}`} maskUnits="userSpaceOnUse" x={0} y={0} width={BOX.w} height={BOX.h}>
                     <rect x={0} y={0} width={BOX.w} height={BOX.h} fill="white" />
                     {circles.map((c, idx) => (
                       <circle key={`mask-${strapId}-${idx}`} cx={c.x} cy={c.y} r={c.r} fill="black" />
@@ -516,8 +517,8 @@ export default function PathGuidesPage() {
                   {activeCrossingId === crossing.id && (
                     <circle cx={crossing.x} cy={crossing.y} r={4.2} fill="none" stroke="#312e81" strokeWidth={1.4} vectorEffect="non-scaling-stroke" />
                   )}
-                  <circle cx={crossing.x} cy={crossing.y} r={2.5} fill="#f8fafc" stroke="#0f172a" strokeWidth={0.9} vectorEffect="non-scaling-stroke" />
-                  <text x={crossing.x + 2.6} y={crossing.y - 2.2} fontSize="3.6" fontWeight="700" fill="#111827" stroke="white" strokeWidth={1.2} paintOrder="stroke fill">{idx + 1}</text>
+                  <circle cx={crossing.x} cy={crossing.y} r={2.8} fill="#f8fafc" stroke="#0f172a" strokeWidth={0.9} vectorEffect="non-scaling-stroke" />
+                  <text x={crossing.x + 2.6} y={crossing.y - 2.2} fontSize="3.6" fontWeight="700" fill="#111827" stroke="white" strokeWidth={0.6} paintOrder="stroke fill">{idx + 1}</text>
                 </g>
               ))}
             </svg>
