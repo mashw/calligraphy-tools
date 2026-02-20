@@ -95,6 +95,7 @@ export default function PathGuidesPage() {
   const [crossingsFilter, setCrossingsFilter] = useState<CrossingsFilter>('all');
   const [showAllCrossings, setShowAllCrossings] = useState(false);
   const [crossingOverrides, setCrossingOverrides] = useState<Record<string, string>>({});
+  const [showDebugPoints] = useState(false);
 
   const [straps, setStraps] = useState<Strap[]>(() => ([{
     id: uid('strap'),
@@ -409,6 +410,13 @@ export default function PathGuidesPage() {
                       interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
                     />
                   )}
+
+                  {showDebugPoints && !simplify && transformed.map((pt, i) => (
+                    <g key={`dbg-${strap.id}-${i}`}>
+                      <circle cx={pt.x} cy={pt.y} r={0.8} fill="#ef4444" vectorEffect="non-scaling-stroke" />
+                      <text x={pt.x + 1} y={pt.y - 1} fontSize="2.6" fill="#b91c1c">{i}</text>
+                    </g>
+                  ))}
                 </g>
               ))}
 
