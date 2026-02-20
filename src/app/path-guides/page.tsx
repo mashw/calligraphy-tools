@@ -243,9 +243,9 @@ export default function PathGuidesPage() {
       const intervals = overlapIntervals(under.transformed, underR, other.transformed, otherR, fudgeMM);
       if (!intervals.length) return;
 
-      const merged = mergeIntervals(intervals, 2);
+      const merged = mergeIntervals(intervals, 0.5);
       // Interval coverage is based on over-band reach only; stroke width still clears full under band locally.
-      const strokeW = under.metrics.bandWidthMM + 3;
+      const strokeW = under.metrics.bandWidthMM + 1;
 
       merged.forEach((iv) => {
         const d = polylineSubpathDByS(under.transformed, iv.s0, iv.s1);
@@ -346,7 +346,7 @@ export default function PathGuidesPage() {
 
   const addCircle = () => {
     const i = straps.length;
-    const step = 6;
+    const step = 6; // small, can overlap a little
     const pattern = [
       { x: 0, y: 0 },
       { x: step, y: 0 },
@@ -358,7 +358,8 @@ export default function PathGuidesPage() {
       { x: step, y: -step },
       { x: -step, y: -step },
     ];
-    const offset = pattern[i % pattern.length];
+    const p = pattern[i % pattern.length];
+    const offset = { x: centerX + p.x, y: centerY + p.y };
 
     const next: Strap = {
       id: uid('strap'),
@@ -494,9 +495,9 @@ export default function PathGuidesPage() {
                   </mask>
                 ))}
               </defs>
-              <rect x={vb.minX} y={vb.minY} width={vb.vw} height={vb.vh} fill="#cbd5e1" pointerEvents="none" />
-              <rect x={0} y={0} width={BOX.w} height={BOX.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" pointerEvents="none" />
-              <line x1={centerX} y1={0} x2={centerX} y2={BOX.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" pointerEvents="none" />
+              <rect x={vb.minX} y={vb.minY} width={vb.vw} height={vb.vh} pointerEvents="none" fill="#cbd5e1" pointerEvents="none" />
+              <rect x={0} y={0} width={BOX.w} height={BOX.h} pointerEvents="none" fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+              <line x1={centerX} y1={0} x2={centerX} y2={BOX.h} pointerEvents="none" stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" pointerEvents="none" />
 
               {renderData.map(({ strap, transformed, guideSet, metrics }) => {
                 const hasMask = !simplify && (maskPathsByStrapId[strap.id]?.length ?? 0) > 0;
