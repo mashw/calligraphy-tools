@@ -41,8 +41,6 @@ const SNAP_IN_MM = 6;
 const RELEASE_MM = 10;
 const CROSS_EPS_MM = 1.2;
 const CROSSING_MAX_SEGMENTS = 2800;
-const CUT_MARGIN_MM = 2;
-const BACKGROUND_COLOR = '#ffffff';
 const PALETTE = ['#1d4ed8', '#ea580c', '#16a34a', '#9333ea', '#0891b2', '#dc2626', '#65a30d', '#4f46e5', '#c2410c', '#0f766e', '#be123c', '#4338ca'];
 
 function circlePathD(r = 40) {
@@ -207,6 +205,7 @@ export default function PathGuidesPage() {
 
   const beginStrapDrag = (strapId: string) => (e: React.PointerEvent<SVGPathElement | SVGLineElement | SVGPolylineElement>) => {
     if (e.button !== 0) return;
+    e.stopPropagation();
     const strap = straps.find((s) => s.id === strapId);
     if (!strap || !svgRef.current) return;
     setActiveId(strapId);
@@ -262,10 +261,19 @@ export default function PathGuidesPage() {
 
   const addCircle = () => {
     const i = straps.length;
-    const step = 12;
-    const offset = i === 0
-      ? { x: 0, y: 0 }
-      : { x: (i % 3) * step, y: Math.floor(i / 3) * step };
+    const step = 6;
+    const pattern = [
+      { x: 0, y: 0 },
+      { x: step, y: 0 },
+      { x: 0, y: step },
+      { x: -step, y: 0 },
+      { x: 0, y: -step },
+      { x: step, y: step },
+      { x: -step, y: step },
+      { x: step, y: -step },
+      { x: -step, y: -step },
+    ];
+    const offset = pattern[i % pattern.length];
 
     const next: Strap = {
       id: uid('strap'),
@@ -398,6 +406,8 @@ export default function PathGuidesPage() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       vectorEffect="non-scaling-stroke"
+                      pointerEvents={simplify ? 'stroke' : 'none'}
+                      onPointerDown={simplify ? beginStrapDrag(strap.id) : undefined}
                     />
                   )}
                   {!simplify && guideSet && (
@@ -428,24 +438,17 @@ export default function PathGuidesPage() {
 
               {simplify && crossings.map((crossing) => {
                 const over = strapById.get(crossing.overId);
-                const underId = crossing.overId === crossing.aId ? crossing.bId : crossing.aId;
-                const under = strapById.get(underId);
                 const overPts = transformedById.get(crossing.overId);
-                const underPts = transformedById.get(underId);
-                if (!over || !under || !overPts || !underPts) return null;
+                if (!over || !overPts) return null;
 
                 const overSeg = crossing.overId === crossing.aId ? crossing.aSeg : crossing.bSeg;
                 const overT = crossing.overId === crossing.aId ? crossing.aT : crossing.bT;
-                const underSeg = crossing.overId === crossing.aId ? crossing.bSeg : crossing.aSeg;
-                const underT = crossing.overId === crossing.aId ? crossing.bT : crossing.aT;
                 const halfLenMM = Math.min(14, Math.max(5, over.metrics.bandWidthMM * 0.75));
                 const dOver = polylineSubpathD(overPts, overSeg, overT, halfLenMM);
-                const dUnder = polylineSubpathD(underPts, underSeg, underT, halfLenMM);
-                if (!dOver || !dUnder) return null;
+                if (!dOver) return null;
 
                 return (
-                  <g key={`weave-${crossing.id}`}>
-                    <path d={dUnder} fill="none" stroke={BACKGROUND_COLOR} strokeWidth={under.metrics.bandWidthMM + CUT_MARGIN_MM} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                  <g key={`weave-${crossing.id}`} pointerEvents="none">
                     <path d={dOver} fill="none" stroke={over.strap.color} strokeWidth={over.metrics.bandWidthMM} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
                   </g>
                 );
