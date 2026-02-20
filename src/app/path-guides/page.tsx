@@ -6,6 +6,7 @@ import GuideOverlay from '@/components/preview/GuideOverlay';
 import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
 import { BLACKLETTER_GUIDE_DEFAULTS, buildGuideSet } from '@/lib/guides/guide-template';
 import { findCrossingsForStraps } from '@/lib/paths/intersections';
+import { mergeIntervals, overlapIntervals, polylineArcLengths } from '@/lib/paths/polyline-intervals';
 import { polylineSubpathD } from '@/lib/paths/polyline-subpath';
 import { samplePathDToPolyline } from '@/lib/paths/sample-svg-path';
 import { transformPolyline } from '@/lib/paths/transform';
@@ -75,6 +76,51 @@ function guideMetrics(strap: Strap) {
     actualNibMM: effectiveNib,
     bandWidthMM,
   };
+}
+
+
+function polylineSubpathDByS(pts: { x: number; y: number }[], s0: number, s1: number): string {
+  if (pts.length < 2) return '';
+
+  const arc = polylineArcLengths(pts);
+  const total = arc[arc.length - 1] ?? 0;
+  if (total <= 0) return '';
+
+  const a = Math.max(0, Math.min(total, Math.min(s0, s1)));
+  const b = Math.max(0, Math.min(total, Math.max(s0, s1)));
+  if (b - a < 0.01) return '';
+
+  const points: { x: number; y: number }[] = [];
+
+  for (let i = 0; i < pts.length - 1; i += 1) {
+    const segStart = arc[i];
+    const segEnd = arc[i + 1];
+    if (segEnd < a || segStart > b) continue;
+
+    const segLen = Math.max(1e-9, segEnd - segStart);
+    const local0 = Math.max(segStart, a);
+    const local1 = Math.min(segEnd, b);
+
+    const t0 = (local0 - segStart) / segLen;
+    const t1 = (local1 - segStart) / segLen;
+
+    const p0 = {
+      x: pts[i].x + (pts[i + 1].x - pts[i].x) * t0,
+      y: pts[i].y + (pts[i + 1].y - pts[i].y) * t0,
+    };
+    const p1 = {
+      x: pts[i].x + (pts[i + 1].x - pts[i].x) * t1,
+      y: pts[i].y + (pts[i + 1].y - pts[i].y) * t1,
+    };
+
+    if (!points.length || Math.hypot(points[points.length - 1].x - p0.x, points[points.length - 1].y - p0.y) > 1e-6) {
+      points.push(p0);
+    }
+    points.push(p1);
+  }
+
+  if (points.length < 2) return '';
+  return `M ${points.map((pt) => `${pt.x},${pt.y}`).join(' L ')}`;
 }
 
 export default function PathGuidesPage() {
@@ -174,21 +220,42 @@ export default function PathGuidesPage() {
   const transformedById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r.transformed])), [renderData]);
   const strapById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r])), [renderData]);
 
-  const underByStrapId = useMemo(() => {
-    const out: Record<string, { x: number; y: number; r: number }[]> = {};
+  const maskPathsByStrapId = useMemo(() => {
+    if (simplify || crossingPerformanceWarning) return {} as Record<string, { d: string; strokeW: number }[]>;
+
+    const out: Record<string, { d: string; strokeW: number }[]> = {};
+    const processedPairs = new Set<string>();
+    const fudgeMM = 1.5;
 
     crossings.forEach((crossing) => {
       const underId = crossing.overId === crossing.aId ? crossing.bId : crossing.aId;
-      const under = strapById.get(underId);
-      if (!under) return;
+      const otherId = crossing.overId;
+      const pairKey = `${underId}|${otherId}`;
+      if (processedPairs.has(pairKey)) return;
+      processedPairs.add(pairKey);
 
-      const r = under.metrics.bandWidthMM / 2 + 2;
-      if (!out[underId]) out[underId] = [];
-      out[underId].push({ x: crossing.x, y: crossing.y, r });
+      const under = strapById.get(underId);
+      const other = strapById.get(otherId);
+      if (!under || !other) return;
+
+      const underR = under.metrics.bandWidthMM / 2;
+      const otherR = other.metrics.bandWidthMM / 2;
+      const intervals = overlapIntervals(under.transformed, underR, other.transformed, otherR, fudgeMM);
+      if (!intervals.length) return;
+
+      const merged = mergeIntervals(intervals, 2);
+      const strokeW = under.metrics.bandWidthMM + 3;
+
+      merged.forEach((iv) => {
+        const d = polylineSubpathDByS(under.transformed, iv.s0, iv.s1);
+        if (!d) return;
+        if (!out[underId]) out[underId] = [];
+        out[underId].push({ d, strokeW });
+      });
     });
 
     return out;
-  }, [crossings, strapById]);
+  }, [crossingPerformanceWarning, crossings, simplify, strapById]);
 
   const setCrossingOver = (crossingId: string, overId: string) => {
     setCrossingOverrides((prev) => ({ ...prev, [crossingId]: overId }));
@@ -409,11 +476,19 @@ export default function PathGuidesPage() {
               onPointerLeave={onSvgPointerUp}
             >
               <defs>
-                {Object.entries(underByStrapId).map(([strapId, circles]) => (
+                {Object.entries(maskPathsByStrapId).map(([strapId, paths]) => (
                   <mask key={`mask-${strapId}`} id={`mask-${strapId}`} maskUnits="userSpaceOnUse" x={0} y={0} width={BOX.w} height={BOX.h}>
                     <rect x={0} y={0} width={BOX.w} height={BOX.h} fill="white" />
-                    {circles.map((c, idx) => (
-                      <circle key={`mask-${strapId}-${idx}`} cx={c.x} cy={c.y} r={c.r} fill="black" />
+                    {paths.map((entry, idx) => (
+                      <path
+                        key={`mask-${strapId}-${idx}`}
+                        d={entry.d}
+                        stroke="black"
+                        strokeWidth={entry.strokeW}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        fill="none"
+                      />
                     ))}
                   </mask>
                 ))}
@@ -423,7 +498,7 @@ export default function PathGuidesPage() {
               <line x1={centerX} y1={0} x2={centerX} y2={BOX.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" pointerEvents="none" />
 
               {renderData.map(({ strap, transformed, guideSet, metrics }) => {
-                const hasMask = !simplify && (underByStrapId[strap.id]?.length ?? 0) > 0;
+                const hasMask = !simplify && (maskPathsByStrapId[strap.id]?.length ?? 0) > 0;
                 const maskId = hasMask ? `url(#mask-${strap.id})` : undefined;
 
                 return (
