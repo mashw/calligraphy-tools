@@ -173,6 +173,109 @@ export default function PathGuidesPage() {
 
   const transformedById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r.transformed])), [renderData]);
   const strapById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r])), [renderData]);
+  function bandWindowDFromGuideSet(
+    guideSet: NonNullable<(typeof renderData)[number]["guideSet"]>,
+    segIdx: number,
+    windowMM: number,
+  ) {
+    const asc0 = guideSet.ascLine;
+    const desc0 = guideSet.descLine;
+    if (!asc0?.length || !desc0?.length) return "";
+  
+    const ascN0 = asc0.length;
+    const descN0 = desc0.length;
+  
+    // Detect "closed" by first ~= last (tiny tolerance in mm coords).
+    const ascIsClosed =
+      ascN0 > 2 &&
+      Math.hypot(asc0[0].x - asc0[ascN0 - 1].x, asc0[0].y - asc0[ascN0 - 1].y) < 0.05;
+    const descIsClosed =
+      descN0 > 2 &&
+      Math.hypot(desc0[0].x - desc0[descN0 - 1].x, desc0[0].y - desc0[descN0 - 1].y) < 0.05;
+  
+    // If closed, drop duplicate last point.
+    const asc = ascIsClosed ? asc0.slice(0, -1) : asc0;
+    const desc = descIsClosed ? desc0.slice(0, -1) : desc0;
+  
+    const n = Math.min(asc.length, desc.length);
+    if (n < 2) return "";
+  
+    // segIdx comes from intersections; treat as point-ish index and clamp.
+    const center = Math.max(0, Math.min(n - 1, segIdx));
+  
+    const wrap = ascIsClosed && descIsClosed;
+  
+    const dist = (i: number, j: number) =>
+      Math.hypot(asc[i].x - asc[j].x, asc[i].y - asc[j].y);
+  
+    // Walk backward/forward from center until we hit ~windowMM along the asc polyline.
+    let left = center;
+    let right = center;
+  
+    // Backwards
+    let acc = 0;
+    while (acc < windowMM && (wrap ? acc < windowMM : left > 0)) {
+      const prev = wrap ? (left - 1 + n) % n : left - 1;
+      if (!wrap && prev < 0) break;
+      acc += dist(left, prev);
+      left = prev;
+      if (!wrap && left === 0) break;
+      if (wrap && left === center) break;
+    }
+  
+    // Forwards
+    acc = 0;
+    while (acc < windowMM && (wrap ? acc < windowMM : right < n - 1)) {
+      const next = wrap ? (right + 1) % n : right + 1;
+      if (!wrap && next >= n) break;
+      acc += dist(right, next);
+      right = next;
+      if (!wrap && right === n - 1) break;
+      if (wrap && right === center) break;
+    }
+  
+    // Collect indices from left..right (wrap-aware)
+    const ascPts: { x: number; y: number }[] = [];
+    const descPts: { x: number; y: number }[] = [];
+  
+    if (wrap && left > right) {
+      // left..end, 0..right
+      for (let i = left; i < n; i++) {
+        ascPts.push(asc[i]);
+        descPts.push(desc[i]);
+      }
+      for (let i = 0; i <= right; i++) {
+        ascPts.push(asc[i]);
+        descPts.push(desc[i]);
+      }
+    } else {
+      for (let i = left; i <= right; i++) {
+        ascPts.push(asc[i]);
+        descPts.push(desc[i]);
+      }
+    }
+  
+    if (ascPts.length < 2 || descPts.length < 2) return "";
+  
+    const a = ascPts.map((p) => `${p.x},${p.y}`).join(" L ");
+    const d = descPts
+      .slice()
+      .reverse()
+      .map((p) => `${p.x},${p.y}`)
+      .join(" L ");
+    return `M ${a} L ${d} Z`;
+  }
+
+// --- Weave masking: for each UNDER strap, collect the crossings where it is UNDER ---
+const underCrossings = useMemo(() => {
+  const map = new Map<string, typeof crossings>();
+  crossings.forEach((c) => {
+    const under = c.aId === c.overId ? c.bId : c.aId;
+    if (!map.has(under)) map.set(under, []);
+    map.get(under)!.push(c);
+  });
+  return map;
+}, [crossings]);
 
   const setCrossingOver = (crossingId: string, overId: string) => {
     setCrossingOverrides((prev) => ({ ...prev, [crossingId]: overId }));
@@ -391,12 +494,72 @@ export default function PathGuidesPage() {
               onPointerUp={onSvgPointerUp}
               onPointerLeave={onSvgPointerUp}
             >
+{!simplify && (
+  <defs>
+    {[...underCrossings.entries()].map(([underId, list]) => (
+      <mask
+        key={`mask-${underId}`}
+        id={`mask-${underId}`}
+        maskUnits="userSpaceOnUse"
+        x={0}
+        y={0}
+        width={BOX.w}
+        height={BOX.h}
+      >
+        {/* Always start fully visible over the whole page (NOT viewBox). */}
+        <rect x={0} y={0} width={BOX.w} height={BOX.h} fill="white" />
+
+        {/* For every crossing where this strap is UNDER, cut out the OVER strap band near that crossing. */}
+        {list.map((c) => {
+          const overId = c.overId;
+          const over = strapById.get(overId);
+          if (!over?.guideSet) return null;
+
+          const overSeg = overId === c.aId ? c.aSeg : c.bSeg;
+
+          // Intersections give a *segment* index; center the window on the next point.
+          const centerIdx = overSeg + 1;
+          
+          const bandD = bandWindowDFromGuideSet(
+            over.guideSet,
+            centerIdx,
+            Math.max(12, over.metrics.bandWidthMM * 2.5),
+          );
+          
+          
+          if (!bandD) return null;
+
+          const windowMM = Math.max(12, over.metrics.bandWidthMM * 2.5);
+          
+          const d0 = bandWindowDFromGuideSet(over.guideSet, centerIdx - 1, windowMM);
+          const d1 = bandWindowDFromGuideSet(over.guideSet, centerIdx, windowMM);
+          const d2 = bandWindowDFromGuideSet(over.guideSet, centerIdx + 1, windowMM);
+          
+          return (
+            <g key={`hole-${underId}-${c.id}`}>
+              {d0 ? <path d={d0} fill="black" /> : null}
+              {d1 ? <path d={d1} fill="black" /> : null}
+              {d2 ? <path d={d2} fill="black" /> : null}
+            </g>
+          );
+        })}
+      </mask>
+    ))}
+  </defs>
+)}
               <rect x={vb.minX} y={vb.minY} width={vb.vw} height={vb.vh} fill="#cbd5e1" />
               <rect x={0} y={0} width={BOX.w} height={BOX.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
               <line x1={centerX} y1={0} x2={centerX} y2={BOX.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
 
               {renderData.map(({ strap, transformed, guideSet, metrics }) => (
-                <g key={strap.id}>
+                <g
+  key={strap.id}
+  mask={
+    !simplify && underCrossings.get(strap.id)?.length
+      ? `url(#mask-${strap.id})`
+      : undefined
+  }
+>
                   {transformed.length > 1 && (
                     <path
                       d={pathD(transformed)}

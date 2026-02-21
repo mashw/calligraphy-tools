@@ -97,3 +97,4 @@ export function findCrossingsForStraps(straps: { id: string; pts: Pt[] }[], epsM
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
 }
+
