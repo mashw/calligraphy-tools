@@ -161,6 +161,16 @@ export default function PathGuidesPage() {
     return showAllCrossings ? filtered : filtered.slice(0, 50);
   }, [activeStrap, crossings, crossingsFilter, showAllCrossings]);
 
+  const underIds = useMemo(() => {
+    if (simplify) return new Set<string>();
+    const s = new Set<string>();
+    crossings.forEach((c) => {
+      const under = c.aId === c.overId ? c.bId : c.aId;
+      s.add(under);
+    });
+    return s;
+  }, [crossings, simplify]);
+
   const vb = useMemo(() => {
     if (view === 'fullpage') return { minX: 0, minY: 0, vw: BOX.w, vh: BOX.h, str: `0 0 ${BOX.w} ${BOX.h}` };
     const safeZoom = Math.max(0.35, zoom);
@@ -394,6 +404,9 @@ export default function PathGuidesPage() {
               <rect x={vb.minX} y={vb.minY} width={vb.vw} height={vb.vh} fill="#cbd5e1" />
               <rect x={0} y={0} width={BOX.w} height={BOX.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
               <line x1={centerX} y1={0} x2={centerX} y2={BOX.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+              <defs>
+                {/* Phase 5 will generate per-strap weave clipPaths here */}
+              </defs>
 
               {renderData.map(({ strap, transformed, guideSet, metrics }) => (
                 <g key={strap.id}>
@@ -411,20 +424,25 @@ export default function PathGuidesPage() {
                     />
                   )}
                   {!simplify && guideSet && (
-                    <GuideOverlay
-                      guideSet={guideSet}
-                      style={{
-                        thin: 0.45,
-                        bold: 0.75,
-                        colors: {
-                          thin: strap.color,
-                          bold: activeStrap?.id === strap.id ? '#7c3aed' : strap.color,
-                          tick: '#dbeafe',
-                          frame: 'transparent',
-                        },
-                      }}
-                      interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
-                    />
+                    <g data-weave-under={underIds.has(strap.id) ? '1' : undefined}>
+                      <GuideOverlay
+                        guideSet={guideSet}
+                        style={{
+                          thin: 0.45,
+                          bold: 0.75,
+                          colors: {
+                            thin: strap.color,
+                            bold: activeStrap?.id === strap.id ? '#7c3aed' : strap.color,
+                            tick: '#dbeafe',
+                            frame: 'transparent',
+                          },
+                        }}
+                        interactive={{
+                          onGuidePointerDown: beginStrapDrag(strap.id),
+                          hitStrokeWidthMM: 6,
+                        }}
+                      />
+                    </g>
                   )}
 
                   {showDebugPoints && !simplify && transformed.map((pt, i) => (
