@@ -8,14 +8,37 @@ export type Crossing = {
   y: number;
   aSeg: number;
   aT: number;
+  aU: number;
   bSeg: number;
   bT: number;
+  bU: number;
   overId: string;
 };
 
-type RawCrossing = Omit<Crossing, 'id' | 'overId'>;
+type RawCrossing = Omit<Crossing, 'id' | 'overId' | 'aU' | 'bU'>;
 
 const PARALLEL_EPS = 1e-8;
+
+function cumulativeLengths(pts: Pt[]) {
+  const cumLen = [0];
+  const segLen: number[] = [];
+
+  for (let i = 0; i < pts.length - 1; i += 1) {
+    const dx = pts[i + 1].x - pts[i].x;
+    const dy = pts[i + 1].y - pts[i].y;
+    const len = Math.hypot(dx, dy);
+    segLen.push(len);
+    cumLen.push(cumLen[i] + len);
+  }
+
+  return { cumLen, segLen, totalLen: cumLen[cumLen.length - 1] ?? 0 };
+}
+
+function segFractionToArcU(cumLen: number[], segLen: number[], totalLen: number, segIdx: number, tSeg: number) {
+  if (totalLen <= 0) return 0;
+  const lenAt = (cumLen[segIdx] ?? 0) + tSeg * (segLen[segIdx] ?? 0);
+  return lenAt / totalLen;
+}
 
 export function segmentIntersection(a0: Pt, a1: Pt, b0: Pt, b1: Pt): { x: number; y: number; t: number; u: number } | null {
   const r = { x: a1.x - a0.x, y: a1.y - a0.y };
@@ -45,6 +68,9 @@ function crossingId(aId: string, bId: string, x: number, y: number) {
 
 export function findCrossingsForStraps(straps: { id: string; pts: Pt[] }[], epsMM: number): Crossing[] {
   const raw: RawCrossing[] = [];
+  const lengthsById = new Map(
+    straps.map((strap) => [strap.id, cumulativeLengths(strap.pts)]),
+  );
 
   for (let i = 0; i < straps.length; i += 1) {
     const a = straps[i];
@@ -90,11 +116,29 @@ export function findCrossingsForStraps(straps: { id: string; pts: Pt[] }[], epsM
   });
 
   return keep
-    .map((c) => ({
-      ...c,
-      id: crossingId(c.aId, c.bId, c.x, c.y),
-      overId: c.aId,
-    }))
+    .map((c) => {
+      const aLen = lengthsById.get(c.aId);
+      const bLen = lengthsById.get(c.bId);
+      const aU = aLen ? segFractionToArcU(aLen.cumLen, aLen.segLen, aLen.totalLen, c.aSeg, c.aT) : 0;
+      const bU = bLen ? segFractionToArcU(bLen.cumLen, bLen.segLen, bLen.totalLen, c.bSeg, c.bT) : 0;
+
+      return {
+        ...c,
+        aU,
+        bU,
+        id: crossingId(c.aId, c.bId, c.x, c.y),
+        overId: c.aId,
+      };
+    })
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
+export function crossingSignature(c: { aId: string; bId: string; aU: number; bU: number }, precision = 3): string {
+  const normalized = c.aId <= c.bId
+    ? { id1: c.aId, id2: c.bId, u1: c.aU, u2: c.bU }
+    : { id1: c.bId, id2: c.aId, u1: c.bU, u2: c.aU };
+
+  const q1 = Number(normalized.u1.toFixed(precision));
+  const q2 = Number(normalized.u2.toFixed(precision));
+  return `${normalized.id1}|${normalized.id2}|${q1}|${q2}`;
+}
