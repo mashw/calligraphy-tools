@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 
 import GuideOverlay from '@/components/preview/GuideOverlay';
 import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
 import { buildGuideSet } from '@/lib/guides/guide-template';
-import { findCrossingsForStraps } from '@/lib/paths/intersections';
+import { crossingSignature, findCrossingsForStraps } from '@/lib/paths/intersections';
 import { polylineSubpathD } from '@/lib/paths/polyline-subpath';
 import { samplePathDToPolyline } from '@/lib/paths/sample-svg-path';
 import { transformPolyline } from '@/lib/paths/transform';
@@ -282,7 +282,7 @@ export default function PathGuidesPage() {
   }, [crossingPerformanceWarning, renderData]);
 
   const crossingsWithOverrides = useMemo(
-    () => crossings.map((c) => ({ ...c, overId: crossingOverrides[c.id] ?? c.overId })),
+    () => crossings.map((c) => ({ ...c, overId: crossingOverrides[crossingSignature(c)] ?? c.overId })),
     [crossingOverrides, crossings],
   );
 
@@ -409,9 +409,10 @@ const underCrossings = useMemo(() => {
   return map;
 }, [crossingsWithOverrides]);
 
-const setCrossingOver = (crossingId: string, overId: string) => {
-  setCrossingOverrides((prev) => ({ ...prev, [crossingId]: overId }));
-  setActiveCrossingId(crossingId);
+const setCrossingOver = (crossing: (typeof crossingsWithOverrides)[number], overId: string) => {
+  const overrideKey = crossingSignature(crossing);
+  setCrossingOverrides((prev) => ({ ...prev, [overrideKey]: overId }));
+  setActiveCrossingId(crossing.id);
 };
 
   const updateStrap = (id: string, patch: Partial<Strap>) => {
@@ -760,7 +761,7 @@ const setCrossingOver = (crossingId: string, overId: string) => {
                   onClick={(e) => {
                     e.stopPropagation();
                     const nextOver = crossing.overId === crossing.aId ? crossing.bId : crossing.aId;
-                    setCrossingOver(crossing.id, nextOver);
+                    setCrossingOver(crossing, nextOver);
                   }}
                 >
                   {activeCrossingId === crossing.id && (
@@ -953,8 +954,8 @@ const setCrossingOver = (crossingId: string, overId: string) => {
                   <div key={`row-${crossing.id}`} className={`rounded-lg border p-2 ${activeCrossingId === crossing.id ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200'}`}>
                     <p className="text-xs text-slate-700">#{idx + 1} {aName} × {bName}</p>
                     <div className="mt-1 flex gap-1">
-                    <button onClick={() => setCrossingOver(crossing.id, crossing.aId)} className={`px-2 py-1 rounded border text-xs ${crossing.overId === crossing.aId ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-300'}`}>{aName} over</button>
-                    <button onClick={() => setCrossingOver(crossing.id, crossing.bId)} className={`px-2 py-1 rounded border text-xs ${crossing.overId === crossing.bId ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-300'}`}>{bName} over</button>
+                    <button onClick={() => setCrossingOver(crossing, crossing.aId)} className={`px-2 py-1 rounded border text-xs ${crossing.overId === crossing.aId ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-300'}`}>{aName} over</button>
+                    <button onClick={() => setCrossingOver(crossing, crossing.bId)} className={`px-2 py-1 rounded border text-xs ${crossing.overId === crossing.bId ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-300'}`}>{bName} over</button>
                     </div>
                   </div>
                 );
