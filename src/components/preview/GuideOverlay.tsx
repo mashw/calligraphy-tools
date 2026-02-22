@@ -75,7 +75,8 @@ export default function GuideOverlay({
   const colors = { ...defaultColors, ...style.colors };
   const gridThin = style.grid?.thin;
   const gridColors = style.grid?.colors ?? {};
-  const showGridHorizontal = style.grid?.showHorizontal ?? true;
+  const showGridHorizontal =
+    (style.grid?.showHorizontal ?? true) && !!guideSet.hGuides?.length;
   const showGridVertical = style.grid?.showVertical ?? true;
   const showNibAngleGuide = style.grid?.showNibAngleGuide ?? false;
   const nibAngleDeg = style.grid?.nibAngleDeg ?? 0;

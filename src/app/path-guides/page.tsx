@@ -161,6 +161,8 @@ function defaultStrap(offset: { x: number; y: number }, colorIdx: number, name =
 
 function guideMetrics(strap: Strap) {
   const nibMM = parseOr(strap.nibMMText, 2.5, 0.2);
+  const angleRad = (strap.nibAngleDeg * Math.PI) / 180;
+  const effectiveNibMM = Math.max(0.2, nibMM * Math.cos(angleRad));
   if (strap.script === 'Copperplate') {
     const xMM = parseOr(strap.xHeightMMText ?? '6', 6, 0.5);
     const ratioPreset = strap.copperplateRatioPreset;
@@ -185,11 +187,9 @@ function guideMetrics(strap: Strap) {
     const ascMM = ascUnits * unitScale;
     const descMM = descUnits * unitScale;
     const bandWidthMM = Math.max(ascMM + xMM + descMM, 4);
-    return { xMM, ascMM, descMM, actualNibMM: nibMM, bandWidthMM };
+    return { xMM, ascMM, descMM, nibMM, effectiveNibMM, bandWidthMM };
   }
 
-  const angleRad = (strap.nibAngleDeg * Math.PI) / 180;
-  const effectiveNib = Math.max(0.2, nibMM * Math.cos(angleRad));
   const xNib = parseOr(strap.xNibText, BLACKLETTER_GUIDE_DEFAULTS.xNib, 0.5);
   const ascNib = parseOr(strap.ascNibText, BLACKLETTER_GUIDE_DEFAULTS.ascNib, 0);
   const descNib = parseOr(strap.descNibText, BLACKLETTER_GUIDE_DEFAULTS.descNib, 0);
@@ -201,7 +201,8 @@ function guideMetrics(strap: Strap) {
     xMM,
     ascMM,
     descMM,
-    actualNibMM: effectiveNib,
+    nibMM,
+    effectiveNibMM,
     bandWidthMM,
   };
 }
@@ -255,14 +256,17 @@ export default function PathGuidesPage() {
     const sampled = samplePathDToPolyline(strap.d, 1.25);
     const transformed = transformPolyline(sampled, { scalePct: strap.scalePct, rotDeg: strap.rotDeg, offset: strap.offset });
     const metrics = guideMetrics(strap);
+    const tickStepMM = strap.script === 'Copperplate'
+      ? Math.max(metrics.xMM * 0.9, 3)
+      : metrics.effectiveNibMM;
     const guideSet = !simplify && transformed.length > 1
       ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
         baseline: transformed,
         xMM: metrics.xMM,
         ascMM: metrics.ascMM,
         descMM: metrics.descMM,
-        tickStepMM: Math.max(2, metrics.actualNibMM),
-        actualNibMM: metrics.actualNibMM,
+        tickStepMM,
+        actualNibMM: metrics.nibMM,
       })
       : null;
 
@@ -801,6 +805,8 @@ const underCrossings = useMemo(() => {
                             },
                             grid: {
                               thin: visuals.overlayThin,
+                              showHorizontal: strap.script === 'Copperplate' ? false : undefined,
+                              showVertical: strap.script === 'Copperplate' ? true : undefined,
                               colors: { tick: visuals.tickColor },
                             },
                           }}
