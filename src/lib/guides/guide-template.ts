@@ -97,7 +97,8 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
   // - ascender:  half (if any) lives at the TOP
   const hGuides: Pt[][] = [];
 
-  if (actualNibMM != null && actualNibMM > 0) {
+  const horizontalStep = Math.max(0.5, tickStepMM ?? actualNibMM ?? 1);
+  if (horizontalStep > 0) {
     const topOff = -(xMM + ascMM) * normalSign; // ascLine offset from baseline
     const waistOff = -xMM * normalSign;         // waistLine offset from baseline
     const baseOff = 0;             // baseLine offset from baseline
@@ -111,72 +112,15 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
       Math.abs(d - baseOff) < EPS ||
       Math.abs(d - descOff) < EPS;
 
-    // Coerce to nearest half-nib count to avoid float noise (sliders are 0.5 steps).
-    const toHalfNibs = (mm: number) => Math.round((mm / actualNibMM) * 2) / 2;
-
-    type HalfPlacement = 'top' | 'bottom';
-
-    // Returns internal boundary offsets measured DOWN from the band's TOP edge, in mm.
-    const internalOffsetsFromTopMM = (bandMM: number, placement: HalfPlacement): number[] => {
-      const n = toHalfNibs(bandMM);
-      const whole = Math.floor(n + 1e-9);
-      const hasHalf = Math.abs(n - (whole + 0.5)) < 1e-9;
-
-      const out: number[] = [];
-
-      if (!hasHalf) {
-        // Whole nibs: boundaries at 1,2,...,whole-1 nibs from top
-        for (let i = 1; i < whole; i += 1) out.push(i * actualNibMM);
-        return out;
-      }
-
-      if (placement === 'top') {
-        // Half nib at TOP: boundaries at 0.5, 1.5, 2.5, ... (whole entries)
-        for (let i = 0; i < whole; i += 1) out.push((0.5 + i) * actualNibMM);
-        return out;
-      }
-
-      // placement === 'bottom'
-      // Half nib at BOTTOM: boundaries at 1,2,3,...,whole nibs from top
-      // (the last segment is the 0.5 remainder at the bottom)
-      for (let i = 1; i <= whole; i += 1) out.push(i * actualNibMM);
-      return out;
-    };
-
-    const pushBandBetween = (
-      offTopLine: number,
-      offBottomLine: number,
-      bandMM: number,
-      placement: HalfPlacement,
-    ) => {
-      const offsFromTop = internalOffsetsFromTopMM(bandMM, placement);
-
-      // Walk from "top line" toward "bottom line" even if offsets are reversed by normalSign.
-      const dir = offBottomLine >= offTopLine ? 1 : -1;
-
-      const lo = Math.min(offTopLine, offBottomLine);
-      const hi = Math.max(offTopLine, offBottomLine);
-
-      for (const dTop of offsFromTop) {
-        const d = offTopLine + dir * dTop;
-
-        // Keep inside the band (avoid named lines and avoid floating edge collisions)
-        if (d <= lo + EPS) continue;
-        if (d >= hi - EPS) continue;
-        if (isNearNamedOff(d)) continue;
-
-        hGuides.push(offset(baseline, d));
-      }
-    };
-
-    // Ascender band: ascLine -> waistLine (half at TOP)
-    pushBandBetween(topOff, waistOff, ascMM, 'top');
-
-    // X-height band: waistLine -> baseLine (half at TOP)
-    pushBandBetween(waistOff, baseOff, xMM, 'top');
-
-    // Descender band: baseLine -> descLine (half at BOTTOM)
-    pushBandBetween(baseOff, descOff, descMM, 'bottom');
+    const lo = Math.min(topOff, descOff);
+    const hi = Math.max(topOff, descOff);
+    const count = Math.floor((hi - lo) / horizontalStep);
+    for (let i = 1; i <= count; i += 1) {
+      const d = lo + i * horizontalStep;
+      if (d <= lo + EPS || d >= hi - EPS) continue;
+      if (isNearNamedOff(d)) continue;
+      hGuides.push(offset(baseline, d));
+    }
   }
 
 
@@ -267,7 +211,17 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
 
 
 
-  return { ascLine, waistLine, baseLine, descLine, ticks, dashedGuides: [asc1Line, desc1Line] };
+  const hGuides: Pt[][] = [];
+  const horizontalStep = Math.max(0.5, tickStepMM ?? 1);
+  const top = Math.min(-(xMM + ascMM) * normalSign, descMM * normalSign);
+  const bottom = Math.max(-(xMM + ascMM) * normalSign, descMM * normalSign);
+  const count = Math.floor((bottom - top) / horizontalStep);
+  for (let i = 1; i <= count; i += 1) {
+    const d = top + i * horizontalStep;
+    hGuides.push(offset(baseline, d));
+  }
+
+  return { ascLine, waistLine, baseLine, descLine, ticks, hGuides, dashedGuides: [asc1Line, desc1Line] };
 }
 
 export function buildGuideSet(template: GuideTemplateId, params: GuideTemplateParams): GuideSet {

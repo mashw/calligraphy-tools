@@ -47,6 +47,25 @@ const defaultColors = {
   frame: '#cbd5e1',
 };
 
+function isNeutralGray(color?: string) {
+  if (!color) return false;
+  const hex = color.trim().toLowerCase();
+  const hexMatch = hex.match(/^#([0-9a-f]{6})$/i);
+  if (hexMatch) {
+    const int = Number.parseInt(hexMatch[1], 16);
+    const r = (int >> 16) & 0xff;
+    const g = (int >> 8) & 0xff;
+    const b = int & 0xff;
+    return Math.max(r, g, b) - Math.min(r, g, b) <= 14;
+  }
+  const rgbMatch = hex.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/i);
+  if (!rgbMatch) return false;
+  const r = Number(rgbMatch[1]);
+  const g = Number(rgbMatch[2]);
+  const b = Number(rgbMatch[3]);
+  return Math.max(r, g, b) - Math.min(r, g, b) <= 14;
+}
+
 export default function GuideOverlay({
   box,
   guideSet,
@@ -62,6 +81,9 @@ export default function GuideOverlay({
   const nibAngleDeg = style.grid?.nibAngleDeg ?? 0;
   const hitStrokeWidth =
     interactive?.hitStrokeWidthMM ?? Math.max(8, style.bold * 8);
+  const tickColor = gridColors.tick ?? colors.tick;
+  const dashedGuideStroke = isNeutralGray(tickColor) ? tickColor : '#94a3b8';
+  const dashedGuideWidth = (style.thin ?? 0.45) * 0.85;
 
   const guidePaths = [
     { key: 'asc', pts: guideSet.ascLine, stroke: colors.asc ?? colors.thin, width: style.thin },
@@ -199,9 +221,9 @@ export default function GuideOverlay({
           <path
             key={`dashed-${idx}`}
             d={pathD(poly)}
-            stroke={colors.accent ?? colors.thin}
-            strokeWidth={style.thin}
-            strokeDasharray="3 3"
+            stroke={dashedGuideStroke}
+            strokeWidth={dashedGuideWidth}
+            strokeDasharray="4 3"
             fill="none"
             vectorEffect="non-scaling-stroke"
           />
