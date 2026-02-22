@@ -1122,10 +1122,10 @@ const slantAngleDeg = useMemo(() => {
       <header className="px-6 pt-8 pb-4">
         <div className="max-w-[1120px] mx-auto">
           <h1 className="text-3xl font-semibold tracking-tight">
-            Calligraphy Tools <span className="text-indigo-600">— Guideline Generator</span>
+            Calligraphy Tools <span className="text-indigo-600">— Custom Guideline Tool</span>
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Generate printable guidelines for Copperplate and Textura Quadrata using straight baselines.
+            Generate printable guidelines for Copperplate and Textura Quadrata using straight baselines in the Custom Guideline Tool.
           </p>
         </div>
       </header>
