@@ -957,33 +957,31 @@ const underCrossings = useMemo(() => {
               <InsetLabeledField label="Title text">
                 <input className={INSET_CONTROL_BASE} value={activeStrap.titleText} onChange={(e) => updateStrap(activeStrap.id, { titleText: e.target.value })} />
               </InsetLabeledField>
-              <p className="text-xs text-slate-600">Path length: {activePathLengthMM.toFixed(1)} mm · Script length: {activeScriptLengthMM.toFixed(1)} mm</p>
-              {activeScriptLengthMM > activePathLengthMM && <p className="text-xs font-medium text-red-600">Title exceeds path</p>}
+              <p className="text-xs text-slate-600">
+                Path length: {activePathLengthMM.toFixed(1)} mm · Script length: {activeScriptLengthMM.toFixed(1)} mm
+                {activeScriptLengthMM > activePathLengthMM && <span className="font-medium text-red-600"> · Title exceeds path</span>}
+              </p>
 
               <div className="space-y-2">
-                <p className="text-xs font-medium text-slate-700">Contrast</p>
-                <InsetLabeledField label="Guides darkness">
+                <InsetLabeledField label="Guide contrast">
                   <div className="flex items-center gap-2 px-3 py-2">
                     <input type="range" min={0} max={100} step={1} className="flex-1" value={parseDarkness(activeStrap.guideDarkText, 75)} onChange={(e) => updateStrap(activeStrap.id, { guideDarkText: e.target.value })} />
                     <input type="number" min={0} max={100} step={1} className="w-16 rounded border border-slate-300 px-2 py-1 text-xs" value={activeStrap.guideDarkText} onChange={(e) => updateStrap(activeStrap.id, { guideDarkText: e.target.value })} />
                   </div>
                 </InsetLabeledField>
-                <InsetLabeledField label="Grid darkness">
-                  <div className="flex items-center gap-2 px-3 py-2">
-                    <input type="range" min={0} max={100} step={1} className="flex-1" value={parseDarkness(activeStrap.gridDarkText, 25)} onChange={(e) => updateStrap(activeStrap.id, { gridDarkText: e.target.value })} />
-                    <input type="number" min={0} max={100} step={1} className="w-16 rounded border border-slate-300 px-2 py-1 text-xs" value={activeStrap.gridDarkText} onChange={(e) => updateStrap(activeStrap.id, { gridDarkText: e.target.value })} />
-                  </div>
-                </InsetLabeledField>
-                <InsetLabeledField label="Title darkness">
-                  <div className="flex items-center gap-2 px-3 py-2">
-                    <input type="range" min={0} max={100} step={1} className="flex-1" value={parseDarkness(activeStrap.titleDarkText, 85)} onChange={(e) => updateStrap(activeStrap.id, { titleDarkText: e.target.value })} />
-                    <input type="number" min={0} max={100} step={1} className="w-16 rounded border border-slate-300 px-2 py-1 text-xs" value={activeStrap.titleDarkText} onChange={(e) => updateStrap(activeStrap.id, { titleDarkText: e.target.value })} />
-                  </div>
-                </InsetLabeledField>
+                {activeStrap.script !== 'Copperplate' && (
+                  <InsetLabeledField label="Grid contrast">
+                    <div className="flex items-center gap-2 px-3 py-2">
+                      <input type="range" min={0} max={100} step={1} className="flex-1" value={parseDarkness(activeStrap.gridDarkText, 25)} onChange={(e) => updateStrap(activeStrap.id, { gridDarkText: e.target.value })} />
+                      <input type="number" min={0} max={100} step={1} className="w-16 rounded border border-slate-300 px-2 py-1 text-xs" value={activeStrap.gridDarkText} onChange={(e) => updateStrap(activeStrap.id, { gridDarkText: e.target.value })} />
+                    </div>
+                  </InsetLabeledField>
+                )}
               </div>
 
               {activeStrap.script === 'Copperplate' ? (
                 <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <InsetLabeledField label="X-height" rightAdornment="mm">
                     <input type="number" step="0.5" min={0.5} className={INSET_CONTROL_MM} value={activeStrap.xHeightMMText ?? '6'} onChange={(e) => updateStrap(activeStrap.id, { xHeightMMText: e.target.value })} onKeyDown={(e) => {
                       if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
@@ -999,6 +997,7 @@ const underCrossings = useMemo(() => {
                       <option value="2:1:2">2:1:2</option><option value="3:2:3">3:2:3</option><option value="1:1:1">1:1:1</option><option value="custom">custom</option>
                     </select>
                   </InsetLabeledField>
+                  </div>
                   {activeStrap.copperplateRatioPreset === 'custom' && (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <InsetLabeledField label="Desc units"><input type="number" step="0.5" min={0} className={INSET_CONTROL_BASE} value={activeStrap.copperplateDescUnitsText} onChange={(e) => updateStrap(activeStrap.id, { copperplateDescUnitsText: e.target.value })} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = parseOr(activeStrap.copperplateDescUnitsText, 2, 0); updateStrap(activeStrap.id, { copperplateDescUnitsText: String(Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1))) }); }} /></InsetLabeledField>
@@ -1009,11 +1008,15 @@ const underCrossings = useMemo(() => {
                 </>
               ) : (
                 <>
-                  <InsetLabeledField label="Nib size" rightAdornment="mm"><input type="number" min={0.2} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.nibMMText} onChange={(e) => updateStrap(activeStrap.id, { nibMMText: e.target.value })} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = parseOr(activeStrap.nibMMText, 2.5, 0.2); updateStrap(activeStrap.id, { nibMMText: String(Math.max(0.2, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1))) }); }} /></InsetLabeledField>
-                  <InsetLabeledField label="Nib angle (°)"><select className={INSET_CONTROL_BASE} value={activeStrap.nibAngleDeg} onChange={(e) => updateStrap(activeStrap.id, { nibAngleDeg: Number(e.target.value) as 35 | 40 | 45 })}><option value={35}>35°</option><option value={40}>40°</option><option value={45}>45°</option></select></InsetLabeledField>
-                  <InsetLabeledField label="X-height (nibs)" rightAdornment="nibs" adornmentClassName="right-2"><input type="number" step="0.5" min={0.5} className={INSET_CONTROL_WIDE} value={activeStrap.xNibText} onChange={(e) => updateStrap(activeStrap.id, { xNibText: e.target.value })} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = parseOr(activeStrap.xNibText, BLACKLETTER_GUIDE_DEFAULTS.xNib, 0.5); updateStrap(activeStrap.id, { xNibText: String(Math.max(0.5, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1))) }); }} /></InsetLabeledField>
-                  <InsetLabeledField label="Ascender (nibs)" rightAdornment="nibs" adornmentClassName="right-2"><input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.ascNibText} onChange={(e) => updateStrap(activeStrap.id, { ascNibText: e.target.value })} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = parseOr(activeStrap.ascNibText, BLACKLETTER_GUIDE_DEFAULTS.ascNib, 0); updateStrap(activeStrap.id, { ascNibText: String(Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1))) }); }} /></InsetLabeledField>
-                  <InsetLabeledField label="Descender (nibs)" rightAdornment="nibs" adornmentClassName="right-2"><input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.descNibText} onChange={(e) => updateStrap(activeStrap.id, { descNibText: e.target.value })} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = parseOr(activeStrap.descNibText, BLACKLETTER_GUIDE_DEFAULTS.descNib, 0); updateStrap(activeStrap.id, { descNibText: String(Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1))) }); }} /></InsetLabeledField>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <InsetLabeledField label="Nib size" rightAdornment="mm"><input type="number" min={0.2} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.nibMMText} onChange={(e) => updateStrap(activeStrap.id, { nibMMText: e.target.value })} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = parseOr(activeStrap.nibMMText, 2.5, 0.2); updateStrap(activeStrap.id, { nibMMText: String(Math.max(0.2, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1))) }); }} /></InsetLabeledField>
+                    <InsetLabeledField label="Nib angle (°)"><select className={INSET_CONTROL_BASE} value={activeStrap.nibAngleDeg} onChange={(e) => updateStrap(activeStrap.id, { nibAngleDeg: Number(e.target.value) as 35 | 40 | 45 })}><option value={35}>35°</option><option value={40}>40°</option><option value={45}>45°</option></select></InsetLabeledField>
+                    <InsetLabeledField label="X-height (nibs)" rightAdornment="nibs" adornmentClassName="right-2"><input type="number" step="0.5" min={0.5} className={INSET_CONTROL_WIDE} value={activeStrap.xNibText} onChange={(e) => updateStrap(activeStrap.id, { xNibText: e.target.value })} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = parseOr(activeStrap.xNibText, BLACKLETTER_GUIDE_DEFAULTS.xNib, 0.5); updateStrap(activeStrap.id, { xNibText: String(Math.max(0.5, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1))) }); }} /></InsetLabeledField>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <InsetLabeledField label="Ascender (nibs)" rightAdornment="nibs" adornmentClassName="right-2"><input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.ascNibText} onChange={(e) => updateStrap(activeStrap.id, { ascNibText: e.target.value })} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = parseOr(activeStrap.ascNibText, BLACKLETTER_GUIDE_DEFAULTS.ascNib, 0); updateStrap(activeStrap.id, { ascNibText: String(Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1))) }); }} /></InsetLabeledField>
+                    <InsetLabeledField label="Descender (nibs)" rightAdornment="nibs" adornmentClassName="right-2"><input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.descNibText} onChange={(e) => updateStrap(activeStrap.id, { descNibText: e.target.value })} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = parseOr(activeStrap.descNibText, BLACKLETTER_GUIDE_DEFAULTS.descNib, 0); updateStrap(activeStrap.id, { descNibText: String(Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1))) }); }} /></InsetLabeledField>
+                  </div>
                 </>
               )}
 
