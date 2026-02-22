@@ -8,8 +8,10 @@ export type Crossing = {
   y: number;
   aSeg: number;
   aT: number;
+  aU: number;
   bSeg: number;
   bT: number;
+  bU: number;
   overId: string;
 };
 
@@ -43,8 +45,47 @@ function crossingId(aId: string, bId: string, x: number, y: number) {
   return `${id1}|${id2}|${Math.round(x * 10)}|${Math.round(y * 10)}`;
 }
 
+function polylineLengths(pts: Pt[]) {
+  const segLens: number[] = [];
+  const cumLens: number[] = [0];
+
+  for (let i = 0; i < pts.length - 1; i += 1) {
+    const dx = pts[i + 1].x - pts[i].x;
+    const dy = pts[i + 1].y - pts[i].y;
+    const len = Math.hypot(dx, dy);
+    segLens.push(len);
+    cumLens.push(cumLens[i] + len);
+  }
+
+  return {
+    segLens,
+    cumLens,
+    totalLen: cumLens[cumLens.length - 1] ?? 0,
+  };
+}
+
+function arcLengthU(cumLens: number[], segLens: number[], segIdx: number, tSeg: number, totalLen: number) {
+  if (totalLen <= 0) return 0;
+  const segLen = segLens[segIdx] ?? 0;
+  const lenAt = (cumLens[segIdx] ?? 0) + tSeg * segLen;
+  return lenAt / totalLen;
+}
+
+export function crossingSignature(c: { aId: string; bId: string; aU: number; bU: number }, precision = 3): string {
+  const normalize = (u: number) => Number(u.toFixed(precision));
+
+  if (c.aId <= c.bId) {
+    return `${c.aId}|${c.bId}|${normalize(c.aU)}|${normalize(c.bU)}`;
+  }
+
+  return `${c.bId}|${c.aId}|${normalize(c.bU)}|${normalize(c.aU)}`;
+}
+
 export function findCrossingsForStraps(straps: { id: string; pts: Pt[] }[], epsMM: number): Crossing[] {
   const raw: RawCrossing[] = [];
+  const lengthsByStrapId = new Map(
+    straps.map((strap) => [strap.id, polylineLengths(strap.pts)]),
+  );
 
   for (let i = 0; i < straps.length; i += 1) {
     const a = straps[i];
@@ -90,10 +131,17 @@ export function findCrossingsForStraps(straps: { id: string; pts: Pt[] }[], epsM
   });
 
   return keep
-    .map((c) => ({
-      ...c,
-      id: crossingId(c.aId, c.bId, c.x, c.y),
-      overId: c.aId,
-    }))
+    .map((c) => {
+      const aLengths = lengthsByStrapId.get(c.aId);
+      const bLengths = lengthsByStrapId.get(c.bId);
+
+      return {
+        ...c,
+        aU: aLengths ? arcLengthU(aLengths.cumLens, aLengths.segLens, c.aSeg, c.aT, aLengths.totalLen) : 0,
+        bU: bLengths ? arcLengthU(bLengths.cumLens, bLengths.segLens, c.bSeg, c.bT, bLengths.totalLen) : 0,
+        id: crossingId(c.aId, c.bId, c.x, c.y),
+        overId: c.aId,
+      };
+    })
     .sort((a, b) => a.id.localeCompare(b.id));
 }
