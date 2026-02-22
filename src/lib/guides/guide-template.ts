@@ -13,6 +13,7 @@ export type GuideSet = {
   // optional perpendicular ticks/markers (each tick is a line segment)
   ticks?: { a: Pt; b: Pt }[];
   hGuides?: Pt[][]; // NEW: curve-parallel intermediate rails
+  dashedGuides?: Pt[][];
 };
 
 export type GuideTemplateId = 'copperplate' | 'blackletter';
@@ -190,6 +191,8 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
   const waistLine = offset(baseline, -xMM * normalSign);
   const baseLine = baseline;
   const descLine = offset(baseline, descMM * normalSign);
+  const asc1Line = offset(baseline, -(xMM + ascMM * 0.5) * normalSign);
+  const desc1Line = offset(baseline, descMM * 0.5 * normalSign);
 
   const step = Math.max(0.5, tickStepMM ?? 100);
   const ticks: { a: Pt; b: Pt }[] = [];
@@ -264,7 +267,7 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
 
 
 
-  return { ascLine, waistLine, baseLine, descLine, ticks };
+  return { ascLine, waistLine, baseLine, descLine, ticks, dashedGuides: [asc1Line, desc1Line] };
 }
 
 export function buildGuideSet(template: GuideTemplateId, params: GuideTemplateParams): GuideSet {
