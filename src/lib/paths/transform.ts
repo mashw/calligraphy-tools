@@ -2,7 +2,7 @@ export type Pt = { x: number; y: number };
 
 export function transformPolyline(
   points: Pt[],
-  transform: { scalePct: number; rotDeg: number; offset: Pt },
+  transform: { scalePct: number; rotDeg: number; offset: Pt; flipX?: boolean },
 ): Pt[] {
   const scale = transform.scalePct / 100;
   const rot = (transform.rotDeg * Math.PI) / 180;
@@ -10,7 +10,8 @@ export function transformPolyline(
   const sin = Math.sin(rot);
 
   return points.map((p) => {
-    const sx = p.x * scale;
+    const localX = transform.flipX ? -p.x : p.x;
+    const sx = localX * scale;
     const sy = p.y * scale;
 
     return {

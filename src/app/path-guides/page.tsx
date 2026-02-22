@@ -14,6 +14,8 @@ import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type CrossingsFilter = 'all' | 'selected';
 type CopperplateRatioPreset = '3:2:3' | '2:1:2' | '1:1:1' | 'custom';
+type PaperId = keyof typeof PAPERS_MM;
+type Orientation = 'portrait' | 'landscape';
 type PairKey = string;
 type PairOverrides = Record<PairKey, Record<number, string>>;
 
@@ -45,6 +47,7 @@ type Strap = {
   offset: { x: number; y: number };
   scalePct: number;
   rotDeg: number;
+  flip: boolean;
   snapped: boolean;
 };
 
@@ -55,7 +58,6 @@ type StrapGroup = {
   collapsed: boolean;
 };
 
-const BOX = { w: PAPERS_MM.A4.w, h: PAPERS_MM.A4.h };
 const SNAP_IN_MM = 6;
 const RELEASE_MM = 10;
 const CROSS_EPS_MM = 1.2;
@@ -237,8 +239,16 @@ function guideMetrics(strap: Strap) {
 }
 
 export default function PathGuidesPage() {
-  const centerX = BOX.w / 2;
-  const centerY = BOX.h / 2;
+  const [paper, setPaper] = useState<PaperId>('A4');
+  const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
+  const box = useMemo(() => {
+    const raw = PAPERS_MM[paper];
+    if (orientation === 'landscape' && raw.w < raw.h) return { w: raw.h, h: raw.w };
+    if (orientation === 'portrait' && raw.w > raw.h) return { w: raw.h, h: raw.w };
+    return { w: raw.w, h: raw.h };
+  }, [orientation, paper]);
+  const centerX = box.w / 2;
+  const centerY = box.h / 2;
   const [view, setView] = useState<ViewMode>('autofit');
   const [zoom, setZoom] = useState(1.35);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -267,6 +277,7 @@ export default function PathGuidesPage() {
     offset: { x: centerX, y: centerY },
     scalePct: 100,
     rotDeg: 0,
+    flip: false,
     snapped: false,
   }, 'Copperplate')]));
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -283,7 +294,7 @@ export default function PathGuidesPage() {
 
   const renderData = useMemo(() => straps.map((strap) => {
     const sampled = samplePathDToPolyline(strap.d, 1.25);
-    const transformed = transformPolyline(sampled, { scalePct: strap.scalePct, rotDeg: strap.rotDeg, offset: strap.offset });
+    const transformed = transformPolyline(sampled, { scalePct: strap.scalePct, rotDeg: strap.rotDeg, flipX: strap.flip, offset: strap.offset });
     const metrics = guideMetrics(strap);
 
     const guideSet = !simplify && transformed.length > 1
@@ -361,14 +372,14 @@ export default function PathGuidesPage() {
   }, [activeStrap, crossingsFilter, crossingsWithOverrides, showAllCrossings]);
 
   const vb = useMemo(() => {
-    if (view === 'fullpage') return { minX: 0, minY: 0, vw: BOX.w, vh: BOX.h, str: `0 0 ${BOX.w} ${BOX.h}` };
+    if (view === 'fullpage') return { minX: 0, minY: 0, vw: box.w, vh: box.h, str: `0 0 ${box.w} ${box.h}` };
     const safeZoom = Math.max(0.35, zoom);
-    const vw = BOX.w / safeZoom;
-    const vh = BOX.h / safeZoom;
-    const minX = (BOX.w - vw) / 2 - pan.x;
-    const minY = (BOX.h - vh) / 2 - pan.y;
+    const vw = box.w / safeZoom;
+    const vh = box.h / safeZoom;
+    const minX = (box.w - vw) / 2 - pan.x;
+    const minY = (box.h - vh) / 2 - pan.y;
     return { minX, minY, vw, vh, str: `${minX} ${minY} ${vw} ${vh}` };
-  }, [pan, view, zoom]);
+  }, [box.h, box.w, pan, view, zoom]);
 
   const strapById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r])), [renderData]);
   function bandWindowDFromGuideSet(
@@ -599,6 +610,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       offset,
       scalePct: 100,
       rotDeg: 0,
+      flip: false,
       snapped: false,
     }, 'Copperplate');
     setStraps((prev) => [...prev, next]);
@@ -630,6 +642,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
           offset: { x: centerX, y: centerY },
           scalePct: 100,
           rotDeg: 0,
+          flip: false,
           snapped: false,
         }, 'Copperplate'));
       });
@@ -713,11 +726,11 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
         maskUnits="userSpaceOnUse"
         x={0}
         y={0}
-        width={BOX.w}
-        height={BOX.h}
+        width={box.w}
+        height={box.h}
       >
         {/* Always start fully visible over the whole page (NOT viewBox). */}
-        <rect x={0} y={0} width={BOX.w} height={BOX.h} fill="white" />
+        <rect x={0} y={0} width={box.w} height={box.h} fill="white" />
 
         {/* For every crossing where this strap is UNDER, cut out the OVER strap band near that crossing. */}
         {list.map((c) => {
@@ -758,8 +771,8 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
   </defs>
 )}
               <rect x={vb.minX} y={vb.minY} width={vb.vw} height={vb.vh} fill="#cbd5e1" />
-              <rect x={0} y={0} width={BOX.w} height={BOX.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
-              <line x1={centerX} y1={0} x2={centerX} y2={BOX.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+              <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
+              <line x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
 
               {renderData.map(({ strap, transformed, guideSet, metrics }) => (
                 <g
@@ -859,6 +872,37 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               <input type="file" accept=".svg" multiple className="hidden" onChange={(e) => parseUpload(e.target.files)} />
             </label>
           </div>
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <InsetLabeledField label="Paper size">
+              <select
+                className={INSET_CONTROL_BASE}
+                value={paper}
+                onChange={(e) => {
+                  const nextPaper = e.target.value as PaperId;
+                  setPaper(nextPaper);
+                  setOrientation(PAPERS_MM[nextPaper].defaultOrientation);
+                  setPan({ x: 0, y: 0 });
+                }}
+              >
+                {Object.entries(PAPERS_MM).map(([id, p]) => (
+                  <option key={id} value={id}>{p.label}</option>
+                ))}
+              </select>
+            </InsetLabeledField>
+            <InsetLabeledField label="Orientation">
+              <select
+                className={INSET_CONTROL_BASE}
+                value={orientation}
+                onChange={(e) => {
+                  setOrientation(e.target.value as Orientation);
+                  setPan({ x: 0, y: 0 });
+                }}
+              >
+                <option value="portrait">Portrait</option>
+                <option value="landscape">Landscape</option>
+              </select>
+            </InsetLabeledField>
+          </div>
           {error && <p className="mt-3 text-sm text-amber-700">{error}</p>}
           <div className="mt-4 space-y-2">
             {straps.map((strap, idx) => (
@@ -873,6 +917,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     name: `${strap.name} copy`,
                     color: PALETTE[(straps.length + 1) % PALETTE.length],
                     offset: { x: strap.offset.x + 10, y: strap.offset.y + 10 },
+                    flip: strap.flip,
                     snapped: false,
                   };
                   setStraps((prev) => [...prev, duplicate]);
@@ -949,19 +994,28 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 </>
               )}
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-4 select-none">
                 <div>
-                  <label className="text-xs text-slate-600">Rotation (deg)</label>
-                  <input type="number" className="w-full mt-1 p-2 rounded-lg border border-slate-300" value={activeStrap.rotDeg} onChange={(e) => updateStrap(activeStrap.id, { rotDeg: Number(e.target.value) || 0 })} />
+                  <label className="font-medium text-slate-700">Rotation (°) <span className="text-indigo-600">{activeStrap.rotDeg}°</span></label>
+                  <input type="range" min={-180} max={180} step={1} value={activeStrap.rotDeg} onChange={(e) => updateStrap(activeStrap.id, { rotDeg: Number.parseInt(e.target.value, 10) || 0 })} className="w-full" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-600">Scale (%)</label>
-                  <input type="number" className="w-full mt-1 p-2 rounded-lg border border-slate-300" value={activeStrap.scalePct} onChange={(e) => updateStrap(activeStrap.id, { scalePct: Math.max(1, Number(e.target.value) || 100) })} />
+                  <label className="font-medium text-slate-700">Scale (%) <span className="text-indigo-600">{activeStrap.scalePct}%</span></label>
+                  <input type="range" min={1} max={220} step={1} value={activeStrap.scalePct} onChange={(e) => updateStrap(activeStrap.id, { scalePct: Math.max(1, Number.parseInt(e.target.value, 10) || 100) })} className="w-full" />
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-3">
                 <button onClick={() => updateStrap(activeStrap.id, { offset: { ...activeStrap.offset, x: centerX }, snapped: true })} className="px-2 py-1 rounded border border-slate-300">Center horizontally</button>
-                <button onClick={() => updateStrap(activeStrap.id, { rotDeg: 0, scalePct: 100 })} className="px-2 py-1 rounded border border-slate-300">Reset transform</button>
+                <button onClick={() => updateStrap(activeStrap.id, { rotDeg: 0, scalePct: 100 })} className="px-2 py-1 rounded border border-slate-300">Reset rotation &amp; scale</button>
+                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                    checked={activeStrap.flip}
+                    onChange={(e) => updateStrap(activeStrap.id, { flip: e.target.checked })}
+                  />
+                  Flip strap
+                </label>
               </div>
             </div>
           )}
