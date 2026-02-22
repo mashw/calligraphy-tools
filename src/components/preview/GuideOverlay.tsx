@@ -194,6 +194,18 @@ export default function GuideOverlay({
             />
           );
         })()}
+
+        {guideSet.dashedGuides?.map((poly, idx) => (
+          <path
+            key={`dashed-${idx}`}
+            d={pathD(poly)}
+            stroke={colors.accent ?? colors.thin}
+            strokeWidth={style.thin}
+            strokeDasharray="3 3"
+            fill="none"
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
       </g>
 
       {guidePaths.map(({ key, pts, stroke, width }) => (
