@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import GuideOverlay from '@/components/preview/GuideOverlay';
 import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
-import { BLACKLETTER_GUIDE_DEFAULTS, buildGuideSet } from '@/lib/guides/guide-template';
+import { buildGuideSet } from '@/lib/guides/guide-template';
 import { crossingKey, findCrossingsForStraps } from '@/lib/paths/intersections';
 import { polylineSubpathD } from '@/lib/paths/polyline-subpath';
 import { samplePathDToPolyline } from '@/lib/paths/sample-svg-path';
@@ -13,6 +13,16 @@ import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
 
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type CrossingsFilter = 'all' | 'selected';
+type CopperplateRatioPreset = '3:2:3' | '2:1:2' | '1:1:1' | 'custom';
+
+type InsetLabeledFieldProps = {
+  label: string;
+  disabled?: boolean;
+  className?: string;
+  rightAdornment?: React.ReactNode;
+  adornmentClassName?: string;
+  children: React.ReactNode;
+};
 
 type Strap = {
   id: string;
@@ -23,6 +33,13 @@ type Strap = {
   nibMMText: string;
   nibAngleDeg: 35 | 40 | 45;
   xHeightMMText?: string;
+  copperplateRatioPreset?: CopperplateRatioPreset;
+  copperplateDescUnitsText?: string;
+  copperplateXUnitsText?: string;
+  copperplateAscUnitsText?: string;
+  xNibText?: string;
+  ascNibText?: string;
+  descNibText?: string;
   offset: { x: number; y: number };
   scalePct: number;
   rotDeg: number;
@@ -42,6 +59,36 @@ const RELEASE_MM = 10;
 const CROSS_EPS_MM = 1.2;
 const CROSSING_MAX_SEGMENTS = 2800;
 const PALETTE = ['#1d4ed8', '#ea580c', '#16a34a', '#9333ea', '#0891b2', '#dc2626', '#65a30d', '#4f46e5', '#c2410c', '#0f766e', '#be123c', '#4338ca'];
+const INSET_CONTROL_BASE = 'w-full border-0 rounded-none px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed';
+const INSET_CONTROL_MM = `${INSET_CONTROL_BASE} pr-10`;
+const INSET_CONTROL_WIDE = `${INSET_CONTROL_BASE} pr-14`;
+
+const snapHalf = (v: number) => Math.round(v * 2) / 2;
+
+const stepHalfFrom = (current: number, dir: 1 | -1) => {
+  const eps = 1e-9;
+  const x2 = current * 2;
+  const next2 = dir === 1 ? Math.ceil(x2 - eps) + 1 : Math.floor(x2 + eps) - 1;
+  return next2 / 2;
+};
+
+function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, adornmentClassName = 'right-3', children }: InsetLabeledFieldProps) {
+  return (
+    <div className={`relative rounded-lg border border-slate-300 overflow-hidden ${disabled ? 'bg-slate-50' : 'bg-white'} ${className}`}>
+      <div className="absolute inset-x-0 top-0 h-5 bg-slate-50/80 border-b border-slate-300 px-3 flex items-center z-10 pointer-events-none">
+        <span className="text-[11px] font-medium text-slate-600">{label}</span>
+      </div>
+      <div className="relative pt-5">
+        {children}
+        {rightAdornment && (
+          <span className={`pointer-events-none select-none absolute ${adornmentClassName} top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500`}>
+            {rightAdornment}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function circlePathD(r = 40) {
   return `M ${r} 0 A ${r} ${r} 0 1 1 ${-r} 0 A ${r} ${r} 0 1 1 ${r} 0 Z`;
@@ -52,13 +99,36 @@ function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2)}`;
 }
 
+function scriptDefaults(script: ScriptId) {
+  return script === 'Copperplate'
+    ? { copperplateRatioPreset: '3:2:3' as CopperplateRatioPreset }
+    : { xNibText: '5', ascNibText: '3', descNibText: '2' };
+}
+
 function guideMetrics(strap: Strap) {
   const nibMM = Math.max(0.2, Number.parseFloat(strap.nibMMText) || 2.5);
 
   if (strap.script === 'Copperplate') {
     const xMM = Math.max(0.5, Number.parseFloat(strap.xHeightMMText ?? '6') || 6);
-    const ascMM = xMM * 1.5;
-    const descMM = xMM * 1.5;
+    let descUnits = 3;
+    let xUnits = 2;
+    let ascUnits = 3;
+    if (strap.copperplateRatioPreset === '2:1:2') {
+      descUnits = 2;
+      xUnits = 1;
+      ascUnits = 2;
+    } else if (strap.copperplateRatioPreset === '1:1:1') {
+      descUnits = 1;
+      xUnits = 1;
+      ascUnits = 1;
+    } else if (strap.copperplateRatioPreset === 'custom') {
+      descUnits = Math.max(0, Number.parseFloat(strap.copperplateDescUnitsText ?? '3') || 3);
+      xUnits = Math.max(0.5, Number.parseFloat(strap.copperplateXUnitsText ?? '2') || 2);
+      ascUnits = Math.max(0, Number.parseFloat(strap.copperplateAscUnitsText ?? '3') || 3);
+    }
+    const unitMM = xMM / Math.max(0.5, xUnits);
+    const ascMM = ascUnits * unitMM;
+    const descMM = descUnits * unitMM;
     const bandWidthMM = Math.max(ascMM + xMM + descMM, 4);
     return { xMM, ascMM, descMM, bandWidthMM, nibMM, effectiveNibMM: nibMM };
   }
@@ -66,9 +136,12 @@ function guideMetrics(strap: Strap) {
   const angleRad = (strap.nibAngleDeg * Math.PI) / 180;
   const effectiveNibMM = Math.max(0.2, nibMM * Math.cos(angleRad));
 
-  const ascMM = BLACKLETTER_GUIDE_DEFAULTS.ascNib * nibMM;
-  const descMM = BLACKLETTER_GUIDE_DEFAULTS.descNib * nibMM;
-  const xMM = BLACKLETTER_GUIDE_DEFAULTS.xNib * nibMM;
+  const xNib = Math.max(1, Number.parseFloat(strap.xNibText ?? '5') || 5);
+  const ascNib = Math.max(0, Number.parseFloat(strap.ascNibText ?? '3') || 3);
+  const descNib = Math.max(0, Number.parseFloat(strap.descNibText ?? '2') || 2);
+  const ascMM = ascNib * nibMM;
+  const descMM = descNib * nibMM;
+  const xMM = xNib * nibMM;
   const bandWidthMM = Math.max(ascMM + xMM + descMM, 4);
 
   return {
@@ -108,6 +181,7 @@ export default function PathGuidesPage() {
     nibMMText: '2.5',
     nibAngleDeg: 45,
     xHeightMMText: '6',
+    copperplateRatioPreset: '3:2:3',
     offset: { x: centerX, y: centerY },
     scalePct: 100,
     rotDeg: 0,
@@ -415,6 +489,7 @@ const underCrossings = useMemo(() => {
       nibMMText: '2.5',
       nibAngleDeg: 45,
       xHeightMMText: '6',
+      copperplateRatioPreset: '3:2:3',
       offset,
       scalePct: 100,
       rotDeg: 0,
@@ -445,6 +520,7 @@ const underCrossings = useMemo(() => {
           nibMMText: '2.5',
           nibAngleDeg: 45,
           xHeightMMText: '6',
+          copperplateRatioPreset: '3:2:3',
           offset: { x: centerX, y: centerY },
           scalePct: 100,
           rotDeg: 0,
@@ -712,30 +788,61 @@ const underCrossings = useMemo(() => {
           {!activeStrap && <p className="mt-3 text-slate-500">Select a strap.</p>}
           {activeStrap && (
             <div className="mt-3 space-y-3">
-              <div>
-                <label className="text-xs text-slate-600">Script</label>
-                <select className="w-full mt-1 p-2 rounded-lg border border-slate-300" value={activeStrap.script} onChange={(e) => updateStrap(activeStrap.id, { script: e.target.value as ScriptId })}>
+              <InsetLabeledField label="Script">
+                <select className={INSET_CONTROL_BASE} value={activeStrap.script} onChange={(e) => {
+                  const script = e.target.value as ScriptId;
+                  updateStrap(activeStrap.id, { script, ...scriptDefaults(script) });
+                }}>
                   {Object.keys(SCRIPT_PROFILES).map((id) => <option key={id} value={id}>{id}</option>)}
                 </select>
-              </div>
-              <div>
-                <label className="text-xs text-slate-600">Nib size (mm)</label>
-                <input className="w-full mt-1 p-2 rounded-lg border border-slate-300" value={activeStrap.nibMMText} onChange={(e) => updateStrap(activeStrap.id, { nibMMText: e.target.value })} />
-              </div>
-              {activeStrap.script !== 'Copperplate' && (
-                <div>
-                  <label className="text-xs text-slate-600">Nib angle</label>
-                  <select className="w-full mt-1 p-2 rounded-lg border border-slate-300" value={activeStrap.nibAngleDeg} onChange={(e) => updateStrap(activeStrap.id, { nibAngleDeg: Number(e.target.value) as 35 | 40 | 45 })}>
-                    <option value={35}>35°</option><option value={40}>40°</option><option value={45}>45°</option>
-                  </select>
-                </div>
+              </InsetLabeledField>
+
+              {activeStrap.script === 'Copperplate' ? (
+                <>
+                  <InsetLabeledField label="X-height" rightAdornment="mm">
+                    <input type="number" min={0.5} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.xHeightMMText ?? '6'} onChange={(e) => updateStrap(activeStrap.id, { xHeightMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
+                  </InsetLabeledField>
+                  <InsetLabeledField label="Guideline ratio (desc : x : asc)">
+                    <select className={INSET_CONTROL_BASE} value={activeStrap.copperplateRatioPreset ?? '3:2:3'} onChange={(e) => updateStrap(activeStrap.id, { copperplateRatioPreset: e.target.value as CopperplateRatioPreset })}>
+                      <option value="3:2:3">3 : 2 : 3</option><option value="2:1:2">2 : 1 : 2</option><option value="1:1:1">1 : 1 : 1</option><option value="custom">Custom</option>
+                    </select>
+                  </InsetLabeledField>
+                  {(activeStrap.copperplateRatioPreset ?? '3:2:3') === 'custom' && (
+                    <div className="grid grid-cols-3 gap-2">
+                      <InsetLabeledField label="Desc units">
+                        <input type="number" step="0.5" min={0} className={INSET_CONTROL_BASE} value={activeStrap.copperplateDescUnitsText ?? '3'} onChange={(e) => updateStrap(activeStrap.id, { copperplateDescUnitsText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.copperplateDescUnitsText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { copperplateDescUnitsText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.copperplateDescUnitsText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateStrap(activeStrap.id, { copperplateDescUnitsText: String(next) }); }} />
+                      </InsetLabeledField>
+                      <InsetLabeledField label="X units">
+                        <input type="number" step="0.5" min={0.5} className={INSET_CONTROL_BASE} value={activeStrap.copperplateXUnitsText ?? '2'} onChange={(e) => updateStrap(activeStrap.id, { copperplateXUnitsText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.copperplateXUnitsText ?? '2') || 2; const next = Math.max(0.5, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { copperplateXUnitsText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.copperplateXUnitsText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0.5, snapHalf(parsed)) : 2; updateStrap(activeStrap.id, { copperplateXUnitsText: String(next) }); }} />
+                      </InsetLabeledField>
+                      <InsetLabeledField label="Asc units">
+                        <input type="number" step="0.5" min={0} className={INSET_CONTROL_BASE} value={activeStrap.copperplateAscUnitsText ?? '3'} onChange={(e) => updateStrap(activeStrap.id, { copperplateAscUnitsText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.copperplateAscUnitsText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { copperplateAscUnitsText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.copperplateAscUnitsText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateStrap(activeStrap.id, { copperplateAscUnitsText: String(next) }); }} />
+                      </InsetLabeledField>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <InsetLabeledField label="Nib size" rightAdornment="mm">
+                    <input type="number" min={0.2} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.nibMMText} onChange={(e) => updateStrap(activeStrap.id, { nibMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
+                  </InsetLabeledField>
+                  <InsetLabeledField label="x-height (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
+                    <input type="number" step="0.5" min={1} className={INSET_CONTROL_WIDE} value={activeStrap.xNibText ?? '5'} onChange={(e) => updateStrap(activeStrap.id, { xNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.xNibText ?? '5') || 5; const next = Math.max(1, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { xNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.xNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(1, snapHalf(parsed)) : 5; updateStrap(activeStrap.id, { xNibText: String(next) }); }} />
+                  </InsetLabeledField>
+                  <InsetLabeledField label="Ascender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
+                    <input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.ascNibText ?? '3'} onChange={(e) => updateStrap(activeStrap.id, { ascNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.ascNibText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { ascNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.ascNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateStrap(activeStrap.id, { ascNibText: String(next) }); }} />
+                  </InsetLabeledField>
+                  <InsetLabeledField label="Descender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
+                    <input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.descNibText ?? '2'} onChange={(e) => updateStrap(activeStrap.id, { descNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.descNibText ?? '2') || 2; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { descNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.descNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 2; updateStrap(activeStrap.id, { descNibText: String(next) }); }} />
+                  </InsetLabeledField>
+                  <InsetLabeledField label="Nib angle (°)">
+                    <select className={INSET_CONTROL_BASE} value={activeStrap.nibAngleDeg} onChange={(e) => updateStrap(activeStrap.id, { nibAngleDeg: Number(e.target.value) as 35 | 40 | 45 })}>
+                      <option value={35}>35°</option><option value={40}>40°</option><option value={45}>45°</option>
+                    </select>
+                  </InsetLabeledField>
+                </>
               )}
-              {activeStrap.script === 'Copperplate' && (
-                <div>
-                  <label className="text-xs text-slate-600">x-height (mm)</label>
-                  <input className="w-full mt-1 p-2 rounded-lg border border-slate-300" value={activeStrap.xHeightMMText ?? '6'} onChange={(e) => updateStrap(activeStrap.id, { xHeightMMText: e.target.value })} />
-                </div>
-              )}
+
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-slate-600">Rotation (deg)</label>
