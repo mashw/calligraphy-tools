@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 
 import GuideOverlay from '@/components/preview/GuideOverlay';
 import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
 import { buildGuideSet } from '@/lib/guides/guide-template';
-import { findCrossingsForStraps, type Crossing } from '@/lib/paths/intersections';
+import { findCrossingsForStraps, type Crossing, type Pt } from '@/lib/paths/intersections';
 import { polylineSubpathD } from '@/lib/paths/polyline-subpath';
 import { samplePathDToPolyline } from '@/lib/paths/sample-svg-path';
 import { transformPolyline } from '@/lib/paths/transform';
@@ -14,6 +14,8 @@ import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type CrossingsFilter = 'all' | 'selected';
 type CopperplateRatioPreset = '3:2:3' | '2:1:2' | '1:1:1' | 'custom';
+type PairKey = string;
+type PairOverrides = Record<PairKey, Record<number, string>>;
 
 type InsetLabeledFieldProps = {
   label: string;
@@ -57,7 +59,6 @@ const BOX = { w: PAPERS_MM.A4.w, h: PAPERS_MM.A4.h };
 const SNAP_IN_MM = 6;
 const RELEASE_MM = 10;
 const CROSS_EPS_MM = 1.2;
-const MATCH_EPS_MM = 8;
 const CROSSING_MAX_SEGMENTS = 2800;
 const PALETTE = ['#1d4ed8', '#ea580c', '#16a34a', '#9333ea', '#0891b2', '#dc2626', '#65a30d', '#4f46e5', '#c2410c', '#0f766e', '#be123c', '#4338ca'];
 const INSET_CONTROL_BASE = 'w-full border-0 rounded-none px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed';
@@ -71,6 +72,43 @@ const stepHalfFrom = (current: number, dir: 1 | -1) => {
   const x2 = current * 2;
   const next2 = dir === 1 ? Math.ceil(x2 - eps) + 1 : Math.floor(x2 + eps) - 1;
   return next2 / 2;
+};
+
+
+const pairKey = (aId: string, bId: string): PairKey => (aId < bId ? `${aId}|${bId}` : `${bId}|${aId}`);
+
+const centroid = (pts: Pt[]) => {
+  if (!pts.length) return { x: 0, y: 0 };
+  const sum = pts.reduce((acc, pt) => ({ x: acc.x + pt.x, y: acc.y + pt.y }), { x: 0, y: 0 });
+  return { x: sum.x / pts.length, y: sum.y / pts.length };
+};
+
+const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) => {
+  const ca = centroid(aPts);
+  const cb = centroid(bPts);
+  const dx = cb.x - ca.x;
+  const dy = cb.y - ca.y;
+  const len = Math.hypot(dx, dy);
+  const u = len > 1e-6 ? { x: dx / len, y: dy / len } : { x: 1, y: 0 };
+  const v = { x: -u.y, y: u.x };
+  const mid = { x: (ca.x + cb.x) / 2, y: (ca.y + cb.y) / 2 };
+
+  return crossingsForPair
+    .map((crossing) => {
+      const rx = crossing.x - mid.x;
+      const ry = crossing.y - mid.y;
+      return {
+        crossing,
+        t: rx * u.x + ry * u.y,
+        s: rx * v.x + ry * v.y,
+      };
+    })
+    .sort((left, right) => (
+      right.t - left.t
+      || left.s - right.s
+      || left.crossing.id.localeCompare(right.crossing.id)
+    ))
+    .map((entry) => entry.crossing.id);
 };
 
 function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, adornmentClassName = 'right-3', children }: InsetLabeledFieldProps) {
@@ -213,7 +251,7 @@ export default function PathGuidesPage() {
   const [activeCrossingId, setActiveCrossingId] = useState<string | null>(null);
   const [crossingsFilter, setCrossingsFilter] = useState<CrossingsFilter>('all');
   const [showAllCrossings, setShowAllCrossings] = useState(false);
-  const [crossingOverrides, setCrossingOverrides] = useState<Record<string, string>>({});
+  const [crossingOverrides, setCrossingOverrides] = useState<PairOverrides>({});
   const [showDebugPoints] = useState(false);
 
   const [straps, setStraps] = useState<Strap[]>(() => ([applyScriptDefaults({
@@ -234,7 +272,6 @@ export default function PathGuidesPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const prevCrossingsRef = useRef<Crossing[]>([]);
   const dragRef = useRef<{ mode: 'none' | 'pan' | 'strap'; pointerId: number; startClient: { x: number; y: number }; startPan: { x: number; y: number }; strapId?: string; startOffset?: { x: number; y: number }; startSnapped?: boolean }>({
     mode: 'none',
     pointerId: -1,
@@ -274,6 +311,7 @@ export default function PathGuidesPage() {
     [renderData],
   );
   const crossingPerformanceWarning = totalSegments > CROSSING_MAX_SEGMENTS;
+  const transformedById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r.transformed])), [renderData]);
 
   const baseCrossings = useMemo(() => {
     if (crossingPerformanceWarning) return [];
@@ -283,81 +321,36 @@ export default function PathGuidesPage() {
     );
   }, [crossingPerformanceWarning, renderData]);
 
-  useEffect(() => {
-    const prevCrossings = prevCrossingsRef.current;
+  const pairSlotsByCrossingId = useMemo(() => {
+    const slots = new Map<string, { key: PairKey; slot: number }>();
+    const crossingsByPair = new Map<PairKey, Crossing[]>();
 
-    setCrossingOverrides((prevOverrides) => {
-      const nextOverrides: Record<string, string> = {};
-      const nextCrossingIds = new Set(baseCrossings.map((c) => c.id));
-
-      Object.entries(prevOverrides).forEach(([crossingId, overId]) => {
-        if (nextCrossingIds.has(crossingId)) nextOverrides[crossingId] = overId;
-      });
-
-      const pairKey = (crossing: Pick<Crossing, 'aId' | 'bId'>) => (
-        crossing.aId < crossing.bId
-          ? `${crossing.aId}|${crossing.bId}`
-          : `${crossing.bId}|${crossing.aId}`
-      );
-
-      const oldByPair = new Map<string, Crossing[]>();
-      prevCrossings.forEach((crossing) => {
-        if (!prevOverrides[crossing.id] || nextCrossingIds.has(crossing.id)) return;
-        const key = pairKey(crossing);
-        if (!oldByPair.has(key)) oldByPair.set(key, []);
-        oldByPair.get(key)!.push(crossing);
-      });
-
-      const nextByPair = new Map<string, Crossing[]>();
-      baseCrossings.forEach((crossing) => {
-        if (nextOverrides[crossing.id]) return;
-        const key = pairKey(crossing);
-        if (!nextByPair.has(key)) nextByPair.set(key, []);
-        nextByPair.get(key)!.push(crossing);
-      });
-
-      const maxDistSq = MATCH_EPS_MM * MATCH_EPS_MM;
-
-      nextByPair.forEach((newCrossings, key) => {
-        const oldCrossings = oldByPair.get(key);
-        if (!oldCrossings?.length) return;
-
-        const unmatchedOld = [...oldCrossings];
-        newCrossings.forEach((newCrossing) => {
-          let bestIdx = -1;
-          let bestDistSq = Number.POSITIVE_INFINITY;
-
-          unmatchedOld.forEach((oldCrossing, idx) => {
-            const dx = oldCrossing.x - newCrossing.x;
-            const dy = oldCrossing.y - newCrossing.y;
-            const distSq = dx * dx + dy * dy;
-            if (distSq < bestDistSq) {
-              bestDistSq = distSq;
-              bestIdx = idx;
-            }
-          });
-
-          if (bestIdx < 0 || bestDistSq > maxDistSq) return;
-          const [matchedOld] = unmatchedOld.splice(bestIdx, 1);
-          nextOverrides[newCrossing.id] = prevOverrides[matchedOld.id];
-        });
-      });
-
-      const prevKeys = Object.keys(prevOverrides);
-      const nextKeys = Object.keys(nextOverrides);
-      if (prevKeys.length === nextKeys.length && prevKeys.every((key) => prevOverrides[key] === nextOverrides[key])) {
-        return prevOverrides;
-      }
-
-      return nextOverrides;
+    baseCrossings.forEach((crossing) => {
+      const key = pairKey(crossing.aId, crossing.bId);
+      if (!crossingsByPair.has(key)) crossingsByPair.set(key, []);
+      crossingsByPair.get(key)!.push(crossing);
     });
 
-    prevCrossingsRef.current = baseCrossings;
-  }, [baseCrossings]);
+    crossingsByPair.forEach((crossingsForPair) => {
+      const first = crossingsForPair[0];
+      const aPts = transformedById.get(first.aId) ?? [];
+      const bPts = transformedById.get(first.bId) ?? [];
+      const orderedIds = slotOrderForPair(crossingsForPair, aPts, bPts);
+      orderedIds.forEach((crossingId, slot) => {
+        slots.set(crossingId, { key: pairKey(first.aId, first.bId), slot });
+      });
+    });
+
+    return slots;
+  }, [baseCrossings, transformedById]);
 
   const crossingsWithOverrides = useMemo(
-    () => baseCrossings.map((c) => ({ ...c, overId: crossingOverrides[c.id] ?? c.overId })),
-    [baseCrossings, crossingOverrides],
+    () => baseCrossings.map((crossing) => {
+      const slotMeta = pairSlotsByCrossingId.get(crossing.id);
+      const overId = slotMeta ? (crossingOverrides[slotMeta.key]?.[slotMeta.slot] ?? crossing.overId) : crossing.overId;
+      return { ...crossing, overId };
+    }),
+    [baseCrossings, crossingOverrides, pairSlotsByCrossingId],
   );
 
   const crossingsDisplay = useMemo(() => {
@@ -377,7 +370,6 @@ export default function PathGuidesPage() {
     return { minX, minY, vw, vh, str: `${minX} ${minY} ${vw} ${vh}` };
   }, [pan, view, zoom]);
 
-  const transformedById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r.transformed])), [renderData]);
   const strapById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r])), [renderData]);
   function bandWindowDFromGuideSet(
     guideSet: NonNullable<(typeof renderData)[number]["guideSet"]>,
@@ -483,9 +475,18 @@ const underCrossings = useMemo(() => {
   return map;
 }, [crossingsWithOverrides]);
 
-const setCrossingOver = (crossingId: string, overId: string) => {
-  setCrossingOverrides((prev) => ({ ...prev, [crossingId]: overId }));
-  setActiveCrossingId(crossingId);
+const setCrossingOver = (crossing: Crossing, overId: string) => {
+  const slotMeta = pairSlotsByCrossingId.get(crossing.id);
+  if (!slotMeta) return;
+
+  setCrossingOverrides((prev) => ({
+    ...prev,
+    [slotMeta.key]: {
+      ...(prev[slotMeta.key] ?? {}),
+      [slotMeta.slot]: overId,
+    },
+  }));
+  setActiveCrossingId(crossing.id);
 };
 
   const updateStrap = (id: string, patch: Partial<Strap>) => {
@@ -834,7 +835,7 @@ const setCrossingOver = (crossingId: string, overId: string) => {
                   onClick={(e) => {
                     e.stopPropagation();
                     const nextOver = crossing.overId === crossing.aId ? crossing.bId : crossing.aId;
-                    setCrossingOver(crossing.id, nextOver);
+                    setCrossingOver(crossing, nextOver);
                   }}
                 >
                   {activeCrossingId === crossing.id && (
@@ -1027,8 +1028,8 @@ const setCrossingOver = (crossingId: string, overId: string) => {
                   <div key={`row-${crossing.id}`} className={`rounded-lg border p-2 ${activeCrossingId === crossing.id ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200'}`}>
                     <p className="text-xs text-slate-700">#{idx + 1} {aName} × {bName}</p>
                     <div className="mt-1 flex gap-1">
-                    <button onClick={() => setCrossingOver(crossing.id, crossing.aId)} className={`px-2 py-1 rounded border text-xs ${crossing.overId === crossing.aId ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-300'}`}>{aName} over</button>
-                    <button onClick={() => setCrossingOver(crossing.id, crossing.bId)} className={`px-2 py-1 rounded border text-xs ${crossing.overId === crossing.bId ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-300'}`}>{bName} over</button>
+                    <button onClick={() => setCrossingOver(crossing, crossing.aId)} className={`px-2 py-1 rounded border text-xs ${crossing.overId === crossing.aId ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-300'}`}>{aName} over</button>
+                    <button onClick={() => setCrossingOver(crossing, crossing.bId)} className={`px-2 py-1 rounded border text-xs ${crossing.overId === crossing.bId ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-300'}`}>{bName} over</button>
                     </div>
                   </div>
                 );
