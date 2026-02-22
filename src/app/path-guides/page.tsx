@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import GuideOverlay from '@/components/preview/GuideOverlay';
 import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
 import { BLACKLETTER_GUIDE_DEFAULTS, buildGuideSet } from '@/lib/guides/guide-template';
-import { findCrossingsForStraps } from '@/lib/paths/intersections';
+import { crossingKey, findCrossingsForStraps } from '@/lib/paths/intersections';
 import { polylineSubpathD } from '@/lib/paths/polyline-subpath';
 import { samplePathDToPolyline } from '@/lib/paths/sample-svg-path';
 import { transformPolyline } from '@/lib/paths/transform';
@@ -147,19 +147,34 @@ export default function PathGuidesPage() {
 
   const crossings = useMemo(() => {
     if (crossingPerformanceWarning) return [];
-    const base = findCrossingsForStraps(
+    return findCrossingsForStraps(
       renderData.map((r) => ({ id: r.strap.id, pts: r.transformed })),
       CROSS_EPS_MM,
     );
-    return base.map((c) => ({ ...c, overId: crossingOverrides[c.id] ?? c.overId }));
-  }, [crossingOverrides, crossingPerformanceWarning, renderData]);
+  }, [crossingPerformanceWarning, renderData]);
+
+  const crossingsWithOverrides = useMemo(
+    () => crossings.map((c) => ({ ...c, overId: crossingOverrides[crossingKey(c)] ?? c.overId })),
+    [crossingOverrides, crossings],
+  );
+
+  useEffect(() => {
+    const valid = new Set(crossings.map((c) => crossingKey(c)));
+    const timeout = window.setTimeout(() => {
+      setCrossingOverrides((prev) => {
+        const next = Object.fromEntries(Object.entries(prev).filter(([key]) => valid.has(key)));
+        return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+      });
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [crossings]);
 
   const crossingsDisplay = useMemo(() => {
     const filtered = crossingsFilter === 'selected' && activeStrap
-      ? crossings.filter((c) => c.aId === activeStrap.id || c.bId === activeStrap.id)
-      : crossings;
+      ? crossingsWithOverrides.filter((c) => c.aId === activeStrap.id || c.bId === activeStrap.id)
+      : crossingsWithOverrides;
     return showAllCrossings ? filtered : filtered.slice(0, 50);
-  }, [activeStrap, crossings, crossingsFilter, showAllCrossings]);
+  }, [activeStrap, crossingsFilter, crossingsWithOverrides, showAllCrossings]);
 
   const vb = useMemo(() => {
     if (view === 'fullpage') return { minX: 0, minY: 0, vw: BOX.w, vh: BOX.h, str: `0 0 ${BOX.w} ${BOX.h}` };
@@ -268,18 +283,19 @@ export default function PathGuidesPage() {
 
 // --- Weave masking: for each UNDER strap, collect the crossings where it is UNDER ---
 const underCrossings = useMemo(() => {
-  const map = new Map<string, typeof crossings>();
-  crossings.forEach((c) => {
+  const map = new Map<string, typeof crossingsWithOverrides>();
+  crossingsWithOverrides.forEach((c) => {
     const under = c.aId === c.overId ? c.bId : c.aId;
     if (!map.has(under)) map.set(under, []);
     map.get(under)!.push(c);
   });
   return map;
-}, [crossings]);
+}, [crossingsWithOverrides]);
 
-  const setCrossingOver = (crossingId: string, overId: string) => {
-    setCrossingOverrides((prev) => ({ ...prev, [crossingId]: overId }));
-    setActiveCrossingId(crossingId);
+  const setCrossingOver = (crossing: { id: string; aId: string; bId: string; aSeg: number; bSeg: number }, overId: string) => {
+    const key = crossingKey(crossing);
+    setCrossingOverrides((prev) => ({ ...prev, [key]: overId }));
+    setActiveCrossingId(crossing.id);
   };
 
   const updateStrap = (id: string, patch: Partial<Strap>) => {
@@ -364,19 +380,20 @@ const underCrossings = useMemo(() => {
 
   const addCircle = () => {
     const i = straps.length;
-    const step = 6;
+    const step = 10;
     const pattern = [
-      { x: 0, y: 0 },
-      { x: step, y: 0 },
-      { x: 0, y: step },
-      { x: -step, y: 0 },
-      { x: 0, y: -step },
       { x: step, y: step },
-      { x: -step, y: step },
-      { x: step, y: -step },
-      { x: -step, y: -step },
+      { x: step * 2, y: step },
+      { x: step, y: step * 2 },
+      { x: 0, y: step },
+      { x: step, y: 0 },
+      { x: step * 2, y: step * 2 },
+      { x: 0, y: step * 2 },
+      { x: step * 2, y: 0 },
+      { x: 0, y: 0 },
     ];
-    const offset = pattern[i % pattern.length];
+    const localOffset = pattern[i % pattern.length];
+    const offset = { x: centerX + localOffset.x, y: centerY + localOffset.y };
 
     const next: Strap = {
       id: uid('strap'),
@@ -452,7 +469,7 @@ const underCrossings = useMemo(() => {
 
       <header className="px-6 pt-8 pb-4">
         <div className="max-w-[1120px] mx-auto">
-          <h1 className="text-3xl font-semibold tracking-tight">Calligraphy Tools <span className="text-indigo-600">— Path Guides</span></h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Calligraphy Tools <span className="text-indigo-600">— Custom Guideline Tool</span></h1>
           <p className="mt-1 text-sm text-slate-600">Upload SVG paths and generate calligraphy guidelines that follow each path. Arrange and layer straps to plan interwoven layouts.</p>
         </div>
       </header>
@@ -599,7 +616,7 @@ const underCrossings = useMemo(() => {
                 </g>
               ))}
 
-              {simplify && crossings.map((crossing) => {
+              {simplify && crossingsWithOverrides.map((crossing) => {
                 const over = strapById.get(crossing.overId);
                 const overPts = transformedById.get(crossing.overId);
                 if (!over || !overPts) return null;
@@ -617,7 +634,7 @@ const underCrossings = useMemo(() => {
                 );
               })}
 
-              {showCrossings && crossings.map((crossing, idx) => (
+              {showCrossings && crossingsWithOverrides.map((crossing, idx) => (
                 <g
                   key={`marker-${crossing.id}`}
                   style={{ cursor: 'pointer' }}
@@ -625,7 +642,7 @@ const underCrossings = useMemo(() => {
                   onClick={(e) => {
                     e.stopPropagation();
                     const nextOver = crossing.overId === crossing.aId ? crossing.bId : crossing.aId;
-                    setCrossingOver(crossing.id, nextOver);
+                    setCrossingOver(crossing, nextOver);
                   }}
                 >
                   {activeCrossingId === crossing.id && (
@@ -657,7 +674,14 @@ const underCrossings = useMemo(() => {
                 <span className="flex-1 truncate">{strap.name}</span>
                 <button onClick={() => setActiveId(strap.id)} className="px-2 py-1 rounded border border-slate-300">Select</button>
                 <button onClick={() => {
-                  const duplicate = { ...strap, id: uid('strap'), name: `${strap.name} copy`, color: PALETTE[(straps.length + 1) % PALETTE.length] };
+                  const duplicate = {
+                    ...strap,
+                    id: uid('strap'),
+                    name: `${strap.name} copy`,
+                    color: PALETTE[(straps.length + 1) % PALETTE.length],
+                    offset: { x: strap.offset.x + 10, y: strap.offset.y + 10 },
+                    snapped: false,
+                  };
                   setStraps((prev) => [...prev, duplicate]);
                 }} className="px-2 py-1 rounded border border-slate-300">Duplicate</button>
                 <button disabled={straps.length <= 1} onClick={() => {
@@ -673,6 +697,7 @@ const underCrossings = useMemo(() => {
 
         <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
           <h2 className="text-lg font-semibold text-slate-800">Step 2 — Strap settings</h2>
+          <p className="mt-1 text-xs text-slate-600">{activeStrap?.script === 'Copperplate' ? 'Copperplate uses x-height (mm).' : 'Blackletter scripts use nib size and nib angle.'}</p>
           {!activeStrap && <p className="mt-3 text-slate-500">Select a strap.</p>}
           {activeStrap && (
             <div className="mt-3 space-y-3">
@@ -686,12 +711,14 @@ const underCrossings = useMemo(() => {
                 <label className="text-xs text-slate-600">Nib size (mm)</label>
                 <input className="w-full mt-1 p-2 rounded-lg border border-slate-300" value={activeStrap.nibMMText} onChange={(e) => updateStrap(activeStrap.id, { nibMMText: e.target.value })} />
               </div>
-              <div>
-                <label className="text-xs text-slate-600">Nib angle</label>
-                <select className="w-full mt-1 p-2 rounded-lg border border-slate-300" value={activeStrap.nibAngleDeg} onChange={(e) => updateStrap(activeStrap.id, { nibAngleDeg: Number(e.target.value) as 35 | 40 | 45 })}>
-                  <option value={35}>35°</option><option value={40}>40°</option><option value={45}>45°</option>
-                </select>
-              </div>
+              {activeStrap.script !== 'Copperplate' && (
+                <div>
+                  <label className="text-xs text-slate-600">Nib angle</label>
+                  <select className="w-full mt-1 p-2 rounded-lg border border-slate-300" value={activeStrap.nibAngleDeg} onChange={(e) => updateStrap(activeStrap.id, { nibAngleDeg: Number(e.target.value) as 35 | 40 | 45 })}>
+                    <option value={35}>35°</option><option value={40}>40°</option><option value={45}>45°</option>
+                  </select>
+                </div>
+              )}
               {activeStrap.script === 'Copperplate' && (
                 <div>
                   <label className="text-xs text-slate-600">x-height (mm)</label>
@@ -718,7 +745,34 @@ const underCrossings = useMemo(() => {
 
         <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
           <h2 className="text-lg font-semibold text-slate-800">Step 3 — Weave / Layer order</h2>
-          <p className="mt-1 text-xs text-slate-600">Order controls render stack. First = bottom, last = top.</p>
+          <p className="mt-1 text-xs text-slate-600">Order controls render stack. First = back, last = front.</p>
+          {activeStrap && (() => {
+            const activeIdx = straps.findIndex((s) => s.id === activeStrap.id);
+            const canMoveDown = activeIdx > 0;
+            const canMoveUp = activeIdx >= 0 && activeIdx < straps.length - 1;
+            const moveSelected = (nextIndex: number) => {
+              if (activeIdx < 0 || nextIndex < 0 || nextIndex >= straps.length || nextIndex === activeIdx) return;
+              setStraps((prev) => {
+                const currentIdx = prev.findIndex((s) => s.id === activeStrap.id);
+                if (currentIdx < 0 || nextIndex < 0 || nextIndex >= prev.length || currentIdx === nextIndex) return prev;
+                const copy = [...prev];
+                const [item] = copy.splice(currentIdx, 1);
+                copy.splice(nextIndex, 0, item);
+                return copy;
+              });
+              setActiveId(activeStrap.id);
+            };
+
+            return (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button disabled={!canMoveUp} onClick={() => moveSelected(straps.length - 1)} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40">Bring to front</button>
+                <button disabled={!canMoveDown} onClick={() => moveSelected(0)} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40">Send to back</button>
+                <button disabled={!canMoveUp} onClick={() => moveSelected(activeIdx + 1)} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40">Move up</button>
+                <button disabled={!canMoveDown} onClick={() => moveSelected(activeIdx - 1)} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40">Move down</button>
+              </div>
+            );
+          })()}
+
           <div className="mt-3 space-y-2">
             {straps.map((strap) => (
               <div key={strap.id} draggable onDragStart={() => setDragListId(strap.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => {
@@ -726,21 +780,20 @@ const underCrossings = useMemo(() => {
                 setDragListId(null);
               }} className="rounded-lg border border-slate-200 p-2 flex items-center gap-2 cursor-move">
                 <span className="w-3 h-3 rounded-full" style={{ backgroundColor: strap.color }} />
-                <span className="flex-1">{strap.name}</span>
-                <button onClick={() => setStraps((prev) => [...prev.filter((s) => s.id !== strap.id), strap])} className="px-2 py-1 rounded border border-slate-300">Bring to front</button>
-                <button onClick={() => setStraps((prev) => [strap, ...prev.filter((s) => s.id !== strap.id)])} className="px-2 py-1 rounded border border-slate-300">Send to back</button>
+                <button onClick={() => setActiveId(strap.id)} className={`flex-1 text-left ${activeId === strap.id ? 'font-semibold text-indigo-700' : ''}`}>{strap.name}</button>
+                <span className="text-xs text-slate-500">#{straps.findIndex((s) => s.id === strap.id) + 1}</span>
               </div>
             ))}
           </div>
 
           <div className="mt-5 border-t border-slate-200 pt-4">
             <h3 className="font-semibold text-slate-800">Crossings</h3>
-            <p className="mt-1 text-xs text-slate-600">Detected crossings: {crossings.length}</p>
+            <p className="mt-1 text-xs text-slate-600">Detected crossings: {crossingsWithOverrides.length}</p>
             <select className="mt-2 w-full rounded-lg border border-slate-300 p-2" value={crossingsFilter} onChange={(e) => setCrossingsFilter(e.target.value as CrossingsFilter)}>
               <option value="all">All crossings</option>
               <option value="selected" disabled={!activeStrap}>Only selected strap</option>
             </select>
-            {crossings.length > 50 && (
+            {crossingsWithOverrides.length > 50 && (
               <button onClick={() => setShowAllCrossings((v) => !v)} className="mt-2 px-2 py-1 rounded border border-slate-300">{showAllCrossings ? 'Show first 50' : 'Show all'}</button>
             )}
             <div className="mt-2 max-h-48 overflow-auto space-y-2">
@@ -751,8 +804,8 @@ const underCrossings = useMemo(() => {
                   <div key={`row-${crossing.id}`} className={`rounded-lg border p-2 ${activeCrossingId === crossing.id ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200'}`}>
                     <p className="text-xs text-slate-700">#{idx + 1} {aName} × {bName}</p>
                     <div className="mt-1 flex gap-1">
-                      <button onClick={() => setCrossingOver(crossing.id, crossing.aId)} className={`px-2 py-1 rounded border text-xs ${crossing.overId === crossing.aId ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-300'}`}>{aName} over</button>
-                      <button onClick={() => setCrossingOver(crossing.id, crossing.bId)} className={`px-2 py-1 rounded border text-xs ${crossing.overId === crossing.bId ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-300'}`}>{bName} over</button>
+                      <button onClick={() => setCrossingOver(crossing, crossing.aId)} className={`px-2 py-1 rounded border text-xs ${crossing.overId === crossing.aId ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-300'}`}>{aName} over</button>
+                      <button onClick={() => setCrossingOver(crossing, crossing.bId)} className={`px-2 py-1 rounded border text-xs ${crossing.overId === crossing.bId ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-300'}`}>{bName} over</button>
                     </div>
                   </div>
                 );
