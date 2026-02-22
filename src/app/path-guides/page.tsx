@@ -99,10 +99,53 @@ function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2)}`;
 }
 
-function scriptDefaults(script: ScriptId) {
-  return script === 'Copperplate'
-    ? { copperplateRatioPreset: '3:2:3' as CopperplateRatioPreset }
-    : { xNibText: '5', ascNibText: '3', descNibText: '2' };
+const SCRIPT_DEFAULTS = {
+  TexturaQuadrata: {
+    nibMMText: '4',
+    nibAngleDeg: 45 as const,
+    xNibText: '5',
+    ascNibText: '2',
+    descNibText: '2',
+  },
+  Fraktur: {
+    nibMMText: '4',
+    nibAngleDeg: 40 as const,
+    xNibText: '4.5',
+    ascNibText: '2',
+    descNibText: '2',
+  },
+  Copperplate: {
+    xHeightMMText: '6',
+    copperplateRatioPreset: '3:2:3' as CopperplateRatioPreset,
+  },
+};
+
+function applyScriptDefaults(strap: Strap, script: ScriptId): Strap {
+  if (script === 'Copperplate') {
+    return {
+      ...strap,
+      script,
+      xHeightMMText: SCRIPT_DEFAULTS.Copperplate.xHeightMMText,
+      copperplateRatioPreset: SCRIPT_DEFAULTS.Copperplate.copperplateRatioPreset,
+      xNibText: undefined,
+      ascNibText: undefined,
+      descNibText: undefined,
+    };
+  }
+
+  const blackletterDefaults = script === 'Fraktur'
+    ? SCRIPT_DEFAULTS.Fraktur
+    : SCRIPT_DEFAULTS.TexturaQuadrata;
+
+  return {
+    ...strap,
+    script,
+    nibMMText: blackletterDefaults.nibMMText,
+    nibAngleDeg: blackletterDefaults.nibAngleDeg,
+    xNibText: blackletterDefaults.xNibText,
+    ascNibText: blackletterDefaults.ascNibText,
+    descNibText: blackletterDefaults.descNibText,
+  };
 }
 
 function guideMetrics(strap: Strap) {
@@ -172,7 +215,7 @@ export default function PathGuidesPage() {
   const [crossingOverrides, setCrossingOverrides] = useState<Record<string, string>>({});
   const [showDebugPoints] = useState(false);
 
-  const [straps, setStraps] = useState<Strap[]>(() => ([{
+  const [straps, setStraps] = useState<Strap[]>(() => ([applyScriptDefaults({
     id: uid('strap'),
     name: 'Circle',
     d: circlePathD(40),
@@ -186,7 +229,7 @@ export default function PathGuidesPage() {
     scalePct: 100,
     rotDeg: 0,
     snapped: false,
-  }]));
+  }, 'Copperplate')]));
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -480,7 +523,7 @@ const underCrossings = useMemo(() => {
     const localOffset = pattern[i % pattern.length];
     const offset = { x: centerX + localOffset.x, y: centerY + localOffset.y };
 
-    const next: Strap = {
+    const next = applyScriptDefaults({
       id: uid('strap'),
       name: `Circle ${straps.length + 1}`,
       d: circlePathD(40),
@@ -494,7 +537,7 @@ const underCrossings = useMemo(() => {
       scalePct: 100,
       rotDeg: 0,
       snapped: false,
-    };
+    }, 'Copperplate');
     setStraps((prev) => [...prev, next]);
     setActiveId(next.id);
   };
@@ -511,7 +554,7 @@ const underCrossings = useMemo(() => {
       matches.forEach((m, idx) => {
         const d = m[2]?.trim();
         if (!d) return;
-        created.push({
+        created.push(applyScriptDefaults({
           id: uid('strap'),
           name: `${file.name.replace(/\.svg$/i, '')} ${idx + 1}`,
           d,
@@ -525,7 +568,7 @@ const underCrossings = useMemo(() => {
           scalePct: 100,
           rotDeg: 0,
           snapped: false,
-        });
+        }, 'Copperplate'));
       });
     }
 
@@ -791,7 +834,7 @@ const underCrossings = useMemo(() => {
               <InsetLabeledField label="Script">
                 <select className={INSET_CONTROL_BASE} value={activeStrap.script} onChange={(e) => {
                   const script = e.target.value as ScriptId;
-                  updateStrap(activeStrap.id, { script, ...scriptDefaults(script) });
+                  setStraps((prev) => prev.map((strap) => (strap.id === activeStrap.id ? applyScriptDefaults(strap, script) : strap)));
                 }}>
                   {Object.keys(SCRIPT_PROFILES).map((id) => <option key={id} value={id}>{id}</option>)}
                 </select>
