@@ -5,7 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import GuideOverlay from '@/components/preview/GuideOverlay';
 import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
 import { buildGuideSet } from '@/lib/guides/guide-template';
-import { findCrossingsForStraps } from '@/lib/paths/intersections';
+import { findCrossingsForStraps, type Crossing } from '@/lib/paths/intersections';
 import { polylineSubpathD } from '@/lib/paths/polyline-subpath';
 import { samplePathDToPolyline } from '@/lib/paths/sample-svg-path';
 import { transformPolyline } from '@/lib/paths/transform';
@@ -57,6 +57,7 @@ const BOX = { w: PAPERS_MM.A4.w, h: PAPERS_MM.A4.h };
 const SNAP_IN_MM = 6;
 const RELEASE_MM = 10;
 const CROSS_EPS_MM = 1.2;
+const MATCH_EPS_MM = 8;
 const CROSSING_MAX_SEGMENTS = 2800;
 const PALETTE = ['#1d4ed8', '#ea580c', '#16a34a', '#9333ea', '#0891b2', '#dc2626', '#65a30d', '#4f46e5', '#c2410c', '#0f766e', '#be123c', '#4338ca'];
 const INSET_CONTROL_BASE = 'w-full border-0 rounded-none px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed';
@@ -233,6 +234,7 @@ export default function PathGuidesPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const prevCrossingsRef = useRef<Crossing[]>([]);
   const dragRef = useRef<{ mode: 'none' | 'pan' | 'strap'; pointerId: number; startClient: { x: number; y: number }; startPan: { x: number; y: number }; strapId?: string; startOffset?: { x: number; y: number }; startSnapped?: boolean }>({
     mode: 'none',
     pointerId: -1,
@@ -273,7 +275,7 @@ export default function PathGuidesPage() {
   );
   const crossingPerformanceWarning = totalSegments > CROSSING_MAX_SEGMENTS;
 
-  const crossings = useMemo(() => {
+  const baseCrossings = useMemo(() => {
     if (crossingPerformanceWarning) return [];
     return findCrossingsForStraps(
       renderData.map((r) => ({ id: r.strap.id, pts: r.transformed })),
@@ -281,9 +283,81 @@ export default function PathGuidesPage() {
     );
   }, [crossingPerformanceWarning, renderData]);
 
+  useEffect(() => {
+    const prevCrossings = prevCrossingsRef.current;
+
+    setCrossingOverrides((prevOverrides) => {
+      const nextOverrides: Record<string, string> = {};
+      const nextCrossingIds = new Set(baseCrossings.map((c) => c.id));
+
+      Object.entries(prevOverrides).forEach(([crossingId, overId]) => {
+        if (nextCrossingIds.has(crossingId)) nextOverrides[crossingId] = overId;
+      });
+
+      const pairKey = (crossing: Pick<Crossing, 'aId' | 'bId'>) => (
+        crossing.aId < crossing.bId
+          ? `${crossing.aId}|${crossing.bId}`
+          : `${crossing.bId}|${crossing.aId}`
+      );
+
+      const oldByPair = new Map<string, Crossing[]>();
+      prevCrossings.forEach((crossing) => {
+        if (!prevOverrides[crossing.id] || nextCrossingIds.has(crossing.id)) return;
+        const key = pairKey(crossing);
+        if (!oldByPair.has(key)) oldByPair.set(key, []);
+        oldByPair.get(key)!.push(crossing);
+      });
+
+      const nextByPair = new Map<string, Crossing[]>();
+      baseCrossings.forEach((crossing) => {
+        if (nextOverrides[crossing.id]) return;
+        const key = pairKey(crossing);
+        if (!nextByPair.has(key)) nextByPair.set(key, []);
+        nextByPair.get(key)!.push(crossing);
+      });
+
+      const maxDistSq = MATCH_EPS_MM * MATCH_EPS_MM;
+
+      nextByPair.forEach((newCrossings, key) => {
+        const oldCrossings = oldByPair.get(key);
+        if (!oldCrossings?.length) return;
+
+        const unmatchedOld = [...oldCrossings];
+        newCrossings.forEach((newCrossing) => {
+          let bestIdx = -1;
+          let bestDistSq = Number.POSITIVE_INFINITY;
+
+          unmatchedOld.forEach((oldCrossing, idx) => {
+            const dx = oldCrossing.x - newCrossing.x;
+            const dy = oldCrossing.y - newCrossing.y;
+            const distSq = dx * dx + dy * dy;
+            if (distSq < bestDistSq) {
+              bestDistSq = distSq;
+              bestIdx = idx;
+            }
+          });
+
+          if (bestIdx < 0 || bestDistSq > maxDistSq) return;
+          const [matchedOld] = unmatchedOld.splice(bestIdx, 1);
+          nextOverrides[newCrossing.id] = prevOverrides[matchedOld.id];
+        });
+      });
+
+      const prevKeys = Object.keys(prevOverrides);
+      const nextKeys = Object.keys(nextOverrides);
+      if (prevKeys.length === nextKeys.length && prevKeys.every((key) => prevOverrides[key] === nextOverrides[key])) {
+        return prevOverrides;
+      }
+
+      return nextOverrides;
+    });
+
+    prevCrossingsRef.current = baseCrossings;
+  }, [baseCrossings]);
+
   const crossingsWithOverrides = useMemo(
-    () => crossings.map((c) => ({ ...c, overId: crossingOverrides[c.id] ?? c.overId })),
-    [crossingOverrides, crossings],
+    () => baseCrossings.map((c) => ({ ...c, overId: crossingOverrides[c.id] ?? c.overId })),
+    [baseCrossings, crossingOverrides],
   );
 
   const crossingsDisplay = useMemo(() => {
