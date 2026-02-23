@@ -22,6 +22,7 @@ export type GuideTemplateParams = {
   xMM: number;
   ascMM: number;
   descMM: number;
+  invertGuides?: boolean;
   normalSign?: 1 | -1;
   tickStepMM?: number;     // used for vertical ticks
   tickAnchorS?: number;    // phase anchor along baseline arc-length (mm)
@@ -46,11 +47,14 @@ export function blackletterGuideHeightsMM(nibMM: number) {
 }
 
 function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
-  const { baseline, xMM, ascMM, descMM, normalSign = 1, tickStepMM, tickAnchorS, actualNibMM } = params;
-  const baseLine = baseline;
-  const waistLine = offset(baseline, -xMM * normalSign);
-  const ascLine = offset(baseline, -(xMM + ascMM) * normalSign);
-  const descLine = offset(baseline, descMM * normalSign);
+  const { baseline, xMM, ascMM, descMM, invertGuides = false, normalSign = 1, tickStepMM, tickAnchorS, actualNibMM } = params;
+  const waistOff = -xMM * normalSign;
+  const ascOffNormal = -(xMM + ascMM) * normalSign;
+  const descOffNormal = descMM * normalSign;
+  const baseLine = invertGuides ? offset(baseline, waistOff) : baseline;
+  const waistLine = invertGuides ? baseline : offset(baseline, waistOff);
+  const ascLine = invertGuides ? offset(baseline, ascMM * normalSign) : offset(baseline, ascOffNormal);
+  const descLine = invertGuides ? offset(baseline, -(xMM + descMM) * normalSign) : offset(baseline, descOffNormal);
 
   const step = Math.max(0.0001, tickStepMM ?? 1);
   const ticks: { a: Pt; b: Pt }[] = [];
@@ -73,6 +77,9 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
   const kMin = Math.floor((0 - anchor) / step);
   const kMax = Math.ceil((arcLen - anchor) / step);
 
+  const topScalar = invertGuides ? ascMM : -(xMM + ascMM);
+  const botScalar = invertGuides ? -(xMM + descMM) : descMM;
+
   for (let k = kMin; k <= kMax; k += 1) {
     const s = anchor + k * step;
     const sClamped = Math.max(0, Math.min(arcLen, s));
@@ -82,8 +89,8 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
     const { p, n } = pointAt(baseline, sClamped);
 
     ticks.push({
-      a: { x: p.x - n.x * (xMM + ascMM) * normalSign, y: p.y - n.y * (xMM + ascMM) * normalSign },
-      b: { x: p.x + n.x * descMM * normalSign, y: p.y + n.y * descMM * normalSign },
+      a: { x: p.x + n.x * topScalar * normalSign, y: p.y + n.y * topScalar * normalSign },
+      b: { x: p.x + n.x * botScalar * normalSign, y: p.y + n.y * botScalar * normalSign },
     });
   }
 
@@ -97,18 +104,18 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
   const hGuides: Pt[][] = [];
 
   if (actualNibMM != null && actualNibMM > 0) {
-    const topOff = -(xMM + ascMM) * normalSign; // ascLine offset from baseline
-    const waistOff = -xMM * normalSign;         // waistLine offset from baseline
-    const baseOff = 0;             // baseLine offset from baseline
-    const descOff = descMM * normalSign;        // descLine offset from baseline
+    const offAsc = invertGuides ? ascMM * normalSign : -(xMM + ascMM) * normalSign;
+    const offWaist = invertGuides ? 0 : -xMM * normalSign;
+    const offBase = invertGuides ? -xMM * normalSign : 0;
+    const offDesc = invertGuides ? -(xMM + descMM) * normalSign : descMM * normalSign;
 
     const EPS = 1e-2; // 0.01mm tolerance
 
     const isNearNamedOff = (d: number) =>
-      Math.abs(d - topOff) < EPS ||
-      Math.abs(d - waistOff) < EPS ||
-      Math.abs(d - baseOff) < EPS ||
-      Math.abs(d - descOff) < EPS;
+      Math.abs(d - offAsc) < EPS ||
+      Math.abs(d - offWaist) < EPS ||
+      Math.abs(d - offBase) < EPS ||
+      Math.abs(d - offDesc) < EPS;
 
     // Coerce to nearest half-nib count to avoid float noise (sliders are 0.5 steps).
     const toHalfNibs = (mm: number) => Math.round((mm / actualNibMM) * 2) / 2;
@@ -169,13 +176,13 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
     };
 
     // Ascender band: ascLine -> waistLine (half at TOP)
-    pushBandBetween(topOff, waistOff, ascMM, 'top');
+    pushBandBetween(offAsc, offWaist, ascMM, 'top');
 
     // X-height band: waistLine -> baseLine (half at TOP)
-    pushBandBetween(waistOff, baseOff, xMM, 'top');
+    pushBandBetween(offWaist, offBase, xMM, 'top');
 
     // Descender band: baseLine -> descLine (half at BOTTOM)
-    pushBandBetween(baseOff, descOff, descMM, 'bottom');
+    pushBandBetween(offBase, offDesc, descMM, 'bottom');
   }
 
 
@@ -184,19 +191,19 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
 
 
 function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
-  const { baseline, xMM, ascMM, descMM, normalSign = 1, tickStepMM, tickAnchorS } = params;
+  const { baseline, xMM, ascMM, descMM, invertGuides = false, normalSign = 1, tickStepMM, tickAnchorS } = params;
 
-  const ascLine = offset(baseline, -(xMM + ascMM) * normalSign);
-  const waistLine = offset(baseline, -xMM * normalSign);
-  const baseLine = baseline;
-  const descLine = offset(baseline, descMM * normalSign);
+  const baseLine = invertGuides ? offset(baseline, -xMM * normalSign) : baseline;
+  const waistLine = invertGuides ? baseline : offset(baseline, -xMM * normalSign);
+  const ascLine = invertGuides ? offset(baseline, ascMM * normalSign) : offset(baseline, -(xMM + ascMM) * normalSign);
+  const descLine = invertGuides ? offset(baseline, -(xMM + descMM) * normalSign) : offset(baseline, descMM * normalSign);
 
   const step = Math.max(0.5, tickStepMM ?? 100);
   const ticks: { a: Pt; b: Pt }[] = [];
   const arcLen = lengthPoly(baseline);
   const cot = 1 / Math.tan((COPPERPLATE_SLANT_DEG * Math.PI) / 180);
-  const topOff = xMM + ascMM;
-  const botOff = descMM;
+  const topScalar = invertGuides ? ascMM : -(xMM + ascMM);
+  const botScalar = invertGuides ? -(xMM + descMM) : descMM;
   const isClosed = (() => {
     if (baseline.length < 3) return false;
     const a = baseline[0];
@@ -222,15 +229,15 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
     for (let i = 0; i < count; i += 1) {
       const s = anchor + i * evenStep;
 
-      const sTop = s + topOff * cot * normalSign;
-      const sBot = s - botOff * cot * normalSign;
+      const sTop = s - topScalar * cot * normalSign;
+      const sBot = s - botScalar * cot * normalSign;
 
       const Ct = pointAt(baseline, wrap(sTop));
       const Cb = pointAt(baseline, wrap(sBot));
 
       ticks.push({
-        a: { x: Ct.p.x - Ct.n.x * topOff * normalSign, y: Ct.p.y - Ct.n.y * topOff * normalSign },
-        b: { x: Cb.p.x + Cb.n.x * botOff * normalSign, y: Cb.p.y + Cb.n.y * botOff * normalSign },
+        a: { x: Ct.p.x + Ct.n.x * topScalar * normalSign, y: Ct.p.y + Ct.n.y * topScalar * normalSign },
+        b: { x: Cb.p.x + Cb.n.x * botScalar * normalSign, y: Cb.p.y + Cb.n.y * botScalar * normalSign },
       });
     }
   } else {
@@ -238,7 +245,7 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
     // become "special" and look broken at the ends.
     // Instead: over-generate beyond both ends and sample with pointAtExtended.
 
-    const slantPad = Math.max(topOff * cot, botOff * cot);
+    const slantPad = Math.max(Math.abs(topScalar * cot), Math.abs(botScalar * cot));
     const uMin = -slantPad - step * 2;
     const uMax = arcLen + slantPad + step * 2;
 
@@ -249,15 +256,15 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
       const s = anchor + k * step;
 
       // Top of tick occurs "later" along the curve than the bottom for forward slant
-      const sTop = s + topOff * cot * normalSign;
-      const sBot = s - botOff * cot * normalSign;
+      const sTop = s - topScalar * cot * normalSign;
+      const sBot = s - botScalar * cot * normalSign;
 
       const Ct = pointAtExtended(baseline, sTop);
       const Cb = pointAtExtended(baseline, sBot);
 
       ticks.push({
-        a: { x: Ct.p.x - Ct.n.x * topOff * normalSign, y: Ct.p.y - Ct.n.y * topOff * normalSign },
-        b: { x: Cb.p.x + Cb.n.x * botOff * normalSign, y: Cb.p.y + Cb.n.y * botOff * normalSign },
+        a: { x: Ct.p.x + Ct.n.x * topScalar * normalSign, y: Ct.p.y + Ct.n.y * topScalar * normalSign },
+        b: { x: Cb.p.x + Cb.n.x * botScalar * normalSign, y: Cb.p.y + Cb.n.y * botScalar * normalSign },
       });
     }
   }
