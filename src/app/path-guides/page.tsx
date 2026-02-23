@@ -49,6 +49,7 @@ type Strap = {
   rotDeg: number;
   flip: boolean;
   snapped: boolean;
+  invertGuides: boolean;
 };
 
 type StrapGroup = {
@@ -279,6 +280,7 @@ export default function PathGuidesPage() {
     rotDeg: 0,
     flip: false,
     snapped: false,
+    invertGuides: false,
   }, 'Copperplate')]));
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -311,6 +313,7 @@ export default function PathGuidesPage() {
     
           // ✅ actualNibMM: pass the raw nib size (matches Calligram)
           actualNibMM: metrics.nibMM,
+          invertGuides: strap.invertGuides,
         })
       : null;
 
@@ -612,6 +615,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       rotDeg: 0,
       flip: false,
       snapped: false,
+      invertGuides: false,
     }, 'Copperplate');
     setStraps((prev) => [...prev, next]);
     setActiveId(next.id);
@@ -644,6 +648,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
           rotDeg: 0,
           flip: false,
           snapped: false,
+          invertGuides: false,
         }, 'Copperplate'));
       });
     }
@@ -919,6 +924,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     offset: { x: strap.offset.x + 10, y: strap.offset.y + 10 },
                     flip: strap.flip,
                     snapped: false,
+                    invertGuides: strap.invertGuides,
                   };
                   setStraps((prev) => [...prev, duplicate]);
                 }} className="px-2 py-1 rounded border border-slate-300">Duplicate</button>
@@ -1015,6 +1021,15 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     onChange={(e) => updateStrap(activeStrap.id, { flip: e.target.checked })}
                   />
                   Flip strap
+                </label>
+                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                    checked={activeStrap.invertGuides}
+                    onChange={(e) => updateStrap(activeStrap.id, { invertGuides: e.target.checked })}
+                  />
+                  Invert guidelines
                 </label>
               </div>
             </div>
