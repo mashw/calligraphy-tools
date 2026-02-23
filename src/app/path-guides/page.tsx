@@ -3,7 +3,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 
 import GuideOverlay from '@/components/preview/GuideOverlay';
-import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
+import { PAPERS_MM, lengthPoly, pathD, pointAt } from '@/lib/curve-helpers';
 import { buildGuideSet } from '@/lib/guides/guide-template';
 import { findCrossingsForStraps, type Crossing, type Pt } from '@/lib/paths/intersections';
 import { polylineSubpathD } from '@/lib/paths/polyline-subpath';
@@ -48,6 +48,7 @@ type Strap = {
   scalePct: number;
   rotDeg: number;
   flip: boolean;
+  invertGuides: boolean;
   snapped: boolean;
 };
 
@@ -112,6 +113,31 @@ const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) 
     ))
     .map((entry) => entry.crossing.id);
 };
+
+function ensureGuidelinesOutward(
+  pts: Pt[],
+  center: { x: number; y: number },
+  invert: boolean,
+): Pt[] {
+  if (pts.length < 2) return pts;
+
+  const arcLen = lengthPoly(pts);
+  if (arcLen <= 0) return pts;
+
+  let sum = 0;
+  const sampleCount = 9;
+  for (let i = 0; i < sampleCount; i += 1) {
+    const s = (arcLen * i) / (sampleCount - 1);
+    const { p, n } = pointAt(pts, s);
+    sum += n.x * (p.x - center.x) + n.y * (p.y - center.y);
+  }
+  const avgDot = sum / sampleCount;
+
+  let shouldReverse = avgDot > 0;
+  if (invert) shouldReverse = !shouldReverse;
+
+  return shouldReverse ? [...pts].reverse() : pts;
+}
 
 function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, adornmentClassName = 'right-3', children }: InsetLabeledFieldProps) {
   return (
@@ -278,6 +304,7 @@ export default function PathGuidesPage() {
     scalePct: 100,
     rotDeg: 0,
     flip: false,
+    invertGuides: false,
     snapped: false,
   }, 'Copperplate')]));
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -295,11 +322,12 @@ export default function PathGuidesPage() {
   const renderData = useMemo(() => straps.map((strap) => {
     const sampled = samplePathDToPolyline(strap.d, 1.25);
     const transformed = transformPolyline(sampled, { scalePct: strap.scalePct, rotDeg: strap.rotDeg, flipX: strap.flip, offset: strap.offset });
+    const baselineForGuides = ensureGuidelinesOutward(transformed, { x: centerX, y: centerY }, strap.invertGuides);
     const metrics = guideMetrics(strap);
 
     const guideSet = !simplify && transformed.length > 1
       ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
-          baseline: transformed,
+          baseline: baselineForGuides,
           xMM: metrics.xMM,
           ascMM: metrics.ascMM,
           descMM: metrics.descMM,
@@ -315,7 +343,7 @@ export default function PathGuidesPage() {
       : null;
 
     return { strap, transformed, guideSet, metrics };
-  }), [simplify, straps]);
+  }), [centerX, centerY, simplify, straps]);
 
   const totalSegments = useMemo(
     () => renderData.reduce((sum, r) => sum + Math.max(0, r.transformed.length - 1), 0),
@@ -611,6 +639,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       scalePct: 100,
       rotDeg: 0,
       flip: false,
+      invertGuides: false,
       snapped: false,
     }, 'Copperplate');
     setStraps((prev) => [...prev, next]);
@@ -643,6 +672,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
           scalePct: 100,
           rotDeg: 0,
           flip: false,
+          invertGuides: false,
           snapped: false,
         }, 'Copperplate'));
       });
@@ -1015,6 +1045,15 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     onChange={(e) => updateStrap(activeStrap.id, { flip: e.target.checked })}
                   />
                   Flip strap
+                </label>
+                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                    checked={activeStrap.invertGuides}
+                    onChange={(e) => updateStrap(activeStrap.id, { invertGuides: e.target.checked })}
+                  />
+                  Invert guidelines
                 </label>
               </div>
             </div>
