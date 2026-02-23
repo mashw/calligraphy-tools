@@ -63,6 +63,7 @@ const SNAP_IN_MM = 6;
 const RELEASE_MM = 10;
 const CROSS_EPS_MM = 1.2;
 const CROSSING_MAX_SEGMENTS = 2800;
+const FIT_MARGIN_MM = 12;
 const PALETTE = ['#1d4ed8', '#ea580c', '#16a34a', '#9333ea', '#0891b2', '#dc2626', '#65a30d', '#4f46e5', '#c2410c', '#0f766e', '#be123c', '#4338ca'];
 const INSET_CONTROL_BASE = 'w-full border-0 rounded-none px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed';
 const INSET_CONTROL_MM = `${INSET_CONTROL_BASE} pr-10`;
@@ -84,6 +85,74 @@ const centroid = (pts: Pt[]) => {
   if (!pts.length) return { x: 0, y: 0 };
   const sum = pts.reduce((acc, pt) => ({ x: acc.x + pt.x, y: acc.y + pt.y }), { x: 0, y: 0 });
   return { x: sum.x / pts.length, y: sum.y / pts.length };
+};
+
+const boundsOf = (pts: Pt[]) => {
+  if (!pts.length) return { minX: 0, maxX: 0, minY: 0, maxY: 0, w: 0, h: 0 };
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  pts.forEach((pt) => {
+    minX = Math.min(minX, pt.x);
+    maxX = Math.max(maxX, pt.x);
+    minY = Math.min(minY, pt.y);
+    maxY = Math.max(maxY, pt.y);
+  });
+  return { minX, maxX, minY, maxY, w: maxX - minX, h: maxY - minY };
+};
+
+const clampOffsetToPage = ({
+  sampled,
+  localCenter,
+  strap,
+  box,
+  marginMM,
+}: {
+  sampled: Pt[];
+  localCenter: Pt;
+  strap: Pick<Strap, 'scalePct' | 'rotDeg' | 'flip' | 'offset'>;
+  box: { w: number; h: number };
+  marginMM: number;
+}) => {
+  const centered = sampled.map((p) => ({ x: p.x - localCenter.x, y: p.y - localCenter.y }));
+  const transformed = transformPolyline(centered, {
+    scalePct: strap.scalePct,
+    rotDeg: strap.rotDeg,
+    flipX: strap.flip,
+    offset: { x: strap.offset.x + localCenter.x, y: strap.offset.y + localCenter.y },
+  });
+  const b = boundsOf(transformed);
+  let adjustX = 0;
+  let adjustY = 0;
+  if (b.minX < marginMM) adjustX = marginMM - b.minX;
+  if (b.maxX > box.w - marginMM) adjustX = (box.w - marginMM) - b.maxX;
+  if (b.minY < marginMM) adjustY = marginMM - b.minY;
+  if (b.maxY > box.h - marginMM) adjustY = (box.h - marginMM) - b.maxY;
+  return { x: strap.offset.x + adjustX, y: strap.offset.y + adjustY };
+};
+
+const fitStrapToPage = ({
+  d,
+  box,
+  centerX,
+  centerY,
+  marginMM,
+}: {
+  d: string;
+  box: { w: number; h: number };
+  centerX: number;
+  centerY: number;
+  marginMM: number;
+}) => {
+  const sampled = samplePathDToPolyline(d, 1.25);
+  const localCenter = centroid(sampled);
+  const b = boundsOf(sampled);
+  const availW = box.w - 2 * marginMM;
+  const availH = box.h - 2 * marginMM;
+  const scalePct = Math.max(5, Math.min(400, Math.min(availW / Math.max(b.w, 1e-6), availH / Math.max(b.h, 1e-6)) * 100 * 0.9));
+  const offset = { x: centerX - localCenter.x, y: centerY - localCenter.y };
+  return { scalePct, offset };
 };
 
 const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) => {
@@ -285,7 +354,7 @@ export default function PathGuidesPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const dragRef = useRef<{ mode: 'none' | 'pan' | 'strap'; pointerId: number; startClient: { x: number; y: number }; startPan: { x: number; y: number }; strapId?: string; startOffset?: { x: number; y: number }; startSnapped?: boolean }>({
+  const dragRef = useRef<{ mode: 'none' | 'pan' | 'strap'; pointerId: number; startClient: { x: number; y: number }; startPan: { x: number; y: number }; strapId?: string; startOffset?: { x: number; y: number }; startSnapped?: boolean; startLocalCenter?: { x: number; y: number } }>({
     mode: 'none',
     pointerId: -1,
     startClient: { x: 0, y: 0 },
@@ -296,7 +365,14 @@ export default function PathGuidesPage() {
 
   const renderData = useMemo(() => straps.map((strap) => {
     const sampled = samplePathDToPolyline(strap.d, 1.25);
-    const transformed = transformPolyline(sampled, { scalePct: strap.scalePct, rotDeg: strap.rotDeg, flipX: strap.flip, offset: strap.offset });
+    const localCenter = centroid(sampled);
+    const centered = sampled.map((p) => ({ x: p.x - localCenter.x, y: p.y - localCenter.y }));
+    const transformed = transformPolyline(centered, {
+      scalePct: strap.scalePct,
+      rotDeg: strap.rotDeg,
+      flipX: strap.flip,
+      offset: { x: strap.offset.x + localCenter.x, y: strap.offset.y + localCenter.y },
+    });
     const metrics = guideMetrics(strap);
 
     const guideSet = !simplify && transformed.length > 1
@@ -317,7 +393,7 @@ export default function PathGuidesPage() {
         })
       : null;
 
-    return { strap, transformed, guideSet, metrics };
+    return { strap, transformed, guideSet, metrics, localCenter, sampled };
   }), [simplify, straps]);
 
   const totalSegments = useMemo(
@@ -541,6 +617,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       strapId,
       startOffset: strap.offset,
       startSnapped: strap.snapped,
+      startLocalCenter: strapById.get(strapId)?.localCenter,
     };
     svgRef.current.setPointerCapture(e.pointerId);
   };
@@ -565,12 +642,13 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     const nextY = drag.startOffset.y + dyMM;
     let snapped = drag.startSnapped ?? false;
 
+    const cX = drag.startLocalCenter?.x ?? 0;
     if (snapped) {
-      if (Math.abs(nextX - centerX) > RELEASE_MM) snapped = false;
-      else nextX = centerX;
+      if (Math.abs((nextX + cX) - centerX) > RELEASE_MM) snapped = false;
+      else nextX = centerX - cX;
     }
-    if (!snapped && Math.abs(nextX - centerX) <= SNAP_IN_MM) {
-      nextX = centerX;
+    if (!snapped && Math.abs((nextX + cX) - centerX) <= SNAP_IN_MM) {
+      nextX = centerX - cX;
       snapped = true;
     }
 
@@ -598,12 +676,22 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       { x: 0, y: 0 },
     ];
     const localOffset = pattern[i % pattern.length];
-    const offset = { x: centerX + localOffset.x, y: centerY + localOffset.y };
+    const baseD = circlePathD(40);
+    const fit = fitStrapToPage({ d: baseD, box, centerX, centerY, marginMM: FIT_MARGIN_MM });
+    const sampled = samplePathDToPolyline(baseD, 1.25);
+    const localCenterPt = centroid(sampled);
+    const offset = clampOffsetToPage({
+      sampled,
+      localCenter: localCenterPt,
+      strap: { scalePct: fit.scalePct, rotDeg: 0, flip: false, offset: { x: fit.offset.x + localOffset.x, y: fit.offset.y + localOffset.y } },
+      box,
+      marginMM: FIT_MARGIN_MM,
+    });
 
     const next = applyScriptDefaults({
       id: uid('strap'),
       name: `Circle ${straps.length + 1}`,
-      d: circlePathD(40),
+      d: baseD,
       color: PALETTE[straps.length % PALETTE.length],
       script: 'Copperplate',
       nibMMText: '2.5',
@@ -611,7 +699,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       xHeightMMText: '6',
       copperplateRatioPreset: '3:2:3',
       offset,
-      scalePct: 100,
+      scalePct: fit.scalePct,
       rotDeg: 0,
       flip: false,
       snapped: false,
@@ -633,6 +721,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       matches.forEach((m, idx) => {
         const d = m[2]?.trim();
         if (!d) return;
+        const fit = fitStrapToPage({ d, box, centerX, centerY, marginMM: FIT_MARGIN_MM });
         created.push(applyScriptDefaults({
           id: uid('strap'),
           name: `${file.name.replace(/\.svg$/i, '')} ${idx + 1}`,
@@ -643,8 +732,8 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
           nibAngleDeg: 45,
           xHeightMMText: '6',
           copperplateRatioPreset: '3:2:3',
-          offset: { x: centerX, y: centerY },
-          scalePct: 100,
+          offset: fit.offset,
+          scalePct: fit.scalePct,
           rotDeg: 0,
           flip: false,
           snapped: false,
@@ -916,16 +1005,19 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 <span className="flex-1 truncate">{strap.name}</span>
                 <button onClick={() => setActiveId(strap.id)} className="px-2 py-1 rounded border border-slate-300">Select</button>
                 <button onClick={() => {
+                  const sampled = samplePathDToPolyline(strap.d, 1.25);
+                  const localCenter = centroid(sampled);
                   const duplicate = {
                     ...strap,
                     id: uid('strap'),
                     name: `${strap.name} copy`,
                     color: PALETTE[(straps.length + 1) % PALETTE.length],
-                    offset: { x: strap.offset.x + 10, y: strap.offset.y + 10 },
+                    offset: { x: strap.offset.x + 8, y: strap.offset.y + 8 },
                     flip: strap.flip,
                     snapped: false,
                     invertGuides: strap.invertGuides,
                   };
+                  duplicate.offset = clampOffsetToPage({ sampled, localCenter, strap: duplicate, box, marginMM: FIT_MARGIN_MM });
                   setStraps((prev) => [...prev, duplicate]);
                 }} className="px-2 py-1 rounded border border-slate-300">Duplicate</button>
                 <button disabled={straps.length <= 1} onClick={() => {
