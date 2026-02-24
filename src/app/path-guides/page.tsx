@@ -344,6 +344,7 @@ export default function PathGuidesPage() {
   const [showDebugPoints] = useState(false);
   const [dragSimplifyStrapId, setDragSimplifyStrapId] = useState<string | null>(null);
   const [scaleInputText, setScaleInputText] = useState('');
+  const [verticalTickMode, setVerticalTickMode] = useState<'baseline' | 'geodesic'>('baseline');
 
   const [straps, setStraps] = useState<Strap[]>(() => ([applyScriptDefaults({
     id: uid('strap'),
@@ -373,6 +374,7 @@ export default function PathGuidesPage() {
   });
 
   const activeStrap = straps.find((s) => s.id === (activeId ?? straps[0]?.id)) ?? straps[0] ?? null;
+  const hasBlackletterStraps = straps.some((strap) => strap.script !== 'Copperplate');
 
   const renderData = useMemo(() => straps.map((strap) => {
     const sampled = samplePathDToPolyline(strap.d, 1.25);
@@ -401,11 +403,12 @@ export default function PathGuidesPage() {
           // ✅ actualNibMM: pass the raw nib size (matches Calligram)
           actualNibMM: metrics.nibMM,
           invertGuides: strap.invertGuides,
+          verticalTickMode: strap.script === 'Copperplate' ? undefined : verticalTickMode,
         })
       : null;
 
     return { strap, transformed, guideSet, metrics, localCenter, sampled };
-  }), [straps]);
+  }), [straps, verticalTickMode]);
 
   const totalSegments = useMemo(
     () => renderData.reduce((sum, r) => sum + Math.max(0, r.transformed.length - 1), 0),
@@ -1075,6 +1078,29 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                   {Object.keys(SCRIPT_PROFILES).map((id) => <option key={id} value={id}>{id}</option>)}
                 </select>
               </InsetLabeledField>
+
+
+              <InsetLabeledField label="Vertical grid mode (Blackletter only)">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVerticalTickMode('baseline')}
+                    disabled={!hasBlackletterStraps || activeStrap.script === 'Copperplate'}
+                    className={`px-3 py-1.5 rounded border text-sm disabled:opacity-50 disabled:cursor-not-allowed ${verticalTickMode === 'baseline' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    Baseline
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVerticalTickMode('geodesic')}
+                    disabled={!hasBlackletterStraps || activeStrap.script === 'Copperplate'}
+                    className={`px-3 py-1.5 rounded border text-sm disabled:opacity-50 disabled:cursor-not-allowed ${verticalTickMode === 'geodesic' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    Geodesic
+                  </button>
+                </div>
+              </InsetLabeledField>
+              <p className="-mt-2 text-[11px] text-slate-500">Baseline keeps spacing correct on the baseline; Geodesic enforces spacing per band (ticks curve).</p>
 
               {activeStrap.script === 'Copperplate' ? (
                 <>

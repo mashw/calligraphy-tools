@@ -461,6 +461,7 @@ export default function CalligramPage() {
   };
   const snap05 = (v: number) => Math.round(v / 0.5) * 0.5;
   const [script, setScript] = useState<ScriptId>('TexturaQuadrata');
+  const [verticalTickMode, setVerticalTickMode] = useState<'baseline' | 'geodesic'>('baseline');
   const [allowPartialNibWidths, setAllowPartialNibWidths] = useState(true);
   const [radiusMM, setRadiusMM] = useState(MAIN_DEFAULTS.TexturaQuadrata.radiusMM);
   const [innerOffsetMM, setInnerOffsetMM] = useState(
@@ -1015,8 +1016,9 @@ export default function CalligramPage() {
         tickStepMM,
         tickAnchorS: span ? span.sStart : undefined,
         actualNibMM: nibMM,
+        verticalTickMode: script === 'Copperplate' ? undefined : verticalTickMode,
       }),
-    [baseline, guideTemplate, xMM, ascMM, descMM, mainNormalSign, tickStepMM, nibMM, span],
+    [baseline, guideTemplate, xMM, ascMM, descMM, mainNormalSign, tickStepMM, nibMM, span, script, verticalTickMode],
   );
 
   const mainAscTopOffsetMM = useMemo(
@@ -1121,8 +1123,9 @@ const innerRadiusMaxMM = useMemo(
       tickStepMM: topTickStepMM,
       tickAnchorS: topSpan ? topSpan.sStart : undefined,
       actualNibMM: topBandSizeMM,
+      verticalTickMode: topBandScript === 'Copperplate' ? undefined : verticalTickMode,
     }),
-    [topBandScript, topBaseline, topXMM, topAscMM, topDescMM, innerNormalSign, topTickStepMM, topSpan, topBandSizeMM],
+    [topBandScript, topBaseline, topXMM, topAscMM, topDescMM, innerNormalSign, topTickStepMM, topSpan, topBandSizeMM, verticalTickMode],
   );
 
   const bottomXMM = useMemo(
@@ -1173,8 +1176,9 @@ const innerRadiusMaxMM = useMemo(
       tickStepMM: bottomTickStepMM,
       tickAnchorS: bottomSpan ? bottomSpan.sStart : undefined,
       actualNibMM: bottomBandSizeMM,
+      verticalTickMode: bottomBandScript === 'Copperplate' ? undefined : verticalTickMode,
     }),
-    [bottomBandScript, bottomBaseline, bottomXMM, bottomAscMM, bottomDescMM, outerNormalSign, bottomTickStepMM, bottomSpan, bottomBandSizeMM],
+    [bottomBandScript, bottomBaseline, bottomXMM, bottomAscMM, bottomDescMM, outerNormalSign, bottomTickStepMM, bottomSpan, bottomBandSizeMM, verticalTickMode],
   );
 
   useEffect(() => {
@@ -2469,6 +2473,28 @@ const innerRadiusMaxMM = useMemo(
                   <option value={45}>45°</option>
                 </select>
                 </InsetLabeledField>
+
+              <div className="col-span-2">
+                <InsetLabeledField label="Vertical grid mode">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setVerticalTickMode('baseline')}
+                      className={`px-3 py-1.5 rounded border text-sm ${verticalTickMode === 'baseline' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+                    >
+                      Baseline
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVerticalTickMode('geodesic')}
+                      className={`px-3 py-1.5 rounded border text-sm ${verticalTickMode === 'geodesic' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+                    >
+                      Geodesic
+                    </button>
+                  </div>
+                </InsetLabeledField>
+                <p className="mt-1 text-[11px] text-slate-400">Baseline keeps spacing correct on the baseline; Geodesic enforces spacing per band (ticks curve).</p>
+              </div>
               </div>
             </div>
           )}
