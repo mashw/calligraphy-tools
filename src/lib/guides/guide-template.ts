@@ -12,6 +12,7 @@ export type GuideSet = {
   descLine: Pt[];
   // optional perpendicular ticks/markers (each tick is a line segment)
   ticks?: { a: Pt; b: Pt }[];
+  tickPolys?: Pt[][];
   hGuides?: Pt[][]; // NEW: curve-parallel intermediate rails
 };
 
@@ -27,6 +28,7 @@ export type GuideTemplateParams = {
   tickStepMM?: number;     // used for vertical ticks
   tickAnchorS?: number;    // phase anchor along baseline arc-length (mm)
   actualNibMM?: number;    // used for horizontal tick spacing
+  verticalTickMode?: 'baseline' | 'geodesic';
 };
 
 
@@ -47,7 +49,7 @@ export function blackletterGuideHeightsMM(nibMM: number) {
 }
 
 function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
-  const { baseline, xMM, ascMM, descMM, invertGuides = false, normalSign = 1, tickStepMM, tickAnchorS, actualNibMM } = params;
+  const { baseline, xMM, ascMM, descMM, invertGuides = false, normalSign = 1, tickStepMM, tickAnchorS, actualNibMM, verticalTickMode } = params;
   const waistOff = -xMM * normalSign;
   const ascOffNormal = -(xMM + ascMM) * normalSign;
   const descOffNormal = descMM * normalSign;
@@ -58,6 +60,7 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
 
   const step = Math.max(0.0001, tickStepMM ?? 1);
   const ticks: { a: Pt; b: Pt }[] = [];
+  const tickPolys: Pt[][] = [];
   const arcLen = lengthPoly(baseline);
 
   const isClosed = (() => {
@@ -80,18 +83,38 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
   const topScalar = invertGuides ? ascMM : -(xMM + ascMM);
   const botScalar = invertGuides ? -(xMM + descMM) : descMM;
 
-  for (let k = kMin; k <= kMax; k += 1) {
-    const s = anchor + k * step;
-    const sClamped = Math.max(0, Math.min(arcLen, s));
-        // Closed loops: avoid drawing both s=0 and s=arcLen (same physical seam).
-        if (isClosed && sClamped >= arcLen - 1e-9) continue;
+  if (verticalTickMode === 'geodesic') {
+    const ascArcLen = lengthPoly(ascLine);
+    const waistArcLen = lengthPoly(waistLine);
+    const baseArcLen = lengthPoly(baseLine);
+    const descArcLen = lengthPoly(descLine);
 
-    const { p, n } = pointAt(baseline, sClamped);
+    for (let k = kMin; k <= kMax; k += 1) {
+      const s = anchor + k * step;
+      const sClamped = Math.max(0, Math.min(arcLen, s));
+      if (isClosed && sClamped >= arcLen - 1e-9) continue;
 
-    ticks.push({
-      a: { x: p.x + n.x * topScalar * normalSign, y: p.y + n.y * topScalar * normalSign },
-      b: { x: p.x + n.x * botScalar * normalSign, y: p.y + n.y * botScalar * normalSign },
-    });
+      const pAsc = pointAt(ascLine, Math.max(0, Math.min(ascArcLen, s))).p;
+      const pWaist = pointAt(waistLine, Math.max(0, Math.min(waistArcLen, s))).p;
+      const pBase = pointAt(baseLine, Math.max(0, Math.min(baseArcLen, s))).p;
+      const pDesc = pointAt(descLine, Math.max(0, Math.min(descArcLen, s))).p;
+
+      tickPolys.push([pAsc, pWaist, pBase, pDesc]);
+    }
+  } else {
+    for (let k = kMin; k <= kMax; k += 1) {
+      const s = anchor + k * step;
+      const sClamped = Math.max(0, Math.min(arcLen, s));
+      // Closed loops: avoid drawing both s=0 and s=arcLen (same physical seam).
+      if (isClosed && sClamped >= arcLen - 1e-9) continue;
+
+      const { p, n } = pointAt(baseline, sClamped);
+
+      ticks.push({
+        a: { x: p.x + n.x * topScalar * normalSign, y: p.y + n.y * topScalar * normalSign },
+        b: { x: p.x + n.x * botScalar * normalSign, y: p.y + n.y * botScalar * normalSign },
+      });
+    }
   }
 
 
@@ -186,7 +209,15 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
   }
 
 
-  return { ascLine, waistLine, baseLine, descLine, ticks, hGuides };
+  return {
+    ascLine,
+    waistLine,
+    baseLine,
+    descLine,
+    ticks: verticalTickMode === 'geodesic' ? undefined : ticks,
+    tickPolys: verticalTickMode === 'geodesic' ? tickPolys : undefined,
+    hGuides,
+  };
 }
 
 

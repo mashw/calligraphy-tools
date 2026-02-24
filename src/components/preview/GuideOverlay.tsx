@@ -125,7 +125,32 @@ export default function GuideOverlay({
       )}
 
       <g clipPath={bandClipD ? `url(#${bandClipId})` : undefined}>
-        {showGridVertical && guideSet.ticks?.map((tick, idx) => (
+        {showGridVertical && (guideSet.tickPolys?.length ? guideSet.tickPolys.map((poly, idx) => {
+          const points = poly.map((p) => `${p.x},${p.y}`).join(' ');
+          return (
+            <g key={`tick-poly-${idx}`}>
+              <polyline
+                points={points}
+                fill="none"
+                stroke={gridColors.tick ?? colors.tick}
+                strokeWidth={gridThin ?? style.thin}
+                vectorEffect="non-scaling-stroke"
+              />
+              {interactive?.onGuidePointerDown && (
+                <polyline
+                  points={points}
+                  fill="none"
+                  stroke="rgba(0,0,0,0)"
+                  strokeWidth={hitStrokeWidth}
+                  vectorEffect="non-scaling-stroke"
+                  pointerEvents="stroke"
+                  className="cursor-move"
+                  onPointerDown={interactive.onGuidePointerDown}
+                />
+              )}
+            </g>
+          );
+        }) : guideSet.ticks?.map((tick, idx) => (
           <g key={`tick-${idx}`}>
             <line
               x1={tick.a.x}
@@ -151,7 +176,7 @@ export default function GuideOverlay({
               />
             )}
           </g>
-        ))}
+        )))}
 
         {showGridHorizontal && guideSet.hGuides?.map((poly, idx) => {
           const points = poly.map((p) => `${p.x},${p.y}`).join(' ');
