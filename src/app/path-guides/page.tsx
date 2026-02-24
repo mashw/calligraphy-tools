@@ -340,6 +340,7 @@ export default function PathGuidesPage() {
   const [showAllCrossings, setShowAllCrossings] = useState(false);
   const [crossingOverrides, setCrossingOverrides] = useState<PairOverrides>({});
   const [showDebugPoints] = useState(false);
+  const [dragSimplifyStrapId, setDragSimplifyStrapId] = useState<string | null>(null);
 
   const [straps, setStraps] = useState<Strap[]>(() => ([applyScriptDefaults({
     id: uid('strap'),
@@ -616,6 +617,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     const strap = straps.find((s) => s.id === strapId);
     if (!strap || !svgRef.current) return;
     setActiveId(strapId);
+    setDragSimplifyStrapId(strapId);
     dragRef.current = {
       mode: 'strap',
       pointerId: e.pointerId,
@@ -665,6 +667,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
   const onSvgPointerUp: React.PointerEventHandler<SVGSVGElement> = (e) => {
     if (dragRef.current.pointerId === e.pointerId) {
       dragRef.current = { mode: 'none', pointerId: -1, startClient: { x: 0, y: 0 }, startPan: { x: 0, y: 0 } };
+      setDragSimplifyStrapId(null);
     }
   };
 
@@ -816,6 +819,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               onPointerDown={onSvgPointerDown}
               onPointerMove={onSvgPointerMove}
               onPointerUp={onSvgPointerUp}
+              onPointerCancel={onSvgPointerUp}
               onPointerLeave={onSvgPointerUp}
             >
 {!simplify && (
@@ -875,63 +879,68 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
               <line x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
 
-              {renderData.map(({ strap, transformed, guideSet }) => (
-                <g
-  key={strap.id}
-  mask={
-    !simplify && underCrossings.get(strap.id)?.length
-      ? `url(#mask-${strap.id})`
-      : undefined
-  }
->
-                  {simplify ? (
-                    guideSet && (
-                      <path
-                        d={bandPolygonD(guideSet.ascLine, guideSet.descLine)}
-                        fill={strap.color}
-                        stroke="none"
-                        vectorEffect="non-scaling-stroke"
-                        pointerEvents="fill"
-                        onPointerDown={beginStrapDrag(strap.id)}
-                      />
-                    )
-                  ) : transformed.length > 1 && (
-                    <path
-                      d={pathD(transformed)}
-                      fill="none"
-                      stroke={strap.color}
-                      strokeWidth={0.9}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      vectorEffect="non-scaling-stroke"
-                      pointerEvents="none"
-                    />
-                  )}
-                  {!simplify && guideSet && (
-                    <GuideOverlay
-                      guideSet={guideSet}
-                      style={{
-                        thin: 0.45,
-                        bold: 0.75,
-                        colors: {
-                          thin: strap.color,
-                          bold: activeStrap?.id === strap.id ? '#7c3aed' : strap.color,
-                          tick: '#dbeafe',
-                          frame: 'transparent',
-                        },
-                      }}
-                      interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
-                    />
-                  )}
+              {renderData.map(({ strap, transformed, guideSet }) => {
+                const strapIsTempSimplified = dragSimplifyStrapId === strap.id;
+                const isSimplifiedForThisStrap = simplify || strapIsTempSimplified;
 
-                  {showDebugPoints && !simplify && transformed.map((pt, i) => (
-                    <g key={`dbg-${strap.id}-${i}`}>
-                      <circle cx={pt.x} cy={pt.y} r={0.8} fill="#ef4444" vectorEffect="non-scaling-stroke" />
-                      <text x={pt.x + 1} y={pt.y - 1} fontSize="2.6" fill="#b91c1c">{i}</text>
-                    </g>
-                  ))}
-                </g>
-              ))}
+                return (
+                  <g
+                    key={strap.id}
+                    mask={
+                      !isSimplifiedForThisStrap && underCrossings.get(strap.id)?.length
+                        ? `url(#mask-${strap.id})`
+                        : undefined
+                    }
+                  >
+                    {isSimplifiedForThisStrap ? (
+                      guideSet && (
+                        <path
+                          d={bandPolygonD(guideSet.ascLine, guideSet.descLine)}
+                          fill={strap.color}
+                          stroke="none"
+                          vectorEffect="non-scaling-stroke"
+                          pointerEvents="fill"
+                          onPointerDown={beginStrapDrag(strap.id)}
+                        />
+                      )
+                    ) : transformed.length > 1 && (
+                      <path
+                        d={pathD(transformed)}
+                        fill="none"
+                        stroke={strap.color}
+                        strokeWidth={0.9}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        vectorEffect="non-scaling-stroke"
+                        pointerEvents="none"
+                      />
+                    )}
+                    {!isSimplifiedForThisStrap && guideSet && (
+                      <GuideOverlay
+                        guideSet={guideSet}
+                        style={{
+                          thin: 0.45,
+                          bold: 0.75,
+                          colors: {
+                            thin: strap.color,
+                            bold: activeStrap?.id === strap.id ? '#7c3aed' : strap.color,
+                            tick: '#dbeafe',
+                            frame: 'transparent',
+                          },
+                        }}
+                        interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
+                      />
+                    )}
+
+                    {showDebugPoints && !isSimplifiedForThisStrap && transformed.map((pt, i) => (
+                      <g key={`dbg-${strap.id}-${i}`}>
+                        <circle cx={pt.x} cy={pt.y} r={0.8} fill="#ef4444" vectorEffect="non-scaling-stroke" />
+                        <text x={pt.x + 1} y={pt.y - 1} fontSize="2.6" fill="#b91c1c">{i}</text>
+                      </g>
+                    ))}
+                  </g>
+                );
+              })}
 
               {simplify && crossingsWithOverrides.map((crossing) => {
                 const over = strapById.get(crossing.overId);
