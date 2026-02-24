@@ -67,6 +67,8 @@ const PALETTE = ['#1d4ed8', '#ea580c', '#16a34a', '#9333ea', '#0891b2', '#dc2626
 const INSET_CONTROL_BASE = 'w-full border-0 rounded-none px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed';
 const INSET_CONTROL_MM = `${INSET_CONTROL_BASE} pr-10`;
 const INSET_CONTROL_WIDE = `${INSET_CONTROL_BASE} pr-14`;
+const SCALE_MIN_PCT = 1;
+const SCALE_MAX_PCT = 220;
 
 const snapHalf = (v: number) => Math.round(v * 2) / 2;
 
@@ -149,7 +151,7 @@ const fitStrapToPage = ({
   const b = boundsOf(sampled);
   const availW = box.w - 2 * marginMM;
   const availH = box.h - 2 * marginMM;
-  const scalePct = Math.max(5, Math.min(400, Math.min(availW / Math.max(b.w, 1e-6), availH / Math.max(b.h, 1e-6)) * 100 * 0.9));
+  const scalePct = Math.max(5, Math.min(400, Math.min(availW / Math.max(b.w, 1e-6), availH / Math.max(b.h, 1e-6)) * 100 * 0.85));
   const offset = { x: centerX - localCenter.x, y: centerY - localCenter.y };
   return { scalePct, offset };
 };
@@ -341,6 +343,7 @@ export default function PathGuidesPage() {
   const [crossingOverrides, setCrossingOverrides] = useState<PairOverrides>({});
   const [showDebugPoints] = useState(false);
   const [dragSimplifyStrapId, setDragSimplifyStrapId] = useState<string | null>(null);
+  const [scaleInputText, setScaleInputText] = useState('');
 
   const [straps, setStraps] = useState<Strap[]>(() => ([applyScriptDefaults({
     id: uid('strap'),
@@ -687,13 +690,12 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     ];
     const localOffset = pattern[i % pattern.length];
     const baseD = circlePathD(40);
-    const fit = fitStrapToPage({ d: baseD, box, centerX, centerY, marginMM: FIT_MARGIN_MM });
     const sampled = samplePathDToPolyline(baseD, 1.25);
     const localCenterPt = centroid(sampled);
     const offset = clampOffsetToPage({
       sampled,
       localCenter: localCenterPt,
-      strap: { scalePct: fit.scalePct, rotDeg: 0, flip: false, offset: { x: fit.offset.x + localOffset.x, y: fit.offset.y + localOffset.y } },
+      strap: { scalePct: 100, rotDeg: 0, flip: false, offset: { x: centerX + localOffset.x, y: centerY + localOffset.y } },
       box,
       marginMM: FIT_MARGIN_MM,
     });
@@ -709,7 +711,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       xHeightMMText: '6',
       copperplateRatioPreset: '3:2:3',
       offset,
-      scalePct: fit.scalePct,
+      scalePct: 100,
       rotDeg: 0,
       flip: false,
       snapped: false,
@@ -1126,8 +1128,57 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                   <input type="range" min={-180} max={180} step={1} value={activeStrap.rotDeg} onChange={(e) => updateStrap(activeStrap.id, { rotDeg: Number.parseInt(e.target.value, 10) || 0 })} className="w-full" />
                 </div>
                 <div>
-                  <label className="font-medium text-slate-700">Scale (%) <span className="text-indigo-600">{activeStrap.scalePct}%</span></label>
-                  <input type="range" min={1} max={220} step={1} value={activeStrap.scalePct} onChange={(e) => updateStrap(activeStrap.id, { scalePct: Math.max(1, Number.parseInt(e.target.value, 10) || 100) })} className="w-full" />
+                  <div className="mb-1 flex items-center gap-2">
+                    <label className="font-medium text-slate-700">Scale (%)</label>
+                    <input
+                      type="number"
+                      min={SCALE_MIN_PCT}
+                      max={SCALE_MAX_PCT}
+                      step={1}
+                      value={scaleInputText || String(Math.round(activeStrap.scalePct))}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        setScaleInputText(raw);
+                        if (!raw.trim()) return;
+                        const parsed = Number.parseFloat(raw);
+                        if (!Number.isFinite(parsed)) return;
+                        const next = Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed));
+                        updateStrap(activeStrap.id, { scalePct: next });
+                      }}
+                      onBlur={(e) => {
+                        const raw = e.target.value.trim();
+                        if (!raw) {
+                          setScaleInputText('');
+                          return;
+                        }
+                        const parsed = Number.parseFloat(raw);
+                        if (!Number.isFinite(parsed)) {
+                          setScaleInputText('');
+                          return;
+                        }
+                        const next = Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed));
+                        updateStrap(activeStrap.id, { scalePct: next });
+                        setScaleInputText('');
+                      }}
+                      className="w-20 rounded border border-slate-300 px-2 py-0.5 text-sm"
+                    />
+                    <span className="text-xs text-slate-500">%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={SCALE_MIN_PCT}
+                    max={SCALE_MAX_PCT}
+                    step={1}
+                    value={activeStrap.scalePct}
+                    onChange={(e) => {
+                      const parsed = Number.parseFloat(e.target.value);
+                      const next = Number.isFinite(parsed)
+                        ? Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed))
+                        : 100;
+                      updateStrap(activeStrap.id, { scalePct: next });
+                    }}
+                    className="w-full"
+                  />
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
