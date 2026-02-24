@@ -6,7 +6,6 @@ import GuideOverlay from '@/components/preview/GuideOverlay';
 import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
 import { buildGuideSet } from '@/lib/guides/guide-template';
 import { findCrossingsForStraps, type Crossing, type Pt } from '@/lib/paths/intersections';
-import { polylineSubpathD } from '@/lib/paths/polyline-subpath';
 import { samplePathDToPolyline } from '@/lib/paths/sample-svg-path';
 import { transformPolyline } from '@/lib/paths/transform';
 import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
@@ -153,6 +152,14 @@ const fitStrapToPage = ({
   const scalePct = Math.max(5, Math.min(400, Math.min(availW / Math.max(b.w, 1e-6), availH / Math.max(b.h, 1e-6)) * 100 * 0.9));
   const offset = { x: centerX - localCenter.x, y: centerY - localCenter.y };
   return { scalePct, offset };
+};
+
+
+const bandPolygonD = (asc: Pt[], desc: Pt[]) => {
+  if (!asc?.length || !desc?.length) return '';
+  const a = asc.map((p) => `${p.x},${p.y}`).join(' L ');
+  const d = [...desc].reverse().map((p) => `${p.x},${p.y}`).join(' L ');
+  return `M ${a} L ${d} Z`;
 };
 
 const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) => {
@@ -375,7 +382,7 @@ export default function PathGuidesPage() {
     });
     const metrics = guideMetrics(strap);
 
-    const guideSet = !simplify && transformed.length > 1
+    const guideSet = transformed.length > 1
       ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
           baseline: transformed,
           xMM: metrics.xMM,
@@ -394,7 +401,7 @@ export default function PathGuidesPage() {
       : null;
 
     return { strap, transformed, guideSet, metrics, localCenter, sampled };
-  }), [simplify, straps]);
+  }), [straps]);
 
   const totalSegments = useMemo(
     () => renderData.reduce((sum, r) => sum + Math.max(0, r.transformed.length - 1), 0),
@@ -868,7 +875,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
               <line x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
 
-              {renderData.map(({ strap, transformed, guideSet, metrics }) => (
+              {renderData.map(({ strap, transformed, guideSet }) => (
                 <g
   key={strap.id}
   mask={
@@ -877,17 +884,27 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       : undefined
   }
 >
-                  {transformed.length > 1 && (
+                  {simplify ? (
+                    guideSet && (
+                      <path
+                        d={bandPolygonD(guideSet.ascLine, guideSet.descLine)}
+                        fill={strap.color}
+                        stroke="none"
+                        vectorEffect="non-scaling-stroke"
+                        pointerEvents="fill"
+                        onPointerDown={beginStrapDrag(strap.id)}
+                      />
+                    )
+                  ) : transformed.length > 1 && (
                     <path
                       d={pathD(transformed)}
                       fill="none"
                       stroke={strap.color}
-                      strokeWidth={simplify ? metrics.bandWidthMM : 0.9}
+                      strokeWidth={0.9}
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       vectorEffect="non-scaling-stroke"
-                      pointerEvents={simplify ? 'stroke' : 'none'}
-                      onPointerDown={simplify ? beginStrapDrag(strap.id) : undefined}
+                      pointerEvents="none"
                     />
                   )}
                   {!simplify && guideSet && (
@@ -918,18 +935,20 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
               {simplify && crossingsWithOverrides.map((crossing) => {
                 const over = strapById.get(crossing.overId);
-                const overPts = transformedById.get(crossing.overId);
-                if (!over || !overPts) return null;
+                if (!over?.guideSet) return null;
 
                 const overSeg = crossing.overId === crossing.aId ? crossing.aSeg : crossing.bSeg;
-                const overT = crossing.overId === crossing.aId ? crossing.aT : crossing.bT;
-                const halfLenMM = Math.min(14, Math.max(5, over.metrics.bandWidthMM * 0.75));
-                const dOver = polylineSubpathD(overPts, overSeg, overT, halfLenMM);
+                const centerIdx = overSeg + 1;
+                const dOver = bandWindowDFromGuideSet(
+                  over.guideSet,
+                  centerIdx,
+                  Math.max(12, over.metrics.bandWidthMM * 2.5),
+                );
                 if (!dOver) return null;
 
                 return (
                   <g key={`weave-${crossing.id}`} pointerEvents="none">
-                    <path d={dOver} fill="none" stroke={over.strap.color} strokeWidth={over.metrics.bandWidthMM} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                    <path d={dOver} fill={over.strap.color} stroke="none" vectorEffect="non-scaling-stroke" />
                   </g>
                 );
               })}
