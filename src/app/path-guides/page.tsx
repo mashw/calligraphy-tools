@@ -343,6 +343,8 @@ export default function PathGuidesPage() {
   const [crossingOverrides, setCrossingOverrides] = useState<PairOverrides>({});
   const [showDebugPoints] = useState(false);
   const [dragSimplifyStrapId, setDragSimplifyStrapId] = useState<string | null>(null);
+  const dragActive = dragSimplifyStrapId !== null;
+  const previewSimplify = simplify || dragActive;
   const [scaleInputText, setScaleInputText] = useState('');
 
   const [straps, setStraps] = useState<Strap[]>(() => ([applyScriptDefaults({
@@ -372,10 +374,14 @@ export default function PathGuidesPage() {
     startPan: { x: 0, y: 0 },
   });
 
-  const activeStrap = straps.find((s) => s.id === (activeId ?? straps[0]?.id)) ?? straps[0] ?? null;
+  const rafRef = useRef<number | null>(null);
+const pendingPanRef = useRef<{ x: number; y: number } | null>(null);
+const pendingStrapMoveRef = useRef<{ strapId: string; x: number; y: number; snapped: boolean } | null>(null);
 
+  const activeStrap = straps.find((s) => s.id === (activeId ?? straps[0]?.id)) ?? straps[0] ?? null;
+  
   const renderData = useMemo(() => straps.map((strap) => {
-    const sampled = samplePathDToPolyline(strap.d, 1.25);
+    const sampled = samplePathDToPolyline(strap.d, dragActive ? 3.5 : 1.25);
     const localCenter = centroid(sampled);
     const centered = sampled.map((p) => ({ x: p.x - localCenter.x, y: p.y - localCenter.y }));
     const transformed = transformPolyline(centered, {
@@ -386,27 +392,21 @@ export default function PathGuidesPage() {
     });
     const metrics = guideMetrics(strap);
 
-    const guideSet = transformed.length > 1
+    const guideSet =
+    ( (!dragActive || strap.id === dragSimplifyStrapId) && transformed.length > 1 )
       ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
           baseline: transformed,
           xMM: metrics.xMM,
           ascMM: metrics.ascMM,
           descMM: metrics.descMM,
-    
-          // ✅ tick spacing: use effective nib for blackletter (matches Calligram)
-          tickStepMM: strap.script === 'Copperplate'
-            ? Math.max(2, metrics.nibMM)
-            : metrics.effectiveNibMM,
-    
-          // ✅ actualNibMM: pass the raw nib size (matches Calligram)
+          tickStepMM: strap.script === 'Copperplate' ? Math.max(2, metrics.nibMM) : metrics.effectiveNibMM,
           actualNibMM: metrics.nibMM,
           invertGuides: strap.invertGuides,
         })
       : null;
 
     return { strap, transformed, guideSet, metrics, localCenter, sampled };
-  }), [straps]);
-
+  }), [straps, dragActive, dragSimplifyStrapId]);  
   const totalSegments = useMemo(
     () => renderData.reduce((sum, r) => sum + Math.max(0, r.transformed.length - 1), 0),
     [renderData],
@@ -415,12 +415,13 @@ export default function PathGuidesPage() {
   const transformedById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r.transformed])), [renderData]);
 
   const baseCrossings = useMemo(() => {
+    if (previewSimplify) return [];
     if (crossingPerformanceWarning) return [];
     return findCrossingsForStraps(
       renderData.map((r) => ({ id: r.strap.id, pts: r.transformed })),
       CROSS_EPS_MM,
     );
-  }, [crossingPerformanceWarning, renderData]);
+  }, [crossingPerformanceWarning, previewSimplify, renderData]);
 
   const pairSlotsByCrossingId = useMemo(() => {
     const slots = new Map<string, { key: PairKey; slot: number }>();
@@ -614,7 +615,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     e.currentTarget.setPointerCapture(e.pointerId);
   };
 
-  const beginStrapDrag = (strapId: string) => (e: React.PointerEvent<SVGPathElement | SVGLineElement | SVGPolylineElement>) => {
+  const beginStrapDrag =
+  (strapId: string) =>
+  (e: React.PointerEvent<SVGPathElement | SVGLineElement | SVGPolylineElement>) => {    
     if (e.button !== 0) return;
     e.stopPropagation();
     const strap = straps.find((s) => s.id === strapId);
@@ -644,8 +647,31 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     const dyMM = ((e.clientY - drag.startClient.y) / rect.height) * vb.vh;
 
     if (drag.mode === 'pan') {
-      setView('custom');
-      setPan({ x: drag.startPan.x - dxMM, y: drag.startPan.y - dyMM });
+      pendingPanRef.current = { x: drag.startPan.x - dxMM, y: drag.startPan.y - dyMM };
+
+      if (rafRef.current == null) {
+        rafRef.current = requestAnimationFrame(() => {
+          rafRef.current = null;
+      
+          const panNext = pendingPanRef.current;
+          if (panNext) {
+            pendingPanRef.current = null;
+            setView('custom');
+            setPan(panNext);
+          }
+      
+          const move = pendingStrapMoveRef.current;
+          if (move) {
+            pendingStrapMoveRef.current = null;
+            setStraps((prev) =>
+              prev.map((s) =>
+                s.id === move.strapId ? { ...s, offset: { x: move.x, y: move.y }, snapped: move.snapped } : s,
+              ),
+            );
+          }
+        });
+      }
+      
       return;
     }
 
@@ -664,12 +690,43 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       snapped = true;
     }
 
-    setStraps((prev) => prev.map((s) => (s.id === drag.strapId ? { ...s, offset: { x: nextX, y: nextY }, snapped } : s)));
+    pendingStrapMoveRef.current = { strapId: drag.strapId, x: nextX, y: nextY, snapped };
+
+if (rafRef.current == null) {
+  rafRef.current = requestAnimationFrame(() => {
+    rafRef.current = null;
+
+    const panNext = pendingPanRef.current;
+    if (panNext) {
+      pendingPanRef.current = null;
+      setView('custom');
+      setPan(panNext);
+    }
+
+    const move = pendingStrapMoveRef.current;
+    if (move) {
+      pendingStrapMoveRef.current = null;
+      setStraps((prev) =>
+        prev.map((s) =>
+          s.id === move.strapId ? { ...s, offset: { x: move.x, y: move.y }, snapped: move.snapped } : s,
+        ),
+      );
+    }
+  });
+}
   };
 
   const onSvgPointerUp: React.PointerEventHandler<SVGSVGElement> = (e) => {
     if (dragRef.current.pointerId === e.pointerId) {
       dragRef.current = { mode: 'none', pointerId: -1, startClient: { x: 0, y: 0 }, startPan: { x: 0, y: 0 } };
+  
+      if (rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      pendingPanRef.current = null;
+      pendingStrapMoveRef.current = null;
+  
       setDragSimplifyStrapId(null);
     }
   };
@@ -824,7 +881,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               onPointerCancel={onSvgPointerUp}
               onPointerLeave={onSvgPointerUp}
             >
-{!simplify && (
+{!previewSimplify && (
   <defs>
     {[...underCrossings.entries()].map(([underId, list]) => (
       <mask
@@ -881,8 +938,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
               <line x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
 
-              {renderData.map(({ strap, transformed, guideSet }) => {
-                const strapIsTempSimplified = dragSimplifyStrapId === strap.id;
+              {renderData.map(({ strap, transformed, guideSet, metrics }) => {                const strapIsTempSimplified = dragSimplifyStrapId === strap.id;
                 const isSimplifiedForThisStrap = simplify || strapIsTempSimplified;
 
                 return (
@@ -894,29 +950,41 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                         : undefined
                     }
                   >
-                    {isSimplifiedForThisStrap ? (
-                      guideSet && (
-                        <path
-                          d={bandPolygonD(guideSet.ascLine, guideSet.descLine)}
-                          fill={strap.color}
-                          stroke="none"
-                          vectorEffect="non-scaling-stroke"
-                          pointerEvents="fill"
-                          onPointerDown={beginStrapDrag(strap.id)}
-                        />
-                      )
-                    ) : transformed.length > 1 && (
-                      <path
-                        d={pathD(transformed)}
-                        fill="none"
-                        stroke={strap.color}
-                        strokeWidth={0.9}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        vectorEffect="non-scaling-stroke"
-                        pointerEvents="none"
-                      />
-                    )}
+{isSimplifiedForThisStrap ? (
+  guideSet ? (
+    <path
+      d={bandPolygonD(guideSet.ascLine, guideSet.descLine)}
+      fill={strap.color}
+      stroke="none"
+      vectorEffect="non-scaling-stroke"
+      pointerEvents="fill"
+      onPointerDown={beginStrapDrag(strap.id)}
+    />
+  ) : transformed.length > 1 ? (
+    <path
+      d={pathD(transformed)}
+      fill="none"
+      stroke={strap.color}
+      strokeWidth={metrics.bandWidthMM}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      vectorEffect="non-scaling-stroke"
+      pointerEvents="stroke"
+      onPointerDown={beginStrapDrag(strap.id)}
+    />
+  ) : null
+) : transformed.length > 1 && (
+  <path
+    d={pathD(transformed)}
+    fill="none"
+    stroke={strap.color}
+    strokeWidth={0.9}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    vectorEffect="non-scaling-stroke"
+    pointerEvents="none"
+  />
+)}
                     {!isSimplifiedForThisStrap && guideSet && (
                       <GuideOverlay
                         guideSet={guideSet}
@@ -1034,9 +1102,10 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 <span className="w-3 h-3 rounded-full" style={{ backgroundColor: strap.color }} />
                 <span className="flex-1 truncate">{strap.name}</span>
                 <button onClick={() => setActiveId(strap.id)} className="px-2 py-1 rounded border border-slate-300">Select</button>
-                <button onClick={() => {
-                  const sampled = samplePathDToPolyline(strap.d, 1.25);
-                  const localCenter = centroid(sampled);
+                <button
+  onClick={() => {
+    const sampled = samplePathDToPolyline(strap.d, 1.25);
+    const localCenter = centroid(sampled);
                   const duplicate = {
                     ...strap,
                     id: uid('strap'),
