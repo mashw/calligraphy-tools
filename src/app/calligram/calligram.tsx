@@ -124,7 +124,12 @@ const resolveBandDefaults: DefaultsResolver = ({ mainScript, band, bandScript })
 const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0.5);
 const MIDLINE_DASH_GAP = 12;
 const DEFAULT_RING_GAP_MM = 1;
-const UNDER_MAIN_BAND_MASK_ID = 'underMainBandMask';
+const UNDER_MAIN_BAND_CLIP_ID = 'underMainBandClip';
+
+
+function rectPathD(box: { w: number; h: number }) {
+  return `M 0,0 H ${box.w} V ${box.h} H 0 Z`;
+}
 
 function bandPolygonD(guideSet: { ascLine?: Pt[]; descLine?: Pt[] }): string {
   const asc = guideSet.ascLine;
@@ -1895,10 +1900,12 @@ const innerRadiusMaxMM = useMemo(
                 <clipPath id="pageClip">
                   <rect x={0} y={0} width={box.w} height={box.h} />
                 </clipPath>
-                <mask id={UNDER_MAIN_BAND_MASK_ID} maskUnits="userSpaceOnUse">
-                  <rect x={0} y={0} width={box.w} height={box.h} fill="white" />
-                  {mainBandD && <path d={mainBandD} fill="black" />}
-                </mask>
+                {mainBandD && (
+                  <clipPath id={UNDER_MAIN_BAND_CLIP_ID} clipPathUnits="userSpaceOnUse">
+                    {/* Even-odd: outer rect minus main band polygon */}
+                    <path d={`${rectPathD(box)} ${mainBandD}`} fillRule="evenodd" clipRule="evenodd" />
+                  </clipPath>
+                )}
               </defs>
 
               {/* stage bg (kept only for on-screen; removed in export) */}
@@ -1932,7 +1939,7 @@ const innerRadiusMaxMM = useMemo(
                     shapeRendering="geometricPrecision"
                   />
                 )}
-                <g mask={mainBandD ? `url(#${UNDER_MAIN_BAND_MASK_ID})` : undefined}>
+                <g clipPath={mainBandD ? `url(#${UNDER_MAIN_BAND_CLIP_ID})` : undefined}>
                   {topBandEnabled && topMidAscPts && (
                     <path
                       d={pathD(topMidAscPts)}
@@ -1958,7 +1965,7 @@ const innerRadiusMaxMM = useMemo(
                     />
                   )}
                 </g>
-                <g mask={mainBandD ? `url(#${UNDER_MAIN_BAND_MASK_ID})` : undefined}>
+                <g clipPath={mainBandD ? `url(#${UNDER_MAIN_BAND_CLIP_ID})` : undefined}>
                   {bottomBandEnabled && bottomMidAscPts && (
                     <path
                       d={pathD(bottomMidAscPts)}
@@ -1999,7 +2006,12 @@ const innerRadiusMaxMM = useMemo(
                   }}
                 />
 
-                <g mask={mainBandD ? `url(#${UNDER_MAIN_BAND_MASK_ID})` : undefined}>
+                {/* DEBUG: remove once verified. */}
+                {mainBandD && (
+                  <path d={mainBandD} fill="rgba(255,0,0,0.08)" stroke="none" pointerEvents="none" />
+                )}
+
+                <g clipPath={mainBandD ? `url(#${UNDER_MAIN_BAND_CLIP_ID})` : undefined}>
                   {topBandEnabled && (
                     <GuideOverlay
                       guideSet={topGuideSet}
@@ -2017,7 +2029,7 @@ const innerRadiusMaxMM = useMemo(
                   )}
                 </g>
 
-                <g mask={mainBandD ? `url(#${UNDER_MAIN_BAND_MASK_ID})` : undefined}>
+                <g clipPath={mainBandD ? `url(#${UNDER_MAIN_BAND_CLIP_ID})` : undefined}>
                   {bottomBandEnabled && (
                     <GuideOverlay
                       guideSet={bottomGuideSet}
@@ -2052,7 +2064,7 @@ const innerRadiusMaxMM = useMemo(
                     />
                   </>
                 )}
-                <g mask={mainBandD ? `url(#${UNDER_MAIN_BAND_MASK_ID})` : undefined}>
+                <g clipPath={mainBandD ? `url(#${UNDER_MAIN_BAND_CLIP_ID})` : undefined}>
                   {showSpanFill && topSpanPoly && (
                     <>
                       <path
@@ -2080,7 +2092,7 @@ const innerRadiusMaxMM = useMemo(
                   )}
                 </g>
 
-                <g mask={mainBandD ? `url(#${UNDER_MAIN_BAND_MASK_ID})` : undefined}>
+                <g clipPath={mainBandD ? `url(#${UNDER_MAIN_BAND_CLIP_ID})` : undefined}>
                   {showSpanFill && bottomSpanPoly && (
                     <>
                       <path
@@ -2110,10 +2122,10 @@ const innerRadiusMaxMM = useMemo(
 
                 {/* Letter boxes: true rectangles */}
                 {showBoxes && renderLetterBoxes(layout.placements, guideSet.baseLine, guideSet.waistLine, arcLen, xMM, script, 'main')}
-                <g mask={mainBandD ? `url(#${UNDER_MAIN_BAND_MASK_ID})` : undefined}>
+                <g clipPath={mainBandD ? `url(#${UNDER_MAIN_BAND_CLIP_ID})` : undefined}>
                   {showBoxes && topBandEnabled && renderLetterBoxes(topLayout.placements, topGuideSet.baseLine, topGuideSet.waistLine, topArcLen, topXMM, topBandScript, 'top')}
                 </g>
-                <g mask={mainBandD ? `url(#${UNDER_MAIN_BAND_MASK_ID})` : undefined}>
+                <g clipPath={mainBandD ? `url(#${UNDER_MAIN_BAND_CLIP_ID})` : undefined}>
                   {showBoxes && bottomBandEnabled && renderLetterBoxes(bottomLayout.placements, bottomGuideSet.baseLine, bottomGuideSet.waistLine, bottomArcLen, bottomXMM, bottomBandScript, 'bottom')}
                 </g>
 
