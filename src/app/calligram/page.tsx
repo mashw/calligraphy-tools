@@ -734,15 +734,18 @@ export default function CalligramPage() {
   const swThin = Math.max(0.35, Math.min(0.7, Math.min(box.w, box.h) * 0.0025));
   const swBold = swThin * 1.8;
 
-  // Make guide lines heavier in high-contrast, but keep grid light/thin.
-  const guideBoldWidth = highContrastMode ? swBold * 1.6 : swBold;
-  const guideThinWidth = swThin; // keep asc/desc thinner than waist/base
+  // Main guide lines should all read the same (asc/waist/base/desc).
+  const guideWidth = highContrastMode ? swBold * 1.6 : swBold;
+  const guideBoldWidth = guideWidth;
+  const guideThinWidth = guideWidth; // intentionally equal to bold
 
-  const gridStrokeWidth = swThin * (highContrastMode ? 0.9 : 1.0);
+  const gridStrokeWidth = swThin * 1.0; // keep grid slightly thinner than guides by color, not width
 
   // Grid color should NOT become black in high-contrast; it must remain a lighter tone.
   const guideStrokeColor = isCurveDragging ? '#7c3aed' : '#111827';
-  const gridColor = isCurveDragging ? '#a78bfa' : (highContrastMode ? '#94a3b8' : '#e2e8f0');
+  const gridColor = isCurveDragging
+    ? '#a78bfa'
+    : (highContrastMode ? '#64748b' : '#cbd5e1'); // darker grid, still lighter than #111827
 
   const midlineStroke = `rgba(17, 24, 39, ${highContrastMode ? 1 : 0.35})`;
   const midlineStrokeWidth = highContrastMode ? 0.9 * 1.6 : 0.9;
