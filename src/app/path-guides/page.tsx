@@ -9,6 +9,7 @@ import { findCrossingsForStraps, type Crossing, type Pt } from '@/lib/paths/inte
 import { samplePathDToPolyline } from '@/lib/paths/sample-svg-path';
 import { transformPolyline } from '@/lib/paths/transform';
 import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
+import { openSvgPrintWindow } from '@/lib/print/open-svg-print-window';
 
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type CrossingsFilter = 'all' | 'selected';
@@ -315,6 +316,24 @@ function guideMetrics(strap: Strap) {
     nibMM,              // raw nib
     effectiveNibMM,     // projected nib (for tick spacing)
   };
+}
+
+
+function stripNoExport(svg: SVGSVGElement) {
+  svg.querySelectorAll('[data-no-export="true"]').forEach((node) => node.remove());
+  const stage = svg.querySelector('#stage-bg');
+  if (stage) stage.remove();
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 export default function PathGuidesPage() {
@@ -831,6 +850,65 @@ if (rafRef.current == null) {
     });
   };
 
+
+  function downloadSVG() {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('viewBox', `0 0 ${box.w} ${box.h}`);
+    clone.setAttribute('width', `${box.w}mm`);
+    clone.setAttribute('height', `${box.h}mm`);
+
+    stripNoExport(clone);
+
+    const blob = new Blob([clone.outerHTML], { type: 'image/svg+xml;charset=utf-8' });
+    downloadBlob(blob, 'path-guides.svg');
+  }
+
+  function exportPdfVector() {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('viewBox', `0 0 ${box.w} ${box.h}`);
+    clone.setAttribute('width', `${box.w}mm`);
+    clone.setAttribute('height', `${box.h}mm`);
+
+    stripNoExport(clone);
+
+    openSvgPrintWindow(clone, {
+      pageWmm: box.w,
+      pageHmm: box.h,
+      title: 'path-guides',
+      autoPrint: true,
+      autoClose: true,
+    });
+  }
+
+  function printToScale() {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('viewBox', `0 0 ${box.w} ${box.h}`);
+    clone.setAttribute('width', `${box.w}mm`);
+    clone.setAttribute('height', `${box.h}mm`);
+
+    stripNoExport(clone);
+
+    openSvgPrintWindow(clone, {
+      pageWmm: box.w,
+      pageHmm: box.h,
+      title: 'path-guides',
+      autoPrint: true,
+      autoClose: true,
+    });
+  }
+
   return (
     <main className="min-h-screen text-sm text-slate-900 relative">
       <div className="fixed inset-0 -z-10 bg-slate-100" style={{ backgroundImage: 'none' }} />
@@ -859,6 +937,10 @@ if (rafRef.current == null) {
               <button onClick={() => { setView('custom'); setZoom((z) => Math.max(0.35, z * 0.9)); }} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">–</button>
               <button onClick={() => { setView('custom'); setZoom((z) => Math.min(6, z * 1.1)); }} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">+</button>
               <button onClick={() => applyViewPreset('autofit')} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Reset view</button>
+              <button onClick={downloadSVG} className="ml-2 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">SVG</button>
+              <button onClick={exportPdfVector} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Export PDF</button>
+              <span className="text-xs text-slate-500">Opens print dialog (use Save as PDF)</span>
+              <button onClick={printToScale} className="px-3 py-1.5 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500">Print</button>
             </div>
           </div>
 
