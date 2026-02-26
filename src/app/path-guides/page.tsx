@@ -393,7 +393,7 @@ const pendingStrapMoveRef = useRef<{ strapId: string; x: number; y: number; snap
     const metrics = guideMetrics(strap);
 
     const guideSet =
-    ( (!dragActive || strap.id === dragSimplifyStrapId) && transformed.length > 1 )
+    ( transformed.length > 1 )
       ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
           baseline: transformed,
           xMM: metrics.xMM,
@@ -406,7 +406,7 @@ const pendingStrapMoveRef = useRef<{ strapId: string; x: number; y: number; snap
       : null;
 
     return { strap, transformed, guideSet, metrics, localCenter, sampled };
-  }), [straps, dragActive, dragSimplifyStrapId]);  
+  }), [straps, dragActive]);  
   const totalSegments = useMemo(
     () => renderData.reduce((sum, r) => sum + Math.max(0, r.transformed.length - 1), 0),
     [renderData],
@@ -415,13 +415,12 @@ const pendingStrapMoveRef = useRef<{ strapId: string; x: number; y: number; snap
   const transformedById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r.transformed])), [renderData]);
 
   const baseCrossings = useMemo(() => {
-    if (previewSimplify) return [];
     if (crossingPerformanceWarning) return [];
     return findCrossingsForStraps(
       renderData.map((r) => ({ id: r.strap.id, pts: r.transformed })),
       CROSS_EPS_MM,
     );
-  }, [crossingPerformanceWarning, previewSimplify, renderData]);
+  }, [crossingPerformanceWarning, renderData]);
 
   const pairSlotsByCrossingId = useMemo(() => {
     const slots = new Map<string, { key: PairKey; slot: number }>();
@@ -938,8 +937,8 @@ if (rafRef.current == null) {
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
               <line x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
 
-              {renderData.map(({ strap, transformed, guideSet, metrics }) => {                const strapIsTempSimplified = dragSimplifyStrapId === strap.id;
-                const isSimplifiedForThisStrap = simplify || strapIsTempSimplified;
+              {renderData.map(({ strap, transformed, guideSet, metrics }) => {
+                const isSimplifiedForThisStrap = simplify || (dragActive && dragSimplifyStrapId === strap.id);
 
                 return (
                   <g
