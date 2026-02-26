@@ -736,8 +736,6 @@ export default function CalligramPage() {
 
   // Main guide lines should all read the same (asc/waist/base/desc).
   const guideWidth = highContrastMode ? swBold * 1.6 : swBold;
-  const guideBoldWidth = guideWidth;
-  const guideThinWidth = guideWidth; // intentionally equal to bold
 
   const gridStrokeWidth = swThin * 1.0; // keep grid slightly thinner than guides by color, not width
 
@@ -1983,8 +1981,8 @@ const innerRadiusMaxMM = useMemo(
                 <GuideOverlay
                   guideSet={guideSet}
                   style={{
-                    thin: guideThinWidth,
-                    bold: guideBoldWidth,
+                    thin: guideWidth,
+                    bold: guideWidth,
                     colors: {
                       thin: guideStrokeColor,
                       bold: guideStrokeColor,
@@ -2001,8 +1999,8 @@ const innerRadiusMaxMM = useMemo(
                   <GuideOverlay
                     guideSet={topGuideSet}
                     style={{
-                      thin: guideThinWidth,
-                      bold: guideBoldWidth,
+                      thin: guideWidth,
+                      bold: guideWidth,
                       colors: {
                         thin: guideStrokeColor,
                         bold: guideStrokeColor,
@@ -2020,8 +2018,8 @@ const innerRadiusMaxMM = useMemo(
                   <GuideOverlay
                     guideSet={bottomGuideSet}
                     style={{
-                      thin: guideThinWidth,
-                      bold: guideBoldWidth,
+                      thin: guideWidth,
+                      bold: guideWidth,
                       colors: {
                         thin: guideStrokeColor,
                         bold: guideStrokeColor,
