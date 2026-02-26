@@ -124,6 +124,23 @@ const resolveBandDefaults: DefaultsResolver = ({ mainScript, band, bandScript })
 const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0.5);
 const MIDLINE_DASH_GAP = 12;
 const DEFAULT_RING_GAP_MM = 1;
+const UNDER_MAIN_BAND_CLIP_ID = 'underMainBandClip';
+
+
+function rectPathD(box: { w: number; h: number }) {
+  return `M 0,0 H ${box.w} V ${box.h} H 0 Z`;
+}
+
+function bandPolygonD(guideSet: { ascLine?: Pt[]; descLine?: Pt[] }): string {
+  const asc = guideSet.ascLine;
+  const desc = guideSet.descLine;
+  if (!asc?.length || !desc?.length) return '';
+  return `M ${asc.map(p => `${p.x},${p.y}`).join(' L ')} L ${desc
+    .slice()
+    .reverse()
+    .map(p => `${p.x},${p.y}`)
+    .join(' L ')} Z`;
+}
 
 const CAL_STORAGE_KEY_PREFIX = 'ct_curveplanner_calibration_v2_xh_';
 const keyForXHeight = (x: number) => `${CAL_STORAGE_KEY_PREFIX}${x.toFixed(1)}`;
@@ -1019,6 +1036,8 @@ export default function CalligramPage() {
     [baseline, guideTemplate, xMM, ascMM, descMM, mainNormalSign, tickStepMM, nibMM, span],
   );
 
+  const mainBandD = useMemo(() => bandPolygonD(guideSet), [guideSet]);
+
   const mainAscTopOffsetMM = useMemo(
     () => Math.abs(avgRadiusFromCenter(guideSet.ascLine) - avgRadiusFromCenter(guideSet.baseLine)),
     [guideSet.ascLine, guideSet.baseLine, box, radiusMM],
@@ -1881,6 +1900,12 @@ const innerRadiusMaxMM = useMemo(
                 <clipPath id="pageClip">
                   <rect x={0} y={0} width={box.w} height={box.h} />
                 </clipPath>
+                {mainBandD && (
+                  <clipPath id={UNDER_MAIN_BAND_CLIP_ID} clipPathUnits="userSpaceOnUse">
+                    {/* Even-odd: outer rect minus main band polygon */}
+                    <path d={`${rectPathD(box)} ${mainBandD}`} fillRule="evenodd" clipRule="evenodd" />
+                  </clipPath>
+                )}
               </defs>
 
               {/* stage bg (kept only for on-screen; removed in export) */}
@@ -1914,54 +1939,58 @@ const innerRadiusMaxMM = useMemo(
                     shapeRendering="geometricPrecision"
                   />
                 )}
-                {topBandEnabled && topMidAscPts && (
-                  <path
-                    d={pathD(topMidAscPts)}
-                    fill="none"
-                    stroke="rgba(17, 24, 39, 0.35)"
-                    strokeWidth={0.9}
-                    strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
-                    vectorEffect="non-scaling-stroke"
-                    strokeLinecap="round"
-                    shapeRendering="geometricPrecision"
-                  />
-                )}
-                {topBandEnabled && topMidDescPts && (
-                  <path
-                    d={pathD(topMidDescPts)}
-                    fill="none"
-                    stroke="rgba(17, 24, 39, 0.35)"
-                    strokeWidth={0.9}
-                    strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
-                    vectorEffect="non-scaling-stroke"
-                    strokeLinecap="round"
-                    shapeRendering="geometricPrecision"
-                  />
-                )}
-                {bottomBandEnabled && bottomMidAscPts && (
-                  <path
-                    d={pathD(bottomMidAscPts)}
-                    fill="none"
-                    stroke="rgba(17, 24, 39, 0.35)"
-                    strokeWidth={0.9}
-                    strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
-                    vectorEffect="non-scaling-stroke"
-                    strokeLinecap="round"
-                    shapeRendering="geometricPrecision"
-                  />
-                )}
-                {bottomBandEnabled && bottomMidDescPts && (
-                  <path
-                    d={pathD(bottomMidDescPts)}
-                    fill="none"
-                    stroke="rgba(17, 24, 39, 0.35)"
-                    strokeWidth={0.9}
-                    strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
-                    vectorEffect="non-scaling-stroke"
-                    strokeLinecap="round"
-                    shapeRendering="geometricPrecision"
-                  />
-                )}
+                <g clipPath={mainBandD ? `url(#${UNDER_MAIN_BAND_CLIP_ID})` : undefined}>
+                  {topBandEnabled && topMidAscPts && (
+                    <path
+                      d={pathD(topMidAscPts)}
+                      fill="none"
+                      stroke="rgba(17, 24, 39, 0.35)"
+                      strokeWidth={0.9}
+                      strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
+                      vectorEffect="non-scaling-stroke"
+                      strokeLinecap="round"
+                      shapeRendering="geometricPrecision"
+                    />
+                  )}
+                  {topBandEnabled && topMidDescPts && (
+                    <path
+                      d={pathD(topMidDescPts)}
+                      fill="none"
+                      stroke="rgba(17, 24, 39, 0.35)"
+                      strokeWidth={0.9}
+                      strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
+                      vectorEffect="non-scaling-stroke"
+                      strokeLinecap="round"
+                      shapeRendering="geometricPrecision"
+                    />
+                  )}
+                </g>
+                <g clipPath={mainBandD ? `url(#${UNDER_MAIN_BAND_CLIP_ID})` : undefined}>
+                  {bottomBandEnabled && bottomMidAscPts && (
+                    <path
+                      d={pathD(bottomMidAscPts)}
+                      fill="none"
+                      stroke="rgba(17, 24, 39, 0.35)"
+                      strokeWidth={0.9}
+                      strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
+                      vectorEffect="non-scaling-stroke"
+                      strokeLinecap="round"
+                      shapeRendering="geometricPrecision"
+                    />
+                  )}
+                  {bottomBandEnabled && bottomMidDescPts && (
+                    <path
+                      d={pathD(bottomMidDescPts)}
+                      fill="none"
+                      stroke="rgba(17, 24, 39, 0.35)"
+                      strokeWidth={0.9}
+                      strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
+                      vectorEffect="non-scaling-stroke"
+                      strokeLinecap="round"
+                      shapeRendering="geometricPrecision"
+                    />
+                  )}
+                </g>
                 {/* Guides */}
                 <GuideOverlay
                   guideSet={guideSet}
@@ -1977,37 +2006,46 @@ const innerRadiusMaxMM = useMemo(
                   }}
                 />
 
-                {topBandEnabled && (
-                  <GuideOverlay
-                    guideSet={topGuideSet}
-                    style={{
-                      thin: swBold,
-                      bold: swBold,
-                      colors: {
-                        thin: isCurveDragging ? '#7c3aed' : '#111827',
-                        bold: isCurveDragging ? '#7c3aed' : '#111827',
-                        tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
-                        frame: '#cbd5e1',
-                      },
-                    }}
-                  />
+                {/* DEBUG: remove once verified. */}
+                {mainBandD && (
+                  <path d={mainBandD} fill="rgba(255,0,0,0.08)" stroke="none" pointerEvents="none" />
                 )}
 
-                {bottomBandEnabled && (
-                  <GuideOverlay
-                    guideSet={bottomGuideSet}
-                    style={{
-                      thin: swBold,
-                      bold: swBold,
-                      colors: {
-                        thin: isCurveDragging ? '#7c3aed' : '#111827',
-                        bold: isCurveDragging ? '#7c3aed' : '#111827',
-                        tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
-                        frame: '#cbd5e1',
-                      },
-                    }}
-                  />
-                )}
+                <g clipPath={mainBandD ? `url(#${UNDER_MAIN_BAND_CLIP_ID})` : undefined}>
+                  {topBandEnabled && (
+                    <GuideOverlay
+                      guideSet={topGuideSet}
+                      style={{
+                        thin: swBold,
+                        bold: swBold,
+                        colors: {
+                          thin: isCurveDragging ? '#7c3aed' : '#111827',
+                          bold: isCurveDragging ? '#7c3aed' : '#111827',
+                          tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
+                          frame: '#cbd5e1',
+                        },
+                      }}
+                    />
+                  )}
+                </g>
+
+                <g clipPath={mainBandD ? `url(#${UNDER_MAIN_BAND_CLIP_ID})` : undefined}>
+                  {bottomBandEnabled && (
+                    <GuideOverlay
+                      guideSet={bottomGuideSet}
+                      style={{
+                        thin: swBold,
+                        bold: swBold,
+                        colors: {
+                          thin: isCurveDragging ? '#7c3aed' : '#111827',
+                          bold: isCurveDragging ? '#7c3aed' : '#111827',
+                          tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
+                          frame: '#cbd5e1',
+                        },
+                      }}
+                    />
+                  )}
+                </g>
 
                 {showSpanFill && spanPoly && (
                   <>
@@ -2026,62 +2064,70 @@ const innerRadiusMaxMM = useMemo(
                     />
                   </>
                 )}
-                {showSpanFill && topSpanPoly && (
-                  <>
-                    <path
-                      d={`M ${topSpanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${topSpanPoly.basePts
-                        .slice()
-                        .reverse()
-                        .map(p => `${p.x},${p.y}`)
-                        .join(' L ')} Z`}
-                      fill="rgba(148,163,184,0.18)"
-                      stroke={isCurveDragging ? '#7c3aed' : 'rgba(100,116,139,0.55)'}
-                      strokeWidth={swThin}
-                      vectorEffect="non-scaling-stroke"
-                    />
-                    <path
-                      d={`M ${topSpanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${topSpanPoly.basePts
-                        .slice()
-                        .reverse()
-                        .map(p => `${p.x},${p.y}`)
-                        .join(' L ')} Z`}
-                      fill="rgba(0,0,0,0.0001)"
-                      stroke="none"
-                      pointerEvents="fill"
-                    />
-                  </>
-                )}
+                <g clipPath={mainBandD ? `url(#${UNDER_MAIN_BAND_CLIP_ID})` : undefined}>
+                  {showSpanFill && topSpanPoly && (
+                    <>
+                      <path
+                        d={`M ${topSpanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${topSpanPoly.basePts
+                          .slice()
+                          .reverse()
+                          .map(p => `${p.x},${p.y}`)
+                          .join(' L ')} Z`}
+                        fill="rgba(148,163,184,0.18)"
+                        stroke={isCurveDragging ? '#7c3aed' : 'rgba(100,116,139,0.55)'}
+                        strokeWidth={swThin}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      <path
+                        d={`M ${topSpanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${topSpanPoly.basePts
+                          .slice()
+                          .reverse()
+                          .map(p => `${p.x},${p.y}`)
+                          .join(' L ')} Z`}
+                        fill="rgba(0,0,0,0.0001)"
+                        stroke="none"
+                        pointerEvents="fill"
+                      />
+                    </>
+                  )}
+                </g>
 
-                {showSpanFill && bottomSpanPoly && (
-                  <>
-                    <path
-                      d={`M ${bottomSpanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${bottomSpanPoly.basePts
-                        .slice()
-                        .reverse()
-                        .map(p => `${p.x},${p.y}`)
-                        .join(' L ')} Z`}
-                      fill="rgba(148,163,184,0.18)"
-                      stroke={isCurveDragging ? '#7c3aed' : 'rgba(100,116,139,0.55)'}
-                      strokeWidth={swThin}
-                      vectorEffect="non-scaling-stroke"
-                    />
-                    <path
-                      d={`M ${bottomSpanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${bottomSpanPoly.basePts
-                        .slice()
-                        .reverse()
-                        .map(p => `${p.x},${p.y}`)
-                        .join(' L ')} Z`}
-                      fill="rgba(0,0,0,0.0001)"
-                      stroke="none"
-                      pointerEvents="fill"
-                    />
-                  </>
-                )}
+                <g clipPath={mainBandD ? `url(#${UNDER_MAIN_BAND_CLIP_ID})` : undefined}>
+                  {showSpanFill && bottomSpanPoly && (
+                    <>
+                      <path
+                        d={`M ${bottomSpanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${bottomSpanPoly.basePts
+                          .slice()
+                          .reverse()
+                          .map(p => `${p.x},${p.y}`)
+                          .join(' L ')} Z`}
+                        fill="rgba(148,163,184,0.18)"
+                        stroke={isCurveDragging ? '#7c3aed' : 'rgba(100,116,139,0.55)'}
+                        strokeWidth={swThin}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      <path
+                        d={`M ${bottomSpanPoly.waistPts.map(p => `${p.x},${p.y}`).join(' L ')} L ${bottomSpanPoly.basePts
+                          .slice()
+                          .reverse()
+                          .map(p => `${p.x},${p.y}`)
+                          .join(' L ')} Z`}
+                        fill="rgba(0,0,0,0.0001)"
+                        stroke="none"
+                        pointerEvents="fill"
+                      />
+                    </>
+                  )}
+                </g>
 
                 {/* Letter boxes: true rectangles */}
                 {showBoxes && renderLetterBoxes(layout.placements, guideSet.baseLine, guideSet.waistLine, arcLen, xMM, script, 'main')}
-                {showBoxes && topBandEnabled && renderLetterBoxes(topLayout.placements, topGuideSet.baseLine, topGuideSet.waistLine, topArcLen, topXMM, topBandScript, 'top')}
-                {showBoxes && bottomBandEnabled && renderLetterBoxes(bottomLayout.placements, bottomGuideSet.baseLine, bottomGuideSet.waistLine, bottomArcLen, bottomXMM, bottomBandScript, 'bottom')}
+                <g clipPath={mainBandD ? `url(#${UNDER_MAIN_BAND_CLIP_ID})` : undefined}>
+                  {showBoxes && topBandEnabled && renderLetterBoxes(topLayout.placements, topGuideSet.baseLine, topGuideSet.waistLine, topArcLen, topXMM, topBandScript, 'top')}
+                </g>
+                <g clipPath={mainBandD ? `url(#${UNDER_MAIN_BAND_CLIP_ID})` : undefined}>
+                  {showBoxes && bottomBandEnabled && renderLetterBoxes(bottomLayout.placements, bottomGuideSet.baseLine, bottomGuideSet.waistLine, bottomArcLen, bottomXMM, bottomBandScript, 'bottom')}
+                </g>
 
                 <circle cx={box.w / 2} cy={box.h / 2} r={1.6} fill="#000000" />
               </g>
