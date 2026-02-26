@@ -526,6 +526,7 @@ export default function CalligramPage() {
 
   const [showBoxes, setShowBoxes] = useState(false);
   const [showSpanFill, setShowSpanFill] = useState(true);
+  const [highContrastMode, setHighContrastMode] = useState(false);
 
 
   const [isNarrow, setIsNarrow] = useState(() => (typeof window !== 'undefined'
@@ -732,6 +733,11 @@ export default function CalligramPage() {
 
   const swThin = Math.max(0.35, Math.min(0.7, Math.min(box.w, box.h) * 0.0025));
   const swBold = swThin * 1.8;
+  const guideStrokeWidth = highContrastMode ? swBold * 1.6 : swBold;
+  const guideStrokeColor = isCurveDragging ? '#7c3aed' : '#111827';
+  const guideTickColor = isCurveDragging ? '#a78bfa' : highContrastMode ? '#111827' : '#e2e8f0';
+  const midlineStroke = `rgba(17, 24, 39, ${highContrastMode ? 1 : 0.35})`;
+  const midlineStrokeWidth = highContrastMode ? 0.9 * 1.6 : 0.9;
 
   // ---------- Measurement (shared) ----------
   const copper = useMemo(() => {
@@ -1894,8 +1900,8 @@ const innerRadiusMaxMM = useMemo(
                   <path
                     d={pathD(midAscPts)}
                     fill="none"
-                    stroke="rgba(17, 24, 39, 0.35)"
-                    strokeWidth={0.9}
+                    stroke={midlineStroke}
+                    strokeWidth={midlineStrokeWidth}
                     strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
                     vectorEffect="non-scaling-stroke"
                     strokeLinecap="round"
@@ -1906,8 +1912,8 @@ const innerRadiusMaxMM = useMemo(
                   <path
                     d={pathD(midDescPts)}
                     fill="none"
-                    stroke="rgba(17, 24, 39, 0.35)"
-                    strokeWidth={0.9}
+                    stroke={midlineStroke}
+                    strokeWidth={midlineStrokeWidth}
                     strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
                     vectorEffect="non-scaling-stroke"
                     strokeLinecap="round"
@@ -1918,8 +1924,8 @@ const innerRadiusMaxMM = useMemo(
                   <path
                     d={pathD(topMidAscPts)}
                     fill="none"
-                    stroke="rgba(17, 24, 39, 0.35)"
-                    strokeWidth={0.9}
+                    stroke={midlineStroke}
+                    strokeWidth={midlineStrokeWidth}
                     strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
                     vectorEffect="non-scaling-stroke"
                     strokeLinecap="round"
@@ -1930,8 +1936,8 @@ const innerRadiusMaxMM = useMemo(
                   <path
                     d={pathD(topMidDescPts)}
                     fill="none"
-                    stroke="rgba(17, 24, 39, 0.35)"
-                    strokeWidth={0.9}
+                    stroke={midlineStroke}
+                    strokeWidth={midlineStrokeWidth}
                     strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
                     vectorEffect="non-scaling-stroke"
                     strokeLinecap="round"
@@ -1942,8 +1948,8 @@ const innerRadiusMaxMM = useMemo(
                   <path
                     d={pathD(bottomMidAscPts)}
                     fill="none"
-                    stroke="rgba(17, 24, 39, 0.35)"
-                    strokeWidth={0.9}
+                    stroke={midlineStroke}
+                    strokeWidth={midlineStrokeWidth}
                     strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
                     vectorEffect="non-scaling-stroke"
                     strokeLinecap="round"
@@ -1954,8 +1960,8 @@ const innerRadiusMaxMM = useMemo(
                   <path
                     d={pathD(bottomMidDescPts)}
                     fill="none"
-                    stroke="rgba(17, 24, 39, 0.35)"
-                    strokeWidth={0.9}
+                    stroke={midlineStroke}
+                    strokeWidth={midlineStrokeWidth}
                     strokeDasharray={`10 ${MIDLINE_DASH_GAP}`}
                     vectorEffect="non-scaling-stroke"
                     strokeLinecap="round"
@@ -1966,12 +1972,12 @@ const innerRadiusMaxMM = useMemo(
                 <GuideOverlay
                   guideSet={guideSet}
                   style={{
-                    thin: swBold,
-                    bold: swBold,
+                    thin: guideStrokeWidth,
+                    bold: guideStrokeWidth,
                     colors: {
-                      thin: isCurveDragging ? '#7c3aed' : '#111827',
-                      bold: isCurveDragging ? '#7c3aed' : '#111827',
-                      tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
+                      thin: guideStrokeColor,
+                      bold: guideStrokeColor,
+                      tick: guideTickColor,
                       frame: '#cbd5e1',
                     },
                   }}
@@ -1981,12 +1987,12 @@ const innerRadiusMaxMM = useMemo(
                   <GuideOverlay
                     guideSet={topGuideSet}
                     style={{
-                      thin: swBold,
-                      bold: swBold,
+                      thin: guideStrokeWidth,
+                      bold: guideStrokeWidth,
                       colors: {
-                        thin: isCurveDragging ? '#7c3aed' : '#111827',
-                        bold: isCurveDragging ? '#7c3aed' : '#111827',
-                        tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
+                        thin: guideStrokeColor,
+                        bold: guideStrokeColor,
+                        tick: guideTickColor,
                         frame: '#cbd5e1',
                       },
                     }}
@@ -1997,12 +2003,12 @@ const innerRadiusMaxMM = useMemo(
                   <GuideOverlay
                     guideSet={bottomGuideSet}
                     style={{
-                      thin: swBold,
-                      bold: swBold,
+                      thin: guideStrokeWidth,
+                      bold: guideStrokeWidth,
                       colors: {
-                        thin: isCurveDragging ? '#7c3aed' : '#111827',
-                        bold: isCurveDragging ? '#7c3aed' : '#111827',
-                        tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
+                        thin: guideStrokeColor,
+                        bold: guideStrokeColor,
+                        tick: guideTickColor,
                         frame: '#cbd5e1',
                       },
                     }}
@@ -2664,7 +2670,25 @@ const innerRadiusMaxMM = useMemo(
           </div>
 
           <div className="my-3 border-t border-slate-200/70" />
-          <div className="mt-4 flex items-center gap-4">
+          <div className="mt-4 flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="min-w-0 text-sm font-medium text-slate-700">High-contrast</div>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setHighContrastMode(v => !v)}
+                className={`shrink-0 inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
+        ${highContrastMode
+                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                  : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
+              >
+                <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
+        ${highContrastMode ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
+                  <span className="h-3 w-3 rounded-full bg-white shadow" />
+                </span>
+                {highContrastMode ? 'On' : 'Off'}
+              </button>
+            </div>
             <label className="inline-flex items-center gap-2 text-sm text-slate-800">
               <input
                 type="checkbox"
