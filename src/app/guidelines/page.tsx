@@ -80,7 +80,7 @@ function buildCopperplateSlantLines(
 
 function GuidelinesRowMask({ guideSets, box }: { guideSets: GuideSet[]; box: Box }) {
   return (
-    <mask id="guidelines-row-mask">
+    <mask id="guidelines-row-mask" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse">
       <rect x={0} y={0} width={box.w} height={box.h} fill="black" />
 
       {guideSets.map((gs, i) => {

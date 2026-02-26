@@ -8,6 +8,16 @@ export type PrintSvgOpts = {
 
 const normalizeNum = (v: string) => Number.parseFloat(v.trim());
 
+const stripStyleDeclarations = (styleValue: string) => styleValue
+  .split(';')
+  .map((decl) => decl.trim())
+  .filter(Boolean)
+  .filter((decl) => {
+    const lower = decl.toLowerCase();
+    return !(lower.startsWith('vector-effect:') || lower.startsWith('transform:') || lower.startsWith('zoom:'));
+  })
+  .join('; ');
+
 const hasMatchingViewBox = (viewBox: string | null, pageWmm: number, pageHmm: number) => {
   if (!viewBox) return false;
   const parts = viewBox.split(/[\s,]+/).filter(Boolean);
@@ -35,19 +45,18 @@ export function openSvgPrintWindow(svg: SVGSVGElement, opts: PrintSvgOpts): void
   clone.setAttribute('width', `${pageWmm}mm`);
   clone.setAttribute('height', `${pageHmm}mm`);
 
-  const inlineStyle = clone.getAttribute('style');
-  if (inlineStyle) {
-    const nextStyle = inlineStyle
-      .replace(/(?:^|;)\s*transform\s*:[^;]*/gi, '')
-      .replace(/(?:^|;)\s*zoom\s*:[^;]*/gi, '')
-      .replace(/^;|;$/g, '')
-      .trim();
+  clone.querySelectorAll('[vector-effect]').forEach((el) => el.removeAttribute('vector-effect'));
+
+  clone.querySelectorAll('[style]').forEach((el) => {
+    const styleValue = el.getAttribute('style');
+    if (!styleValue) return;
+    const nextStyle = stripStyleDeclarations(styleValue);
     if (nextStyle) {
-      clone.setAttribute('style', nextStyle);
+      el.setAttribute('style', nextStyle);
     } else {
-      clone.removeAttribute('style');
+      el.removeAttribute('style');
     }
-  }
+  });
 
   const html = `<!doctype html>
 <html>
