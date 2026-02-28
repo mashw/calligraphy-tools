@@ -128,6 +128,7 @@ export default function GuideOverlay({
         {showGridVertical && guideSet.ticks?.map((tick, idx) => (
           <g key={`tick-${idx}`}>
             <line
+              data-export-role="grid"
               x1={tick.a.x}
               y1={tick.a.y}
               x2={tick.b.x}
@@ -137,10 +138,11 @@ export default function GuideOverlay({
               vectorEffect="non-scaling-stroke"
             />
             {interactive?.onGuidePointerDown && (
-              <line
-                x1={tick.a.x}
-                y1={tick.a.y}
-                x2={tick.b.x}
+                <line
+                  data-export-role="grid"
+                  x1={tick.a.x}
+                  y1={tick.a.y}
+                  x2={tick.b.x}
                 y2={tick.b.y}
                 stroke="rgba(0,0,0,0)"
                 strokeWidth={hitStrokeWidth}
@@ -158,6 +160,7 @@ export default function GuideOverlay({
           return (
             <g key={`hguide-${idx}`}>
               <polyline
+                data-export-role="grid"
                 points={points}
                 fill="none"
                 stroke={gridColors.tick ?? colors.tick}
@@ -166,6 +169,7 @@ export default function GuideOverlay({
               />
               {interactive?.onGuidePointerDown && (
                 <polyline
+                  data-export-role="grid"
                   points={points}
                   fill="none"
                   stroke="rgba(0,0,0,0)"

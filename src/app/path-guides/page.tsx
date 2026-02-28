@@ -9,6 +9,7 @@ import { findCrossingsForStraps, type Crossing, type Pt } from '@/lib/paths/inte
 import { samplePathDToPolyline } from '@/lib/paths/sample-svg-path';
 import { transformPolyline } from '@/lib/paths/transform';
 import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
+import { applyExportOnlyGridTweaks, exportVectorPdf, printVectorToScale } from '@/lib/export/vector-svg-pdf';
 
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type CrossingsFilter = 'all' | 'selected';
@@ -217,6 +218,25 @@ function circlePathD(r = 40) {
 function uid(prefix: string) {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return `${prefix}-${crypto.randomUUID()}`;
   return `${prefix}-${Math.random().toString(36).slice(2)}`;
+}
+
+
+function stripNoExport(svg: SVGSVGElement) {
+  svg.querySelectorAll('[data-no-export="true"]').forEach((n) => n.remove());
+  const stage = svg.querySelector('#stage-bg');
+  if (stage) stage.remove();
+  svg.querySelectorAll('filter').forEach((f) => f.remove());
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 const SCRIPT_DEFAULTS = {
@@ -831,6 +851,53 @@ if (rafRef.current == null) {
     });
   };
 
+  function downloadSVG() {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('viewBox', `0 0 ${box.w} ${box.h}`);
+    clone.setAttribute('width', `${box.w}mm`);
+    clone.setAttribute('height', `${box.h}mm`);
+
+    stripNoExport(clone);
+    applyExportOnlyGridTweaks(clone);
+
+    const blob = new Blob([clone.outerHTML], { type: 'image/svg+xml;charset=utf-8' });
+    downloadBlob(blob, 'path-guides.svg');
+  }
+
+  async function downloadPDF() {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    await exportVectorPdf({
+      svgEl: svg,
+      pageWmm: box.w,
+      pageHmm: box.h,
+      filename: 'path-guides.pdf',
+      prepareClone: (clone) => {
+        stripNoExport(clone);
+      },
+    });
+  }
+
+  async function printToScale() {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    await printVectorToScale({
+      svgEl: svg,
+      pageWmm: box.w,
+      pageHmm: box.h,
+      title: 'path-guides',
+      prepareClone: (clone) => {
+        stripNoExport(clone);
+      },
+    });
+  }
+
   return (
     <main className="min-h-screen text-sm text-slate-900 relative">
       <div className="fixed inset-0 -z-10 bg-slate-100" style={{ backgroundImage: 'none' }} />
@@ -859,6 +926,9 @@ if (rafRef.current == null) {
               <button onClick={() => { setView('custom'); setZoom((z) => Math.max(0.35, z * 0.9)); }} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">–</button>
               <button onClick={() => { setView('custom'); setZoom((z) => Math.min(6, z * 1.1)); }} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">+</button>
               <button onClick={() => applyViewPreset('autofit')} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Reset view</button>
+              <button onClick={downloadSVG} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Export SVG</button>
+              <button onClick={downloadPDF} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Export PDF</button>
+              <button onClick={printToScale} className="px-2 py-1 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500">Print to scale</button>
             </div>
           </div>
 
