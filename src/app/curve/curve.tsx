@@ -26,6 +26,11 @@ import { measureRun } from '@/lib/measure/measure-run';
 import { buildCopperplateContext } from '@/lib/copperplate/context';
 import { buildGuideSet, BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/guide-template';
 import GuideOverlay from '@/components/preview/GuideOverlay';
+import {
+  EXPORT_PX_PER_MM,
+  JPEG_QUALITY,
+  applyExportOnlyGridTweaks,
+} from '@/lib/export/raster-export-jpeg';
 
 type PaperId = keyof typeof PAPERS_MM;
 type CurvePresetId = 'simpleArch' | 'highArch' | 'shallowArch' | 'compoundArch' | 'zanerian';
@@ -1341,6 +1346,7 @@ export default function CurvedTitlePage() {
 
     bakeExportStrokes(svg, clone, box.w);
     stripNoExport(clone);
+    applyExportOnlyGridTweaks(clone);
 
     const blob = new Blob([clone.outerHTML], { type: 'image/svg+xml;charset=utf-8' });
     downloadBlob(blob, 'curved-title.svg');
@@ -1350,7 +1356,7 @@ export default function CurvedTitlePage() {
     const svg = svgRef.current;
     if (!svg) return;
 
-    const pxPerMM = 8; // enough for clean printing
+    const pxPerMM = EXPORT_PX_PER_MM;
     const wpx = Math.round(box.w * pxPerMM);
     const hpx = Math.round(box.h * pxPerMM);
 
@@ -1362,6 +1368,7 @@ export default function CurvedTitlePage() {
 
     bakeExportStrokes(svg, clone, box.w);
     stripNoExport(clone);
+    applyExportOnlyGridTweaks(clone);
 
     const xml = new XMLSerializer().serializeToString(clone);
     const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }));
@@ -1377,7 +1384,7 @@ export default function CurvedTitlePage() {
         ctx.fillRect(0, 0, wpx, hpx);
         ctx.drawImage(img, 0, 0, wpx, hpx);
         URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL('image/jpeg', 0.95));
+        resolve(canvas.toDataURL('image/jpeg', JPEG_QUALITY));
       };
       img.onerror = reject;
       img.src = url;
@@ -1398,6 +1405,7 @@ export default function CurvedTitlePage() {
     clone.setAttribute('height', `${box.h}mm`);
 
     stripNoExport(clone);
+    applyExportOnlyGridTweaks(clone);
 
     const html = `<!doctype html><html><head><meta charset="utf-8"/>
 <style>

@@ -20,6 +20,11 @@ import { measureRun } from '@/lib/measure/measure-run';
 import { buildCopperplateContext } from '@/lib/copperplate/context';
 import { buildGuideSet } from '@/lib/guides/guide-template';
 import GuideOverlay from '@/components/preview/GuideOverlay';
+import {
+  EXPORT_PX_PER_MM,
+  JPEG_QUALITY,
+  applyExportOnlyGridTweaks,
+} from '@/lib/export/raster-export-jpeg';
 
 type PaperId = keyof typeof PAPERS_MM;
 type Orientation = 'portrait' | 'landscape';
@@ -1534,6 +1539,7 @@ const innerRadiusMaxMM = useMemo(
 
     bakeExportStrokes(svg, clone, box.w);
     stripNoExport(clone);
+    applyExportOnlyGridTweaks(clone);
 
     const blob = new Blob([clone.outerHTML], { type: 'image/svg+xml;charset=utf-8' });
     downloadBlob(blob, 'curved-title.svg');
@@ -1543,7 +1549,7 @@ const innerRadiusMaxMM = useMemo(
     const svg = svgRef.current;
     if (!svg) return;
 
-    const pxPerMM = 8; // enough for clean printing
+    const pxPerMM = EXPORT_PX_PER_MM;
     const wpx = Math.round(box.w * pxPerMM);
     const hpx = Math.round(box.h * pxPerMM);
 
@@ -1555,6 +1561,7 @@ const innerRadiusMaxMM = useMemo(
 
     bakeExportStrokes(svg, clone, box.w);
     stripNoExport(clone);
+    applyExportOnlyGridTweaks(clone);
 
     const xml = new XMLSerializer().serializeToString(clone);
     const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }));
@@ -1570,7 +1577,7 @@ const innerRadiusMaxMM = useMemo(
         ctx.fillRect(0, 0, wpx, hpx);
         ctx.drawImage(img, 0, 0, wpx, hpx);
         URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL('image/jpeg', 0.95));
+        resolve(canvas.toDataURL('image/jpeg', JPEG_QUALITY));
       };
       img.onerror = reject;
       img.src = url;
@@ -1591,6 +1598,7 @@ const innerRadiusMaxMM = useMemo(
     clone.setAttribute('height', `${box.h}mm`);
 
     stripNoExport(clone);
+    applyExportOnlyGridTweaks(clone);
 
     const html = `<!doctype html><html><head><meta charset="utf-8"/>
 <style>
