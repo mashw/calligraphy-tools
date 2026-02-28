@@ -26,6 +26,7 @@ import { measureRun } from '@/lib/measure/measure-run';
 import { buildCopperplateContext } from '@/lib/copperplate/context';
 import { buildGuideSet, BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/guide-template';
 import GuideOverlay from '@/components/preview/GuideOverlay';
+import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 
 type PaperId = keyof typeof PAPERS_MM;
 type CurvePresetId = 'simpleArch' | 'highArch' | 'shallowArch' | 'compoundArch' | 'zanerian';
@@ -1326,7 +1327,8 @@ export default function CurvedTitlePage() {
 
 
   /* ---------------- Export actions ---------------- */
-  const MM_TO_PT = 72 / 25.4;
+  const EXPORT_TARGET_DPI = 900;
+  const EXPORT_MAX_DIM_PX = 12000;
 
   function downloadSVG() {
     const svg = svgRef.current;
@@ -1350,71 +1352,30 @@ export default function CurvedTitlePage() {
     const svg = svgRef.current;
     if (!svg) return;
 
-    const pxPerMM = 8; // enough for clean printing
-    const wpx = Math.round(box.w * pxPerMM);
-    const hpx = Math.round(box.h * pxPerMM);
-
-    const clone = svg.cloneNode(true) as SVGSVGElement;
-    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    clone.setAttribute('viewBox', `0 0 ${box.w} ${box.h}`);
-    clone.setAttribute('width', String(wpx));
-    clone.setAttribute('height', String(hpx));
-
-    bakeExportStrokes(svg, clone, box.w);
-    stripNoExport(clone);
-
-    const xml = new XMLSerializer().serializeToString(clone);
-    const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }));
-
-    const img = new Image();
-    const dataUrl: string = await new Promise((resolve, reject) => {
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = wpx;
-        canvas.height = hpx;
-        const ctx = canvas.getContext('2d')!;
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, wpx, hpx);
-        ctx.drawImage(img, 0, 0, wpx, hpx);
-        URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL('image/jpeg', 0.95));
-      };
-      img.onerror = reject;
-      img.src = url;
+    const { wPx, hPx } = computeRasterPxPerMM(box.w, box.h, {
+      targetDpi: EXPORT_TARGET_DPI,
+      maxDimPx: EXPORT_MAX_DIM_PX,
     });
 
-    const pdfBlob = makeSimplePdfFromJpeg(dataUrl, box.w * MM_TO_PT, box.h * MM_TO_PT, wpx, hpx);
+    const clone = cloneSvgForRasterExport(svg, box.w, box.h, wPx, hPx, bakeExportStrokes, stripNoExport);
+    const dataUrl = await renderSvgCloneToJpegDataUrl(clone, wPx, hPx);
+
+    const pdfBlob = makeSimplePdfFromJpeg(dataUrl, mmToPt(box.w), mmToPt(box.h), wPx, hPx);
     downloadBlob(pdfBlob, 'curved-title.pdf');
   }
 
-  function printToScale() {
+  async function printToScale() {
     const svg = svgRef.current;
     if (!svg) return;
 
-    const clone = svg.cloneNode(true) as SVGSVGElement;
-    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    clone.setAttribute('viewBox', `0 0 ${box.w} ${box.h}`);
-    clone.setAttribute('width', `${box.w}mm`);
-    clone.setAttribute('height', `${box.h}mm`);
+    const { wPx, hPx } = computeRasterPxPerMM(box.w, box.h, {
+      targetDpi: EXPORT_TARGET_DPI,
+      maxDimPx: EXPORT_MAX_DIM_PX,
+    });
 
-    stripNoExport(clone);
-
-    const html = `<!doctype html><html><head><meta charset="utf-8"/>
-<style>
-  @page{size:${box.w}mm ${box.h}mm;margin:0}
-  html,body{height:100%;margin:0;background:#fff}
-  body{display:flex;align-items:center;justify-content:center}
-  svg{width:${box.w}mm;height:${box.h}mm}
-</style>
-</head><body>${clone.outerHTML}<script>
-  window.onload=()=>{ window.print(); setTimeout(()=>window.close(), 250); }
-</script></body></html>`;
-
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
+    const clone = cloneSvgForRasterExport(svg, box.w, box.h, wPx, hPx, bakeExportStrokes, stripNoExport);
+    const dataUrl = await renderSvgCloneToJpegDataUrl(clone, wPx, hPx);
+    printJpegDataUrlToScale(dataUrl, box.w, box.h);
   }
 
   /* ---------------- Pan & Curve Drag handlers ---------------- */
