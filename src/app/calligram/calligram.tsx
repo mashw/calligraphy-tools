@@ -1520,9 +1520,6 @@ const innerRadiusMaxMM = useMemo(
 
 
   /* ---------------- Export actions ---------------- */
-  const EXPORT_TARGET_DPI = 900;
-  const EXPORT_MAX_DIM_PX = 12000;
-
   function downloadSVG() {
     const svg = svgRef.current;
     if (!svg) return;
@@ -1545,10 +1542,7 @@ const innerRadiusMaxMM = useMemo(
     const svg = svgRef.current;
     if (!svg) return;
 
-    const { wPx, hPx } = computeRasterPxPerMM(box.w, box.h, {
-      targetDpi: EXPORT_TARGET_DPI,
-      maxDimPx: EXPORT_MAX_DIM_PX,
-    });
+    const { wPx, hPx } = computeRasterPxPerMM(box.w, box.h);
 
     const clone = cloneSvgForRasterExport(svg, box.w, box.h, wPx, hPx, bakeExportStrokes, stripNoExport);
     const dataUrl = await renderSvgCloneToJpegDataUrl(clone, wPx, hPx);
@@ -1561,10 +1555,7 @@ const innerRadiusMaxMM = useMemo(
     const svg = svgRef.current;
     if (!svg) return;
 
-    const { wPx, hPx } = computeRasterPxPerMM(box.w, box.h, {
-      targetDpi: EXPORT_TARGET_DPI,
-      maxDimPx: EXPORT_MAX_DIM_PX,
-    });
+    const { wPx, hPx } = computeRasterPxPerMM(box.w, box.h);
 
     const clone = cloneSvgForRasterExport(svg, box.w, box.h, wPx, hPx, bakeExportStrokes, stripNoExport);
     const dataUrl = await renderSvgCloneToJpegDataUrl(clone, wPx, hPx);

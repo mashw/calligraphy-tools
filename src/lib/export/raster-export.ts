@@ -1,3 +1,7 @@
+const DEFAULT_TARGET_DPI = 600;
+const DEFAULT_MAX_DIM_PX = 9000;
+const DEFAULT_JPEG_QUALITY = 0.92;
+
 export function mmToPt(mm: number): number {
   return mm * (72 / 25.4);
 }
@@ -7,8 +11,8 @@ export function computeRasterPxPerMM(
   pageHmm: number,
   opts: { targetDpi?: number; maxDimPx?: number } = {}
 ): { pxPerMM: number; scale: number; wPx: number; hPx: number } {
-  const targetDpi = opts.targetDpi ?? 900;
-  const maxDimPx = opts.maxDimPx ?? 12000;
+  const targetDpi = opts.targetDpi ?? DEFAULT_TARGET_DPI;
+  const maxDimPx = opts.maxDimPx ?? DEFAULT_MAX_DIM_PX;
 
   const basePxPerMM = targetDpi / 25.4;
   let wPx = Math.max(1, Math.round(pageWmm * basePxPerMM));
@@ -89,7 +93,7 @@ export async function renderSvgCloneToJpegDataUrl(clone: SVGSVGElement, wPx: num
     ctx.fillRect(0, 0, wPx, hPx);
     ctx.drawImage(img, 0, 0, wPx, hPx);
 
-    return canvas.toDataURL('image/jpeg', 1.0);
+    return canvas.toDataURL('image/jpeg', DEFAULT_JPEG_QUALITY);
   } finally {
     URL.revokeObjectURL(url);
   }

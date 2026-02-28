@@ -898,9 +898,6 @@ const slantAngleDeg = useMemo(() => {
     return { minX: minXc, minY: minYc, vw: vwc, vh: vhc, str: `${minXc} ${minYc} ${vwc} ${vhc}` };
   }, [view, box, guideSets, zoom, pan, previewPxH, DEFAULT_AUTOFIT_ZOOM]);
   /* ---------------- Export actions ---------------- */
-  const EXPORT_TARGET_DPI = 900;
-  const EXPORT_MAX_DIM_PX = 12000;
-
   function downloadSVG() {
     const svg = svgRef.current;
     if (!svg) return;
@@ -923,10 +920,7 @@ const slantAngleDeg = useMemo(() => {
     const svg = svgRef.current;
     if (!svg) return;
 
-    const { wPx, hPx } = computeRasterPxPerMM(box.w, box.h, {
-      targetDpi: EXPORT_TARGET_DPI,
-      maxDimPx: EXPORT_MAX_DIM_PX,
-    });
+    const { wPx, hPx } = computeRasterPxPerMM(box.w, box.h);
 
     const clone = cloneSvgForRasterExport(svg, box.w, box.h, wPx, hPx, bakeExportStrokes, stripNoExport);
     const dataUrl = await renderSvgCloneToJpegDataUrl(clone, wPx, hPx);
@@ -939,10 +933,7 @@ const slantAngleDeg = useMemo(() => {
     const svg = svgRef.current;
     if (!svg) return;
 
-    const { wPx, hPx } = computeRasterPxPerMM(box.w, box.h, {
-      targetDpi: EXPORT_TARGET_DPI,
-      maxDimPx: EXPORT_MAX_DIM_PX,
-    });
+    const { wPx, hPx } = computeRasterPxPerMM(box.w, box.h);
 
     const clone = cloneSvgForRasterExport(svg, box.w, box.h, wPx, hPx, bakeExportStrokes, stripNoExport);
     const dataUrl = await renderSvgCloneToJpegDataUrl(clone, wPx, hPx);
