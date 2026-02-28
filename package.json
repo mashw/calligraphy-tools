@@ -11,7 +11,9 @@
   "dependencies": {
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "next": "16.0.0"
+    "next": "16.0.0",
+    "jspdf": "^2.5.2",
+    "svg2pdf.js": "^2.5.0"
   },
   "devDependencies": {
     "babel-plugin-react-compiler": "1.0.0",
