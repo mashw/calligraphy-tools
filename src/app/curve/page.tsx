@@ -25,6 +25,7 @@ import type { ScriptContext } from '@/lib/scripts/types';
 import { measureRun } from '@/lib/measure/measure-run';
 import { buildCopperplateContext } from '@/lib/copperplate/context';
 import { buildGuideSet, BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/guide-template';
+import { exportRasterPdf, printRasterToScale } from '@/lib/export/export-raster-pdf';
 import GuideOverlay from '@/components/preview/GuideOverlay';
 
 type PaperId = keyof typeof PAPERS_MM;
@@ -248,14 +249,6 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-function b64ToUint8(base64: string): Uint8Array {
-  const bin = atob(base64);
-  const len = bin.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes;
-}
-
 function flipCubicVertically(c: PtCubic, boxH: number): PtCubic {
   const flipPt = (p: Pt): Pt => ({ x: p.x, y: boxH - p.y });
 
@@ -270,7 +263,6 @@ function flipCubicVertically(c: PtCubic, boxH: number): PtCubic {
   const extra = (c as PtCubic)._extraSegs;
   if (extra && extra.length) {
     (out as PtCubic)._extraSegs = extra.map(seg => {
-      // seg is [x0,y0,x1,y1,x2,y2,x3,y3]
       const s = seg.slice() as number[];
       s[1] = boxH - s[1];
       s[3] = boxH - s[3];
@@ -307,100 +299,6 @@ function translateCubic(c: PtCubic, dx: number, dy: number): PtCubic {
   }
 
   return out;
-}
-
-
-
-function makeSimplePdfFromJpeg(
-  jpegDataUrl: string,
-  pageWpt: number,
-  pageHpt: number,
-  imgW: number,
-  imgH: number
-): Blob {
-  const base64 = jpegDataUrl.split(',')[1];
-  const imgBytes = b64ToUint8(base64);
-
-  const EOL = '\n';
-  const header = '%PDF-1.4' + EOL;
-
-  const obj1 = `1 0 obj${EOL}<< /Type /Catalog /Pages 2 0 R >>${EOL}endobj${EOL}`;
-  const obj2 = `2 0 obj${EOL}<< /Type /Pages /Count 1 /Kids [3 0 R] >>${EOL}endobj${EOL}`;
-  const obj3 =
-    `3 0 obj${EOL}` +
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWpt} ${pageHpt}] ` +
-    `/Resources << /XObject << /Im0 4 0 R >> /ProcSet [/PDF /ImageC] >> /Contents 5 0 R >>${EOL}` +
-    `endobj${EOL}`;
-
-  const contentStream = `q ${pageWpt} 0 0 ${pageHpt} 0 0 cm /Im0 Do Q`;
-  const obj5 =
-    `5 0 obj${EOL}` +
-    `<< /Length ${contentStream.length} >>${EOL}` +
-    `stream${EOL}${contentStream}${EOL}endstream${EOL}` +
-    `endobj${EOL}`;
-
-  const obj4Head =
-    `4 0 obj${EOL}` +
-    `<< /Type /XObject /Subtype /Image /ColorSpace /DeviceRGB /BitsPerComponent 8 ` +
-    `/Filter /DCTDecode /Width ${imgW} /Height ${imgH} /Length ${imgBytes.byteLength} >>${EOL}` +
-    `stream${EOL}`;
-  const obj4Tail = `${EOL}endstream${EOL}endobj${EOL}`;
-
-  const chunks: (string | Uint8Array)[] = [header];
-
-  const xref: number[] = [];
-  let offset = header.length;
-
-  const pushStr = (s: string) => {
-    chunks.push(s);
-    offset += s.length;
-  };
-  const pushBytes = (b: Uint8Array) => {
-    chunks.push(b);
-    offset += b.byteLength;
-  };
-
-  // obj 1
-  xref.push(offset);
-  pushStr(obj1);
-
-  // obj 2
-  xref.push(offset);
-  pushStr(obj2);
-
-  // obj 3
-  xref.push(offset);
-  pushStr(obj3);
-
-  // obj 4 (record xref ONCE, at the start of "4 0 obj")
-  xref.push(offset);
-  pushStr(obj4Head);
-  pushBytes(imgBytes);
-  pushStr(obj4Tail);
-
-  // obj 5
-  xref.push(offset);
-  pushStr(obj5);
-
-  const xrefStart = offset;
-  let xrefTable =
-    `xref${EOL}` +
-    `0 ${xref.length + 1}${EOL}` +
-    `0000000000 65535 f ${EOL}`;
-  for (const off of xref) {
-    xrefTable += `${off.toString().padStart(10, '0')} 00000 n ${EOL}`;
-  }
-
-  const trailer =
-    `trailer${EOL}` +
-    `<< /Size ${xref.length + 1} /Root 1 0 R >>${EOL}` +
-    `startxref${EOL}` +
-    `${xrefStart}${EOL}` +
-    `%%EOF`;
-
-  chunks.push(xrefTable, trailer);
-
-  return new Blob(chunks as unknown as BlobPart[], { type: 'application/pdf' });
 }
 
 export default function CurvedTitlePage() {
@@ -1326,7 +1224,6 @@ export default function CurvedTitlePage() {
 
 
   /* ---------------- Export actions ---------------- */
-  const MM_TO_PT = 72 / 25.4;
 
   function downloadSVG() {
     const svg = svgRef.current;
@@ -1350,71 +1247,32 @@ export default function CurvedTitlePage() {
     const svg = svgRef.current;
     if (!svg) return;
 
-    const pxPerMM = 8; // enough for clean printing
-    const wpx = Math.round(box.w * pxPerMM);
-    const hpx = Math.round(box.h * pxPerMM);
-
-    const clone = svg.cloneNode(true) as SVGSVGElement;
-    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    clone.setAttribute('viewBox', `0 0 ${box.w} ${box.h}`);
-    clone.setAttribute('width', String(wpx));
-    clone.setAttribute('height', String(hpx));
-
-    bakeExportStrokes(svg, clone, box.w);
-    stripNoExport(clone);
-
-    const xml = new XMLSerializer().serializeToString(clone);
-    const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }));
-
-    const img = new Image();
-    const dataUrl: string = await new Promise((resolve, reject) => {
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = wpx;
-        canvas.height = hpx;
-        const ctx = canvas.getContext('2d')!;
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, wpx, hpx);
-        ctx.drawImage(img, 0, 0, wpx, hpx);
-        URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL('image/jpeg', 0.95));
-      };
-      img.onerror = reject;
-      img.src = url;
+    await exportRasterPdf({
+      svgEl: svg,
+      pageWmm: box.w,
+      pageHmm: box.h,
+      filename: 'curved-title.pdf',
+      prepareClone(clone) {
+        bakeExportStrokes(svg, clone, box.w);
+        stripNoExport(clone);
+      },
     });
-
-    const pdfBlob = makeSimplePdfFromJpeg(dataUrl, box.w * MM_TO_PT, box.h * MM_TO_PT, wpx, hpx);
-    downloadBlob(pdfBlob, 'curved-title.pdf');
   }
 
-  function printToScale() {
+  async function printToScale() {
     const svg = svgRef.current;
     if (!svg) return;
 
-    const clone = svg.cloneNode(true) as SVGSVGElement;
-    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    clone.setAttribute('viewBox', `0 0 ${box.w} ${box.h}`);
-    clone.setAttribute('width', `${box.w}mm`);
-    clone.setAttribute('height', `${box.h}mm`);
-
-    stripNoExport(clone);
-
-    const html = `<!doctype html><html><head><meta charset="utf-8"/>
-<style>
-  @page{size:${box.w}mm ${box.h}mm;margin:0}
-  html,body{height:100%;margin:0;background:#fff}
-  body{display:flex;align-items:center;justify-content:center}
-  svg{width:${box.w}mm;height:${box.h}mm}
-</style>
-</head><body>${clone.outerHTML}<script>
-  window.onload=()=>{ window.print(); setTimeout(()=>window.close(), 250); }
-</script></body></html>`;
-
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
+    await printRasterToScale({
+      svgEl: svg,
+      pageWmm: box.w,
+      pageHmm: box.h,
+      title: 'Curved Title Print',
+      prepareClone(clone) {
+        bakeExportStrokes(svg, clone, box.w);
+        stripNoExport(clone);
+      },
+    });
   }
 
   /* ---------------- Pan & Curve Drag handlers ---------------- */
@@ -1750,10 +1608,11 @@ export default function CurvedTitlePage() {
                 Center horizontally
               </button>
 
+              
               <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={downloadSVG}
-                className="shrink-0 ml-2 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
                 SVG
               </button>
