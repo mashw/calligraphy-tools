@@ -3,6 +3,8 @@
 import React, { useMemo, useRef, useState } from 'react';
 
 import GuideOverlay from '@/components/preview/GuideOverlay';
+import { exportRasterPdf, printRasterToScale } from '@/lib/export/export-raster-pdf';
+import type { ExportDpi } from '@/lib/export/rasterize-svg-to-png';
 import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
 import { buildGuideSet } from '@/lib/guides/guide-template';
 import { findCrossingsForStraps, type Crossing, type Pt } from '@/lib/paths/intersections';
@@ -219,6 +221,24 @@ function uid(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2)}`;
 }
 
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function stripNoExport(svg: SVGSVGElement) {
+  svg.querySelectorAll('[data-no-export="true"]').forEach((n) => n.remove());
+  const stage = svg.querySelector('#stage-bg');
+  if (stage) stage.remove();
+  svg.querySelectorAll('filter').forEach((f) => f.remove());
+}
+
 const SCRIPT_DEFAULTS = {
   TexturaQuadrata: {
     nibMMText: '4',
@@ -328,6 +348,7 @@ export default function PathGuidesPage() {
   }, [orientation, paper]);
   const centerX = box.w / 2;
   const centerY = box.h / 2;
+  const [exportDpi, setExportDpi] = useState<ExportDpi>(600);
   const [view, setView] = useState<ViewMode>('autofit');
   const [zoom, setZoom] = useState(1.35);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -831,6 +852,49 @@ if (rafRef.current == null) {
     });
   };
 
+  const downloadSvg = () => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('viewBox', `0 0 ${box.w} ${box.h}`);
+    clone.setAttribute('width', `${box.w}mm`);
+    clone.setAttribute('height', `${box.h}mm`);
+    stripNoExport(clone);
+
+    const blob = new Blob([clone.outerHTML], { type: 'image/svg+xml;charset=utf-8' });
+    downloadBlob(blob, 'path-guides.svg');
+  };
+
+  const downloadPdf = async () => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    await exportRasterPdf({
+      svgEl: svg,
+      pageWmm: box.w,
+      pageHmm: box.h,
+      dpi: exportDpi,
+      filename: 'path-guides.pdf',
+      prepareClone: stripNoExport,
+    });
+  };
+
+  const printToScale = async () => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    await printRasterToScale({
+      svgEl: svg,
+      pageWmm: box.w,
+      pageHmm: box.h,
+      dpi: exportDpi,
+      title: 'Path Guides Print',
+      prepareClone: stripNoExport,
+    });
+  };
+
   return (
     <main className="min-h-screen text-sm text-slate-900 relative">
       <div className="fixed inset-0 -z-10 bg-slate-100" style={{ backgroundImage: 'none' }} />
@@ -859,6 +923,21 @@ if (rafRef.current == null) {
               <button onClick={() => { setView('custom'); setZoom((z) => Math.max(0.35, z * 0.9)); }} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">–</button>
               <button onClick={() => { setView('custom'); setZoom((z) => Math.min(6, z * 1.1)); }} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">+</button>
               <button onClick={() => applyViewPreset('autofit')} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Reset view</button>
+              <label className="ml-2 flex items-center gap-2 text-xs text-slate-500">
+                Export DPI
+                <select
+                  className="p-1.5 text-sm rounded-lg border border-slate-300 text-slate-900"
+                  value={exportDpi}
+                  onChange={(e) => setExportDpi(Number(e.target.value) as ExportDpi)}
+                >
+                  <option value={300}>300</option>
+                  <option value={600}>600</option>
+                  <option value={1200}>1200</option>
+                </select>
+              </label>
+              <button onClick={downloadSvg} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">SVG</button>
+              <button onClick={downloadPdf} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">PDF</button>
+              <button onClick={printToScale} className="px-3 py-1.5 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500">Print</button>
             </div>
           </div>
 
