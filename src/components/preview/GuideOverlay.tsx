@@ -135,6 +135,7 @@ export default function GuideOverlay({
               stroke={gridColors.tick ?? colors.tick}
               strokeWidth={gridThin ?? style.thin}
               vectorEffect="non-scaling-stroke"
+              data-export-role="grid"
             />
             {interactive?.onGuidePointerDown && (
               <line
@@ -163,6 +164,7 @@ export default function GuideOverlay({
                 stroke={gridColors.tick ?? colors.tick}
                 strokeWidth={gridThin ?? style.thin}
                 vectorEffect="non-scaling-stroke"
+                data-export-role="grid"
               />
               {interactive?.onGuidePointerDown && (
                 <polyline
