@@ -4,7 +4,6 @@ import React, { useMemo, useRef, useState } from 'react';
 
 import GuideOverlay from '@/components/preview/GuideOverlay';
 import { exportRasterPdf, printRasterToScale } from '@/lib/export/export-raster-pdf';
-import type { ExportDpi } from '@/lib/export/rasterize-svg-to-png';
 import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
 import { buildGuideSet } from '@/lib/guides/guide-template';
 import { findCrossingsForStraps, type Crossing, type Pt } from '@/lib/paths/intersections';
@@ -348,7 +347,6 @@ export default function PathGuidesPage() {
   }, [orientation, paper]);
   const centerX = box.w / 2;
   const centerY = box.h / 2;
-  const [exportDpi, setExportDpi] = useState<ExportDpi>(600);
   const [view, setView] = useState<ViewMode>('autofit');
   const [zoom, setZoom] = useState(1.35);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -875,7 +873,6 @@ if (rafRef.current == null) {
       svgEl: svg,
       pageWmm: box.w,
       pageHmm: box.h,
-      dpi: exportDpi,
       filename: 'path-guides.pdf',
       prepareClone: stripNoExport,
     });
@@ -889,7 +886,6 @@ if (rafRef.current == null) {
       svgEl: svg,
       pageWmm: box.w,
       pageHmm: box.h,
-      dpi: exportDpi,
       title: 'Path Guides Print',
       prepareClone: stripNoExport,
     });
@@ -923,19 +919,7 @@ if (rafRef.current == null) {
               <button onClick={() => { setView('custom'); setZoom((z) => Math.max(0.35, z * 0.9)); }} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">–</button>
               <button onClick={() => { setView('custom'); setZoom((z) => Math.min(6, z * 1.1)); }} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">+</button>
               <button onClick={() => applyViewPreset('autofit')} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Reset view</button>
-              <label className="ml-2 flex items-center gap-2 text-xs text-slate-500">
-                Export DPI
-                <select
-                  className="p-1.5 text-sm rounded-lg border border-slate-300 text-slate-900"
-                  value={exportDpi}
-                  onChange={(e) => setExportDpi(Number(e.target.value) as ExportDpi)}
-                >
-                  <option value={300}>300</option>
-                  <option value={600}>600</option>
-                  <option value={1200}>1200</option>
-                </select>
-              </label>
-              <button onClick={downloadSvg} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">SVG</button>
+                            <button onClick={downloadSvg} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">SVG</button>
               <button onClick={downloadPdf} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">PDF</button>
               <button onClick={printToScale} className="px-3 py-1.5 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500">Print</button>
             </div>

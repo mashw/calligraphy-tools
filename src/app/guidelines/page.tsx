@@ -9,7 +9,6 @@ import {
 import { type ScriptId } from '@/lib/scripts';
 import { buildGuideSet, BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/guide-template';
 import { exportRasterPdf, printRasterToScale } from '@/lib/export/export-raster-pdf';
-import type { ExportDpi } from '@/lib/export/rasterize-svg-to-png';
 import GuideOverlay from '@/components/preview/GuideOverlay';
 
 type PaperId = keyof typeof PAPERS_MM;
@@ -328,7 +327,6 @@ export default function GuidelinesPage() {
   // ---------- State ----------
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
-  const [exportDpi, setExportDpi] = useState<ExportDpi>(600);
   const [view, setView] = useState<ViewMode>('autofit');
   const [customOrigin, setCustomOrigin] = useState<'autofit' | 'fullpage'>('autofit');
 
@@ -826,7 +824,6 @@ const slantAngleDeg = useMemo(() => {
       svgEl: svg,
       pageWmm: box.w,
       pageHmm: box.h,
-      dpi: exportDpi,
       filename: 'guidelines.pdf',
       prepareClone(clone) {
         bakeExportStrokes(svg, clone, box.w);
@@ -842,7 +839,6 @@ const slantAngleDeg = useMemo(() => {
       svgEl: svg,
       pageWmm: box.w,
       pageHmm: box.h,
-      dpi: exportDpi,
       title: 'Guidelines Print',
       prepareClone(clone) {
         bakeExportStrokes(svg, clone, box.w);
@@ -1034,19 +1030,6 @@ const slantAngleDeg = useMemo(() => {
               <button onMouseDown={e => e.preventDefault()} onClick={goToTop} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
                 Top
               </button>
-
-              <label className="ml-2 flex items-center gap-2 text-xs text-slate-500">
-                Export DPI
-                <select
-                  className="p-1.5 text-sm rounded-lg border border-slate-300 text-slate-900"
-                  value={exportDpi}
-                  onChange={(e) => setExportDpi(Number(e.target.value) as ExportDpi)}
-                >
-                  <option value={300}>300</option>
-                  <option value={600}>600</option>
-                  <option value={1200}>1200</option>
-                </select>
-              </label>
 
               <button onMouseDown={e => e.preventDefault()} onClick={downloadSVG} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white">
                 SVG

@@ -20,7 +20,6 @@ import { measureRun } from '@/lib/measure/measure-run';
 import { buildCopperplateContext } from '@/lib/copperplate/context';
 import { buildGuideSet } from '@/lib/guides/guide-template';
 import { exportRasterPdf, printRasterToScale } from '@/lib/export/export-raster-pdf';
-import type { ExportDpi } from '@/lib/export/rasterize-svg-to-png';
 import GuideOverlay from '@/components/preview/GuideOverlay';
 
 type PaperId = keyof typeof PAPERS_MM;
@@ -365,7 +364,6 @@ export default function CalligramPage() {
   // ---------- State ----------
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>('landscape');
-  const [exportDpi, setExportDpi] = useState<ExportDpi>(600);
   const [view, setView] = useState<ViewMode>('fullpage');
   const [customOrigin, setCustomOrigin] = useState<'autofit' | 'fullpage'>('fullpage');
 
@@ -1464,7 +1462,6 @@ const innerRadiusMaxMM = useMemo(
       svgEl: svg,
       pageWmm: box.w,
       pageHmm: box.h,
-      dpi: exportDpi,
       filename: 'curved-title.pdf',
       prepareClone(clone) {
         bakeExportStrokes(svg, clone, box.w);
@@ -1481,7 +1478,6 @@ const innerRadiusMaxMM = useMemo(
       svgEl: svg,
       pageWmm: box.w,
       pageHmm: box.h,
-      dpi: exportDpi,
       title: 'Calligram Print',
       prepareClone(clone) {
         bakeExportStrokes(svg, clone, box.w);
@@ -1736,19 +1732,7 @@ const innerRadiusMaxMM = useMemo(
               >
                 Reset view
               </button>
-              <label className="shrink-0 ml-2 flex items-center gap-2 text-xs text-slate-500">
-                Export DPI
-                <select
-                  className="p-1.5 text-sm rounded-lg border border-slate-300 text-slate-900"
-                  value={exportDpi}
-                  onChange={(e) => setExportDpi(Number(e.target.value) as ExportDpi)}
-                >
-                  <option value={300}>300</option>
-                  <option value={600}>600</option>
-                  <option value={1200}>1200</option>
-                </select>
-              </label>
-              <button
+                            <button
                 onMouseDown={e => e.preventDefault()}
                 onClick={downloadSVG}
                 className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
