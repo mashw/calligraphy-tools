@@ -132,12 +132,7 @@ const fitStrapToPage = ({
 };
 
 
-const bandPolygonD = (asc: Pt[], desc: Pt[]) => {
-  if (!asc?.length || !desc?.length) return '';
-  const a = asc.map((p) => `${p.x},${p.y}`).join(' L ');
-  const d = [...desc].reverse().map((p) => `${p.x},${p.y}`).join(' L ');
-  return `M ${a} L ${d} Z`;
-};
+
 
 const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) => {
   const ca = centroid(aPts);
@@ -819,9 +814,21 @@ if (rafRef.current == null) {
     setGroups(clonePreset(preset.groups ?? []));
     setCrossingOverrides(clonePreset(preset.crossingOverrides ?? {}));
     setActiveId(preset.straps[0]?.id ?? null);
-    setView('autofit');
-    setPan({ x: 0, y: 0 });
-    setZoom(1.35);
+
+    if (preset.ui) {
+      setView(preset.ui.view);
+      setZoom(preset.ui.zoom);
+      setPan(clonePreset(preset.ui.pan));
+      setSimplify(preset.ui.simplify);
+      setShowCrossings(preset.ui.showCrossings);
+      setCrossingsFilter(preset.ui.crossingsFilter);
+      setShowAllCrossings(preset.ui.showAllCrossings);
+    } else {
+      setView('autofit');
+      setPan({ x: 0, y: 0 });
+      setZoom(1.35);
+    }
+
     setSelectedForGroup([]);
     setActiveCrossingId(null);
     setError(null);
@@ -836,6 +843,15 @@ if (rafRef.current == null) {
       straps: clonePreset(straps),
       groups: clonePreset(groups),
       crossingOverrides: clonePreset(crossingOverrides),
+      ui: {
+        view,
+        zoom,
+        pan: clonePreset(pan),
+        simplify,
+        showCrossings,
+        crossingsFilter,
+        showAllCrossings,
+      },
       createdAt: new Date().toISOString(),
     };
     downloadJson(preset, 'path-guides-preset.json');
@@ -972,16 +988,7 @@ if (rafRef.current == null) {
                     }
                   >
 {isSimplifiedForThisStrap ? (
-  guideSet ? (
-    <path
-      d={bandPolygonD(guideSet.ascLine, guideSet.descLine)}
-      fill={strap.color}
-      stroke="none"
-      vectorEffect="non-scaling-stroke"
-      pointerEvents="fill"
-      onPointerDown={beginStrapDrag(strap.id)}
-    />
-  ) : transformed.length > 1 ? (
+  transformed.length > 1 ? (
     <path
       d={pathD(transformed)}
       fill="none"

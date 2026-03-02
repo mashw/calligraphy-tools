@@ -46,6 +46,15 @@ export type PathGuidesPresetV1 = {
   straps: Strap[];
   groups: StrapGroup[];
   crossingOverrides: PairOverrides;
+  ui?: {
+    view: 'autofit' | 'fullpage' | 'custom';
+    zoom: number;
+    pan: { x: number; y: number };
+    simplify: boolean;
+    showCrossings: boolean;
+    crossingsFilter: 'all' | 'selected';
+    showAllCrossings: boolean;
+  };
   notes?: string;
   createdAt?: string;
 };
@@ -80,23 +89,23 @@ export const PATH_GUIDES_PRESETS: PathGuidesPresetV1[] = [
   },
   {
     version: 1,
-    name: 'Fraktur S-curve (Exported preset)',
+    name: 'Fraktur S-curve (Two straps)',
     paper: 'A4',
     orientation: 'portrait',
     straps: [
       {
-        id: 'strap-d6fc900c-f4cd-4084-b385-efbedca6ef96',
-        name: 'scurve 1 copy',
-        d: 'M297.64,75.67c-37.83,0-68.5,30.67-68.5,68.5c0,37.83,30.67,68.5,68.5,68.5c37.83,0,68.5-30.67,68.5-68.5c0-37.83-30.67-68.5-68.5-68.5z',
-        color: '#1d4ed8',
+        id: 'strap-17e3862a-d626-450d-b11c-223eb0faaea3',
+        name: 'scurve 1',
+        d: 'M248.76,160.95c-29.87,0-54.08,24.21-54.08,54.08s24.21,54.08,54.08,54.08h.02c83.85,0,151.82,67.98,151.82,151.83s-67.97,151.82-151.82,151.83v.02c-29.87,0-54.08,24.21-54.08,54.08s24.21,54.08,54.08,54.08',
+        color: '#ea580c',
         script: 'Fraktur',
-        nibMMText: '5',
+        nibMMText: '4',
         nibAngleDeg: 40,
         xHeightMMText: '6',
         copperplateRatioPreset: '3:2:3',
-        offset: { x: -229.47842363337446, y: -257.028015448866 },
-        scalePct: 30,
-        rotDeg: -180,
+        offset: { x: -205.28625537247697, y: -269.79313980106855 },
+        scalePct: 44.62499345265998,
+        rotDeg: 0,
         flip: true,
         snapped: false,
         invertGuides: false,
@@ -105,18 +114,18 @@ export const PATH_GUIDES_PRESETS: PathGuidesPresetV1[] = [
         descNibText: '2',
       },
       {
-        id: 'strap-b95576c0-ad8b-46d1-b29c-ee34aadf1445',
-        name: 'scurve 1',
-        d: 'M297.64,75.67c-37.83,0-68.5,30.67-68.5,68.5c0,37.83,30.67,68.5,68.5,68.5c37.83,0,68.5-30.67,68.5-68.5c0-37.83-30.67-68.5-68.5-68.5z',
-        color: '#1d4ed8',
+        id: 'strap-5ce1b6ef-bf8b-46ba-96d1-d38d1e631bac',
+        name: 'scurve 1 copy',
+        d: 'M248.76,160.95c-29.87,0-54.08,24.21-54.08,54.08s24.21,54.08,54.08,54.08h.02c83.85,0,151.82,67.98,151.82,151.83s-67.97,151.82-151.82,151.83v.02c-29.87,0-54.08,24.21-54.08,54.08s24.21,54.08,54.08,54.08',
+        color: '#16a34a',
         script: 'Fraktur',
-        nibMMText: '5',
+        nibMMText: '4',
         nibAngleDeg: 40,
         xHeightMMText: '6',
         copperplateRatioPreset: '3:2:3',
-        offset: { x: -261.63392329405406, y: -256.9296699927915 },
-        scalePct: 30,
-        rotDeg: 0,
+        offset: { x: -167.61710430035964, y: -269.74352218735777 },
+        scalePct: 44.62499345265998,
+        rotDeg: -180,
         flip: true,
         snapped: false,
         invertGuides: false,
@@ -127,9 +136,8 @@ export const PATH_GUIDES_PRESETS: PathGuidesPresetV1[] = [
     ],
     groups: [],
     crossingOverrides: {
-      'strap-b95576c0-ad8b-46d1-b29c-ee34aadf1445|strap-d6fc900c-f4cd-4084-b385-efbedca6ef96': {
-        0: 'strap-d6fc900c-f4cd-4084-b385-efbedca6ef96',
-        1: 'strap-d6fc900c-f4cd-4084-b385-efbedca6ef96',
+      'strap-17e3862a-d626-450d-b11c-223eb0faaea3|strap-5ce1b6ef-bf8b-46ba-96d1-d38d1e631bac': {
+        0: 'strap-5ce1b6ef-bf8b-46ba-96d1-d38d1e631bac',
       },
     },
   },
