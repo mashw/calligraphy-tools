@@ -9,14 +9,20 @@ import { findCrossingsForStraps, type Crossing, type Pt } from '@/lib/paths/inte
 import { samplePathDToPolyline } from '@/lib/paths/sample-svg-path';
 import { transformPolyline } from '@/lib/paths/transform';
 import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
+import {
+  PATH_GUIDES_PRESETS,
+  type CopperplateRatioPreset,
+  type Orientation,
+  type PairOverrides,
+  type PaperId,
+  type PathGuidesPresetV1,
+  type Strap,
+  type StrapGroup,
+} from './presets';
 
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type CrossingsFilter = 'all' | 'selected';
-type CopperplateRatioPreset = '3:2:3' | '2:1:2' | '1:1:1' | 'custom';
-type PaperId = keyof typeof PAPERS_MM;
-type Orientation = 'portrait' | 'landscape';
 type PairKey = string;
-type PairOverrides = Record<PairKey, Record<number, string>>;
 
 type InsetLabeledFieldProps = {
   label: string;
@@ -25,37 +31,6 @@ type InsetLabeledFieldProps = {
   rightAdornment?: React.ReactNode;
   adornmentClassName?: string;
   children: React.ReactNode;
-};
-
-type Strap = {
-  id: string;
-  name: string;
-  d: string;
-  color: string;
-  script: ScriptId;
-  nibMMText: string;
-  nibAngleDeg: 35 | 40 | 45;
-  xHeightMMText?: string;
-  copperplateRatioPreset?: CopperplateRatioPreset;
-  copperplateDescUnitsText?: string;
-  copperplateXUnitsText?: string;
-  copperplateAscUnitsText?: string;
-  xNibText?: string;
-  ascNibText?: string;
-  descNibText?: string;
-  offset: { x: number; y: number };
-  scalePct: number;
-  rotDeg: number;
-  flip: boolean;
-  snapped: boolean;
-  invertGuides: boolean;
-};
-
-type StrapGroup = {
-  id: string;
-  name: string;
-  strapIds: string[];
-  collapsed: boolean;
 };
 
 const SNAP_IN_MM = 6;
@@ -157,12 +132,7 @@ const fitStrapToPage = ({
 };
 
 
-const bandPolygonD = (asc: Pt[], desc: Pt[]) => {
-  if (!asc?.length || !desc?.length) return '';
-  const a = asc.map((p) => `${p.x},${p.y}`).join(' L ');
-  const d = [...desc].reverse().map((p) => `${p.x},${p.y}`).join(' L ');
-  return `M ${a} L ${d} Z`;
-};
+
 
 const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) => {
   const ca = centroid(aPts);
@@ -212,6 +182,23 @@ function InsetLabeledField({ label, disabled = false, className = '', rightAdorn
 
 function circlePathD(r = 40) {
   return `M ${r} 0 A ${r} ${r} 0 1 1 ${-r} 0 A ${r} ${r} 0 1 1 ${r} 0 Z`;
+}
+
+
+function clonePreset<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function downloadJson(obj: unknown, filename: string) {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 function uid(prefix: string) {
@@ -365,6 +352,7 @@ export default function PathGuidesPage() {
     invertGuides: false,
   }, 'Copperplate')]));
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [selectedPresetName, setSelectedPresetName] = useState('');
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragRef = useRef<{ mode: 'none' | 'pan' | 'strap'; pointerId: number; startClient: { x: number; y: number }; startPan: { x: number; y: number }; strapId?: string; startOffset?: { x: number; y: number }; startSnapped?: boolean; startLocalCenter?: { x: number; y: number } }>({
@@ -819,6 +807,56 @@ if (rafRef.current == null) {
     setActiveId(created[0].id);
   };
 
+  const applyPreset = (preset: PathGuidesPresetV1) => {
+    setPaper(preset.paper);
+    setOrientation(preset.orientation);
+    setStraps(clonePreset(preset.straps));
+    setGroups(clonePreset(preset.groups ?? []));
+    setCrossingOverrides(clonePreset(preset.crossingOverrides ?? {}));
+    setActiveId(preset.straps[0]?.id ?? null);
+
+    if (preset.ui) {
+      setView(preset.ui.view);
+      setZoom(preset.ui.zoom);
+      setPan(clonePreset(preset.ui.pan));
+      setSimplify(preset.ui.simplify);
+      setShowCrossings(preset.ui.showCrossings);
+      setCrossingsFilter(preset.ui.crossingsFilter);
+      setShowAllCrossings(preset.ui.showAllCrossings);
+    } else {
+      setView('autofit');
+      setPan({ x: 0, y: 0 });
+      setZoom(1.35);
+    }
+
+    setSelectedForGroup([]);
+    setActiveCrossingId(null);
+    setError(null);
+  };
+
+  const exportPreset = () => {
+    const preset: PathGuidesPresetV1 = {
+      version: 1,
+      name: 'Exported preset',
+      paper,
+      orientation,
+      straps: clonePreset(straps),
+      groups: clonePreset(groups),
+      crossingOverrides: clonePreset(crossingOverrides),
+      ui: {
+        view,
+        zoom,
+        pan: clonePreset(pan),
+        simplify,
+        showCrossings,
+        crossingsFilter,
+        showAllCrossings,
+      },
+      createdAt: new Date().toISOString(),
+    };
+    downloadJson(preset, 'path-guides-preset.json');
+  };
+
   const reorderStraps = (sourceId: string, targetId: string) => {
     setStraps((prev) => {
       const srcIdx = prev.findIndex((s) => s.id === sourceId);
@@ -950,16 +988,7 @@ if (rafRef.current == null) {
                     }
                   >
 {isSimplifiedForThisStrap ? (
-  guideSet ? (
-    <path
-      d={bandPolygonD(guideSet.ascLine, guideSet.descLine)}
-      fill={strap.color}
-      stroke="none"
-      vectorEffect="non-scaling-stroke"
-      pointerEvents="fill"
-      onPointerDown={beginStrapDrag(strap.id)}
-    />
-  ) : transformed.length > 1 ? (
+  transformed.length > 1 ? (
     <path
       d={pathD(transformed)}
       fill="none"
@@ -1063,6 +1092,27 @@ if (rafRef.current == null) {
               <input type="file" accept=".svg" multiple className="hidden" onChange={(e) => parseUpload(e.target.files)} />
             </label>
           </div>
+          <div className="mt-3">
+            <InsetLabeledField label="Presets">
+              <select
+                className={INSET_CONTROL_BASE}
+                value={selectedPresetName}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  setSelectedPresetName(name);
+                  if (!name) return;
+                  const preset = PATH_GUIDES_PRESETS.find((candidate) => candidate.name === name);
+                  if (!preset) return;
+                  applyPreset(preset);
+                }}
+              >
+                <option value="">Choose a preset…</option>
+                {PATH_GUIDES_PRESETS.map((preset) => (
+                  <option key={preset.name} value={preset.name}>{preset.name}</option>
+                ))}
+              </select>
+            </InsetLabeledField>
+          </div>
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <InsetLabeledField label="Paper size">
               <select
@@ -1126,6 +1176,10 @@ if (rafRef.current == null) {
                 <span className="text-xs text-slate-500">#{idx + 1}</span>
               </div>
             ))}
+          </div>
+          <div className="mt-4">
+            <button onClick={exportPreset} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Export preset (dev)</button>
+            <p className="mt-1 text-xs text-slate-500">Downloads a JSON file you can upload to ChatGPT.</p>
           </div>
         </div>
 
