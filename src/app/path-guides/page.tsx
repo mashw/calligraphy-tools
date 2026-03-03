@@ -954,8 +954,8 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     if (drag.mode === 'pan') {
       const mmPerPxX = vb.vw / rect.width;
       const mmPerPxY = vb.vh / rect.height;
-      const nx = drag.startPan.x - (e.clientX - drag.startClient.x) * mmPerPxX;
-      const ny = drag.startPan.y - (e.clientY - drag.startClient.y) * mmPerPxY;
+      const nx = drag.startPan.x + (e.clientX - drag.startClient.x) * mmPerPxX;
+      const ny = drag.startPan.y + (e.clientY - drag.startClient.y) * mmPerPxY;
       setView('custom');
       setPan({ x: nx, y: ny });
       return;
