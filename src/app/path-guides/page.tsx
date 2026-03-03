@@ -238,6 +238,73 @@ function circlePathD(r = 40) {
 }
 
 const PATH_GUIDES_PRESETS: PathGuidesPresetV1[] = [
+
+  {
+    id: 'fraktur-scurve-weave-2',
+    name: 'Fraktur S-curve weave (2 straps)',
+    state: {
+      paper: 'A4',
+      orientation: 'portrait',
+      view: 'custom',
+      zoom: 1.5225287458060701,
+      pan: { x: -1.4380402120600384, y: 9.767309200966686 },
+      simplify: false,
+      showCrossings: true,
+      activeCrossingId:
+        'strap-21f24596-a745-4fd4-97c6-769e53aa9acb|strap-8d1a8810-e85d-4281-85af-b1979c496a13|1027|2271',
+      crossingsFilter: 'all',
+      showAllCrossings: false,
+      crossingOverrides: {
+        'strap-21f24596-a745-4fd4-97c6-769e53aa9acb|strap-8d1a8810-e85d-4281-85af-b1979c496a13': {
+          1: 'strap-21f24596-a745-4fd4-97c6-769e53aa9acb',
+        },
+      },
+      groups: [],
+      straps: [
+        {
+          id: 'strap-8d1a8810-e85d-4281-85af-b1979c496a13',
+          name: 'scurve 1',
+          d: 'M248.76,160.95c-29.87,0-54.08,24.21-54.08,54.08s24.21,54.08,54.08,54.08h.02c83.85,0,151.82,67.98,151.82,151.83s-67.97,151.82-151.82,151.83v.02c-29.87,0-54.08,24.21-54.08,54.08s24.21,54.08,54.08,54.08',
+          color: '#ea580c',
+          script: 'Fraktur',
+          nibMMText: '3.8',
+          nibAngleDeg: 40,
+          xHeightMMText: '6',
+          copperplateRatioPreset: '3:2:3',
+          offset: { x: -206.68742293228425, y: -261.5880849181708 },
+          scalePct: 44.62499345265998,
+          rotDeg: 0,
+          flip: true,
+          snapped: false,
+          invertGuides: false,
+          xNibText: '4.5',
+          ascNibText: '2',
+          descNibText: '2',
+        },
+        {
+          id: 'strap-21f24596-a745-4fd4-97c6-769e53aa9acb',
+          name: 'scurve2 1',
+          d: 'M346.52,680.95c29.87,0,54.08-24.21,54.08-54.08s-24.21-54.08-54.08-54.08h-.02c-83.85,0-151.82-67.98-151.82-151.83s67.97-151.82,151.82-151.83v-.02c29.87,0,54.08-24.21,54.08-54.08s-24.21-54.08-54.08-54.08',
+          color: '#ea580c',
+          script: 'Fraktur',
+          nibMMText: '3.8',
+          nibAngleDeg: 40,
+          xHeightMMText: '6',
+          copperplateRatioPreset: '3:2:3',
+          offset: { x: -182.94658644083785, y: -261.6014905214777 },
+          scalePct: 44.62499476212782,
+          rotDeg: 0,
+          flip: true,
+          snapped: false,
+          invertGuides: false,
+          xNibText: '4.5',
+          ascNibText: '2',
+          descNibText: '2',
+        },
+      ],
+      activeId: 'strap-8d1a8810-e85d-4281-85af-b1979c496a13',
+    },
+  },
   {
     id: 'woven-double-circle',
     name: 'Woven double circle',
@@ -1256,14 +1323,11 @@ if (rafRef.current == null) {
       <section className="px-6 py-5 max-w-[1120px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
           <h2 className="text-lg font-semibold text-slate-800">Step 1 — Manage straps</h2>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3">
             <button onClick={() => { markPresetDirty(); addCircle(); }} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Add circle (test)</button>
-            <label className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer">Upload SVG(s)
-              <input type="file" accept=".svg" multiple className="hidden" onChange={(e) => { markPresetDirty(); parseUpload(e.target.files); }} />
-            </label>
           </div>
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <InsetLabeledField label="Presets:">
+          <div className="mt-2 flex flex-wrap gap-2 items-end">
+            <InsetLabeledField label="Presets:" className="flex-1 min-w-[220px]">
               <select
                 className={INSET_CONTROL_BASE}
                 value={selectedPresetId}
@@ -1283,6 +1347,11 @@ if (rafRef.current == null) {
                 ))}
               </select>
             </InsetLabeledField>
+            <label className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer">Upload SVG(s)
+              <input type="file" accept=".svg" multiple className="hidden" onChange={(e) => { markPresetDirty(); parseUpload(e.target.files); }} />
+            </label>
+          </div>
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <InsetLabeledField label="Paper size">
               <select
                 className={INSET_CONTROL_BASE}
