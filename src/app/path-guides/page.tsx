@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import GuideOverlay from '@/components/preview/GuideOverlay';
 import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
@@ -23,6 +23,7 @@ type InsetLabeledFieldProps = {
   disabled?: boolean;
   className?: string;
   rightAdornment?: React.ReactNode;
+  rightAdornmentInteractive?: boolean;
   adornmentClassName?: string;
   children: React.ReactNode;
 };
@@ -86,7 +87,7 @@ const RELEASE_MM = 10;
 const CROSS_EPS_MM = 1.2;
 const CROSSING_MAX_SEGMENTS = 2800;
 const FIT_MARGIN_MM = 12;
-const PALETTE = ['#1d4ed8', '#ea580c', '#16a34a', '#9333ea', '#0891b2', '#dc2626', '#65a30d', '#4f46e5', '#c2410c', '#0f766e', '#be123c', '#4338ca'];
+const PALETTE = ['#5778A4', '#E49444', '#D1615D', '#85B6B2', '#6A9F58', '#E7CA60', '#A87C9F', '#F1A2A9', '#967662', '#B8B0AC'];
 const INSET_CONTROL_BASE = 'w-full border-0 rounded-none px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed';
 const INSET_CONTROL_MM = `${INSET_CONTROL_BASE} pr-10`;
 const INSET_CONTROL_WIDE = `${INSET_CONTROL_BASE} pr-14`;
@@ -215,7 +216,7 @@ const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) 
     .map((entry) => entry.crossing.id);
 };
 
-function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, adornmentClassName = 'right-3', children }: InsetLabeledFieldProps) {
+function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, rightAdornmentInteractive = false, adornmentClassName = 'right-3', children }: InsetLabeledFieldProps) {
   return (
     <div className={`relative rounded-lg border border-slate-300 overflow-hidden ${disabled ? 'bg-slate-50' : 'bg-white'} ${className}`}>
       <div className="absolute inset-x-0 top-0 h-5 bg-slate-50/80 border-b border-slate-300 px-3 flex items-center z-10 pointer-events-none">
@@ -224,7 +225,7 @@ function InsetLabeledField({ label, disabled = false, className = '', rightAdorn
       <div className="relative pt-5">
         {children}
         {rightAdornment && (
-          <span className={`pointer-events-none select-none absolute ${adornmentClassName} top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500`}>
+          <span className={`${rightAdornmentInteractive ? '' : 'pointer-events-none'} select-none absolute ${adornmentClassName} top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500`}>
             {rightAdornment}
           </span>
         )}
@@ -236,6 +237,48 @@ function InsetLabeledField({ label, disabled = false, className = '', rightAdorn
 function circlePathD(r = 40) {
   return `M ${r} 0 A ${r} ${r} 0 1 1 ${-r} 0 A ${r} ${r} 0 1 1 ${r} 0 Z`;
 }
+
+const SHAPE_OPTIONS = [
+  { kind: 'circle', label: 'circle' },
+  { kind: 'rounded-square', label: 'rounded square' },
+  { kind: 'rounded-right-angle', label: 'rounded right angle' },
+  { kind: 'hard-right-angle', label: 'hard right angle' },
+  { kind: 'hard-square', label: 'hard square' },
+  { kind: 'curved-arch', label: 'curved arch' },
+  { kind: 'horseshoe', label: 'horseshoe' },
+  { kind: 'shallow-s-curve', label: 'shallow S curve' },
+  { kind: 'diamond', label: 'diamond' },
+  { kind: 'kite', label: 'kite' },
+  { kind: 'hard-zigzag', label: 'hard zigzag' },
+  { kind: 'curved-zigzag', label: 'curved zigzag' },
+  { kind: 'rectangle', label: 'rectangle' },
+] as const;
+
+type ShapeKind = typeof SHAPE_OPTIONS[number]['kind'];
+
+const assignDistinctColors = (straps: Strap[]): Strap[] => straps.map((strap, idx) => ({
+  ...strap,
+  color: PALETTE[idx % PALETTE.length],
+}));
+
+const shapePathD = (kind: ShapeKind): string => {
+  switch (kind) {
+    case 'circle': return circlePathD(45);
+    case 'rounded-square': return 'M -45 -30 Q -45 -45 -30 -45 L 30 -45 Q 45 -45 45 -30 L 45 30 Q 45 45 30 45 L -30 45 Q -45 45 -45 30 Z';
+    case 'rounded-right-angle': return 'M -40 -35 L -40 35 Q -40 45 -30 45 L 20 45 Q 35 45 35 30 L 35 20 L 15 20 L 15 25 Q 15 30 10 30 L -20 30 Q -25 30 -25 25 L -25 -35 Z';
+    case 'hard-right-angle': return 'M -40 -35 L -40 40 L 10 40 L 10 15 L 35 15 L 35 -35 Z';
+    case 'hard-square': return 'M -45 -45 L 45 -45 L 45 45 L -45 45 Z';
+    case 'curved-arch': return 'M -50 35 Q 0 -45 50 35';
+    case 'horseshoe': return 'M -38 -40 L -38 15 Q 0 55 38 15 L 38 -40';
+    case 'shallow-s-curve': return 'M -48 -20 C -18 -50 18 10 48 -20 C 18 10 -18 50 -48 20';
+    case 'diamond': return 'M 0 -50 L 45 0 L 0 50 L -45 0 Z';
+    case 'kite': return 'M 0 -55 L 32 0 L 0 50 L -32 0 Z';
+    case 'hard-zigzag': return 'M -50 25 L -25 -25 L 0 25 L 25 -25 L 50 25';
+    case 'curved-zigzag': return 'M -50 20 Q -38 -22 -25 20 Q -12 55 0 20 Q 12 -22 25 20 Q 38 55 50 20';
+    case 'rectangle': return 'M -60 -30 L 60 -30 L 60 30 L -60 30 Z';
+    default: return circlePathD(45);
+  }
+};
 
 const PATH_GUIDES_PRESETS: PathGuidesPresetV1[] = [
 
@@ -491,6 +534,7 @@ export default function PathGuidesPage() {
   const [crossingOverrides, setCrossingOverrides] = useState<PairOverrides>({});
   const [showDebugPoints] = useState(false);
   const [dragSimplifyStrapId, setDragSimplifyStrapId] = useState<string | null>(null);
+  const [shapeKind, setShapeKind] = useState<ShapeKind>('circle');
   const dragActive = dragSimplifyStrapId !== null;
   const previewSimplify = simplify || dragActive;
   const [scaleInputText, setScaleInputText] = useState('');
@@ -741,6 +785,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 };
 
   const buildExportedState = (): ExportedStateV1 => ({
+    // Export canonical placement fields for each strap: d, offset, scalePct, rotDeg, flip, and array order.
     paper,
     orientation,
     view,
@@ -757,14 +802,14 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     activeId,
   });
 
-  const markPresetDirty = () => {
+  const markPresetDirty = useCallback(() => {
     if (selectedPresetId === 'custom') return;
     setSelectedPresetId('custom');
     lastAppliedPresetStateRef.current = null;
-  };
+  }, [selectedPresetId]);
 
   const loadPreset = (preset: PathGuidesPresetV1) => {
-    const { state } = preset;
+    const state = { ...preset.state, straps: assignDistinctColors(preset.state.straps) };
     setPaper(state.paper);
     setOrientation(state.orientation);
     setView(state.view);
@@ -857,6 +902,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
   };
 
   const updateStrap = (id: string, patch: Partial<Strap>) => {
+    markPresetDirty();
     setStraps((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   };
 
@@ -996,7 +1042,8 @@ if (rafRef.current == null) {
     }
   };
 
-  const addCircle = () => {
+  const addCircle = (name = `Circle ${straps.length + 1}`) => {
+    markPresetDirty();
     const i = straps.length;
     const step = 10;
     const pattern = [
@@ -1024,7 +1071,7 @@ if (rafRef.current == null) {
 
     const next = applyScriptDefaults({
       id: uid('strap'),
-      name: `Circle ${straps.length + 1}`,
+      name,
       d: baseD,
       color: PALETTE[straps.length % PALETTE.length],
       script: 'Copperplate',
@@ -1039,12 +1086,43 @@ if (rafRef.current == null) {
       snapped: false,
       invertGuides: false,
     }, 'Copperplate');
-    setStraps((prev) => [...prev, next]);
+    setStraps((prev) => assignDistinctColors([...prev, next]));
+    setActiveId(next.id);
+  };
+
+  const addShape = () => {
+    markPresetDirty();
+    const selected = SHAPE_OPTIONS.find((shape) => shape.kind === shapeKind) ?? SHAPE_OPTIONS[0];
+    const d = shapePathD(selected.kind);
+    const fit = fitStrapToPage({ d, box, centerX, centerY, marginMM: FIT_MARGIN_MM });
+    if (selected.kind === 'circle') {
+      addCircle(`Shape: ${selected.label}`);
+      return;
+    }
+    const next = applyScriptDefaults({
+      id: uid('strap'),
+      name: `Shape: ${selected.label}`,
+      d,
+      color: PALETTE[straps.length % PALETTE.length],
+      script: 'Copperplate',
+      nibMMText: '2.5',
+      nibAngleDeg: 45,
+      xHeightMMText: '6',
+      copperplateRatioPreset: '3:2:3',
+      offset: fit.offset,
+      scalePct: fit.scalePct,
+      rotDeg: 0,
+      flip: false,
+      snapped: false,
+      invertGuides: false,
+    }, 'Copperplate');
+    setStraps((prev) => assignDistinctColors([...prev, next]));
     setActiveId(next.id);
   };
 
   const parseUpload = async (files: FileList | null) => {
     if (!files?.length) return;
+    markPresetDirty();
     setError(null);
     const created: Strap[] = [];
 
@@ -1081,11 +1159,12 @@ if (rafRef.current == null) {
       return;
     }
 
-    setStraps((prev) => [...prev, ...created]);
+    setStraps((prev) => assignDistinctColors([...prev, ...created]));
     setActiveId(created[0].id);
   };
 
   const reorderStraps = (sourceId: string, targetId: string) => {
+    markPresetDirty();
     setStraps((prev) => {
       const srcIdx = prev.findIndex((s) => s.id === sourceId);
       const dstIdx = prev.findIndex((s) => s.id === targetId);
@@ -1096,6 +1175,38 @@ if (rafRef.current == null) {
       return copy;
     });
   };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!activeId) return;
+      if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tagName = target.tagName.toLowerCase();
+        if (tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target.isContentEditable) return;
+      }
+
+      const strap = straps.find((s) => s.id === activeId);
+      if (!strap) return;
+
+      const step = event.shiftKey ? 5 : event.altKey ? 0.5 : 1;
+      const delta = { x: 0, y: 0 };
+      if (event.key === 'ArrowLeft') delta.x = -step;
+      if (event.key === 'ArrowRight') delta.x = step;
+      if (event.key === 'ArrowUp') delta.y = -step;
+      if (event.key === 'ArrowDown') delta.y = step;
+
+      markPresetDirty();
+      setStraps((prev) => prev.map((s) => (s.id === activeId
+        ? { ...s, offset: { x: s.offset.x + delta.x, y: s.offset.y + delta.y } }
+        : s)));
+      event.preventDefault();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [activeId, markPresetDirty, straps]);
 
   return (
     <main className="min-h-screen text-sm text-slate-900 relative">
@@ -1324,10 +1435,7 @@ if (rafRef.current == null) {
         <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
           <h2 className="text-lg font-semibold text-slate-800">Step 1 — Manage straps</h2>
           <div className="mt-3">
-            <button onClick={() => { markPresetDirty(); addCircle(); }} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Add circle (test)</button>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2 items-end">
-            <InsetLabeledField label="Presets:" className="flex-1 min-w-[220px]">
+            <InsetLabeledField label="Presets:" className="w-full">
               <select
                 className={INSET_CONTROL_BASE}
                 value={selectedPresetId}
@@ -1347,8 +1455,33 @@ if (rafRef.current == null) {
                 ))}
               </select>
             </InsetLabeledField>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2 items-end">
+            <InsetLabeledField
+              label="Add shape"
+              className="flex-1 min-w-[220px]"
+              rightAdornment={(
+                <button
+                  type="button"
+                  onClick={addShape}
+                  className="h-7 min-w-7 rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  aria-label="Add selected shape"
+                  title="Add selected shape"
+                >
+                  +
+                </button>
+              )}
+              rightAdornmentInteractive
+              adornmentClassName="right-1"
+            >
+              <select className={INSET_CONTROL_WIDE} value={shapeKind} onChange={(e) => setShapeKind(e.target.value as ShapeKind)}>
+                {SHAPE_OPTIONS.map((shape) => (
+                  <option key={shape.kind} value={shape.kind}>{shape.label}</option>
+                ))}
+              </select>
+            </InsetLabeledField>
             <label className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer">Upload SVG(s)
-              <input type="file" accept=".svg" multiple className="hidden" onChange={(e) => { markPresetDirty(); parseUpload(e.target.files); }} />
+              <input type="file" accept=".svg" multiple className="hidden" onChange={(e) => { parseUpload(e.target.files); }} />
             </label>
           </div>
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1407,7 +1540,7 @@ if (rafRef.current == null) {
                     invertGuides: strap.invertGuides,
                   };
                   duplicate.offset = clampOffsetToPage({ sampled, localCenter, strap: duplicate, box, marginMM: FIT_MARGIN_MM });
-                  setStraps((prev) => [...prev, duplicate]);
+                  setStraps((prev) => assignDistinctColors([...prev, duplicate]));
                 }} className="px-2 py-1 rounded border border-slate-300">Duplicate</button>
                 <button disabled={straps.length <= 1} onClick={() => {
                   markPresetDirty();
@@ -1573,33 +1706,6 @@ if (rafRef.current == null) {
         <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
           <h2 className="text-lg font-semibold text-slate-800">Step 3 — Weave / Layer order</h2>
           <p className="mt-1 text-xs text-slate-600">Order controls render stack. First = back, last = front.</p>
-          {activeStrap && (() => {
-            const activeIdx = straps.findIndex((s) => s.id === activeStrap.id);
-            const canMoveDown = activeIdx > 0;
-            const canMoveUp = activeIdx >= 0 && activeIdx < straps.length - 1;
-            const moveSelected = (nextIndex: number) => {
-              if (activeIdx < 0 || nextIndex < 0 || nextIndex >= straps.length || nextIndex === activeIdx) return;
-              setStraps((prev) => {
-                const currentIdx = prev.findIndex((s) => s.id === activeStrap.id);
-                if (currentIdx < 0 || nextIndex < 0 || nextIndex >= prev.length || currentIdx === nextIndex) return prev;
-                const copy = [...prev];
-                const [item] = copy.splice(currentIdx, 1);
-                copy.splice(nextIndex, 0, item);
-                return copy;
-              });
-              setActiveId(activeStrap.id);
-            };
-
-            return (
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button disabled={!canMoveUp} onClick={() => moveSelected(straps.length - 1)} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40">Bring to front</button>
-                <button disabled={!canMoveDown} onClick={() => moveSelected(0)} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40">Send to back</button>
-                <button disabled={!canMoveUp} onClick={() => moveSelected(activeIdx + 1)} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40">Move up</button>
-                <button disabled={!canMoveDown} onClick={() => moveSelected(activeIdx - 1)} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40">Move down</button>
-              </div>
-            );
-          })()}
-
           <div className="mt-3 space-y-2">
             {straps.map((strap) => (
               <div key={strap.id} draggable onDragStart={() => setDragListId(strap.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => {
