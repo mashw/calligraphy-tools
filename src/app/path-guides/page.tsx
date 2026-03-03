@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import GuideOverlay from '@/components/preview/GuideOverlay';
 import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
@@ -56,6 +56,29 @@ type StrapGroup = {
   name: string;
   strapIds: string[];
   collapsed: boolean;
+};
+
+type ExportedStateV1 = {
+  paper: PaperId;
+  orientation: Orientation;
+  view: ViewMode;
+  zoom: number;
+  pan: { x: number; y: number };
+  simplify: boolean;
+  showCrossings: boolean;
+  activeCrossingId: string | null;
+  crossingsFilter: CrossingsFilter;
+  showAllCrossings: boolean;
+  crossingOverrides: PairOverrides;
+  groups: StrapGroup[];
+  straps: Strap[];
+  activeId: string | null;
+};
+
+type PathGuidesPresetV1 = {
+  id: string;
+  name: string;
+  state: ExportedStateV1;
 };
 
 const SNAP_IN_MM = 6;
@@ -214,6 +237,64 @@ function circlePathD(r = 40) {
   return `M ${r} 0 A ${r} ${r} 0 1 1 ${-r} 0 A ${r} ${r} 0 1 1 ${r} 0 Z`;
 }
 
+const PATH_GUIDES_PRESETS: PathGuidesPresetV1[] = [
+  {
+    id: 'woven-double-circle',
+    name: 'Woven double circle',
+    state: {
+      paper: 'A4',
+      orientation: 'portrait',
+      view: 'autofit',
+      zoom: 1.35,
+      pan: { x: 0, y: 0 },
+      simplify: true,
+      showCrossings: true,
+      activeCrossingId: null,
+      crossingsFilter: 'all',
+      showAllCrossings: false,
+      crossingOverrides: {},
+      groups: [],
+      straps: [
+        {
+          id: 'preset-strap-1',
+          name: 'Circle A',
+          d: circlePathD(40),
+          color: '#1d4ed8',
+          script: 'Copperplate',
+          nibMMText: '2.5',
+          nibAngleDeg: 45,
+          xHeightMMText: '6',
+          copperplateRatioPreset: '3:2:3',
+          offset: { x: 90, y: 140 },
+          scalePct: 100,
+          rotDeg: 0,
+          flip: false,
+          snapped: false,
+          invertGuides: false,
+        },
+        {
+          id: 'preset-strap-2',
+          name: 'Circle B',
+          d: circlePathD(40),
+          color: '#ea580c',
+          script: 'Copperplate',
+          nibMMText: '2.5',
+          nibAngleDeg: 45,
+          xHeightMMText: '6',
+          copperplateRatioPreset: '3:2:3',
+          offset: { x: 120, y: 155 },
+          scalePct: 100,
+          rotDeg: 0,
+          flip: false,
+          snapped: false,
+          invertGuides: false,
+        },
+      ],
+      activeId: 'preset-strap-2',
+    },
+  },
+];
+
 function uid(prefix: string) {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return `${prefix}-${crypto.randomUUID()}`;
   return `${prefix}-${Math.random().toString(36).slice(2)}`;
@@ -365,6 +446,8 @@ export default function PathGuidesPage() {
     invertGuides: false,
   }, 'Copperplate')]));
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [selectedPresetId, setSelectedPresetId] = useState('custom');
+  const lastAppliedPresetStateRef = useRef<string | null>(null);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragRef = useRef<{ mode: 'none' | 'pan' | 'strap'; pointerId: number; startClient: { x: number; y: number }; startPan: { x: number; y: number }; strapId?: string; startOffset?: { x: number; y: number }; startSnapped?: boolean; startLocalCenter?: { x: number; y: number } }>({
@@ -589,6 +672,122 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
   }));
   setActiveCrossingId(crossing.id);
 };
+
+  const buildExportedState = (): ExportedStateV1 => ({
+    paper,
+    orientation,
+    view,
+    zoom,
+    pan,
+    simplify,
+    showCrossings,
+    activeCrossingId,
+    crossingsFilter,
+    showAllCrossings,
+    crossingOverrides,
+    groups,
+    straps,
+    activeId,
+  });
+
+  const markPresetDirty = () => {
+    if (selectedPresetId === 'custom') return;
+    setSelectedPresetId('custom');
+    lastAppliedPresetStateRef.current = null;
+  };
+
+  const loadPreset = (preset: PathGuidesPresetV1) => {
+    const { state } = preset;
+    setPaper(state.paper);
+    setOrientation(state.orientation);
+    setView(state.view);
+    setZoom(state.zoom);
+    setPan(state.pan);
+    setSimplify(state.simplify);
+    setShowCrossings(state.showCrossings);
+    setActiveCrossingId(state.activeCrossingId);
+    setCrossingsFilter(state.crossingsFilter);
+    setShowAllCrossings(state.showAllCrossings);
+    setCrossingOverrides(state.crossingOverrides);
+    setGroups(state.groups);
+    setStraps(state.straps);
+    setActiveId(state.activeId);
+    setError(null);
+    setDragListId(null);
+    setSelectedForGroup([]);
+    setScaleInputText('');
+    setDragSimplifyStrapId(null);
+    dragRef.current = { mode: 'none', pointerId: -1, startClient: { x: 0, y: 0 }, startPan: { x: 0, y: 0 } };
+    pendingPanRef.current = null;
+    pendingStrapMoveRef.current = null;
+    setSelectedPresetId(preset.id);
+    lastAppliedPresetStateRef.current = JSON.stringify(state);
+  };
+
+  const serializedCurrentState = useMemo(() => JSON.stringify({
+    paper,
+    orientation,
+    view,
+    zoom,
+    pan,
+    simplify,
+    showCrossings,
+    activeCrossingId,
+    crossingsFilter,
+    showAllCrossings,
+    crossingOverrides,
+    groups,
+    straps,
+    activeId,
+  } satisfies ExportedStateV1), [
+    paper,
+    orientation,
+    view,
+    zoom,
+    pan,
+    simplify,
+    showCrossings,
+    activeCrossingId,
+    crossingsFilter,
+    showAllCrossings,
+    crossingOverrides,
+    groups,
+    straps,
+    activeId,
+  ]);
+
+  useEffect(() => {
+    if (selectedPresetId === 'custom') return;
+    if (serializedCurrentState === lastAppliedPresetStateRef.current) return;
+    const timer = window.setTimeout(() => {
+      setSelectedPresetId('custom');
+      lastAppliedPresetStateRef.current = null;
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [selectedPresetId, serializedCurrentState]);
+
+  const exportPresetJson = () => {
+    const state = buildExportedState();
+    const payload = {
+      format: 'calligraphy-tools/path-guides-preset',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      state,
+    };
+    const now = new Date();
+    const pad2 = (n: number) => String(n).padStart(2, '0');
+    const ts = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}_${pad2(now.getHours())}-${pad2(now.getMinutes())}-${pad2(now.getSeconds())}`;
+    const filename = `path-guides-preset_${paper}_${orientation}_${ts}.json`;
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(href);
+  };
 
   const updateStrap = (id: string, patch: Partial<Strap>) => {
     setStraps((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
@@ -1058,17 +1257,38 @@ if (rafRef.current == null) {
         <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
           <h2 className="text-lg font-semibold text-slate-800">Step 1 — Manage straps</h2>
           <div className="mt-3 flex flex-wrap gap-2">
-            <button onClick={addCircle} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Add circle (test)</button>
+            <button onClick={() => { markPresetDirty(); addCircle(); }} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Add circle (test)</button>
             <label className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer">Upload SVG(s)
-              <input type="file" accept=".svg" multiple className="hidden" onChange={(e) => parseUpload(e.target.files)} />
+              <input type="file" accept=".svg" multiple className="hidden" onChange={(e) => { markPresetDirty(); parseUpload(e.target.files); }} />
             </label>
           </div>
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <InsetLabeledField label="Presets:">
+              <select
+                className={INSET_CONTROL_BASE}
+                value={selectedPresetId}
+                onChange={(e) => {
+                  const nextId = e.target.value;
+                  if (nextId === 'custom') {
+                    setSelectedPresetId('custom');
+                    return;
+                  }
+                  const preset = PATH_GUIDES_PRESETS.find((x) => x.id === nextId);
+                  if (preset) loadPreset(preset);
+                }}
+              >
+                <option value="custom">Custom (current)</option>
+                {PATH_GUIDES_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>{preset.name}</option>
+                ))}
+              </select>
+            </InsetLabeledField>
             <InsetLabeledField label="Paper size">
               <select
                 className={INSET_CONTROL_BASE}
                 value={paper}
                 onChange={(e) => {
+                  markPresetDirty();
                   const nextPaper = e.target.value as PaperId;
                   setPaper(nextPaper);
                   setOrientation(PAPERS_MM[nextPaper].defaultOrientation);
@@ -1085,6 +1305,7 @@ if (rafRef.current == null) {
                 className={INSET_CONTROL_BASE}
                 value={orientation}
                 onChange={(e) => {
+                  markPresetDirty();
                   setOrientation(e.target.value as Orientation);
                   setPan({ x: 0, y: 0 });
                 }}
@@ -1103,6 +1324,7 @@ if (rafRef.current == null) {
                 <button onClick={() => setActiveId(strap.id)} className="px-2 py-1 rounded border border-slate-300">Select</button>
                 <button
   onClick={() => {
+    markPresetDirty();
     const sampled = samplePathDToPolyline(strap.d, 1.25);
     const localCenter = centroid(sampled);
                   const duplicate = {
@@ -1119,6 +1341,7 @@ if (rafRef.current == null) {
                   setStraps((prev) => [...prev, duplicate]);
                 }} className="px-2 py-1 rounded border border-slate-300">Duplicate</button>
                 <button disabled={straps.length <= 1} onClick={() => {
+                  markPresetDirty();
                   setStraps((prev) => prev.filter((s) => s.id !== strap.id));
                   if (activeId === strap.id) setActiveId(straps.find((s) => s.id !== strap.id)?.id ?? null);
                 }} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40">Remove</button>
@@ -1126,6 +1349,9 @@ if (rafRef.current == null) {
                 <span className="text-xs text-slate-500">#{idx + 1}</span>
               </div>
             ))}
+          </div>
+          <div className="mt-5 border-t border-slate-200 pt-3">
+            <button onClick={exportPresetJson} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100">Export preset JSON (dev)</button>
           </div>
         </div>
 
