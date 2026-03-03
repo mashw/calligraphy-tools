@@ -523,6 +523,7 @@ export default function PathGuidesPage() {
   const [view, setView] = useState<ViewMode>('autofit');
   const [zoom, setZoom] = useState(1.35);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragListId, setDragListId] = useState<string | null>(null);
   const [groups, setGroups] = useState<StrapGroup[]>([]);
@@ -569,8 +570,7 @@ export default function PathGuidesPage() {
   });
 
   const rafRef = useRef<number | null>(null);
-const pendingPanRef = useRef<{ x: number; y: number } | null>(null);
-const pendingStrapMoveRef = useRef<{ strapId: string; x: number; y: number; snapped: boolean } | null>(null);
+  const pendingStrapMoveRef = useRef<{ strapId: string; x: number; y: number; snapped: boolean } | null>(null);
 
   const activeStrap = straps.find((s) => s.id === (activeId ?? straps[0]?.id)) ?? straps[0] ?? null;
   
@@ -908,7 +908,8 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
   };
 
   const onSvgPointerDown: React.PointerEventHandler<SVGSVGElement> = (e) => {
-    if (e.button !== 0 || e.target !== e.currentTarget) return;
+    if (e.button !== 0) return;
+    e.preventDefault();
     dragRef.current = {
       mode: 'pan',
       pointerId: e.pointerId,
@@ -916,6 +917,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       startPan: pan,
     };
     e.currentTarget.setPointerCapture(e.pointerId);
+    setIsPanning(true);
   };
 
   const beginStrapDrag =
@@ -950,31 +952,12 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     const dyMM = ((e.clientY - drag.startClient.y) / rect.height) * vb.vh;
 
     if (drag.mode === 'pan') {
-      pendingPanRef.current = { x: drag.startPan.x - dxMM, y: drag.startPan.y - dyMM };
-
-      if (rafRef.current == null) {
-        rafRef.current = requestAnimationFrame(() => {
-          rafRef.current = null;
-      
-          const panNext = pendingPanRef.current;
-          if (panNext) {
-            pendingPanRef.current = null;
-            setView('custom');
-            setPan(panNext);
-          }
-      
-          const move = pendingStrapMoveRef.current;
-          if (move) {
-            pendingStrapMoveRef.current = null;
-            setStraps((prev) =>
-              prev.map((s) =>
-                s.id === move.strapId ? { ...s, offset: { x: move.x, y: move.y }, snapped: move.snapped } : s,
-              ),
-            );
-          }
-        });
-      }
-      
+      const mmPerPxX = vb.vw / rect.width;
+      const mmPerPxY = vb.vh / rect.height;
+      const nx = drag.startPan.x - (e.clientX - drag.startClient.x) * mmPerPxX;
+      const ny = drag.startPan.y - (e.clientY - drag.startClient.y) * mmPerPxY;
+      setView('custom');
+      setPan({ x: nx, y: ny });
       return;
     }
 
@@ -999,13 +982,6 @@ if (rafRef.current == null) {
   rafRef.current = requestAnimationFrame(() => {
     rafRef.current = null;
 
-    const panNext = pendingPanRef.current;
-    if (panNext) {
-      pendingPanRef.current = null;
-      setView('custom');
-      setPan(panNext);
-    }
-
     const move = pendingStrapMoveRef.current;
     if (move) {
       pendingStrapMoveRef.current = null;
@@ -1021,13 +997,18 @@ if (rafRef.current == null) {
 
   const onSvgPointerUp: React.PointerEventHandler<SVGSVGElement> = (e) => {
     if (dragRef.current.pointerId === e.pointerId) {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+      setIsPanning(false);
       dragRef.current = { mode: 'none', pointerId: -1, startClient: { x: 0, y: 0 }, startPan: { x: 0, y: 0 } };
   
       if (rafRef.current != null) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
-      pendingPanRef.current = null;
       pendingStrapMoveRef.current = null;
   
       setDragSimplifyStrapId(null);
@@ -1285,7 +1266,7 @@ if (rafRef.current == null) {
             <svg
               ref={svgRef}
               viewBox={vb.str}
-              className="block mx-auto w-full h-[38vh] sm:h-[44vh] md:h-[50vh] touch-none cursor-grab active:cursor-grabbing"
+              className={`block mx-auto w-full h-[38vh] sm:h-[44vh] md:h-[50vh] touch-none ${isPanning ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
               style={{ background: '#cbd5e1' }}
               onPointerDown={onSvgPointerDown}
               onPointerMove={onSvgPointerMove}
