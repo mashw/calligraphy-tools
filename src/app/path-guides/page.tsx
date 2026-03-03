@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import GuideOverlay from '@/components/preview/GuideOverlay';
 import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
@@ -23,6 +23,7 @@ type InsetLabeledFieldProps = {
   disabled?: boolean;
   className?: string;
   rightAdornment?: React.ReactNode;
+  rightAdornmentInteractive?: boolean;
   adornmentClassName?: string;
   children: React.ReactNode;
 };
@@ -86,7 +87,7 @@ const RELEASE_MM = 10;
 const CROSS_EPS_MM = 1.2;
 const CROSSING_MAX_SEGMENTS = 2800;
 const FIT_MARGIN_MM = 12;
-const PALETTE = ['#1d4ed8', '#ea580c', '#16a34a', '#9333ea', '#0891b2', '#dc2626', '#65a30d', '#4f46e5', '#c2410c', '#0f766e', '#be123c', '#4338ca'];
+const PALETTE = ['#5778A4', '#E49444', '#D1615D', '#85B6B2', '#6A9F58', '#E7CA60', '#A87C9F', '#F1A2A9', '#967662', '#B8B0AC'];
 const INSET_CONTROL_BASE = 'w-full border-0 rounded-none px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed';
 const INSET_CONTROL_MM = `${INSET_CONTROL_BASE} pr-10`;
 const INSET_CONTROL_WIDE = `${INSET_CONTROL_BASE} pr-14`;
@@ -215,7 +216,7 @@ const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) 
     .map((entry) => entry.crossing.id);
 };
 
-function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, adornmentClassName = 'right-3', children }: InsetLabeledFieldProps) {
+function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, rightAdornmentInteractive = false, adornmentClassName = 'right-3', children }: InsetLabeledFieldProps) {
   return (
     <div className={`relative rounded-lg border border-slate-300 overflow-hidden ${disabled ? 'bg-slate-50' : 'bg-white'} ${className}`}>
       <div className="absolute inset-x-0 top-0 h-5 bg-slate-50/80 border-b border-slate-300 px-3 flex items-center z-10 pointer-events-none">
@@ -224,7 +225,7 @@ function InsetLabeledField({ label, disabled = false, className = '', rightAdorn
       <div className="relative pt-5">
         {children}
         {rightAdornment && (
-          <span className={`pointer-events-none select-none absolute ${adornmentClassName} top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500`}>
+          <span className={`${rightAdornmentInteractive ? '' : 'pointer-events-none'} select-none absolute ${adornmentClassName} top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500`}>
             {rightAdornment}
           </span>
         )}
@@ -237,6 +238,48 @@ function circlePathD(r = 40) {
   return `M ${r} 0 A ${r} ${r} 0 1 1 ${-r} 0 A ${r} ${r} 0 1 1 ${r} 0 Z`;
 }
 
+const SHAPE_OPTIONS = [
+  { kind: 'circle', label: 'Circle' },
+  { kind: 'rounded-square', label: 'Rounded square' },
+  { kind: 'rounded-right-angle', label: 'Rounded right angle' },
+  { kind: 'hard-right-angle', label: 'Hard right angle' },
+  { kind: 'hard-square', label: 'Hard square' },
+  { kind: 'curved-arch', label: 'Curved arch' },
+  { kind: 'horseshoe', label: 'Horseshoe' },
+  { kind: 'shallow-s-curve', label: 'Shallow S curve' },
+  { kind: 'diamond', label: 'Diamond' },
+  { kind: 'kite', label: 'Kite' },
+  { kind: 'hard-zigzag', label: 'Hard zigzag' },
+  { kind: 'curved-zigzag', label: 'Curved zigzag' },
+  { kind: 'rectangle', label: 'Rectangle' },
+] as const;
+
+type ShapeKind = typeof SHAPE_OPTIONS[number]['kind'];
+
+const assignDistinctColors = (straps: Strap[]): Strap[] => straps.map((strap, idx) => ({
+  ...strap,
+  color: PALETTE[idx % PALETTE.length],
+}));
+
+const shapePathD = (kind: ShapeKind): string => {
+  switch (kind) {
+    case 'circle': return circlePathD(45);
+    case 'rounded-square': return 'M -45 -30 Q -45 -45 -30 -45 L 30 -45 Q 45 -45 45 -30 L 45 30 Q 45 45 30 45 L -30 45 Q -45 45 -45 30 Z';
+    case 'rounded-right-angle': return 'M -40 -35 L -40 35 Q -40 45 -30 45 L 20 45 Q 35 45 35 30 L 35 20 L 15 20 L 15 25 Q 15 30 10 30 L -20 30 Q -25 30 -25 25 L -25 -35 Z';
+    case 'hard-right-angle': return 'M -40 -35 L -40 40 L 10 40 L 10 15 L 35 15 L 35 -35 Z';
+    case 'hard-square': return 'M -45 -45 L 45 -45 L 45 45 L -45 45 Z';
+    case 'curved-arch': return 'M -50 35 Q 0 -45 50 35';
+    case 'horseshoe': return 'M -38 -40 L -38 15 Q 0 55 38 15 L 38 -40';
+    case 'shallow-s-curve': return 'M -48 -20 C -18 -50 18 10 48 -20 C 18 10 -18 50 -48 20';
+    case 'diamond': return 'M 0 -50 L 45 0 L 0 50 L -45 0 Z';
+    case 'kite': return 'M 0 -55 L 32 0 L 0 50 L -32 0 Z';
+    case 'hard-zigzag': return 'M -50 25 L -25 -25 L 0 25 L 25 -25 L 50 25';
+    case 'curved-zigzag': return 'M -50 20 Q -38 -22 -25 20 Q -12 55 0 20 Q 12 -22 25 20 Q 38 55 50 20';
+    case 'rectangle': return 'M -60 -30 L 60 -30 L 60 30 L -60 30 Z';
+    default: return circlePathD(45);
+  }
+};
+
 const PATH_GUIDES_PRESETS: PathGuidesPresetV1[] = [
 
   {
@@ -246,17 +289,18 @@ const PATH_GUIDES_PRESETS: PathGuidesPresetV1[] = [
       paper: 'A4',
       orientation: 'portrait',
       view: 'custom',
-      zoom: 1.5225287458060701,
-      pan: { x: -1.4380402120600384, y: 9.767309200966686 },
+      zoom: 1.1153276421780445,
+      pan: { x: 6.869062493103284, y: 3.4364911042410142 },
       simplify: false,
       showCrossings: true,
       activeCrossingId:
-        'strap-21f24596-a745-4fd4-97c6-769e53aa9acb|strap-8d1a8810-e85d-4281-85af-b1979c496a13|1027|2271',
+        'strap-21f24596-a745-4fd4-97c6-769e53aa9acb|strap-8d1a8810-e85d-4281-85af-b1979c496a13|1021|2161',
       crossingsFilter: 'all',
       showAllCrossings: false,
       crossingOverrides: {
         'strap-21f24596-a745-4fd4-97c6-769e53aa9acb|strap-8d1a8810-e85d-4281-85af-b1979c496a13': {
           1: 'strap-21f24596-a745-4fd4-97c6-769e53aa9acb',
+          3: 'strap-21f24596-a745-4fd4-97c6-769e53aa9acb',
         },
       },
       groups: [],
@@ -265,13 +309,13 @@ const PATH_GUIDES_PRESETS: PathGuidesPresetV1[] = [
           id: 'strap-8d1a8810-e85d-4281-85af-b1979c496a13',
           name: 'scurve 1',
           d: 'M248.76,160.95c-29.87,0-54.08,24.21-54.08,54.08s24.21,54.08,54.08,54.08h.02c83.85,0,151.82,67.98,151.82,151.83s-67.97,151.82-151.82,151.83v.02c-29.87,0-54.08,24.21-54.08,54.08s24.21,54.08,54.08,54.08',
-          color: '#ea580c',
+          color: '#5778A4',
           script: 'Fraktur',
           nibMMText: '3.8',
           nibAngleDeg: 40,
           xHeightMMText: '6',
           copperplateRatioPreset: '3:2:3',
-          offset: { x: -206.68742293228425, y: -261.5880849181708 },
+          offset: { x: -207.68742293228425, y: -272.5880849181708 },
           scalePct: 44.62499345265998,
           rotDeg: 0,
           flip: true,
@@ -285,13 +329,13 @@ const PATH_GUIDES_PRESETS: PathGuidesPresetV1[] = [
           id: 'strap-21f24596-a745-4fd4-97c6-769e53aa9acb',
           name: 'scurve2 1',
           d: 'M346.52,680.95c29.87,0,54.08-24.21,54.08-54.08s-24.21-54.08-54.08-54.08h-.02c-83.85,0-151.82-67.98-151.82-151.83s67.97-151.82,151.82-151.83v-.02c29.87,0,54.08-24.21,54.08-54.08s-24.21-54.08-54.08-54.08',
-          color: '#ea580c',
+          color: '#E49444',
           script: 'Fraktur',
           nibMMText: '3.8',
           nibAngleDeg: 40,
           xHeightMMText: '6',
           copperplateRatioPreset: '3:2:3',
-          offset: { x: -182.94658644083785, y: -261.6014905214777 },
+          offset: { x: -182.94658644083785, y: -272.6014905214777 },
           scalePct: 44.62499476212782,
           rotDeg: 0,
           flip: true,
@@ -481,7 +525,6 @@ export default function PathGuidesPage() {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [error, setError] = useState<string | null>(null);
   const [dragListId, setDragListId] = useState<string | null>(null);
-  const [selectedForGroup, setSelectedForGroup] = useState<string[]>([]);
   const [groups, setGroups] = useState<StrapGroup[]>([]);
   const [simplify, setSimplify] = useState(true);
   const [showCrossings, setShowCrossings] = useState(true);
@@ -491,6 +534,7 @@ export default function PathGuidesPage() {
   const [crossingOverrides, setCrossingOverrides] = useState<PairOverrides>({});
   const [showDebugPoints] = useState(false);
   const [dragSimplifyStrapId, setDragSimplifyStrapId] = useState<string | null>(null);
+  const [shapeKind, setShapeKind] = useState<ShapeKind>('circle');
   const dragActive = dragSimplifyStrapId !== null;
   const previewSimplify = simplify || dragActive;
   const [scaleInputText, setScaleInputText] = useState('');
@@ -603,13 +647,6 @@ const pendingStrapMoveRef = useRef<{ strapId: string; x: number; y: number; snap
     }),
     [baseCrossings, crossingOverrides, pairSlotsByCrossingId],
   );
-
-  const crossingsDisplay = useMemo(() => {
-    const filtered = crossingsFilter === 'selected' && activeStrap
-      ? crossingsWithOverrides.filter((c) => c.aId === activeStrap.id || c.bId === activeStrap.id)
-      : crossingsWithOverrides;
-    return showAllCrossings ? filtered : filtered.slice(0, 50);
-  }, [activeStrap, crossingsFilter, crossingsWithOverrides, showAllCrossings]);
 
   const vb = useMemo(() => {
     if (view === 'fullpage') return { minX: 0, minY: 0, vw: box.w, vh: box.h, str: `0 0 ${box.w} ${box.h}` };
@@ -741,6 +778,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 };
 
   const buildExportedState = (): ExportedStateV1 => ({
+    // Export canonical placement fields for each strap: d, offset, scalePct, rotDeg, flip, and array order.
     paper,
     orientation,
     view,
@@ -757,14 +795,14 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     activeId,
   });
 
-  const markPresetDirty = () => {
+  const markPresetDirty = useCallback(() => {
     if (selectedPresetId === 'custom') return;
     setSelectedPresetId('custom');
     lastAppliedPresetStateRef.current = null;
-  };
+  }, [selectedPresetId]);
 
   const loadPreset = (preset: PathGuidesPresetV1) => {
-    const { state } = preset;
+    const state = { ...preset.state, straps: assignDistinctColors(preset.state.straps) };
     setPaper(state.paper);
     setOrientation(state.orientation);
     setView(state.view);
@@ -781,7 +819,6 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setActiveId(state.activeId);
     setError(null);
     setDragListId(null);
-    setSelectedForGroup([]);
     setScaleInputText('');
     setDragSimplifyStrapId(null);
     dragRef.current = { mode: 'none', pointerId: -1, startClient: { x: 0, y: 0 }, startPan: { x: 0, y: 0 } };
@@ -857,6 +894,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
   };
 
   const updateStrap = (id: string, patch: Partial<Strap>) => {
+    markPresetDirty();
     setStraps((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   };
 
@@ -996,7 +1034,8 @@ if (rafRef.current == null) {
     }
   };
 
-  const addCircle = () => {
+  const addCircle = (name = `Circle ${straps.length + 1}`) => {
+    markPresetDirty();
     const i = straps.length;
     const step = 10;
     const pattern = [
@@ -1024,7 +1063,7 @@ if (rafRef.current == null) {
 
     const next = applyScriptDefaults({
       id: uid('strap'),
-      name: `Circle ${straps.length + 1}`,
+      name,
       d: baseD,
       color: PALETTE[straps.length % PALETTE.length],
       script: 'Copperplate',
@@ -1039,12 +1078,43 @@ if (rafRef.current == null) {
       snapped: false,
       invertGuides: false,
     }, 'Copperplate');
-    setStraps((prev) => [...prev, next]);
+    setStraps((prev) => assignDistinctColors([...prev, next]));
+    setActiveId(next.id);
+  };
+
+  const addShape = () => {
+    markPresetDirty();
+    const selected = SHAPE_OPTIONS.find((shape) => shape.kind === shapeKind) ?? SHAPE_OPTIONS[0];
+    const d = shapePathD(selected.kind);
+    const fit = fitStrapToPage({ d, box, centerX, centerY, marginMM: FIT_MARGIN_MM });
+    if (selected.kind === 'circle') {
+      addCircle(`Shape: ${selected.label}`);
+      return;
+    }
+    const next = applyScriptDefaults({
+      id: uid('strap'),
+      name: `Shape: ${selected.label}`,
+      d,
+      color: PALETTE[straps.length % PALETTE.length],
+      script: 'Copperplate',
+      nibMMText: '2.5',
+      nibAngleDeg: 45,
+      xHeightMMText: '6',
+      copperplateRatioPreset: '3:2:3',
+      offset: fit.offset,
+      scalePct: fit.scalePct,
+      rotDeg: 0,
+      flip: false,
+      snapped: false,
+      invertGuides: false,
+    }, 'Copperplate');
+    setStraps((prev) => assignDistinctColors([...prev, next]));
     setActiveId(next.id);
   };
 
   const parseUpload = async (files: FileList | null) => {
     if (!files?.length) return;
+    markPresetDirty();
     setError(null);
     const created: Strap[] = [];
 
@@ -1081,11 +1151,12 @@ if (rafRef.current == null) {
       return;
     }
 
-    setStraps((prev) => [...prev, ...created]);
+    setStraps((prev) => assignDistinctColors([...prev, ...created]));
     setActiveId(created[0].id);
   };
 
   const reorderStraps = (sourceId: string, targetId: string) => {
+    markPresetDirty();
     setStraps((prev) => {
       const srcIdx = prev.findIndex((s) => s.id === sourceId);
       const dstIdx = prev.findIndex((s) => s.id === targetId);
@@ -1096,6 +1167,82 @@ if (rafRef.current == null) {
       return copy;
     });
   };
+
+  const duplicateStrapById = (id: string) => {
+    const strap = straps.find((s) => s.id === id);
+    if (!strap) return;
+    markPresetDirty();
+    const sampled = samplePathDToPolyline(strap.d, 1.25);
+    const localCenter = centroid(sampled);
+    const duplicate = {
+      ...strap,
+      id: uid('strap'),
+      name: `${strap.name} copy`,
+      color: PALETTE[(straps.length + 1) % PALETTE.length],
+      offset: { x: strap.offset.x + 8, y: strap.offset.y + 8 },
+      flip: strap.flip,
+      snapped: false,
+      invertGuides: strap.invertGuides,
+    };
+    duplicate.offset = clampOffsetToPage({ sampled, localCenter, strap: duplicate, box, marginMM: FIT_MARGIN_MM });
+    setStraps((prev) => assignDistinctColors([...prev, duplicate]));
+  };
+
+  const removeStrapById = (id: string) => {
+    if (straps.length <= 1) return;
+    markPresetDirty();
+    setStraps((prev) => prev.filter((strap) => strap.id !== id));
+    if (activeId === id) setActiveId(straps.find((strap) => strap.id !== id)?.id ?? null);
+  };
+
+
+  const centerStrapX = (strapId: string) => {
+    const strap = straps.find((s) => s.id === strapId);
+    if (!strap) return;
+    const cx = box.w / 2;
+    markPresetDirty();
+    updateStrap(strapId, { offset: { x: cx, y: strap.offset.y }, snapped: false });
+  };
+
+  const centerStrapY = (strapId: string) => {
+    const strap = straps.find((s) => s.id === strapId);
+    if (!strap) return;
+    const cy = box.h / 2;
+    markPresetDirty();
+    updateStrap(strapId, { offset: { x: strap.offset.x, y: cy }, snapped: false });
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!activeId) return;
+      if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tagName = target.tagName.toLowerCase();
+        if (tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target.isContentEditable) return;
+      }
+
+      const strap = straps.find((s) => s.id === activeId);
+      if (!strap) return;
+
+      const step = event.shiftKey ? 5 : event.altKey ? 0.5 : 1;
+      const delta = { x: 0, y: 0 };
+      if (event.key === 'ArrowLeft') delta.x = -step;
+      if (event.key === 'ArrowRight') delta.x = step;
+      if (event.key === 'ArrowUp') delta.y = -step;
+      if (event.key === 'ArrowDown') delta.y = step;
+
+      markPresetDirty();
+      setStraps((prev) => prev.map((s) => (s.id === activeId
+        ? { ...s, offset: { x: s.offset.x + delta.x, y: s.offset.y + delta.y } }
+        : s)));
+      event.preventDefault();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [activeId, markPresetDirty, straps]);
 
   return (
     <main className="min-h-screen text-sm text-slate-900 relative">
@@ -1323,34 +1470,6 @@ if (rafRef.current == null) {
       <section className="px-6 py-5 max-w-[1120px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
           <h2 className="text-lg font-semibold text-slate-800">Step 1 — Manage straps</h2>
-          <div className="mt-3">
-            <button onClick={() => { markPresetDirty(); addCircle(); }} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Add circle (test)</button>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2 items-end">
-            <InsetLabeledField label="Presets:" className="flex-1 min-w-[220px]">
-              <select
-                className={INSET_CONTROL_BASE}
-                value={selectedPresetId}
-                onChange={(e) => {
-                  const nextId = e.target.value;
-                  if (nextId === 'custom') {
-                    setSelectedPresetId('custom');
-                    return;
-                  }
-                  const preset = PATH_GUIDES_PRESETS.find((x) => x.id === nextId);
-                  if (preset) loadPreset(preset);
-                }}
-              >
-                <option value="custom">Custom (current)</option>
-                {PATH_GUIDES_PRESETS.map((preset) => (
-                  <option key={preset.id} value={preset.id}>{preset.name}</option>
-                ))}
-              </select>
-            </InsetLabeledField>
-            <label className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer">Upload SVG(s)
-              <input type="file" accept=".svg" multiple className="hidden" onChange={(e) => { markPresetDirty(); parseUpload(e.target.files); }} />
-            </label>
-          </div>
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <InsetLabeledField label="Paper size">
               <select
@@ -1384,46 +1503,61 @@ if (rafRef.current == null) {
               </select>
             </InsetLabeledField>
           </div>
-          {error && <p className="mt-3 text-sm text-amber-700">{error}</p>}
-          <div className="mt-4 space-y-2">
-            {straps.map((strap, idx) => (
-              <div key={strap.id} className="rounded-lg border border-slate-200 p-2 flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: strap.color }} />
-                <span className="flex-1 truncate">{strap.name}</span>
-                <button onClick={() => setActiveId(strap.id)} className="px-2 py-1 rounded border border-slate-300">Select</button>
-                <button
-  onClick={() => {
-    markPresetDirty();
-    const sampled = samplePathDToPolyline(strap.d, 1.25);
-    const localCenter = centroid(sampled);
-                  const duplicate = {
-                    ...strap,
-                    id: uid('strap'),
-                    name: `${strap.name} copy`,
-                    color: PALETTE[(straps.length + 1) % PALETTE.length],
-                    offset: { x: strap.offset.x + 8, y: strap.offset.y + 8 },
-                    flip: strap.flip,
-                    snapped: false,
-                    invertGuides: strap.invertGuides,
-                  };
-                  duplicate.offset = clampOffsetToPage({ sampled, localCenter, strap: duplicate, box, marginMM: FIT_MARGIN_MM });
-                  setStraps((prev) => [...prev, duplicate]);
-                }} className="px-2 py-1 rounded border border-slate-300">Duplicate</button>
-                <button disabled={straps.length <= 1} onClick={() => {
-                  markPresetDirty();
-                  setStraps((prev) => prev.filter((s) => s.id !== strap.id));
-                  if (activeId === strap.id) setActiveId(straps.find((s) => s.id !== strap.id)?.id ?? null);
-                }} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40">Remove</button>
-                <input type="checkbox" checked={selectedForGroup.includes(strap.id)} onChange={(e) => setSelectedForGroup((prev) => e.target.checked ? [...new Set([...prev, strap.id])] : prev.filter((id) => id !== strap.id))} title="Select for group" />
-                <span className="text-xs text-slate-500">#{idx + 1}</span>
-              </div>
-            ))}
+          <div className="mt-3">
+            <InsetLabeledField label="Presets:" className="w-full">
+              <select
+                className={INSET_CONTROL_BASE}
+                value={selectedPresetId}
+                onChange={(e) => {
+                  const nextId = e.target.value;
+                  if (nextId === 'custom') {
+                    setSelectedPresetId('custom');
+                    return;
+                  }
+                  const preset = PATH_GUIDES_PRESETS.find((x) => x.id === nextId);
+                  if (preset) loadPreset(preset);
+                }}
+              >
+                <option value="custom">Custom (current)</option>
+                {PATH_GUIDES_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>{preset.name}</option>
+                ))}
+              </select>
+            </InsetLabeledField>
           </div>
+          <div className="mt-2 flex flex-wrap gap-2 items-end">
+            <InsetLabeledField
+              label="Add shape"
+              className="flex-1 min-w-[220px]"
+              rightAdornment={(
+                <button
+                  type="button"
+                  onClick={addShape}
+                  className="h-7 min-w-7 rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  aria-label="Add selected shape"
+                  title="Add selected shape"
+                >
+                  +
+                </button>
+              )}
+              rightAdornmentInteractive
+              adornmentClassName="right-1 top-[calc(50%+10px)]"
+            >
+              <select className={INSET_CONTROL_WIDE} value={shapeKind} onChange={(e) => setShapeKind(e.target.value as ShapeKind)}>
+                {SHAPE_OPTIONS.map((shape) => (
+                  <option key={shape.kind} value={shape.kind}>{shape.label}</option>
+                ))}
+              </select>
+            </InsetLabeledField>
+            <label className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer">Upload SVG(s)
+              <input type="file" accept=".svg" multiple className="hidden" onChange={(e) => { parseUpload(e.target.files); }} />
+            </label>
+          </div>
+          {error && <p className="mt-3 text-sm text-amber-700">{error}</p>}
           <div className="mt-5 border-t border-slate-200 pt-3">
             <button onClick={exportPresetJson} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100">Export preset JSON (dev)</button>
           </div>
         </div>
-
         <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
           <h2 className="text-lg font-semibold text-slate-800">Step 2 — Strap settings</h2>
           <p className="mt-1 text-xs text-slate-600">{activeStrap?.script === 'Copperplate' ? 'Copperplate uses x-height (mm).' : 'Blackletter scripts use nib size and nib angle.'}</p>
@@ -1465,18 +1599,22 @@ if (rafRef.current == null) {
                 </>
               ) : (
                 <>
-                  <InsetLabeledField label="Nib size" rightAdornment="mm">
-                    <input type="number" min={0.2} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.nibMMText} onChange={(e) => updateStrap(activeStrap.id, { nibMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
-                  </InsetLabeledField>
-                  <InsetLabeledField label="x-height (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
-                    <input type="number" step="0.5" min={1} className={INSET_CONTROL_WIDE} value={activeStrap.xNibText ?? '5'} onChange={(e) => updateStrap(activeStrap.id, { xNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.xNibText ?? '5') || 5; const next = Math.max(1, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { xNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.xNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(1, snapHalf(parsed)) : 5; updateStrap(activeStrap.id, { xNibText: String(next) }); }} />
-                  </InsetLabeledField>
-                  <InsetLabeledField label="Ascender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
-                    <input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.ascNibText ?? '3'} onChange={(e) => updateStrap(activeStrap.id, { ascNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.ascNibText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { ascNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.ascNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateStrap(activeStrap.id, { ascNibText: String(next) }); }} />
-                  </InsetLabeledField>
-                  <InsetLabeledField label="Descender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
-                    <input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.descNibText ?? '2'} onChange={(e) => updateStrap(activeStrap.id, { descNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.descNibText ?? '2') || 2; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { descNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.descNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 2; updateStrap(activeStrap.id, { descNibText: String(next) }); }} />
-                  </InsetLabeledField>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <InsetLabeledField label="Nib size" rightAdornment="mm">
+                      <input type="number" min={0.2} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.nibMMText} onChange={(e) => updateStrap(activeStrap.id, { nibMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
+                    </InsetLabeledField>
+                    <InsetLabeledField label="x-height (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
+                      <input type="number" step="0.5" min={1} className={INSET_CONTROL_WIDE} value={activeStrap.xNibText ?? '5'} onChange={(e) => updateStrap(activeStrap.id, { xNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.xNibText ?? '5') || 5; const next = Math.max(1, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { xNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.xNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(1, snapHalf(parsed)) : 5; updateStrap(activeStrap.id, { xNibText: String(next) }); }} />
+                    </InsetLabeledField>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <InsetLabeledField label="Ascender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
+                      <input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.ascNibText ?? '3'} onChange={(e) => updateStrap(activeStrap.id, { ascNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.ascNibText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { ascNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.ascNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateStrap(activeStrap.id, { ascNibText: String(next) }); }} />
+                    </InsetLabeledField>
+                    <InsetLabeledField label="Descender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
+                      <input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.descNibText ?? '2'} onChange={(e) => updateStrap(activeStrap.id, { descNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.descNibText ?? '2') || 2; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { descNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.descNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 2; updateStrap(activeStrap.id, { descNibText: String(next) }); }} />
+                    </InsetLabeledField>
+                  </div>
                   <InsetLabeledField label="Nib angle (°)">
                     <select className={INSET_CONTROL_BASE} value={activeStrap.nibAngleDeg} onChange={(e) => updateStrap(activeStrap.id, { nibAngleDeg: Number(e.target.value) as 35 | 40 | 45 })}>
                       <option value={35}>35°</option><option value={40}>40°</option><option value={45}>45°</option>
@@ -1545,7 +1683,6 @@ if (rafRef.current == null) {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <button onClick={() => updateStrap(activeStrap.id, { offset: { ...activeStrap.offset, x: centerX }, snapped: true })} className="px-2 py-1 rounded border border-slate-300">Center horizontally</button>
                 <button onClick={() => updateStrap(activeStrap.id, { rotDeg: 0, scalePct: 100 })} className="px-2 py-1 rounded border border-slate-300">Reset rotation &amp; scale</button>
                 <label className="inline-flex items-center gap-2 text-sm text-slate-800">
                   <input
@@ -1573,33 +1710,6 @@ if (rafRef.current == null) {
         <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
           <h2 className="text-lg font-semibold text-slate-800">Step 3 — Weave / Layer order</h2>
           <p className="mt-1 text-xs text-slate-600">Order controls render stack. First = back, last = front.</p>
-          {activeStrap && (() => {
-            const activeIdx = straps.findIndex((s) => s.id === activeStrap.id);
-            const canMoveDown = activeIdx > 0;
-            const canMoveUp = activeIdx >= 0 && activeIdx < straps.length - 1;
-            const moveSelected = (nextIndex: number) => {
-              if (activeIdx < 0 || nextIndex < 0 || nextIndex >= straps.length || nextIndex === activeIdx) return;
-              setStraps((prev) => {
-                const currentIdx = prev.findIndex((s) => s.id === activeStrap.id);
-                if (currentIdx < 0 || nextIndex < 0 || nextIndex >= prev.length || currentIdx === nextIndex) return prev;
-                const copy = [...prev];
-                const [item] = copy.splice(currentIdx, 1);
-                copy.splice(nextIndex, 0, item);
-                return copy;
-              });
-              setActiveId(activeStrap.id);
-            };
-
-            return (
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button disabled={!canMoveUp} onClick={() => moveSelected(straps.length - 1)} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40">Bring to front</button>
-                <button disabled={!canMoveDown} onClick={() => moveSelected(0)} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40">Send to back</button>
-                <button disabled={!canMoveUp} onClick={() => moveSelected(activeIdx + 1)} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40">Move up</button>
-                <button disabled={!canMoveDown} onClick={() => moveSelected(activeIdx - 1)} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40">Move down</button>
-              </div>
-            );
-          })()}
-
           <div className="mt-3 space-y-2">
             {straps.map((strap) => (
               <div key={strap.id} draggable onDragStart={() => setDragListId(strap.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => {
@@ -1607,55 +1717,14 @@ if (rafRef.current == null) {
                 setDragListId(null);
               }} className="rounded-lg border border-slate-200 p-2 flex items-center gap-2 cursor-move">
                 <span className="w-3 h-3 rounded-full" style={{ backgroundColor: strap.color }} />
-                <button onClick={() => setActiveId(strap.id)} className={`flex-1 text-left ${activeId === strap.id ? 'font-semibold text-indigo-700' : ''}`}>{strap.name}</button>
-                <span className="text-xs text-slate-500">#{straps.findIndex((s) => s.id === strap.id) + 1}</span>
+                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => setActiveId(strap.id)} className={`px-2 py-1 rounded border border-slate-300 ${activeId === strap.id ? 'border-indigo-300 text-indigo-700' : ''}`}>Select</button>
+                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => duplicateStrapById(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Duplicate strap" aria-label="Duplicate strap">⧉</button>
+                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapX(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Center on page" aria-label="Center on page">⌖</button>
+                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapY(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Center vertically" aria-label="Center vertically">↕</button>
+                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => removeStrapById(strap.id)} disabled={straps.length <= 1} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40" title="Delete strap" aria-label="Delete strap">✕</button>
+                <span className="text-xs text-slate-500 ml-auto">#{straps.findIndex((s) => s.id === strap.id) + 1}</span>
               </div>
             ))}
-          </div>
-
-          <div className="mt-5 border-t border-slate-200 pt-4">
-            <h3 className="font-semibold text-slate-800">Crossings</h3>
-            <p className="mt-1 text-xs text-slate-600">Detected crossings: {crossingsWithOverrides.length}</p>
-            <select className="mt-2 w-full rounded-lg border border-slate-300 p-2" value={crossingsFilter} onChange={(e) => setCrossingsFilter(e.target.value as CrossingsFilter)}>
-              <option value="all">All crossings</option>
-              <option value="selected" disabled={!activeStrap}>Only selected strap</option>
-            </select>
-            {crossingsWithOverrides.length > 50 && (
-              <button onClick={() => setShowAllCrossings((v) => !v)} className="mt-2 px-2 py-1 rounded border border-slate-300">{showAllCrossings ? 'Show first 50' : 'Show all'}</button>
-            )}
-            <div className="mt-2 max-h-48 overflow-auto space-y-2">
-              {crossingsDisplay.map((crossing, idx) => {
-                const aName = strapById.get(crossing.aId)?.strap.name ?? crossing.aId;
-                const bName = strapById.get(crossing.bId)?.strap.name ?? crossing.bId;
-                return (
-                  <div key={`row-${crossing.id}`} className={`rounded-lg border p-2 ${activeCrossingId === crossing.id ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200'}`}>
-                    <p className="text-xs text-slate-700">#{idx + 1} {aName} × {bName}</p>
-                    <div className="mt-1 flex gap-1">
-                    <button onClick={() => setCrossingOver(crossing, crossing.aId)} className={`px-2 py-1 rounded border text-xs ${crossing.overId === crossing.aId ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-300'}`}>{aName} over</button>
-                    <button onClick={() => setCrossingOver(crossing, crossing.bId)} className={`px-2 py-1 rounded border text-xs ${crossing.overId === crossing.bId ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-300'}`}>{bName} over</button>
-                    </div>
-                  </div>
-                );
-              })}
-              {!crossingsDisplay.length && <p className="text-xs text-slate-500">No crossings to show.</p>}
-            </div>
-          </div>
-
-          <div className="mt-5 border-t border-slate-200 pt-4">
-            <h3 className="font-semibold text-slate-800">Weave groups (coming next)</h3>
-            <button onClick={() => {
-              if (selectedForGroup.length < 2) return;
-              setGroups((prev) => [...prev, { id: uid('group'), name: `Group ${prev.length + 1}`, strapIds: selectedForGroup, collapsed: false }]);
-              setSelectedForGroup([]);
-            }} className="mt-2 px-2 py-1 rounded border border-slate-300">Create group from selected straps</button>
-            <div className="mt-2 space-y-2">
-              {groups.map((g) => (
-                <div key={g.id} className="rounded-lg border border-slate-200 p-2">
-                  <button className="font-medium" onClick={() => setGroups((prev) => prev.map((x) => (x.id === g.id ? { ...x, collapsed: !x.collapsed } : x)))}>{g.collapsed ? '▶' : '▼'} {g.name}</button>
-                  {!g.collapsed && <p className="text-xs text-slate-600 mt-1">{g.strapIds.map((id) => straps.find((s) => s.id === id)?.name ?? id).join(', ')}</p>}
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       </section>
