@@ -239,19 +239,19 @@ function circlePathD(r = 40) {
 }
 
 const SHAPE_OPTIONS = [
-  { kind: 'circle', label: 'circle' },
-  { kind: 'rounded-square', label: 'rounded square' },
-  { kind: 'rounded-right-angle', label: 'rounded right angle' },
-  { kind: 'hard-right-angle', label: 'hard right angle' },
-  { kind: 'hard-square', label: 'hard square' },
-  { kind: 'curved-arch', label: 'curved arch' },
-  { kind: 'horseshoe', label: 'horseshoe' },
-  { kind: 'shallow-s-curve', label: 'shallow S curve' },
-  { kind: 'diamond', label: 'diamond' },
-  { kind: 'kite', label: 'kite' },
-  { kind: 'hard-zigzag', label: 'hard zigzag' },
-  { kind: 'curved-zigzag', label: 'curved zigzag' },
-  { kind: 'rectangle', label: 'rectangle' },
+  { kind: 'circle', label: 'Circle' },
+  { kind: 'rounded-square', label: 'Rounded square' },
+  { kind: 'rounded-right-angle', label: 'Rounded right angle' },
+  { kind: 'hard-right-angle', label: 'Hard right angle' },
+  { kind: 'hard-square', label: 'Hard square' },
+  { kind: 'curved-arch', label: 'Curved arch' },
+  { kind: 'horseshoe', label: 'Horseshoe' },
+  { kind: 'shallow-s-curve', label: 'Shallow S curve' },
+  { kind: 'diamond', label: 'Diamond' },
+  { kind: 'kite', label: 'Kite' },
+  { kind: 'hard-zigzag', label: 'Hard zigzag' },
+  { kind: 'curved-zigzag', label: 'Curved zigzag' },
+  { kind: 'rectangle', label: 'Rectangle' },
 ] as const;
 
 type ShapeKind = typeof SHAPE_OPTIONS[number]['kind'];
@@ -647,13 +647,6 @@ const pendingStrapMoveRef = useRef<{ strapId: string; x: number; y: number; snap
     }),
     [baseCrossings, crossingOverrides, pairSlotsByCrossingId],
   );
-
-  const crossingsDisplay = useMemo(() => {
-    const filtered = crossingsFilter === 'selected' && activeStrap
-      ? crossingsWithOverrides.filter((c) => c.aId === activeStrap.id || c.bId === activeStrap.id)
-      : crossingsWithOverrides;
-    return showAllCrossings ? filtered : filtered.slice(0, 50);
-  }, [activeStrap, crossingsFilter, crossingsWithOverrides, showAllCrossings]);
 
   const vb = useMemo(() => {
     if (view === 'fullpage') return { minX: 0, minY: 0, vw: box.w, vh: box.h, str: `0 0 ${box.w} ${box.h}` };
@@ -1202,6 +1195,23 @@ if (rafRef.current == null) {
     if (activeId === id) setActiveId(straps.find((strap) => strap.id !== id)?.id ?? null);
   };
 
+
+  const centerStrapX = (strapId: string) => {
+    const strap = straps.find((s) => s.id === strapId);
+    if (!strap) return;
+    const cx = box.w / 2;
+    markPresetDirty();
+    updateStrap(strapId, { offset: { x: cx, y: strap.offset.y }, snapped: false });
+  };
+
+  const centerStrapY = (strapId: string) => {
+    const strap = straps.find((s) => s.id === strapId);
+    if (!strap) return;
+    const cy = box.h / 2;
+    markPresetDirty();
+    updateStrap(strapId, { offset: { x: strap.offset.x, y: cy }, snapped: false });
+  };
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!activeId) return;
@@ -1460,6 +1470,39 @@ if (rafRef.current == null) {
       <section className="px-6 py-5 max-w-[1120px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
           <h2 className="text-lg font-semibold text-slate-800">Step 1 — Manage straps</h2>
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <InsetLabeledField label="Paper size">
+              <select
+                className={INSET_CONTROL_BASE}
+                value={paper}
+                onChange={(e) => {
+                  markPresetDirty();
+                  const nextPaper = e.target.value as PaperId;
+                  setPaper(nextPaper);
+                  setOrientation(PAPERS_MM[nextPaper].defaultOrientation);
+                  setPan({ x: 0, y: 0 });
+                }}
+              >
+                {Object.entries(PAPERS_MM).map(([id, p]) => (
+                  <option key={id} value={id}>{p.label}</option>
+                ))}
+              </select>
+            </InsetLabeledField>
+            <InsetLabeledField label="Orientation">
+              <select
+                className={INSET_CONTROL_BASE}
+                value={orientation}
+                onChange={(e) => {
+                  markPresetDirty();
+                  setOrientation(e.target.value as Orientation);
+                  setPan({ x: 0, y: 0 });
+                }}
+              >
+                <option value="portrait">Portrait</option>
+                <option value="landscape">Landscape</option>
+              </select>
+            </InsetLabeledField>
+          </div>
           <div className="mt-3">
             <InsetLabeledField label="Presets:" className="w-full">
               <select
@@ -1510,45 +1553,11 @@ if (rafRef.current == null) {
               <input type="file" accept=".svg" multiple className="hidden" onChange={(e) => { parseUpload(e.target.files); }} />
             </label>
           </div>
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <InsetLabeledField label="Paper size">
-              <select
-                className={INSET_CONTROL_BASE}
-                value={paper}
-                onChange={(e) => {
-                  markPresetDirty();
-                  const nextPaper = e.target.value as PaperId;
-                  setPaper(nextPaper);
-                  setOrientation(PAPERS_MM[nextPaper].defaultOrientation);
-                  setPan({ x: 0, y: 0 });
-                }}
-              >
-                {Object.entries(PAPERS_MM).map(([id, p]) => (
-                  <option key={id} value={id}>{p.label}</option>
-                ))}
-              </select>
-            </InsetLabeledField>
-            <InsetLabeledField label="Orientation">
-              <select
-                className={INSET_CONTROL_BASE}
-                value={orientation}
-                onChange={(e) => {
-                  markPresetDirty();
-                  setOrientation(e.target.value as Orientation);
-                  setPan({ x: 0, y: 0 });
-                }}
-              >
-                <option value="portrait">Portrait</option>
-                <option value="landscape">Landscape</option>
-              </select>
-            </InsetLabeledField>
-          </div>
           {error && <p className="mt-3 text-sm text-amber-700">{error}</p>}
           <div className="mt-5 border-t border-slate-200 pt-3">
             <button onClick={exportPresetJson} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100">Export preset JSON (dev)</button>
           </div>
         </div>
-
         <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
           <h2 className="text-lg font-semibold text-slate-800">Step 2 — Strap settings</h2>
           <p className="mt-1 text-xs text-slate-600">{activeStrap?.script === 'Copperplate' ? 'Copperplate uses x-height (mm).' : 'Blackletter scripts use nib size and nib angle.'}</p>
@@ -1590,18 +1599,22 @@ if (rafRef.current == null) {
                 </>
               ) : (
                 <>
-                  <InsetLabeledField label="Nib size" rightAdornment="mm">
-                    <input type="number" min={0.2} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.nibMMText} onChange={(e) => updateStrap(activeStrap.id, { nibMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
-                  </InsetLabeledField>
-                  <InsetLabeledField label="x-height (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
-                    <input type="number" step="0.5" min={1} className={INSET_CONTROL_WIDE} value={activeStrap.xNibText ?? '5'} onChange={(e) => updateStrap(activeStrap.id, { xNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.xNibText ?? '5') || 5; const next = Math.max(1, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { xNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.xNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(1, snapHalf(parsed)) : 5; updateStrap(activeStrap.id, { xNibText: String(next) }); }} />
-                  </InsetLabeledField>
-                  <InsetLabeledField label="Ascender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
-                    <input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.ascNibText ?? '3'} onChange={(e) => updateStrap(activeStrap.id, { ascNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.ascNibText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { ascNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.ascNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateStrap(activeStrap.id, { ascNibText: String(next) }); }} />
-                  </InsetLabeledField>
-                  <InsetLabeledField label="Descender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
-                    <input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.descNibText ?? '2'} onChange={(e) => updateStrap(activeStrap.id, { descNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.descNibText ?? '2') || 2; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { descNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.descNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 2; updateStrap(activeStrap.id, { descNibText: String(next) }); }} />
-                  </InsetLabeledField>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <InsetLabeledField label="Nib size" rightAdornment="mm">
+                      <input type="number" min={0.2} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.nibMMText} onChange={(e) => updateStrap(activeStrap.id, { nibMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
+                    </InsetLabeledField>
+                    <InsetLabeledField label="x-height (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
+                      <input type="number" step="0.5" min={1} className={INSET_CONTROL_WIDE} value={activeStrap.xNibText ?? '5'} onChange={(e) => updateStrap(activeStrap.id, { xNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.xNibText ?? '5') || 5; const next = Math.max(1, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { xNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.xNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(1, snapHalf(parsed)) : 5; updateStrap(activeStrap.id, { xNibText: String(next) }); }} />
+                    </InsetLabeledField>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <InsetLabeledField label="Ascender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
+                      <input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.ascNibText ?? '3'} onChange={(e) => updateStrap(activeStrap.id, { ascNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.ascNibText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { ascNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.ascNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateStrap(activeStrap.id, { ascNibText: String(next) }); }} />
+                    </InsetLabeledField>
+                    <InsetLabeledField label="Descender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
+                      <input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.descNibText ?? '2'} onChange={(e) => updateStrap(activeStrap.id, { descNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.descNibText ?? '2') || 2; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { descNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.descNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 2; updateStrap(activeStrap.id, { descNibText: String(next) }); }} />
+                    </InsetLabeledField>
+                  </div>
                   <InsetLabeledField label="Nib angle (°)">
                     <select className={INSET_CONTROL_BASE} value={activeStrap.nibAngleDeg} onChange={(e) => updateStrap(activeStrap.id, { nibAngleDeg: Number(e.target.value) as 35 | 40 | 45 })}>
                       <option value={35}>35°</option><option value={40}>40°</option><option value={45}>45°</option>
@@ -1670,7 +1683,6 @@ if (rafRef.current == null) {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <button onClick={() => updateStrap(activeStrap.id, { offset: { ...activeStrap.offset, x: centerX }, snapped: true })} className="px-2 py-1 rounded border border-slate-300">Center horizontally</button>
                 <button onClick={() => updateStrap(activeStrap.id, { rotDeg: 0, scalePct: 100 })} className="px-2 py-1 rounded border border-slate-300">Reset rotation &amp; scale</button>
                 <label className="inline-flex items-center gap-2 text-sm text-slate-800">
                   <input
@@ -1707,38 +1719,12 @@ if (rafRef.current == null) {
                 <span className="w-3 h-3 rounded-full" style={{ backgroundColor: strap.color }} />
                 <button onPointerDown={(e) => e.stopPropagation()} onClick={() => setActiveId(strap.id)} className={`px-2 py-1 rounded border border-slate-300 ${activeId === strap.id ? 'border-indigo-300 text-indigo-700' : ''}`}>Select</button>
                 <button onPointerDown={(e) => e.stopPropagation()} onClick={() => duplicateStrapById(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Duplicate strap" aria-label="Duplicate strap">⧉</button>
+                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapX(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Center on page" aria-label="Center on page">⌖</button>
+                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapY(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Center vertically" aria-label="Center vertically">↕</button>
                 <button onPointerDown={(e) => e.stopPropagation()} onClick={() => removeStrapById(strap.id)} disabled={straps.length <= 1} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40" title="Delete strap" aria-label="Delete strap">✕</button>
                 <span className="text-xs text-slate-500 ml-auto">#{straps.findIndex((s) => s.id === strap.id) + 1}</span>
               </div>
             ))}
-          </div>
-
-          <div className="mt-5 border-t border-slate-200 pt-4">
-            <h3 className="font-semibold text-slate-800">Crossings</h3>
-            <p className="mt-1 text-xs text-slate-600">Detected crossings: {crossingsWithOverrides.length}</p>
-            <select className="mt-2 w-full rounded-lg border border-slate-300 p-2" value={crossingsFilter} onChange={(e) => setCrossingsFilter(e.target.value as CrossingsFilter)}>
-              <option value="all">All crossings</option>
-              <option value="selected" disabled={!activeStrap}>Only selected strap</option>
-            </select>
-            {crossingsWithOverrides.length > 50 && (
-              <button onClick={() => setShowAllCrossings((v) => !v)} className="mt-2 px-2 py-1 rounded border border-slate-300">{showAllCrossings ? 'Show first 50' : 'Show all'}</button>
-            )}
-            <div className="mt-2 max-h-48 overflow-auto space-y-2">
-              {crossingsDisplay.map((crossing, idx) => {
-                const aName = strapById.get(crossing.aId)?.strap.name ?? crossing.aId;
-                const bName = strapById.get(crossing.bId)?.strap.name ?? crossing.bId;
-                return (
-                  <div key={`row-${crossing.id}`} className={`rounded-lg border p-2 ${activeCrossingId === crossing.id ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200'}`}>
-                    <p className="text-xs text-slate-700">#{idx + 1} {aName} × {bName}</p>
-                    <div className="mt-1 flex gap-1">
-                    <button onClick={() => setCrossingOver(crossing, crossing.aId)} className={`px-2 py-1 rounded border text-xs ${crossing.overId === crossing.aId ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-300'}`}>{aName} over</button>
-                    <button onClick={() => setCrossingOver(crossing, crossing.bId)} className={`px-2 py-1 rounded border text-xs ${crossing.overId === crossing.bId ? 'border-indigo-400 bg-indigo-100 text-indigo-700' : 'border-slate-300'}`}>{bName} over</button>
-                    </div>
-                  </div>
-                );
-              })}
-              {!crossingsDisplay.length && <p className="text-xs text-slate-500">No crossings to show.</p>}
-            </div>
           </div>
         </div>
       </section>
