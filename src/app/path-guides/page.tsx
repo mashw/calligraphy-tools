@@ -289,17 +289,18 @@ const PATH_GUIDES_PRESETS: PathGuidesPresetV1[] = [
       paper: 'A4',
       orientation: 'portrait',
       view: 'custom',
-      zoom: 1.5225287458060701,
-      pan: { x: -1.4380402120600384, y: 9.767309200966686 },
+      zoom: 1.1153276421780445,
+      pan: { x: 6.869062493103284, y: 3.4364911042410142 },
       simplify: false,
       showCrossings: true,
       activeCrossingId:
-        'strap-21f24596-a745-4fd4-97c6-769e53aa9acb|strap-8d1a8810-e85d-4281-85af-b1979c496a13|1027|2271',
+        'strap-21f24596-a745-4fd4-97c6-769e53aa9acb|strap-8d1a8810-e85d-4281-85af-b1979c496a13|1021|2161',
       crossingsFilter: 'all',
       showAllCrossings: false,
       crossingOverrides: {
         'strap-21f24596-a745-4fd4-97c6-769e53aa9acb|strap-8d1a8810-e85d-4281-85af-b1979c496a13': {
           1: 'strap-21f24596-a745-4fd4-97c6-769e53aa9acb',
+          3: 'strap-21f24596-a745-4fd4-97c6-769e53aa9acb',
         },
       },
       groups: [],
@@ -308,13 +309,13 @@ const PATH_GUIDES_PRESETS: PathGuidesPresetV1[] = [
           id: 'strap-8d1a8810-e85d-4281-85af-b1979c496a13',
           name: 'scurve 1',
           d: 'M248.76,160.95c-29.87,0-54.08,24.21-54.08,54.08s24.21,54.08,54.08,54.08h.02c83.85,0,151.82,67.98,151.82,151.83s-67.97,151.82-151.82,151.83v.02c-29.87,0-54.08,24.21-54.08,54.08s24.21,54.08,54.08,54.08',
-          color: '#ea580c',
+          color: '#5778A4',
           script: 'Fraktur',
           nibMMText: '3.8',
           nibAngleDeg: 40,
           xHeightMMText: '6',
           copperplateRatioPreset: '3:2:3',
-          offset: { x: -206.68742293228425, y: -261.5880849181708 },
+          offset: { x: -207.68742293228425, y: -272.5880849181708 },
           scalePct: 44.62499345265998,
           rotDeg: 0,
           flip: true,
@@ -328,13 +329,13 @@ const PATH_GUIDES_PRESETS: PathGuidesPresetV1[] = [
           id: 'strap-21f24596-a745-4fd4-97c6-769e53aa9acb',
           name: 'scurve2 1',
           d: 'M346.52,680.95c29.87,0,54.08-24.21,54.08-54.08s-24.21-54.08-54.08-54.08h-.02c-83.85,0-151.82-67.98-151.82-151.83s67.97-151.82,151.82-151.83v-.02c29.87,0,54.08-24.21,54.08-54.08s-24.21-54.08-54.08-54.08',
-          color: '#ea580c',
+          color: '#E49444',
           script: 'Fraktur',
           nibMMText: '3.8',
           nibAngleDeg: 40,
           xHeightMMText: '6',
           copperplateRatioPreset: '3:2:3',
-          offset: { x: -182.94658644083785, y: -261.6014905214777 },
+          offset: { x: -182.94658644083785, y: -272.6014905214777 },
           scalePct: 44.62499476212782,
           rotDeg: 0,
           flip: true,
@@ -524,7 +525,6 @@ export default function PathGuidesPage() {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [error, setError] = useState<string | null>(null);
   const [dragListId, setDragListId] = useState<string | null>(null);
-  const [selectedForGroup, setSelectedForGroup] = useState<string[]>([]);
   const [groups, setGroups] = useState<StrapGroup[]>([]);
   const [simplify, setSimplify] = useState(true);
   const [showCrossings, setShowCrossings] = useState(true);
@@ -826,7 +826,6 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setActiveId(state.activeId);
     setError(null);
     setDragListId(null);
-    setSelectedForGroup([]);
     setScaleInputText('');
     setDragSimplifyStrapId(null);
     dragRef.current = { mode: 'none', pointerId: -1, startClient: { x: 0, y: 0 }, startPan: { x: 0, y: 0 } };
@@ -1176,6 +1175,33 @@ if (rafRef.current == null) {
     });
   };
 
+  const duplicateStrapById = (id: string) => {
+    const strap = straps.find((s) => s.id === id);
+    if (!strap) return;
+    markPresetDirty();
+    const sampled = samplePathDToPolyline(strap.d, 1.25);
+    const localCenter = centroid(sampled);
+    const duplicate = {
+      ...strap,
+      id: uid('strap'),
+      name: `${strap.name} copy`,
+      color: PALETTE[(straps.length + 1) % PALETTE.length],
+      offset: { x: strap.offset.x + 8, y: strap.offset.y + 8 },
+      flip: strap.flip,
+      snapped: false,
+      invertGuides: strap.invertGuides,
+    };
+    duplicate.offset = clampOffsetToPage({ sampled, localCenter, strap: duplicate, box, marginMM: FIT_MARGIN_MM });
+    setStraps((prev) => assignDistinctColors([...prev, duplicate]));
+  };
+
+  const removeStrapById = (id: string) => {
+    if (straps.length <= 1) return;
+    markPresetDirty();
+    setStraps((prev) => prev.filter((strap) => strap.id !== id));
+    if (activeId === id) setActiveId(straps.find((strap) => strap.id !== id)?.id ?? null);
+  };
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!activeId) return;
@@ -1472,7 +1498,7 @@ if (rafRef.current == null) {
                 </button>
               )}
               rightAdornmentInteractive
-              adornmentClassName="right-1"
+              adornmentClassName="right-1 top-[calc(50%+10px)]"
             >
               <select className={INSET_CONTROL_WIDE} value={shapeKind} onChange={(e) => setShapeKind(e.target.value as ShapeKind)}>
                 {SHAPE_OPTIONS.map((shape) => (
@@ -1518,40 +1544,6 @@ if (rafRef.current == null) {
             </InsetLabeledField>
           </div>
           {error && <p className="mt-3 text-sm text-amber-700">{error}</p>}
-          <div className="mt-4 space-y-2">
-            {straps.map((strap, idx) => (
-              <div key={strap.id} className="rounded-lg border border-slate-200 p-2 flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: strap.color }} />
-                <span className="flex-1 truncate">{strap.name}</span>
-                <button onClick={() => setActiveId(strap.id)} className="px-2 py-1 rounded border border-slate-300">Select</button>
-                <button
-  onClick={() => {
-    markPresetDirty();
-    const sampled = samplePathDToPolyline(strap.d, 1.25);
-    const localCenter = centroid(sampled);
-                  const duplicate = {
-                    ...strap,
-                    id: uid('strap'),
-                    name: `${strap.name} copy`,
-                    color: PALETTE[(straps.length + 1) % PALETTE.length],
-                    offset: { x: strap.offset.x + 8, y: strap.offset.y + 8 },
-                    flip: strap.flip,
-                    snapped: false,
-                    invertGuides: strap.invertGuides,
-                  };
-                  duplicate.offset = clampOffsetToPage({ sampled, localCenter, strap: duplicate, box, marginMM: FIT_MARGIN_MM });
-                  setStraps((prev) => assignDistinctColors([...prev, duplicate]));
-                }} className="px-2 py-1 rounded border border-slate-300">Duplicate</button>
-                <button disabled={straps.length <= 1} onClick={() => {
-                  markPresetDirty();
-                  setStraps((prev) => prev.filter((s) => s.id !== strap.id));
-                  if (activeId === strap.id) setActiveId(straps.find((s) => s.id !== strap.id)?.id ?? null);
-                }} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40">Remove</button>
-                <input type="checkbox" checked={selectedForGroup.includes(strap.id)} onChange={(e) => setSelectedForGroup((prev) => e.target.checked ? [...new Set([...prev, strap.id])] : prev.filter((id) => id !== strap.id))} title="Select for group" />
-                <span className="text-xs text-slate-500">#{idx + 1}</span>
-              </div>
-            ))}
-          </div>
           <div className="mt-5 border-t border-slate-200 pt-3">
             <button onClick={exportPresetJson} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100">Export preset JSON (dev)</button>
           </div>
@@ -1713,8 +1705,10 @@ if (rafRef.current == null) {
                 setDragListId(null);
               }} className="rounded-lg border border-slate-200 p-2 flex items-center gap-2 cursor-move">
                 <span className="w-3 h-3 rounded-full" style={{ backgroundColor: strap.color }} />
-                <button onClick={() => setActiveId(strap.id)} className={`flex-1 text-left ${activeId === strap.id ? 'font-semibold text-indigo-700' : ''}`}>{strap.name}</button>
-                <span className="text-xs text-slate-500">#{straps.findIndex((s) => s.id === strap.id) + 1}</span>
+                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => setActiveId(strap.id)} className={`px-2 py-1 rounded border border-slate-300 ${activeId === strap.id ? 'border-indigo-300 text-indigo-700' : ''}`}>Select</button>
+                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => duplicateStrapById(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Duplicate strap" aria-label="Duplicate strap">⧉</button>
+                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => removeStrapById(strap.id)} disabled={straps.length <= 1} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40" title="Delete strap" aria-label="Delete strap">✕</button>
+                <span className="text-xs text-slate-500 ml-auto">#{straps.findIndex((s) => s.id === strap.id) + 1}</span>
               </div>
             ))}
           </div>
@@ -1744,23 +1738,6 @@ if (rafRef.current == null) {
                 );
               })}
               {!crossingsDisplay.length && <p className="text-xs text-slate-500">No crossings to show.</p>}
-            </div>
-          </div>
-
-          <div className="mt-5 border-t border-slate-200 pt-4">
-            <h3 className="font-semibold text-slate-800">Weave groups (coming next)</h3>
-            <button onClick={() => {
-              if (selectedForGroup.length < 2) return;
-              setGroups((prev) => [...prev, { id: uid('group'), name: `Group ${prev.length + 1}`, strapIds: selectedForGroup, collapsed: false }]);
-              setSelectedForGroup([]);
-            }} className="mt-2 px-2 py-1 rounded border border-slate-300">Create group from selected straps</button>
-            <div className="mt-2 space-y-2">
-              {groups.map((g) => (
-                <div key={g.id} className="rounded-lg border border-slate-200 p-2">
-                  <button className="font-medium" onClick={() => setGroups((prev) => prev.map((x) => (x.id === g.id ? { ...x, collapsed: !x.collapsed } : x)))}>{g.collapsed ? '▶' : '▼'} {g.name}</button>
-                  {!g.collapsed && <p className="text-xs text-slate-600 mt-1">{g.strapIds.map((id) => straps.find((s) => s.id === id)?.name ?? id).join(', ')}</p>}
-                </div>
-              ))}
             </div>
           </div>
         </div>
