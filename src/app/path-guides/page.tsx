@@ -1128,8 +1128,10 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setActiveId(next.id);
   };
 
-  const NUDGE_MM = 1;
-  const NUDGE_MULT_SHIFT = 5;
+  // Keyboard nudge: smaller increments for precise placement.
+  // Arrow = 0.25mm, Shift+Arrow = 1.0mm.
+  const NUDGE_MM = 0.25;
+  const NUDGE_MULT_SHIFT = 4;
   const NUDGE_COMMIT_IDLE_MS = 90;
 
   useEffect(() => {
