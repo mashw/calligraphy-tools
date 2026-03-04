@@ -540,6 +540,7 @@ export default function PathGuidesPage() {
   const previewSimplify = simplify || dragActive;
   const [dragPaintTick, setDragPaintTick] = useState(0);
   const [scaleInputText, setScaleInputText] = useState('');
+  const [nudgePaintTick, setNudgePaintTick] = useState(0);
 
   const [straps, setStraps] = useState<Strap[]>(() => ([applyScriptDefaults({
     id: uid('strap'),
@@ -585,8 +586,13 @@ export default function PathGuidesPage() {
 
   const pendingDragPaintRef = useRef(false);
   const liveDragTranslateRef = useRef<{ strapId: string; dx: number; dy: number } | null>(null);
+  const nudgeActiveRef = useRef(false);
+  const nudgeTimerRef = useRef<number | null>(null);
+  const nudgeBaseRef = useRef<{ strapId: string; baseOffset: { x: number; y: number }; baseSnapped: boolean } | null>(null);
+  const nudgeSnappedRef = useRef<boolean>(false);
 
   const activeStrap = straps.find((s) => s.id === (activeId ?? straps[0]?.id)) ?? straps[0] ?? null;
+  const interactionActive = dragActive || nudgeActiveRef.current;
   
   const renderData = useMemo(() => straps.map((strap) => {
     const sampled = samplePathDToPolyline(strap.d, 1.25);
@@ -840,6 +846,13 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setDragSimplifyStrapId(null);
     dragRef.current = { mode: 'none', pointerId: -1, startClient: { x: 0, y: 0 }, startPan: { x: 0, y: 0 } };
     liveDragTranslateRef.current = null;
+    nudgeActiveRef.current = false;
+    nudgeBaseRef.current = null;
+    nudgeSnappedRef.current = false;
+    if (nudgeTimerRef.current != null) {
+      window.clearTimeout(nudgeTimerRef.current);
+      nudgeTimerRef.current = null;
+    }
     setSelectedPresetId(preset.id);
     lastAppliedPresetStateRef.current = JSON.stringify(state);
   };
@@ -1016,6 +1029,16 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     }
   };
 
+  const requestNudgePaint = useCallback(() => {
+    if (!pendingDragPaintRef.current) {
+      pendingDragPaintRef.current = true;
+      requestAnimationFrame(() => {
+        pendingDragPaintRef.current = false;
+        setNudgePaintTick((t) => (t + 1) % 1000000);
+      });
+    }
+  }, []);
+
   const onSvgPointerUp: React.PointerEventHandler<SVGSVGElement> = (e) => {
     if (dragRef.current.pointerId === e.pointerId) {
       try {
@@ -1086,6 +1109,103 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setStraps((prev) => assignDistinctColors([...prev, next]));
     setActiveId(next.id);
   };
+
+  const NUDGE_MM = 1;
+  const NUDGE_MULT_SHIFT = 5;
+  const NUDGE_COMMIT_IDLE_MS = 90;
+
+  useEffect(() => {
+    const commitNudge = () => {
+      const baseNow = nudgeBaseRef.current;
+      const liveNow = liveDragTranslateRef.current;
+      if (!baseNow || !liveNow || liveNow.strapId !== baseNow.strapId) return;
+      markPresetDirty();
+      const finalOffset = { x: baseNow.baseOffset.x + liveNow.dx, y: baseNow.baseOffset.y + liveNow.dy };
+      const finalSnapped = nudgeSnappedRef.current;
+      setStraps((prev) => prev.map((s) => (s.id === baseNow.strapId ? { ...s, offset: finalOffset, snapped: finalSnapped } : s)));
+    };
+
+    const endNudgeSession = () => {
+      if (nudgeTimerRef.current != null) {
+        window.clearTimeout(nudgeTimerRef.current);
+        nudgeTimerRef.current = null;
+      }
+      commitNudge();
+      nudgeActiveRef.current = false;
+      nudgeBaseRef.current = null;
+      liveDragTranslateRef.current = null;
+      requestNudgePaint();
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+
+      const strapId = activeId ?? straps[0]?.id;
+      if (!strapId) return;
+      const strap = straps.find((s) => s.id === strapId);
+      if (!strap) return;
+
+      e.preventDefault();
+
+      if (!nudgeBaseRef.current || nudgeBaseRef.current.strapId !== strapId) {
+        nudgeBaseRef.current = { strapId, baseOffset: strap.offset, baseSnapped: strap.snapped };
+        nudgeSnappedRef.current = strap.snapped;
+      }
+      nudgeActiveRef.current = true;
+
+      const step = NUDGE_MM * (e.shiftKey ? NUDGE_MULT_SHIFT : 1);
+      const keyDx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+      const keyDy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+
+      const live = liveDragTranslateRef.current;
+      const prevDx = live && live.strapId === strapId ? live.dx : 0;
+      const prevDy = live && live.strapId === strapId ? live.dy : 0;
+
+      let nextDx = prevDx + keyDx;
+      const nextDy = prevDy + keyDy;
+
+      const rd = strapById.get(strapId);
+      const cX = rd?.localCenter?.x ?? 0;
+      const startX = nudgeBaseRef.current.baseOffset.x;
+      let snapped = nudgeSnappedRef.current;
+      let finalX = startX + nextDx;
+      if (snapped) {
+        if (Math.abs((finalX + cX) - centerX) > RELEASE_MM) snapped = false;
+        else finalX = centerX - cX;
+      }
+      if (!snapped && Math.abs((finalX + cX) - centerX) <= SNAP_IN_MM) {
+        finalX = centerX - cX;
+        snapped = true;
+      }
+      nextDx = finalX - startX;
+      nudgeSnappedRef.current = snapped;
+
+      liveDragTranslateRef.current = { strapId, dx: nextDx, dy: nextDy };
+      requestNudgePaint();
+
+      if (nudgeTimerRef.current != null) window.clearTimeout(nudgeTimerRef.current);
+      nudgeTimerRef.current = window.setTimeout(() => {
+        commitNudge();
+        nudgeActiveRef.current = false;
+        nudgeBaseRef.current = null;
+        liveDragTranslateRef.current = null;
+        requestNudgePaint();
+      }, NUDGE_COMMIT_IDLE_MS);
+    };
+
+    window.addEventListener('keydown', onKeyDown, { passive: false });
+    window.addEventListener('keyup', endNudgeSession);
+    window.addEventListener('blur', endNudgeSession);
+
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', endNudgeSession);
+      window.removeEventListener('blur', endNudgeSession);
+      if (nudgeTimerRef.current != null) window.clearTimeout(nudgeTimerRef.current);
+    };
+  }, [activeId, centerX, markPresetDirty, requestNudgePaint, strapById, straps]);
 
   const addShape = () => {
     markPresetDirty();
@@ -1360,8 +1480,10 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 // Use paint tick so ref-driven translation repaints without heavy recompute.
                 // eslint-disable-next-line @typescript-eslint/no-unused-expressions
                 dragPaintTick;
+                // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                nudgePaintTick;
                 const live = liveDragTranslateRef.current;
-                const isLive = !!(dragActive && live && live.strapId === strap.id);
+                const isLive = !!(interactionActive && live && live.strapId === strap.id);
                 const dx = isLive ? live.dx : 0;
                 const dy = isLive ? live.dy : 0;
 
@@ -1370,7 +1492,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     key={strap.id}
                     transform={dx || dy ? `translate(${dx} ${dy})` : undefined}
                     mask={
-                      !dragActive && !isSimplifiedForThisStrap && underCrossings.get(strap.id)?.length
+                      !interactionActive && !isSimplifiedForThisStrap && underCrossings.get(strap.id)?.length
                         ? `url(#mask-${strap.id})`
                         : undefined
                     }
@@ -1410,7 +1532,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     pointerEvents="none"
   />
 )}
-                    {!dragActive && !isSimplifiedForThisStrap && guideSet && (
+                    {!interactionActive && !isSimplifiedForThisStrap && guideSet && (
                       <GuideOverlay
                         guideSet={guideSet}
                         style={{
@@ -1437,7 +1559,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 );
               })}
 
-              {simplify && !dragActive && crossingsWithOverrides.map((crossing) => {
+              {simplify && !interactionActive && crossingsWithOverrides.map((crossing) => {
                 const over = strapById.get(crossing.overId);
                 if (!over?.guideSet) return null;
 
@@ -1457,7 +1579,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 );
               })}
 
-              {showCrossings && crossingsWithOverrides.map((crossing, idx) => (
+              {showCrossings && !interactionActive && crossingsWithOverrides.map((crossing, idx) => (
                 <g
                   key={`marker-${crossing.id}`}
                   style={{ cursor: 'pointer' }}
