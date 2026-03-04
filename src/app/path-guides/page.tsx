@@ -632,11 +632,15 @@ export default function PathGuidesPage() {
       : null;
 
     const transformedD = transformed.length > 1 ? pathD(transformed) : '';
-    const proxyPts = transformed.length > 1 ? decimatePolyline(transformed, 80) : transformed;
-    const proxyD = proxyPts.length > 1 ? pathD(proxyPts) : '';
     const bandD = guideSet ? bandPolygonD(guideSet.ascLine, guideSet.descLine) : '';
+    const proxyBandD = guideSet
+      ? bandPolygonD(
+          decimatePolyline(guideSet.ascLine, 90),
+          decimatePolyline(guideSet.descLine, 90),
+        )
+      : '';
 
-    return { strap, transformed, transformedD, proxyD, guideSet, bandD, metrics, localCenter, sampled };
+    return { strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter, sampled };
   }), [straps]);
   const totalSegments = useMemo(
     () => renderData.reduce((sum, r) => sum + Math.max(0, r.transformed.length - 1), 0),
@@ -1489,7 +1493,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
               <line x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
 
-              {renderData.map(({ strap, transformed, transformedD, proxyD, guideSet, bandD, metrics }) => {
+              {renderData.map(({ strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics }) => {
                 const isSimplifiedForThisStrap = simplify || (dragActive && dragSimplifyStrapId === strap.id);
                 // Use paint tick so ref-driven translation repaints without heavy recompute.
                 // eslint-disable-next-line @typescript-eslint/no-unused-expressions
@@ -1512,23 +1516,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     }
                   >
 {isSimplifiedForThisStrap ? (
-  interactionActive ? (
-    proxyD ? (
-      <path
-        d={proxyD}
-        fill="none"
-        stroke={strap.color}
-        strokeWidth={metrics.bandWidthMM}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        vectorEffect="non-scaling-stroke"
-        pointerEvents="stroke"
-        onPointerDown={beginStrapDrag(strap.id)}
-      />
-    ) : null
-  ) : guideSet ? (
+  guideSet ? (
     <path
-      d={bandD}
+      d={interactionActive ? proxyBandD : bandD}
       fill={strap.color}
       stroke="none"
       vectorEffect="non-scaling-stroke"
@@ -1549,9 +1539,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     />
   ) : null
 ) : (
-  (interactionActive ? proxyD : transformedD) ? (
+  transformed.length > 1 ? (
     <path
-      d={interactionActive ? proxyD : transformedD}
+      d={transformedD}
       fill="none"
       stroke={strap.color}
       strokeWidth={0.9}
