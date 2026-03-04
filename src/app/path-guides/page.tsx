@@ -538,6 +538,7 @@ export default function PathGuidesPage() {
   const [shapeKind, setShapeKind] = useState<ShapeKind>('circle');
   const dragActive = dragSimplifyStrapId !== null;
   const previewSimplify = simplify || dragActive;
+  const [dragPaintTick, setDragPaintTick] = useState(0);
   const [scaleInputText, setScaleInputText] = useState('');
 
   const [straps, setStraps] = useState<Strap[]>(() => ([applyScriptDefaults({
@@ -562,20 +563,33 @@ export default function PathGuidesPage() {
   const lastAppliedPresetStateRef = useRef<string | null>(null);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const dragRef = useRef<{ mode: 'none' | 'pan' | 'strap'; pointerId: number; startClient: { x: number; y: number }; startPan: { x: number; y: number }; strapId?: string; startOffset?: { x: number; y: number }; startSnapped?: boolean; startLocalCenter?: { x: number; y: number } }>({
+  const dragRef = useRef<{
+    mode: 'none' | 'pan' | 'strap';
+    pointerId: number;
+    startClient: { x: number; y: number };
+    startPan: { x: number; y: number };
+    rect?: { w: number; h: number };
+    vb?: { vw: number; vh: number };
+    strapId?: string;
+    startOffset?: { x: number; y: number };
+    startSnapped?: boolean;
+    startLocalCenter?: { x: number; y: number };
+    liveOffset?: { x: number; y: number };
+    liveSnapped?: boolean;
+  }>({
     mode: 'none',
     pointerId: -1,
     startClient: { x: 0, y: 0 },
     startPan: { x: 0, y: 0 },
   });
 
-  const rafRef = useRef<number | null>(null);
-  const pendingStrapMoveRef = useRef<{ strapId: string; x: number; y: number; snapped: boolean } | null>(null);
+  const pendingDragPaintRef = useRef(false);
+  const liveDragTranslateRef = useRef<{ strapId: string; dx: number; dy: number } | null>(null);
 
   const activeStrap = straps.find((s) => s.id === (activeId ?? straps[0]?.id)) ?? straps[0] ?? null;
   
   const renderData = useMemo(() => straps.map((strap) => {
-    const sampled = samplePathDToPolyline(strap.d, dragActive ? 3.5 : 1.25);
+    const sampled = samplePathDToPolyline(strap.d, 1.25);
     const localCenter = centroid(sampled);
     const centered = sampled.map((p) => ({ x: p.x - localCenter.x, y: p.y - localCenter.y }));
     const transformed = transformPolyline(centered, {
@@ -599,8 +613,11 @@ export default function PathGuidesPage() {
         })
       : null;
 
-    return { strap, transformed, guideSet, metrics, localCenter, sampled };
-  }), [straps, dragActive]);  
+    const transformedD = transformed.length > 1 ? pathD(transformed) : '';
+    const bandD = guideSet ? bandPolygonD(guideSet.ascLine, guideSet.descLine) : '';
+
+    return { strap, transformed, transformedD, guideSet, bandD, metrics, localCenter, sampled };
+  }), [straps]);
   const totalSegments = useMemo(
     () => renderData.reduce((sum, r) => sum + Math.max(0, r.transformed.length - 1), 0),
     [renderData],
@@ -822,8 +839,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setScaleInputText('');
     setDragSimplifyStrapId(null);
     dragRef.current = { mode: 'none', pointerId: -1, startClient: { x: 0, y: 0 }, startPan: { x: 0, y: 0 } };
-    pendingPanRef.current = null;
-    pendingStrapMoveRef.current = null;
+    liveDragTranslateRef.current = null;
     setSelectedPresetId(preset.id);
     lastAppliedPresetStateRef.current = JSON.stringify(state);
   };
@@ -915,6 +931,8 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       pointerId: e.pointerId,
       startClient: { x: e.clientX, y: e.clientY },
       startPan: pan,
+      rect: { w: e.currentTarget.getBoundingClientRect().width, h: e.currentTarget.getBoundingClientRect().height },
+      vb: { vw: vb.vw, vh: vb.vh },
     };
     e.currentTarget.setPointerCapture(e.pointerId);
     setIsPanning(true);
@@ -934,10 +952,14 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       pointerId: e.pointerId,
       startClient: { x: e.clientX, y: e.clientY },
       startPan: pan,
+      rect: svgRef.current.getBoundingClientRect ? { w: svgRef.current.getBoundingClientRect().width, h: svgRef.current.getBoundingClientRect().height } : undefined,
+      vb: { vw: vb.vw, vh: vb.vh },
       strapId,
       startOffset: strap.offset,
       startSnapped: strap.snapped,
       startLocalCenter: strapById.get(strapId)?.localCenter,
+      liveOffset: strap.offset,
+      liveSnapped: strap.snapped,
     };
     svgRef.current.setPointerCapture(e.pointerId);
   };
@@ -945,15 +967,18 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
   const onSvgPointerMove: React.PointerEventHandler<SVGSVGElement> = (e) => {
     const drag = dragRef.current;
     if (drag.pointerId !== e.pointerId || drag.mode === 'none') return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
+    const rectW = drag.rect?.w ?? e.currentTarget.getBoundingClientRect().width;
+    const rectH = drag.rect?.h ?? e.currentTarget.getBoundingClientRect().height;
+    if (!rectW || !rectH) return;
+    const vbVW = drag.vb?.vw ?? vb.vw;
+    const vbVH = drag.vb?.vh ?? vb.vh;
 
-    const dxMM = ((e.clientX - drag.startClient.x) / rect.width) * vb.vw;
-    const dyMM = ((e.clientY - drag.startClient.y) / rect.height) * vb.vh;
+    const dxMM = ((e.clientX - drag.startClient.x) / rectW) * vbVW;
+    const dyMM = ((e.clientY - drag.startClient.y) / rectH) * vbVH;
 
     if (drag.mode === 'pan') {
-      const mmPerPxX = vb.vw / rect.width;
-      const mmPerPxY = vb.vh / rect.height;
+      const mmPerPxX = vbVW / rectW;
+      const mmPerPxY = vbVH / rectH;
       const nx = drag.startPan.x + (e.clientX - drag.startClient.x) * mmPerPxX;
       const ny = drag.startPan.y + (e.clientY - drag.startClient.y) * mmPerPxY;
       setView('custom');
@@ -976,23 +1001,19 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       snapped = true;
     }
 
-    pendingStrapMoveRef.current = { strapId: drag.strapId, x: nextX, y: nextY, snapped };
+    drag.liveOffset = { x: nextX, y: nextY };
+    drag.liveSnapped = snapped;
+    const dx = nextX - drag.startOffset.x;
+    const dy = nextY - drag.startOffset.y;
+    liveDragTranslateRef.current = { strapId: drag.strapId, dx, dy };
 
-if (rafRef.current == null) {
-  rafRef.current = requestAnimationFrame(() => {
-    rafRef.current = null;
-
-    const move = pendingStrapMoveRef.current;
-    if (move) {
-      pendingStrapMoveRef.current = null;
-      setStraps((prev) =>
-        prev.map((s) =>
-          s.id === move.strapId ? { ...s, offset: { x: move.x, y: move.y }, snapped: move.snapped } : s,
-        ),
-      );
+    if (!pendingDragPaintRef.current) {
+      pendingDragPaintRef.current = true;
+      requestAnimationFrame(() => {
+        pendingDragPaintRef.current = false;
+        setDragPaintTick((t) => (t + 1) % 1000000);
+      });
     }
-  });
-}
   };
 
   const onSvgPointerUp: React.PointerEventHandler<SVGSVGElement> = (e) => {
@@ -1003,14 +1024,17 @@ if (rafRef.current == null) {
         // ignore
       }
       setIsPanning(false);
-      dragRef.current = { mode: 'none', pointerId: -1, startClient: { x: 0, y: 0 }, startPan: { x: 0, y: 0 } };
-  
-      if (rafRef.current != null) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
+      const finished = dragRef.current;
+      if (finished.mode === 'strap' && finished.strapId && finished.startOffset && finished.liveOffset) {
+        markPresetDirty();
+        const finalOffset = finished.liveOffset;
+        const finalSnapped = finished.liveSnapped ?? false;
+        setStraps((prev) =>
+          prev.map((s) => (s.id === finished.strapId ? { ...s, offset: finalOffset, snapped: finalSnapped } : s)),
+        );
       }
-      pendingStrapMoveRef.current = null;
-  
+      dragRef.current = { mode: 'none', pointerId: -1, startClient: { x: 0, y: 0 }, startPan: { x: 0, y: 0 } };
+      liveDragTranslateRef.current = null;
       setDragSimplifyStrapId(null);
     }
   };
@@ -1331,14 +1355,22 @@ if (rafRef.current == null) {
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
               <line x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
 
-              {renderData.map(({ strap, transformed, guideSet, metrics }) => {
+              {renderData.map(({ strap, transformed, transformedD, guideSet, bandD, metrics }) => {
                 const isSimplifiedForThisStrap = simplify || (dragActive && dragSimplifyStrapId === strap.id);
+                // Use paint tick so ref-driven translation repaints without heavy recompute.
+                // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                dragPaintTick;
+                const live = liveDragTranslateRef.current;
+                const isLive = !!(dragActive && live && live.strapId === strap.id);
+                const dx = isLive ? live.dx : 0;
+                const dy = isLive ? live.dy : 0;
 
                 return (
                   <g
                     key={strap.id}
+                    transform={dx || dy ? `translate(${dx} ${dy})` : undefined}
                     mask={
-                      !isSimplifiedForThisStrap && underCrossings.get(strap.id)?.length
+                      !dragActive && !isSimplifiedForThisStrap && underCrossings.get(strap.id)?.length
                         ? `url(#mask-${strap.id})`
                         : undefined
                     }
@@ -1346,7 +1378,7 @@ if (rafRef.current == null) {
 {isSimplifiedForThisStrap ? (
   guideSet ? (
     <path
-      d={bandPolygonD(guideSet.ascLine, guideSet.descLine)}
+      d={bandD}
       fill={strap.color}
       stroke="none"
       vectorEffect="non-scaling-stroke"
@@ -1355,7 +1387,7 @@ if (rafRef.current == null) {
     />
   ) : transformed.length > 1 ? (
     <path
-      d={pathD(transformed)}
+      d={transformedD}
       fill="none"
       stroke={strap.color}
       strokeWidth={metrics.bandWidthMM}
@@ -1368,7 +1400,7 @@ if (rafRef.current == null) {
   ) : null
 ) : transformed.length > 1 && (
   <path
-    d={pathD(transformed)}
+    d={transformedD}
     fill="none"
     stroke={strap.color}
     strokeWidth={0.9}
@@ -1378,7 +1410,7 @@ if (rafRef.current == null) {
     pointerEvents="none"
   />
 )}
-                    {!isSimplifiedForThisStrap && guideSet && (
+                    {!dragActive && !isSimplifiedForThisStrap && guideSet && (
                       <GuideOverlay
                         guideSet={guideSet}
                         style={{
@@ -1405,7 +1437,7 @@ if (rafRef.current == null) {
                 );
               })}
 
-              {simplify && crossingsWithOverrides.map((crossing) => {
+              {simplify && !dragActive && crossingsWithOverrides.map((crossing) => {
                 const over = strapById.get(crossing.overId);
                 if (!over?.guideSet) return null;
 
