@@ -593,7 +593,19 @@ export default function PathGuidesPage() {
 
   const activeStrap = straps.find((s) => s.id === (activeId ?? straps[0]?.id)) ?? straps[0] ?? null;
   const interactionActive = dragActive || nudgeActiveRef.current;
-  
+
+  const decimatePolyline = (pts: { x: number; y: number }[], maxPts: number) => {
+    if (pts.length <= maxPts) return pts;
+    if (maxPts < 2) return [pts[0], pts[pts.length - 1]];
+    const stride = Math.ceil((pts.length - 1) / (maxPts - 1));
+    const out: { x: number; y: number }[] = [];
+    for (let i = 0; i < pts.length; i += stride) out.push(pts[i]);
+    const last = pts[pts.length - 1];
+    const end = out[out.length - 1];
+    if (!end || end.x !== last.x || end.y !== last.y) out.push(last);
+    return out;
+  };
+
   const renderData = useMemo(() => straps.map((strap) => {
     const sampled = samplePathDToPolyline(strap.d, 1.25);
     const localCenter = centroid(sampled);
@@ -621,8 +633,14 @@ export default function PathGuidesPage() {
 
     const transformedD = transformed.length > 1 ? pathD(transformed) : '';
     const bandD = guideSet ? bandPolygonD(guideSet.ascLine, guideSet.descLine) : '';
+    const proxyBandD = guideSet
+      ? bandPolygonD(
+          decimatePolyline(guideSet.ascLine, 90),
+          decimatePolyline(guideSet.descLine, 90),
+        )
+      : '';
 
-    return { strap, transformed, transformedD, guideSet, bandD, metrics, localCenter, sampled };
+    return { strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter, sampled };
   }), [straps]);
   const totalSegments = useMemo(
     () => renderData.reduce((sum, r) => sum + Math.max(0, r.transformed.length - 1), 0),
@@ -1110,8 +1128,10 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setActiveId(next.id);
   };
 
-  const NUDGE_MM = 1;
-  const NUDGE_MULT_SHIFT = 5;
+  // Keyboard nudge: smaller increments for precise placement.
+  // Arrow = 0.25mm, Shift+Arrow = 1.0mm.
+  const NUDGE_MM = 0.25;
+  const NUDGE_MULT_SHIFT = 4;
   const NUDGE_COMMIT_IDLE_MS = 90;
 
   useEffect(() => {
@@ -1475,8 +1495,8 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
               <line x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
 
-              {renderData.map(({ strap, transformed, transformedD, guideSet, bandD, metrics }) => {
-                const isSimplifiedForThisStrap = simplify || (dragActive && dragSimplifyStrapId === strap.id);
+              {renderData.map(({ strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics }) => {
+                const isSimplifiedForThisStrap = simplify || interactionActive;
                 // Use paint tick so ref-driven translation repaints without heavy recompute.
                 // eslint-disable-next-line @typescript-eslint/no-unused-expressions
                 dragPaintTick;
@@ -1500,12 +1520,15 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 {isSimplifiedForThisStrap ? (
   guideSet ? (
     <path
-      d={bandD}
+      d={interactionActive ? proxyBandD : bandD}
       fill={strap.color}
       stroke="none"
       vectorEffect="non-scaling-stroke"
       pointerEvents="fill"
-      onPointerDown={beginStrapDrag(strap.id)}
+      onPointerDown={(e) => {
+        if (dragActive) return;
+        beginStrapDrag(strap.id)(e);
+      }}
     />
   ) : transformed.length > 1 ? (
     <path
@@ -1517,20 +1540,25 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       strokeLinejoin="round"
       vectorEffect="non-scaling-stroke"
       pointerEvents="stroke"
-      onPointerDown={beginStrapDrag(strap.id)}
+      onPointerDown={(e) => {
+        if (dragActive) return;
+        beginStrapDrag(strap.id)(e);
+      }}
     />
   ) : null
-) : transformed.length > 1 && (
-  <path
-    d={transformedD}
-    fill="none"
-    stroke={strap.color}
-    strokeWidth={0.9}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    vectorEffect="non-scaling-stroke"
-    pointerEvents="none"
-  />
+) : (
+  transformed.length > 1 ? (
+    <path
+      d={transformedD}
+      fill="none"
+      stroke={strap.color}
+      strokeWidth={0.9}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      vectorEffect="non-scaling-stroke"
+      pointerEvents="none"
+    />
+  ) : null
 )}
                     {!interactionActive && !isSimplifiedForThisStrap && guideSet && (
                       <GuideOverlay
