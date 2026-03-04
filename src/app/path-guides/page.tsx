@@ -1494,7 +1494,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               <line x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
 
               {renderData.map(({ strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics }) => {
-                const isSimplifiedForThisStrap = simplify || (dragActive && dragSimplifyStrapId === strap.id);
+                const isSimplifiedForThisStrap = simplify || interactionActive;
                 // Use paint tick so ref-driven translation repaints without heavy recompute.
                 // eslint-disable-next-line @typescript-eslint/no-unused-expressions
                 dragPaintTick;
@@ -1523,7 +1523,10 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       stroke="none"
       vectorEffect="non-scaling-stroke"
       pointerEvents="fill"
-      onPointerDown={beginStrapDrag(strap.id)}
+      onPointerDown={(e) => {
+        if (dragActive) return;
+        beginStrapDrag(strap.id)(e);
+      }}
     />
   ) : transformed.length > 1 ? (
     <path
@@ -1535,7 +1538,10 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       strokeLinejoin="round"
       vectorEffect="non-scaling-stroke"
       pointerEvents="stroke"
-      onPointerDown={beginStrapDrag(strap.id)}
+      onPointerDown={(e) => {
+        if (dragActive) return;
+        beginStrapDrag(strap.id)(e);
+      }}
     />
   ) : null
 ) : (
