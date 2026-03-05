@@ -1018,12 +1018,30 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       requestScrubPaint();
       return;
     }
-    const finalRot = Math.round((base.rotDeg + live.dRot));
+    const finalRot = Math.round(base.rotDeg + live.dRot);
     const finalScale = base.scalePct * live.dScale;
+    
+    // If nothing actually changed, don't mark dirty and don't write state.
+    // This avoids flipping presets back to "custom" on click-without-move.
+    const rotChanged = finalRot !== base.rotDeg;
+    const scaleChanged = Math.abs(finalScale - base.scalePct) > 1e-6;
+    
+    if (!rotChanged && !scaleChanged) {
+      scrubActiveRef.current = false;
+      scrubStrapIdRef.current = null;
+      scrubBaseRef.current = null;
+      scrubLiveRef.current = null;
+      requestScrubPaint();
+      return;
+    }
+    
     markPresetDirty();
-    setStraps((prev) => prev.map((s) => (
-      s.id === strapId ? { ...s, rotDeg: finalRot, scalePct: finalScale } : s
-    )));
+    setStraps((prev) =>
+      prev.map((s) =>
+        s.id === strapId ? { ...s, rotDeg: finalRot, scalePct: finalScale } : s,
+      ),
+    );
+    
     scrubActiveRef.current = false;
     scrubStrapIdRef.current = null;
     scrubBaseRef.current = null;
