@@ -527,7 +527,7 @@ export default function PathGuidesPage() {
   const [error, setError] = useState<string | null>(null);
   const [dragListId, setDragListId] = useState<string | null>(null);
   const [groups, setGroups] = useState<StrapGroup[]>([]);
-  const [simplify, setSimplify] = useState(true);
+  const [simplify, setSimplify] = useState(false);
   const [showCrossings, setShowCrossings] = useState(true);
   const [activeCrossingId, setActiveCrossingId] = useState<string | null>(null);
   const [crossingsFilter, setCrossingsFilter] = useState<CrossingsFilter>('all');
@@ -877,7 +877,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setView(state.view);
     setZoom(state.zoom);
     setPan(state.pan);
-    setSimplify(state.simplify);
+    setSimplify(state.simplify ?? false);
     setShowCrossings(state.showCrossings);
     setActiveCrossingId(state.activeCrossingId);
     setCrossingsFilter(state.crossingsFilter);
