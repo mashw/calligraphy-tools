@@ -541,6 +541,7 @@ export default function PathGuidesPage() {
   const [dragPaintTick, setDragPaintTick] = useState(0);
   const [scaleInputText, setScaleInputText] = useState('');
   const [nudgePaintTick, setNudgePaintTick] = useState(0);
+  const [scrubPaintTick, setScrubPaintTick] = useState(0);
 
   const [straps, setStraps] = useState<Strap[]>(() => ([applyScriptDefaults({
     id: uid('strap'),
@@ -591,8 +592,14 @@ export default function PathGuidesPage() {
   const nudgeBaseRef = useRef<{ strapId: string; baseOffset: { x: number; y: number }; baseSnapped: boolean } | null>(null);
   const nudgeSnappedRef = useRef<boolean>(false);
 
+  // Live rotation/scale scrubbing (avoid heavy recompute while slider is being dragged)
+  const scrubActiveRef = useRef(false);
+  const scrubStrapIdRef = useRef<string | null>(null);
+  const scrubBaseRef = useRef<{ rotDeg: number; scalePct: number } | null>(null);
+  const scrubLiveRef = useRef<{ dRot: number; dScale: number } | null>(null);
+
   const activeStrap = straps.find((s) => s.id === (activeId ?? straps[0]?.id)) ?? straps[0] ?? null;
-  const interactionActive = dragActive || nudgeActiveRef.current;
+  const interactionActive = dragActive || nudgeActiveRef.current || scrubActiveRef.current;
 
   const decimatePolyline = (pts: { x: number; y: number }[], maxPts: number) => {
     if (pts.length <= maxPts) return pts;
@@ -945,6 +952,64 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setStraps((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   };
 
+  const requestScrubPaint = useCallback(() => {
+    if (!pendingDragPaintRef.current) {
+      pendingDragPaintRef.current = true;
+      requestAnimationFrame(() => {
+        pendingDragPaintRef.current = false;
+        setScrubPaintTick((t) => (t + 1) % 1000000);
+      });
+    }
+  }, []);
+
+  const beginScrubTransform = useCallback((strapId: string) => {
+    const strap = straps.find((s) => s.id === strapId);
+    if (!strap) return;
+    scrubActiveRef.current = true;
+    scrubStrapIdRef.current = strapId;
+    scrubBaseRef.current = { rotDeg: strap.rotDeg, scalePct: strap.scalePct };
+    scrubLiveRef.current = { dRot: 0, dScale: 1 };
+    requestScrubPaint();
+  }, [requestScrubPaint, straps]);
+
+  const updateScrubTransform = useCallback((strapId: string, next: { rotDeg?: number; scalePct?: number }) => {
+    const base = scrubBaseRef.current;
+    if (!base) return;
+    if (scrubStrapIdRef.current !== strapId) return;
+    const rot = next.rotDeg ?? (base.rotDeg + (scrubLiveRef.current?.dRot ?? 0));
+    const scale = next.scalePct ?? (base.scalePct * (scrubLiveRef.current?.dScale ?? 1));
+    const dRot = rot - base.rotDeg;
+    const dScale = base.scalePct > 1e-6 ? (scale / base.scalePct) : 1;
+    scrubLiveRef.current = { dRot, dScale };
+    requestScrubPaint();
+  }, [requestScrubPaint]);
+
+  const commitScrubTransform = useCallback(() => {
+    if (!scrubActiveRef.current) return;
+    const strapId = scrubStrapIdRef.current;
+    const base = scrubBaseRef.current;
+    const live = scrubLiveRef.current;
+    if (!strapId || !base || !live) {
+      scrubActiveRef.current = false;
+      scrubStrapIdRef.current = null;
+      scrubBaseRef.current = null;
+      scrubLiveRef.current = null;
+      requestScrubPaint();
+      return;
+    }
+    const finalRot = Math.round((base.rotDeg + live.dRot));
+    const finalScale = base.scalePct * live.dScale;
+    markPresetDirty();
+    setStraps((prev) => prev.map((s) => (
+      s.id === strapId ? { ...s, rotDeg: finalRot, scalePct: finalScale } : s
+    )));
+    scrubActiveRef.current = false;
+    scrubStrapIdRef.current = null;
+    scrubBaseRef.current = null;
+    scrubLiveRef.current = null;
+    requestScrubPaint();
+  }, [markPresetDirty, requestScrubPaint]);
+
   const applyViewPreset = (next: ViewMode) => {
     setView(next);
     if (next === 'autofit') {
@@ -1056,6 +1121,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       });
     }
   }, []);
+
 
   const onSvgPointerUp: React.PointerEventHandler<SVGSVGElement> = (e) => {
     if (dragRef.current.pointerId === e.pointerId) {
@@ -1495,28 +1561,84 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
               <line x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
 
-              {renderData.map(({ strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics }) => {
+              {renderData.map(({ strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter }) => {
                 const isSimplifiedForThisStrap = simplify || interactionActive;
                 // Use paint tick so ref-driven translation repaints without heavy recompute.
                 // eslint-disable-next-line @typescript-eslint/no-unused-expressions
                 dragPaintTick;
                 // eslint-disable-next-line @typescript-eslint/no-unused-expressions
                 nudgePaintTick;
+                // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+                scrubPaintTick;
                 const live = liveDragTranslateRef.current;
                 const isLive = !!(interactionActive && live && live.strapId === strap.id);
                 const dx = isLive ? live.dx : 0;
                 const dy = isLive ? live.dy : 0;
 
+                const isSelected = activeId === strap.id;
+
+                // Live rotation/scale scrub transform is applied as an SVG transform delta around the strap's world center.
+                // World center for this strap matches the transformPolyline origin: (offset + localCenter).
+                const scrubOnThis = scrubActiveRef.current && scrubStrapIdRef.current === strap.id;
+                const scrub = scrubOnThis ? scrubLiveRef.current : null;
+                const worldCX = strap.offset.x + localCenter.x;
+                const worldCY = strap.offset.y + localCenter.y;
+                const scrubTransform = scrub
+                  ? ` translate(${worldCX} ${worldCY}) rotate(${scrub.dRot}) scale(${scrub.dScale}) translate(${-worldCX} ${-worldCY})`
+                  : '';
+
+                const gTransform = `${dx || dy ? `translate(${dx} ${dy})` : ''}${scrubTransform}`;
+
                 return (
                   <g
                     key={strap.id}
-                    transform={dx || dy ? `translate(${dx} ${dy})` : undefined}
+                    transform={gTransform.trim() ? gTransform : undefined}
                     mask={
                       !interactionActive && !isSimplifiedForThisStrap && underCrossings.get(strap.id)?.length
                         ? `url(#mask-${strap.id})`
                         : undefined
                     }
                   >
+                    {/* Selected indicator: subtle halo that works in both simplify and full guideline view */}
+                    {isSelected && (
+                      isSimplifiedForThisStrap ? (
+                        guideSet ? (
+                          <path
+                            d={(interactionActive ? proxyBandD : bandD) || ''}
+                            fill="none"
+                            stroke="#4f46e5"
+                            strokeWidth={1.2}
+                            opacity={0.55}
+                            vectorEffect="non-scaling-stroke"
+                            pointerEvents="none"
+                          />
+                        ) : transformedD ? (
+                          <path
+                            d={transformedD}
+                            fill="none"
+                            stroke="#4f46e5"
+                            strokeWidth={Math.max(1.2, metrics.bandWidthMM * 0.18)}
+                            opacity={0.55}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            vectorEffect="non-scaling-stroke"
+                            pointerEvents="none"
+                          />
+                        ) : null
+                      ) : transformedD ? (
+                        <path
+                          d={transformedD}
+                          fill="none"
+                          stroke="#4f46e5"
+                          strokeWidth={2.2}
+                          opacity={0.28}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          vectorEffect="non-scaling-stroke"
+                          pointerEvents="none"
+                        />
+                      ) : null
+                    )}
 {isSimplifiedForThisStrap ? (
   guideSet ? (
     <path
@@ -1789,7 +1911,25 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               <div className="grid grid-cols-1 gap-4 select-none">
                 <div>
                   <label className="font-medium text-slate-700">Rotation (°) <span className="text-indigo-600">{activeStrap.rotDeg}°</span></label>
-                  <input type="range" min={-180} max={180} step={1} value={activeStrap.rotDeg} onChange={(e) => updateStrap(activeStrap.id, { rotDeg: Number.parseInt(e.target.value, 10) || 0 })} className="w-full" />
+                  <input
+                    type="range"
+                    min={-180}
+                    max={180}
+                    step={1}
+                    value={activeStrap.rotDeg}
+                    onPointerDown={() => beginScrubTransform(activeStrap.id)}
+                    onPointerUp={() => commitScrubTransform()}
+                    onPointerCancel={() => commitScrubTransform()}
+                    onChange={(e) => {
+                      const nextRot = Number.parseInt(e.target.value, 10) || 0;
+                      if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
+                        updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
+                        return;
+                      }
+                      updateStrap(activeStrap.id, { rotDeg: nextRot });
+                    }}
+                    className="w-full"
+                  />
                 </div>
                 <div>
                   <div className="mb-1 flex items-center gap-2">
@@ -1834,11 +1974,18 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     max={SCALE_MAX_PCT}
                     step={1}
                     value={activeStrap.scalePct}
+                    onPointerDown={() => beginScrubTransform(activeStrap.id)}
+                    onPointerUp={() => commitScrubTransform()}
+                    onPointerCancel={() => commitScrubTransform()}
                     onChange={(e) => {
                       const parsed = Number.parseFloat(e.target.value);
                       const next = Number.isFinite(parsed)
                         ? Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed))
                         : 100;
+                      if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
+                        updateScrubTransform(activeStrap.id, { scalePct: next });
+                        return;
+                      }
                       updateStrap(activeStrap.id, { scalePct: next });
                     }}
                     className="w-full"
