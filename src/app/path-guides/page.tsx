@@ -1971,7 +1971,6 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                           updateStrap(activeStrap.id, { rotDeg: nextRot });
                         }}
                       />
-                      <span className="text-slate-600">°</span>
                     </div>
                   </div>
                   <div className="mt-2 flex items-center gap-3 flex-nowrap">
@@ -2032,7 +2031,6 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                         }}
                         className="w-20 rounded border border-slate-300 px-2 py-0.5 text-indigo-600 tabular-nums"
                       />
-                      <span className="text-xs text-slate-500">%</span>
                     </div>
                   </div>
                   <input
