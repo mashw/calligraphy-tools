@@ -601,6 +601,27 @@ export default function PathGuidesPage() {
   const activeStrap = straps.find((s) => s.id === (activeId ?? straps[0]?.id)) ?? straps[0] ?? null;
   const interactionActive = dragActive || nudgeActiveRef.current || scrubActiveRef.current;
 
+  // While scrubbing, the preview uses an SVG transform delta, but we don't update strap state until commit.
+  // These derived "display" values keep the slider thumb + numbers responsive.
+  const scrubIsForActive =
+    !!activeStrap && scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id && !!scrubBaseRef.current;
+  const displayRotDeg = (() => {
+    if (!activeStrap) return 0;
+    if (!scrubIsForActive) return activeStrap.rotDeg;
+    const base = scrubBaseRef.current!;
+    const live = scrubLiveRef.current;
+    const rot = base.rotDeg + (live?.dRot ?? 0);
+    return Math.round(rot);
+  })();
+  const displayScalePct = (() => {
+    if (!activeStrap) return 100;
+    if (!scrubIsForActive) return activeStrap.scalePct;
+    const base = scrubBaseRef.current!;
+    const live = scrubLiveRef.current;
+    const scale = base.scalePct * (live?.dScale ?? 1);
+    return scale;
+  })();
+
   const decimatePolyline = (pts: { x: number; y: number }[], maxPts: number) => {
     if (pts.length <= maxPts) return pts;
     if (maxPts < 2) return [pts[0], pts[pts.length - 1]];
@@ -1910,36 +1931,60 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
               <div className="grid grid-cols-1 gap-4 select-none">
                 <div>
-                  <label className="font-medium text-slate-700">Rotation (°) <span className="text-indigo-600">{activeStrap.rotDeg}°</span></label>
-                  <input
-                    type="range"
-                    min={-180}
-                    max={180}
-                    step={1}
-                    value={activeStrap.rotDeg}
-                    onPointerDown={() => beginScrubTransform(activeStrap.id)}
-                    onPointerUp={() => commitScrubTransform()}
-                    onPointerCancel={() => commitScrubTransform()}
-                    onChange={(e) => {
-                      const nextRot = Number.parseInt(e.target.value, 10) || 0;
-                      if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
-                        updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
-                        return;
-                      }
-                      updateStrap(activeStrap.id, { rotDeg: nextRot });
-                    }}
-                    className="w-full"
-                  />
+                  <label className="font-medium text-slate-700">Rotation (°)</label>
+                  <div className="mt-1 flex items-center gap-3">
+                    <input
+                      type="number"
+                      className="w-[110px] rounded-lg border border-slate-300 px-2 py-1 text-slate-900"
+                      min={-180}
+                      max={180}
+                      step={1}
+                      value={displayRotDeg}
+                      onFocus={() => beginScrubTransform(activeStrap.id)}
+                      onBlur={() => commitScrubTransform()}
+                      onChange={(e) => {
+                        const parsed = Number.parseInt(e.target.value, 10);
+                        const nextRot = Number.isFinite(parsed) ? Math.max(-180, Math.min(180, parsed)) : 0;
+                        if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
+                          updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
+                          return;
+                        }
+                        updateStrap(activeStrap.id, { rotDeg: nextRot });
+                      }}
+                    />
+                    <div className="flex-1">
+                      <input
+                        type="range"
+                        min={-180}
+                        max={180}
+                        step={1}
+                        value={displayRotDeg}
+                        onPointerDown={() => beginScrubTransform(activeStrap.id)}
+                        onPointerUp={() => commitScrubTransform()}
+                        onPointerCancel={() => commitScrubTransform()}
+                        onChange={(e) => {
+                          const nextRot = Number.parseInt(e.target.value, 10) || 0;
+                          if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
+                            updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
+                            return;
+                          }
+                          updateStrap(activeStrap.id, { rotDeg: nextRot });
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="w-[60px] text-right tabular-nums text-slate-600">{displayRotDeg}°</div>
+                  </div>
                 </div>
                 <div>
                   <div className="mb-1 flex items-center gap-2">
-                    <label className="font-medium text-slate-700">Scale (%)</label>
+                    <label className="font-medium text-slate-700">Scale (%) <span className="text-indigo-600">{Math.round(displayScalePct)}%</span></label>
                     <input
                       type="number"
                       min={SCALE_MIN_PCT}
                       max={SCALE_MAX_PCT}
                       step={1}
-                      value={scaleInputText || String(Math.round(activeStrap.scalePct))}
+                      value={scaleInputText || String(Math.round(displayScalePct))}
                       onChange={(e) => {
                         const raw = e.target.value;
                         setScaleInputText(raw);
@@ -1973,7 +2018,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     min={SCALE_MIN_PCT}
                     max={SCALE_MAX_PCT}
                     step={1}
-                    value={activeStrap.scalePct}
+                    value={displayScalePct}
                     onPointerDown={() => beginScrubTransform(activeStrap.id)}
                     onPointerUp={() => commitScrubTransform()}
                     onPointerCancel={() => commitScrubTransform()}
