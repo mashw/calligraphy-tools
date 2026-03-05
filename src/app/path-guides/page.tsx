@@ -1931,49 +1931,52 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
               <div className="grid grid-cols-1 gap-4 select-none">
                 <div>
-                  <label className="font-medium text-slate-700">Rotation (°)</label>
-                  <div className="mt-1 flex items-center gap-3">
+                  <div className="flex items-center justify-between">
+                    <label className="font-medium text-slate-700">Rotation (°)</label>
+                    <span className="text-indigo-600 tabular-nums">{displayRotDeg}°</span>
+                  </div>
+                  <div className="mt-2 flex items-center gap-3 flex-nowrap">
                     <input
-                      type="number"
-                      className="w-[110px] rounded-lg border border-slate-300 px-2 py-1 text-slate-900"
+                      type="range"
                       min={-180}
                       max={180}
                       step={1}
                       value={displayRotDeg}
-                      onFocus={() => beginScrubTransform(activeStrap.id)}
-                      onBlur={() => commitScrubTransform()}
+                      onPointerDown={() => beginScrubTransform(activeStrap.id)}
+                      onPointerUp={() => commitScrubTransform()}
+                      onPointerCancel={() => commitScrubTransform()}
                       onChange={(e) => {
-                        const parsed = Number.parseInt(e.target.value, 10);
-                        const nextRot = Number.isFinite(parsed) ? Math.max(-180, Math.min(180, parsed)) : 0;
+                        const nextRot = Number.parseInt(e.target.value, 10) || 0;
                         if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
                           updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
                           return;
                         }
                         updateStrap(activeStrap.id, { rotDeg: nextRot });
                       }}
+                      className="w-full"
                     />
-                    <div className="flex-1">
+                    <div className="flex items-center gap-2 shrink-0">
                       <input
-                        type="range"
+                        type="number"
+                        className="w-[72px] rounded-lg border border-slate-300 px-2 py-1 text-slate-900 tabular-nums"
                         min={-180}
                         max={180}
                         step={1}
                         value={displayRotDeg}
-                        onPointerDown={() => beginScrubTransform(activeStrap.id)}
-                        onPointerUp={() => commitScrubTransform()}
-                        onPointerCancel={() => commitScrubTransform()}
+                        onFocus={() => beginScrubTransform(activeStrap.id)}
+                        onBlur={() => commitScrubTransform()}
                         onChange={(e) => {
-                          const nextRot = Number.parseInt(e.target.value, 10) || 0;
+                          const parsed = Number.parseInt(e.target.value, 10);
+                          const nextRot = Number.isFinite(parsed) ? Math.max(-180, Math.min(180, parsed)) : 0;
                           if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
                             updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
                             return;
                           }
                           updateStrap(activeStrap.id, { rotDeg: nextRot });
                         }}
-                        className="w-full"
                       />
+                      <span className="text-slate-600">°</span>
                     </div>
-                    <div className="w-[60px] text-right tabular-nums text-slate-600">{displayRotDeg}°</div>
                   </div>
                 </div>
                 <div>
