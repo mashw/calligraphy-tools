@@ -91,8 +91,10 @@ const PALETTE = ['#5778A4', '#E49444', '#D1615D', '#85B6B2', '#6A9F58', '#E7CA60
 const INSET_CONTROL_BASE = 'w-full border-0 rounded-none px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed';
 const INSET_CONTROL_MM = `${INSET_CONTROL_BASE} pr-10`;
 const INSET_CONTROL_WIDE = `${INSET_CONTROL_BASE} pr-14`;
-const INLINE_NUMERIC_INPUT = 'w-[64px] rounded-md border border-slate-300 px-2 py-1 pr-6 text-indigo-600 tabular-nums';
-const INLINE_NUMERIC_INPUT_WIDE = 'w-[72px] rounded-md border border-slate-300 px-2 py-1 pr-6 text-indigo-600 tabular-nums';
+const INLINE_NUMERIC_INPUT = 'w-[76px] h-8 rounded-md border border-slate-300 pl-2 pr-7 text-sm text-indigo-600 tabular-nums';
+const INLINE_NUMERIC_INPUT_WIDE = 'w-[76px] h-8 rounded-md border border-slate-300 pl-2 pr-7 text-sm text-indigo-600 tabular-nums';
+const INLINE_RESET_BUTTON = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700';
+const INLINE_SLIDER = 'h-2 min-w-0 flex-1 appearance-none rounded-full bg-indigo-100 accent-indigo-600';
 const SCALE_MIN_PCT = 1;
 const SCALE_MAX_PCT = 220;
 
@@ -1954,10 +1956,10 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               )}
 
               <div className="grid grid-cols-1 gap-4 select-none">
-                <div className="flex items-center gap-2 min-w-0 select-none">
-                  <label className="font-medium text-slate-700 shrink-0 min-w-[60px]">Rotation</label>
+                <div className="grid grid-cols-[72px_76px_32px_minmax(0,1fr)] items-center gap-2 min-w-0 select-none">
+                  <label className="font-medium text-slate-700 shrink-0">Rotation</label>
 
-                  <div className="relative shrink-0">
+                  <div className="relative">
                     <input
                       type="number"
                       className={INLINE_NUMERIC_INPUT}
@@ -2003,7 +2005,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                         commitScrubTransform();
                       }}
                     />
-                    <span className="pointer-events-none select-none absolute right-2 top-1 text-[10px] leading-none text-slate-500">
+                    <span className="pointer-events-none select-none absolute right-2 top-1 text-[10px] leading-none text-indigo-400">
                       °
                     </span>
                   </div>
@@ -2014,7 +2016,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       setRotationInputText('');
                       updateStrap(activeStrap.id, { rotDeg: 0 });
                     }}
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-indigo-200 bg-indigo-50 text-indigo-600 hover:text-indigo-700"
+                    className={INLINE_RESET_BUTTON}
                     title="Reset rotation"
                     aria-label="Reset rotation"
                   >
@@ -2038,14 +2040,14 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       }
                       updateStrap(activeStrap.id, { rotDeg: nextRot });
                     }}
-                    className="min-w-0 flex-1"
+                    className={INLINE_SLIDER}
                   />
                 </div>
 
-                <div className="flex items-center gap-2 min-w-0 select-none">
-                  <label className="font-medium text-slate-700 shrink-0 min-w-[44px]">Scale</label>
+                <div className="grid grid-cols-[72px_76px_32px_minmax(0,1fr)] items-center gap-2 min-w-0 select-none">
+                  <label className="font-medium text-slate-700 shrink-0">Scale</label>
 
-                  <div className="relative shrink-0">
+                  <div className="relative">
                     <input
                       type="number"
                       min={SCALE_MIN_PCT}
@@ -2078,7 +2080,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       }}
                       className={INLINE_NUMERIC_INPUT_WIDE}
                     />
-                    <span className="pointer-events-none select-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-500">
+                    <span className="pointer-events-none select-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-indigo-400">
                       %
                     </span>
                   </div>
@@ -2089,7 +2091,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       setScaleInputText('');
                       updateStrap(activeStrap.id, { scalePct: 100 });
                     }}
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-indigo-200 bg-indigo-50 text-indigo-600 hover:text-indigo-700"
+                    className={INLINE_RESET_BUTTON}
                     title="Reset scale"
                     aria-label="Reset scale"
                   >
@@ -2116,7 +2118,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       }
                       updateStrap(activeStrap.id, { scalePct: next });
                     }}
-                    className="min-w-0 flex-1"
+                    className={INLINE_SLIDER}
                   />
                 </div>
               </div>
