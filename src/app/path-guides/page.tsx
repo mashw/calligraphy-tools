@@ -2122,24 +2122,45 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                   />
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                    checked={activeStrap.flip}
-                    onChange={(e) => updateStrap(activeStrap.id, { flip: e.target.checked })}
-                  />
-                  Flip strap
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-800 cursor-pointer select-none">
+                  <span className="font-medium">Mirror path</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={activeStrap.flip}
+                    aria-label="Mirror path"
+                    onClick={() => updateStrap(activeStrap.id, { flip: !activeStrap.flip })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      activeStrap.flip ? 'bg-indigo-600' : 'bg-slate-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        activeStrap.flip ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
                 </label>
-                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                    checked={activeStrap.invertGuides}
-                    onChange={(e) => updateStrap(activeStrap.id, { invertGuides: e.target.checked })}
-                  />
-                  Invert guidelines
+
+                <label className="inline-flex items-center gap-2 text-sm text-slate-800 cursor-pointer select-none">
+                  <span className="font-medium">Invert guidelines</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={activeStrap.invertGuides}
+                    aria-label="Invert guidelines"
+                    onClick={() => updateStrap(activeStrap.id, { invertGuides: !activeStrap.invertGuides })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      activeStrap.invertGuides ? 'bg-indigo-600' : 'bg-slate-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        activeStrap.invertGuides ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
                 </label>
               </div>
             </div>
