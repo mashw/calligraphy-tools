@@ -1951,7 +1951,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 </>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 select-none">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 select-none">
                 <div className="min-w-0">
                   <div className="flex items-center justify-between gap-3 min-w-0">
                     <label className="font-medium text-slate-700 shrink-0">Rotation (°)</label>
@@ -2015,7 +2015,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       </button>
                     </div>
                   </div>
-                  <div className="mt-2 flex items-center gap-3 min-w-0">
+                  <div className="mt-2">
                     <input
                       type="range"
                       min={-180}
@@ -2087,28 +2087,30 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       </button>
                     </div>
                   </div>
-                  <input
-                    type="range"
-                    min={SCALE_MIN_PCT}
-                    max={SCALE_MAX_PCT}
-                    step={1}
-                    value={displayScalePct}
-                    onPointerDown={() => beginScrubTransform(activeStrap.id)}
-                    onPointerUp={() => commitScrubTransform()}
-                    onPointerCancel={() => commitScrubTransform()}
-                    onChange={(e) => {
-                      const parsed = Number.parseFloat(e.target.value);
-                      const next = Number.isFinite(parsed)
-                        ? Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed))
-                        : 100;
-                      if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
-                        updateScrubTransform(activeStrap.id, { scalePct: next });
-                        return;
-                      }
-                      updateStrap(activeStrap.id, { scalePct: next });
-                    }}
-                    className="w-full"
-                  />
+                  <div className="mt-2">
+                    <input
+                      type="range"
+                      min={SCALE_MIN_PCT}
+                      max={SCALE_MAX_PCT}
+                      step={1}
+                      value={displayScalePct}
+                      onPointerDown={() => beginScrubTransform(activeStrap.id)}
+                      onPointerUp={() => commitScrubTransform()}
+                      onPointerCancel={() => commitScrubTransform()}
+                      onChange={(e) => {
+                        const parsed = Number.parseFloat(e.target.value);
+                        const next = Number.isFinite(parsed)
+                          ? Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed))
+                          : 100;
+                        if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
+                          updateScrubTransform(activeStrap.id, { scalePct: next });
+                          return;
+                        }
+                        updateStrap(activeStrap.id, { scalePct: next });
+                      }}
+                      className="w-full"
+                    />
+                  </div>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
