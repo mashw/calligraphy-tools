@@ -1956,7 +1956,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               )}
 
               <div className="grid grid-cols-1 gap-4 select-none">
-                <div className="grid grid-cols-[72px_76px_32px_minmax(0,1fr)] items-center gap-2 min-w-0 select-none">
+                <div className="grid grid-cols-[56px_76px_32px_minmax(0,1fr)] items-center gap-2 min-w-0 select-none">
                   <label className="font-medium text-slate-700 shrink-0">Rotation</label>
 
                   <div className="relative">
@@ -2044,7 +2044,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                   />
                 </div>
 
-                <div className="grid grid-cols-[72px_76px_32px_minmax(0,1fr)] items-center gap-2 min-w-0 select-none">
+                <div className="grid grid-cols-[56px_76px_32px_minmax(0,1fr)] items-center gap-2 min-w-0 select-none">
                   <label className="font-medium text-slate-700 shrink-0">Scale</label>
 
                   <div className="relative">
