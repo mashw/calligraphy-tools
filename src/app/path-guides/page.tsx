@@ -1951,7 +1951,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 </>
               )}
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 select-none">
+              <div className="grid grid-cols-1 gap-4 select-none">
                 <div className="min-w-0">
                   <div className="flex items-center justify-between gap-3 min-w-0">
                     <label className="font-medium text-slate-700 shrink-0">Rotation (°)</label>
