@@ -91,6 +91,8 @@ const PALETTE = ['#5778A4', '#E49444', '#D1615D', '#85B6B2', '#6A9F58', '#E7CA60
 const INSET_CONTROL_BASE = 'w-full border-0 rounded-none px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed';
 const INSET_CONTROL_MM = `${INSET_CONTROL_BASE} pr-10`;
 const INSET_CONTROL_WIDE = `${INSET_CONTROL_BASE} pr-14`;
+const INLINE_NUMERIC_INPUT = 'w-[64px] rounded-md border border-slate-300 px-2 py-1 pr-6 text-indigo-600 tabular-nums';
+const INLINE_NUMERIC_INPUT_WIDE = 'w-[72px] rounded-md border border-slate-300 px-2 py-1 pr-6 text-indigo-600 tabular-nums';
 const SCALE_MIN_PCT = 1;
 const SCALE_MAX_PCT = 220;
 
@@ -1952,165 +1954,170 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               )}
 
               <div className="grid grid-cols-1 gap-4 select-none">
-                <div className="min-w-0">
-                  <div className="flex items-center justify-between gap-3 min-w-0">
-                    <label className="font-medium text-slate-700 shrink-0">Rotation (°)</label>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <input
-                        type="number"
-                        className="w-[72px] rounded-lg border border-slate-300 px-2 py-1 text-indigo-600 tabular-nums"
-                        min={-180}
-                        max={180}
-                        step={1}
-                        value={rotationInputText || String(displayRotDeg)}
-                        onFocus={() => beginScrubTransform(activeStrap.id)}
-                        onPointerDown={() => beginScrubTransform(activeStrap.id)}
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          setRotationInputText(raw);
-                          if (!raw.trim()) return;
-                          const parsed = Number.parseInt(raw, 10);
-                          if (!Number.isFinite(parsed)) return;
-                          const nextRot = Math.max(-180, Math.min(180, parsed));
-                          if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
-                            updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
-                            return;
-                          }
-                          updateStrap(activeStrap.id, { rotDeg: nextRot });
-                        }}
-                        onBlur={(e) => {
-                          const raw = e.target.value.trim();
-                          if (!raw) {
-                            setRotationInputText('');
-                            commitScrubTransform();
-                            return;
-                          }
-                          const parsed = Number.parseInt(raw, 10);
-                          if (!Number.isFinite(parsed)) {
-                            setRotationInputText('');
-                            commitScrubTransform();
-                            return;
-                          }
-                          const nextRot = Math.max(-180, Math.min(180, parsed));
-                          if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
-                            updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
-                          } else {
-                            updateStrap(activeStrap.id, { rotDeg: nextRot });
-                          }
-                          setRotationInputText('');
-                          commitScrubTransform();
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRotationInputText('');
-                          updateStrap(activeStrap.id, { rotDeg: 0 });
-                        }}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-indigo-200 bg-indigo-50 text-indigo-600 hover:text-indigo-700"
-                        title="Reset rotation"
-                        aria-label="Reset rotation"
-                      >
-                        ↺
-                      </button>
-                    </div>
-                  </div>
-                  <div className="mt-2">
+                <div className="flex items-center gap-2 min-w-0 select-none">
+                  <label className="font-medium text-slate-700 shrink-0 min-w-[60px]">Rotation</label>
+
+                  <div className="relative shrink-0">
                     <input
-                      type="range"
+                      type="number"
+                      className={INLINE_NUMERIC_INPUT}
                       min={-180}
                       max={180}
                       step={1}
-                      value={displayRotDeg}
+                      value={rotationInputText || String(displayRotDeg)}
+                      onFocus={() => beginScrubTransform(activeStrap.id)}
                       onPointerDown={() => beginScrubTransform(activeStrap.id)}
-                      onPointerUp={() => commitScrubTransform()}
-                      onPointerCancel={() => commitScrubTransform()}
                       onChange={(e) => {
-                        const nextRot = Number.parseInt(e.target.value, 10) || 0;
+                        const raw = e.target.value;
+                        setRotationInputText(raw);
+                        if (!raw.trim()) return;
+                        const parsed = Number.parseInt(raw, 10);
+                        if (!Number.isFinite(parsed)) return;
+                        const nextRot = Math.max(-180, Math.min(180, parsed));
                         if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
                           updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
                           return;
                         }
                         updateStrap(activeStrap.id, { rotDeg: nextRot });
                       }}
-                      className="w-full"
+                      onBlur={(e) => {
+                        const raw = e.target.value.trim();
+                        if (!raw) {
+                          setRotationInputText('');
+                          commitScrubTransform();
+                          return;
+                        }
+                        const parsed = Number.parseInt(raw, 10);
+                        if (!Number.isFinite(parsed)) {
+                          setRotationInputText('');
+                          commitScrubTransform();
+                          return;
+                        }
+                        const nextRot = Math.max(-180, Math.min(180, parsed));
+                        if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
+                          updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
+                        } else {
+                          updateStrap(activeStrap.id, { rotDeg: nextRot });
+                        }
+                        setRotationInputText('');
+                        commitScrubTransform();
+                      }}
                     />
+                    <span className="pointer-events-none select-none absolute right-2 top-1 text-[10px] leading-none text-slate-500">
+                      °
+                    </span>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRotationInputText('');
+                      updateStrap(activeStrap.id, { rotDeg: 0 });
+                    }}
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-indigo-200 bg-indigo-50 text-indigo-600 hover:text-indigo-700"
+                    title="Reset rotation"
+                    aria-label="Reset rotation"
+                  >
+                    ↺
+                  </button>
+
+                  <input
+                    type="range"
+                    min={-180}
+                    max={180}
+                    step={1}
+                    value={displayRotDeg}
+                    onPointerDown={() => beginScrubTransform(activeStrap.id)}
+                    onPointerUp={() => commitScrubTransform()}
+                    onPointerCancel={() => commitScrubTransform()}
+                    onChange={(e) => {
+                      const nextRot = Number.parseInt(e.target.value, 10) || 0;
+                      if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
+                        updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
+                        return;
+                      }
+                      updateStrap(activeStrap.id, { rotDeg: nextRot });
+                    }}
+                    className="min-w-0 flex-1"
+                  />
                 </div>
-                <div className="min-w-0">
-                  <div className="flex items-center justify-between gap-3 min-w-0">
-                    <label className="font-medium text-slate-700 shrink-0">Scale (%)</label>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <input
-                        type="number"
-                        min={SCALE_MIN_PCT}
-                        max={SCALE_MAX_PCT}
-                        step={1}
-                        value={scaleInputText || String(Math.round(displayScalePct))}
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          setScaleInputText(raw);
-                          if (!raw.trim()) return;
-                          const parsed = Number.parseFloat(raw);
-                          if (!Number.isFinite(parsed)) return;
-                          const next = Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed));
-                          updateStrap(activeStrap.id, { scalePct: next });
-                        }}
-                        onBlur={(e) => {
-                          const raw = e.target.value.trim();
-                          if (!raw) {
-                            setScaleInputText('');
-                            return;
-                          }
-                          const parsed = Number.parseFloat(raw);
-                          if (!Number.isFinite(parsed)) {
-                            setScaleInputText('');
-                            return;
-                          }
-                          const next = Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed));
-                          updateStrap(activeStrap.id, { scalePct: next });
-                          setScaleInputText('');
-                        }}
-                        className="w-20 rounded border border-slate-300 px-2 py-0.5 text-indigo-600 tabular-nums"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setScaleInputText('');
-                          updateStrap(activeStrap.id, { scalePct: 100 });
-                        }}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-indigo-200 bg-indigo-50 text-indigo-600 hover:text-indigo-700"
-                        title="Reset scale"
-                        aria-label="Reset scale"
-                      >
-                        ↺
-                      </button>
-                    </div>
-                  </div>
-                  <div className="mt-2">
+
+                <div className="flex items-center gap-2 min-w-0 select-none">
+                  <label className="font-medium text-slate-700 shrink-0 min-w-[44px]">Scale</label>
+
+                  <div className="relative shrink-0">
                     <input
-                      type="range"
+                      type="number"
                       min={SCALE_MIN_PCT}
                       max={SCALE_MAX_PCT}
                       step={1}
-                      value={displayScalePct}
-                      onPointerDown={() => beginScrubTransform(activeStrap.id)}
-                      onPointerUp={() => commitScrubTransform()}
-                      onPointerCancel={() => commitScrubTransform()}
+                      value={scaleInputText || String(Math.round(displayScalePct))}
                       onChange={(e) => {
-                        const parsed = Number.parseFloat(e.target.value);
-                        const next = Number.isFinite(parsed)
-                          ? Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed))
-                          : 100;
-                        if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
-                          updateScrubTransform(activeStrap.id, { scalePct: next });
-                          return;
-                        }
+                        const raw = e.target.value;
+                        setScaleInputText(raw);
+                        if (!raw.trim()) return;
+                        const parsed = Number.parseFloat(raw);
+                        if (!Number.isFinite(parsed)) return;
+                        const next = Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed));
                         updateStrap(activeStrap.id, { scalePct: next });
                       }}
-                      className="w-full"
+                      onBlur={(e) => {
+                        const raw = e.target.value.trim();
+                        if (!raw) {
+                          setScaleInputText('');
+                          return;
+                        }
+                        const parsed = Number.parseFloat(raw);
+                        if (!Number.isFinite(parsed)) {
+                          setScaleInputText('');
+                          return;
+                        }
+                        const next = Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed));
+                        updateStrap(activeStrap.id, { scalePct: next });
+                        setScaleInputText('');
+                      }}
+                      className={INLINE_NUMERIC_INPUT_WIDE}
                     />
+                    <span className="pointer-events-none select-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-500">
+                      %
+                    </span>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScaleInputText('');
+                      updateStrap(activeStrap.id, { scalePct: 100 });
+                    }}
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-indigo-200 bg-indigo-50 text-indigo-600 hover:text-indigo-700"
+                    title="Reset scale"
+                    aria-label="Reset scale"
+                  >
+                    ↺
+                  </button>
+
+                  <input
+                    type="range"
+                    min={SCALE_MIN_PCT}
+                    max={SCALE_MAX_PCT}
+                    step={1}
+                    value={displayScalePct}
+                    onPointerDown={() => beginScrubTransform(activeStrap.id)}
+                    onPointerUp={() => commitScrubTransform()}
+                    onPointerCancel={() => commitScrubTransform()}
+                    onChange={(e) => {
+                      const parsed = Number.parseFloat(e.target.value);
+                      const next = Number.isFinite(parsed)
+                        ? Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed))
+                        : 100;
+                      if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
+                        updateScrubTransform(activeStrap.id, { scalePct: next });
+                        return;
+                      }
+                      updateStrap(activeStrap.id, { scalePct: next });
+                    }}
+                    className="min-w-0 flex-1"
+                  />
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
