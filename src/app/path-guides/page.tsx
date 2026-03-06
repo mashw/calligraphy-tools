@@ -91,6 +91,10 @@ const PALETTE = ['#5778A4', '#E49444', '#D1615D', '#85B6B2', '#6A9F58', '#E7CA60
 const INSET_CONTROL_BASE = 'w-full border-0 rounded-none px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed';
 const INSET_CONTROL_MM = `${INSET_CONTROL_BASE} pr-10`;
 const INSET_CONTROL_WIDE = `${INSET_CONTROL_BASE} pr-14`;
+const INLINE_NUMERIC_INPUT = 'w-[76px] h-8 rounded-md border border-slate-300 pl-2 pr-7 text-sm text-indigo-600 tabular-nums';
+const INLINE_NUMERIC_INPUT_WIDE = 'w-[76px] h-8 rounded-md border border-slate-300 pl-2 pr-7 text-sm text-indigo-600 tabular-nums';
+const INLINE_RESET_BUTTON = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700';
+const INLINE_SLIDER = 'h-2 min-w-0 flex-1 appearance-none rounded-full bg-indigo-100 accent-indigo-600';
 const SCALE_MIN_PCT = 1;
 const SCALE_MAX_PCT = 220;
 
@@ -520,14 +524,14 @@ export default function PathGuidesPage() {
   }, [orientation, paper]);
   const centerX = box.w / 2;
   const centerY = box.h / 2;
-  const [view, setView] = useState<ViewMode>('autofit');
+  const [view, setView] = useState<ViewMode>('fullpage');
   const [zoom, setZoom] = useState(1.35);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragListId, setDragListId] = useState<string | null>(null);
   const [groups, setGroups] = useState<StrapGroup[]>([]);
-  const [simplify, setSimplify] = useState(false);
+  const [simplify, setSimplify] = useState(true);
   const [showCrossings, setShowCrossings] = useState(true);
   const [activeCrossingId, setActiveCrossingId] = useState<string | null>(null);
   const [crossingsFilter, setCrossingsFilter] = useState<CrossingsFilter>('all');
@@ -540,6 +544,7 @@ export default function PathGuidesPage() {
   const previewSimplify = simplify || dragActive;
   const [dragPaintTick, setDragPaintTick] = useState(0);
   const [scaleInputText, setScaleInputText] = useState('');
+  const [rotationInputText, setRotationInputText] = useState('');
   const [nudgePaintTick, setNudgePaintTick] = useState(0);
   const [scrubPaintTick, setScrubPaintTick] = useState(0);
 
@@ -877,7 +882,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setView(state.view);
     setZoom(state.zoom);
     setPan(state.pan);
-    setSimplify(state.simplify ?? false);
+    setSimplify(state.simplify);
     setShowCrossings(state.showCrossings);
     setActiveCrossingId(state.activeCrossingId);
     setCrossingsFilter(state.crossingsFilter);
@@ -889,6 +894,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setError(null);
     setDragListId(null);
     setScaleInputText('');
+    setRotationInputText('');
     setDragSimplifyStrapId(null);
     dragRef.current = { mode: 'none', pointerId: -1, startClient: { x: 0, y: 0 }, startPan: { x: 0, y: 0 } };
     liveDragTranslateRef.current = null;
@@ -1899,14 +1905,16 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
               {activeStrap.script === 'Copperplate' ? (
                 <>
-                  <InsetLabeledField label="X-height" rightAdornment="mm">
-                    <input type="number" min={0.5} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.xHeightMMText ?? '6'} onChange={(e) => updateStrap(activeStrap.id, { xHeightMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
-                  </InsetLabeledField>
-                  <InsetLabeledField label="Guideline ratio (desc : x : asc)">
-                    <select className={INSET_CONTROL_BASE} value={activeStrap.copperplateRatioPreset ?? '3:2:3'} onChange={(e) => updateStrap(activeStrap.id, { copperplateRatioPreset: e.target.value as CopperplateRatioPreset })}>
-                      <option value="3:2:3">3 : 2 : 3</option><option value="2:1:2">2 : 1 : 2</option><option value="1:1:1">1 : 1 : 1</option><option value="custom">Custom</option>
-                    </select>
-                  </InsetLabeledField>
+                  <div className="grid grid-cols-2 gap-2">
+                    <InsetLabeledField label="X-height" rightAdornment="mm">
+                      <input type="number" min={0.5} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.xHeightMMText ?? '6'} onChange={(e) => updateStrap(activeStrap.id, { xHeightMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
+                    </InsetLabeledField>
+                    <InsetLabeledField label="Guideline ratio">
+                      <select className={INSET_CONTROL_BASE} value={activeStrap.copperplateRatioPreset ?? '3:2:3'} onChange={(e) => updateStrap(activeStrap.id, { copperplateRatioPreset: e.target.value as CopperplateRatioPreset })}>
+                        <option value="3:2:3">3 : 2 : 3</option><option value="2:1:2">2 : 1 : 2</option><option value="1:1:1">1 : 1 : 1</option><option value="custom">Custom</option>
+                      </select>
+                    </InsetLabeledField>
+                  </div>
                   {(activeStrap.copperplateRatioPreset ?? '3:2:3') === 'custom' && (
                     <div className="grid grid-cols-3 gap-2">
                       <InsetLabeledField label="Desc units">
@@ -1948,91 +1956,148 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               )}
 
               <div className="grid grid-cols-1 gap-4 select-none">
-                <div>
-                  <div className="flex items-center justify-between gap-3">
-                    <label className="font-medium text-slate-700 shrink-0">Rotation (°)</label>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <input
-                        type="number"
-                        className="w-[72px] rounded-lg border border-slate-300 px-2 py-1 text-indigo-600 tabular-nums"
-                        min={-180}
-                        max={180}
-                        step={1}
-                        value={displayRotDeg}
-                        onFocus={() => beginScrubTransform(activeStrap.id)}
-                        onBlur={() => commitScrubTransform()}
-                        onChange={(e) => {
-                          const parsed = Number.parseInt(e.target.value, 10);
-                          const nextRot = Number.isFinite(parsed) ? Math.max(-180, Math.min(180, parsed)) : 0;
-                          if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
-                            updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
-                            return;
-                          }
-                          updateStrap(activeStrap.id, { rotDeg: nextRot });
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-2 flex items-center gap-3 flex-nowrap">
+                <div className="grid grid-cols-[56px_76px_32px_minmax(0,1fr)] items-center gap-2 min-w-0 select-none">
+                  <label className="font-medium text-slate-700 shrink-0">Rotation</label>
+
+                  <div className="relative">
                     <input
-                      type="range"
+                      type="number"
+                      className={INLINE_NUMERIC_INPUT}
                       min={-180}
                       max={180}
                       step={1}
-                      value={displayRotDeg}
+                      value={rotationInputText || String(displayRotDeg)}
+                      onFocus={() => beginScrubTransform(activeStrap.id)}
                       onPointerDown={() => beginScrubTransform(activeStrap.id)}
-                      onPointerUp={() => commitScrubTransform()}
-                      onPointerCancel={() => commitScrubTransform()}
                       onChange={(e) => {
-                        const nextRot = Number.parseInt(e.target.value, 10) || 0;
+                        const raw = e.target.value;
+                        setRotationInputText(raw);
+                        if (!raw.trim()) return;
+                        const parsed = Number.parseInt(raw, 10);
+                        if (!Number.isFinite(parsed)) return;
+                        const nextRot = Math.max(-180, Math.min(180, parsed));
                         if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
                           updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
                           return;
                         }
                         updateStrap(activeStrap.id, { rotDeg: nextRot });
                       }}
-                      className="w-full"
+                      onBlur={(e) => {
+                        const raw = e.target.value.trim();
+                        if (!raw) {
+                          setRotationInputText('');
+                          commitScrubTransform();
+                          return;
+                        }
+                        const parsed = Number.parseInt(raw, 10);
+                        if (!Number.isFinite(parsed)) {
+                          setRotationInputText('');
+                          commitScrubTransform();
+                          return;
+                        }
+                        const nextRot = Math.max(-180, Math.min(180, parsed));
+                        if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
+                          updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
+                        } else {
+                          updateStrap(activeStrap.id, { rotDeg: nextRot });
+                        }
+                        setRotationInputText('');
+                        commitScrubTransform();
+                      }}
                     />
+                    <span className="pointer-events-none select-none absolute right-2 top-1 text-[10px] leading-none text-indigo-400">
+                      °
+                    </span>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRotationInputText('');
+                      updateStrap(activeStrap.id, { rotDeg: 0 });
+                    }}
+                    className={INLINE_RESET_BUTTON}
+                    title="Reset rotation"
+                    aria-label="Reset rotation"
+                  >
+                    ↺
+                  </button>
+
+                  <input
+                    type="range"
+                    min={-180}
+                    max={180}
+                    step={1}
+                    value={displayRotDeg}
+                    onPointerDown={() => beginScrubTransform(activeStrap.id)}
+                    onPointerUp={() => commitScrubTransform()}
+                    onPointerCancel={() => commitScrubTransform()}
+                    onChange={(e) => {
+                      const nextRot = Number.parseInt(e.target.value, 10) || 0;
+                      if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
+                        updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
+                        return;
+                      }
+                      updateStrap(activeStrap.id, { rotDeg: nextRot });
+                    }}
+                    className={INLINE_SLIDER}
+                  />
                 </div>
-                <div>
-                  <div className="flex items-center justify-between gap-3">
-                    <label className="font-medium text-slate-700 shrink-0">Scale (%)</label>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <input
-                        type="number"
-                        min={SCALE_MIN_PCT}
-                        max={SCALE_MAX_PCT}
-                        step={1}
-                        value={scaleInputText || String(Math.round(displayScalePct))}
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          setScaleInputText(raw);
-                          if (!raw.trim()) return;
-                          const parsed = Number.parseFloat(raw);
-                          if (!Number.isFinite(parsed)) return;
-                          const next = Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed));
-                          updateStrap(activeStrap.id, { scalePct: next });
-                        }}
-                        onBlur={(e) => {
-                          const raw = e.target.value.trim();
-                          if (!raw) {
-                            setScaleInputText('');
-                            return;
-                          }
-                          const parsed = Number.parseFloat(raw);
-                          if (!Number.isFinite(parsed)) {
-                            setScaleInputText('');
-                            return;
-                          }
-                          const next = Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed));
-                          updateStrap(activeStrap.id, { scalePct: next });
+
+                <div className="grid grid-cols-[56px_76px_32px_minmax(0,1fr)] items-center gap-2 min-w-0 select-none">
+                  <label className="font-medium text-slate-700 shrink-0">Scale</label>
+
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={SCALE_MIN_PCT}
+                      max={SCALE_MAX_PCT}
+                      step={1}
+                      value={scaleInputText || String(Math.round(displayScalePct))}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        setScaleInputText(raw);
+                        if (!raw.trim()) return;
+                        const parsed = Number.parseFloat(raw);
+                        if (!Number.isFinite(parsed)) return;
+                        const next = Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed));
+                        updateStrap(activeStrap.id, { scalePct: next });
+                      }}
+                      onBlur={(e) => {
+                        const raw = e.target.value.trim();
+                        if (!raw) {
                           setScaleInputText('');
-                        }}
-                        className="w-20 rounded border border-slate-300 px-2 py-0.5 text-indigo-600 tabular-nums"
-                      />
-                    </div>
+                          return;
+                        }
+                        const parsed = Number.parseFloat(raw);
+                        if (!Number.isFinite(parsed)) {
+                          setScaleInputText('');
+                          return;
+                        }
+                        const next = Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed));
+                        updateStrap(activeStrap.id, { scalePct: next });
+                        setScaleInputText('');
+                      }}
+                      className={INLINE_NUMERIC_INPUT_WIDE}
+                    />
+                    <span className="pointer-events-none select-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-indigo-400">
+                      %
+                    </span>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScaleInputText('');
+                      updateStrap(activeStrap.id, { scalePct: 100 });
+                    }}
+                    className={INLINE_RESET_BUTTON}
+                    title="Reset scale"
+                    aria-label="Reset scale"
+                  >
+                    ↺
+                  </button>
+
                   <input
                     type="range"
                     min={SCALE_MIN_PCT}
@@ -2053,29 +2118,49 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       }
                       updateStrap(activeStrap.id, { scalePct: next });
                     }}
-                    className="w-full"
+                    className={INLINE_SLIDER}
                   />
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <button onClick={() => updateStrap(activeStrap.id, { rotDeg: 0, scalePct: 100 })} className="px-2 py-1 rounded border border-slate-300">Reset rotation &amp; scale</button>
-                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                    checked={activeStrap.flip}
-                    onChange={(e) => updateStrap(activeStrap.id, { flip: e.target.checked })}
-                  />
-                  Flip strap
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-800 cursor-pointer select-none">
+                  <span className="font-medium">Mirror path</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={activeStrap.flip}
+                    aria-label="Mirror path"
+                    onClick={() => updateStrap(activeStrap.id, { flip: !activeStrap.flip })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      activeStrap.flip ? 'bg-indigo-600' : 'bg-slate-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        activeStrap.flip ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
                 </label>
-                <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                    checked={activeStrap.invertGuides}
-                    onChange={(e) => updateStrap(activeStrap.id, { invertGuides: e.target.checked })}
-                  />
-                  Invert guidelines
+
+                <label className="inline-flex items-center gap-2 text-sm text-slate-800 cursor-pointer select-none">
+                  <span className="font-medium">Invert guidelines</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={activeStrap.invertGuides}
+                    aria-label="Invert guidelines"
+                    onClick={() => updateStrap(activeStrap.id, { invertGuides: !activeStrap.invertGuides })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      activeStrap.invertGuides ? 'bg-indigo-600' : 'bg-slate-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        activeStrap.invertGuides ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
                 </label>
               </div>
             </div>
