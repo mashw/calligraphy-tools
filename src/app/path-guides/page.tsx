@@ -1949,9 +1949,38 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
               <div className="grid grid-cols-1 gap-4 select-none">
                 <div>
-                  <div className="flex items-center justify-between">
-                    <label className="font-medium text-slate-700">Rotation (°)</label>
-                    <span className="text-indigo-600 tabular-nums">{displayRotDeg}°</span>
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="font-medium text-slate-700 shrink-0">Rotation (°)</label>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <input
+                        type="number"
+                        className="w-[72px] rounded-lg border border-slate-300 px-2 py-1 text-indigo-600 tabular-nums"
+                        min={-180}
+                        max={180}
+                        step={1}
+                        value={displayRotDeg}
+                        onFocus={() => beginScrubTransform(activeStrap.id)}
+                        onBlur={() => commitScrubTransform()}
+                        onChange={(e) => {
+                          const parsed = Number.parseInt(e.target.value, 10);
+                          const nextRot = Number.isFinite(parsed) ? Math.max(-180, Math.min(180, parsed)) : 0;
+                          if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
+                            updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
+                            return;
+                          }
+                          updateStrap(activeStrap.id, { rotDeg: nextRot });
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => updateStrap(activeStrap.id, { rotDeg: 0 })}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-indigo-200 bg-indigo-50 text-indigo-600 hover:text-indigo-700"
+                        title="Reset rotation"
+                        aria-label="Reset rotation"
+                      >
+                        ↺
+                      </button>
+                    </div>
                   </div>
                   <div className="mt-2 flex items-center gap-3 flex-nowrap">
                     <input
@@ -1973,66 +2002,57 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       }}
                       className="w-full"
                     />
-                    <div className="flex items-center gap-2 shrink-0">
-                      <input
-                        type="number"
-                        className="w-[72px] rounded-lg border border-slate-300 px-2 py-1 text-slate-900 tabular-nums"
-                        min={-180}
-                        max={180}
-                        step={1}
-                        value={displayRotDeg}
-                        onFocus={() => beginScrubTransform(activeStrap.id)}
-                        onBlur={() => commitScrubTransform()}
-                        onChange={(e) => {
-                          const parsed = Number.parseInt(e.target.value, 10);
-                          const nextRot = Number.isFinite(parsed) ? Math.max(-180, Math.min(180, parsed)) : 0;
-                          if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
-                            updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
-                            return;
-                          }
-                          updateStrap(activeStrap.id, { rotDeg: nextRot });
-                        }}
-                      />
-                      <span className="text-slate-600">°</span>
-                    </div>
                   </div>
                 </div>
                 <div>
-                  <div className="mb-1 flex items-center gap-2">
-                    <label className="font-medium text-slate-700">Scale (%) <span className="text-indigo-600">{Math.round(displayScalePct)}%</span></label>
-                    <input
-                      type="number"
-                      min={SCALE_MIN_PCT}
-                      max={SCALE_MAX_PCT}
-                      step={1}
-                      value={scaleInputText || String(Math.round(displayScalePct))}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        setScaleInputText(raw);
-                        if (!raw.trim()) return;
-                        const parsed = Number.parseFloat(raw);
-                        if (!Number.isFinite(parsed)) return;
-                        const next = Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed));
-                        updateStrap(activeStrap.id, { scalePct: next });
-                      }}
-                      onBlur={(e) => {
-                        const raw = e.target.value.trim();
-                        if (!raw) {
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="font-medium text-slate-700 shrink-0">Scale (%)</label>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <input
+                        type="number"
+                        min={SCALE_MIN_PCT}
+                        max={SCALE_MAX_PCT}
+                        step={1}
+                        value={scaleInputText || String(Math.round(displayScalePct))}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          setScaleInputText(raw);
+                          if (!raw.trim()) return;
+                          const parsed = Number.parseFloat(raw);
+                          if (!Number.isFinite(parsed)) return;
+                          const next = Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed));
+                          updateStrap(activeStrap.id, { scalePct: next });
+                        }}
+                        onBlur={(e) => {
+                          const raw = e.target.value.trim();
+                          if (!raw) {
+                            setScaleInputText('');
+                            return;
+                          }
+                          const parsed = Number.parseFloat(raw);
+                          if (!Number.isFinite(parsed)) {
+                            setScaleInputText('');
+                            return;
+                          }
+                          const next = Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed));
+                          updateStrap(activeStrap.id, { scalePct: next });
                           setScaleInputText('');
-                          return;
-                        }
-                        const parsed = Number.parseFloat(raw);
-                        if (!Number.isFinite(parsed)) {
+                        }}
+                        className="w-20 rounded border border-slate-300 px-2 py-0.5 text-indigo-600 tabular-nums"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
                           setScaleInputText('');
-                          return;
-                        }
-                        const next = Math.max(SCALE_MIN_PCT, Math.min(SCALE_MAX_PCT, parsed));
-                        updateStrap(activeStrap.id, { scalePct: next });
-                        setScaleInputText('');
-                      }}
-                      className="w-20 rounded border border-slate-300 px-2 py-0.5 text-sm"
-                    />
-                    <span className="text-xs text-slate-500">%</span>
+                          updateStrap(activeStrap.id, { scalePct: 100 });
+                        }}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-indigo-200 bg-indigo-50 text-indigo-600 hover:text-indigo-700"
+                        title="Reset scale"
+                        aria-label="Reset scale"
+                      >
+                        ↺
+                      </button>
+                    </div>
                   </div>
                   <input
                     type="range"
@@ -2059,7 +2079,6 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <button onClick={() => updateStrap(activeStrap.id, { rotDeg: 0, scalePct: 100 })} className="px-2 py-1 rounded border border-slate-300">Reset rotation &amp; scale</button>
                 <label className="inline-flex items-center gap-2 text-sm text-slate-800">
                   <input
                     type="checkbox"
