@@ -540,6 +540,7 @@ export default function PathGuidesPage() {
   const previewSimplify = simplify || dragActive;
   const [dragPaintTick, setDragPaintTick] = useState(0);
   const [scaleInputText, setScaleInputText] = useState('');
+  const [rotationInputText, setRotationInputText] = useState('');
   const [nudgePaintTick, setNudgePaintTick] = useState(0);
   const [scrubPaintTick, setScrubPaintTick] = useState(0);
 
@@ -889,6 +890,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setError(null);
     setDragListId(null);
     setScaleInputText('');
+    setRotationInputText('');
     setDragSimplifyStrapId(null);
     dragRef.current = { mode: 'none', pointerId: -1, startClient: { x: 0, y: 0 }, startPan: { x: 0, y: 0 } };
     liveDragTranslateRef.current = null;
@@ -1899,14 +1901,16 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
               {activeStrap.script === 'Copperplate' ? (
                 <>
-                  <InsetLabeledField label="X-height" rightAdornment="mm">
-                    <input type="number" min={0.5} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.xHeightMMText ?? '6'} onChange={(e) => updateStrap(activeStrap.id, { xHeightMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
-                  </InsetLabeledField>
-                  <InsetLabeledField label="Guideline ratio (desc : x : asc)">
-                    <select className={INSET_CONTROL_BASE} value={activeStrap.copperplateRatioPreset ?? '3:2:3'} onChange={(e) => updateStrap(activeStrap.id, { copperplateRatioPreset: e.target.value as CopperplateRatioPreset })}>
-                      <option value="3:2:3">3 : 2 : 3</option><option value="2:1:2">2 : 1 : 2</option><option value="1:1:1">1 : 1 : 1</option><option value="custom">Custom</option>
-                    </select>
-                  </InsetLabeledField>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <InsetLabeledField label="X-height" rightAdornment="mm">
+                      <input type="number" min={0.5} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.xHeightMMText ?? '6'} onChange={(e) => updateStrap(activeStrap.id, { xHeightMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
+                    </InsetLabeledField>
+                    <InsetLabeledField label="Guideline ratio">
+                      <select className={INSET_CONTROL_BASE} value={activeStrap.copperplateRatioPreset ?? '3:2:3'} onChange={(e) => updateStrap(activeStrap.id, { copperplateRatioPreset: e.target.value as CopperplateRatioPreset })}>
+                        <option value="3:2:3">3 : 2 : 3</option><option value="2:1:2">2 : 1 : 2</option><option value="1:1:1">1 : 1 : 1</option><option value="custom">Custom</option>
+                      </select>
+                    </InsetLabeledField>
+                  </div>
                   {(activeStrap.copperplateRatioPreset ?? '3:2:3') === 'custom' && (
                     <div className="grid grid-cols-3 gap-2">
                       <InsetLabeledField label="Desc units">
@@ -1958,22 +1962,51 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                         min={-180}
                         max={180}
                         step={1}
-                        value={displayRotDeg}
+                        value={rotationInputText || String(displayRotDeg)}
                         onFocus={() => beginScrubTransform(activeStrap.id)}
-                        onBlur={() => commitScrubTransform()}
+                        onPointerDown={() => beginScrubTransform(activeStrap.id)}
                         onChange={(e) => {
-                          const parsed = Number.parseInt(e.target.value, 10);
-                          const nextRot = Number.isFinite(parsed) ? Math.max(-180, Math.min(180, parsed)) : 0;
+                          const raw = e.target.value;
+                          setRotationInputText(raw);
+                          if (!raw.trim()) return;
+                          const parsed = Number.parseInt(raw, 10);
+                          if (!Number.isFinite(parsed)) return;
+                          const nextRot = Math.max(-180, Math.min(180, parsed));
                           if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
                             updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
                             return;
                           }
                           updateStrap(activeStrap.id, { rotDeg: nextRot });
                         }}
+                        onBlur={(e) => {
+                          const raw = e.target.value.trim();
+                          if (!raw) {
+                            setRotationInputText('');
+                            commitScrubTransform();
+                            return;
+                          }
+                          const parsed = Number.parseInt(raw, 10);
+                          if (!Number.isFinite(parsed)) {
+                            setRotationInputText('');
+                            commitScrubTransform();
+                            return;
+                          }
+                          const nextRot = Math.max(-180, Math.min(180, parsed));
+                          if (scrubActiveRef.current && scrubStrapIdRef.current === activeStrap.id) {
+                            updateScrubTransform(activeStrap.id, { rotDeg: nextRot });
+                          } else {
+                            updateStrap(activeStrap.id, { rotDeg: nextRot });
+                          }
+                          setRotationInputText('');
+                          commitScrubTransform();
+                        }}
                       />
                       <button
                         type="button"
-                        onClick={() => updateStrap(activeStrap.id, { rotDeg: 0 })}
+                        onClick={() => {
+                          setRotationInputText('');
+                          updateStrap(activeStrap.id, { rotDeg: 0 });
+                        }}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-indigo-200 bg-indigo-50 text-indigo-600 hover:text-indigo-700"
                         title="Reset rotation"
                         aria-label="Reset rotation"
