@@ -87,6 +87,9 @@ const RELEASE_MM = 10;
 const CROSS_EPS_MM = 1.2;
 const CROSSING_MAX_SEGMENTS = 2800;
 const FIT_MARGIN_MM = 12;
+const GUIDE_CHAIN_ENDPOINT_TOL_MM = 1.5;
+const GUIDE_CHAIN_CLOSED_TOL_MM = 0.5;
+const GUIDE_CHAIN_TANGENT_OPPOSITION_MAX_DOT = -0.5;
 const PALETTE = ['#5778A4', '#E49444', '#D1615D', '#85B6B2', '#6A9F58', '#E7CA60', '#A87C9F', '#F1A2A9', '#967662', '#B8B0AC'];
 const INSET_CONTROL_BASE = 'w-full border-0 rounded-none px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed';
 const INSET_CONTROL_MM = `${INSET_CONTROL_BASE} pr-10`;
@@ -218,6 +221,168 @@ const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) 
       || left.crossing.id.localeCompare(right.crossing.id)
     ))
     .map((entry) => entry.crossing.id);
+};
+
+type EndpointSide = 'start' | 'end';
+type EndpointRef = { strapId: string; side: EndpointSide };
+type ChainMeta = { reversed: boolean; offsetMM: number };
+
+const endpointKey = (ref: EndpointRef) => `${ref.strapId}:${ref.side}`;
+
+const lengthOfPolyline = (pts: Pt[]) => {
+  let total = 0;
+  for (let i = 1; i < pts.length; i += 1) {
+    total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+  }
+  return total;
+};
+
+const normalize = (dx: number, dy: number) => {
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return null;
+  return { x: dx / len, y: dy / len };
+};
+
+const isOpenPolyline = (pts: Pt[]) => {
+  if (pts.length < 3) return false;
+  return Math.hypot(pts[0].x - pts[pts.length - 1].x, pts[0].y - pts[pts.length - 1].y) > GUIDE_CHAIN_CLOSED_TOL_MM;
+};
+
+const endpointPoint = (pts: Pt[], side: EndpointSide) => (side === 'start' ? pts[0] : pts[pts.length - 1]);
+
+const endpointInwardTangent = (pts: Pt[], side: EndpointSide) => {
+  if (pts.length < 2) return null;
+  if (side === 'start') {
+    const origin = pts[0];
+    for (let i = 1; i < pts.length; i += 1) {
+      const v = normalize(pts[i].x - origin.x, pts[i].y - origin.y);
+      if (v) return v;
+    }
+    return null;
+  }
+
+  const origin = pts[pts.length - 1];
+  for (let i = pts.length - 2; i >= 0; i -= 1) {
+    const v = normalize(pts[i].x - origin.x, pts[i].y - origin.y);
+    if (v) return v;
+  }
+  return null;
+};
+
+const seamIsCompatible = (aPts: Pt[], aSide: EndpointSide, bPts: Pt[], bSide: EndpointSide) => {
+  const aPoint = endpointPoint(aPts, aSide);
+  const bPoint = endpointPoint(bPts, bSide);
+  const dist = Math.hypot(aPoint.x - bPoint.x, aPoint.y - bPoint.y);
+  if (dist > GUIDE_CHAIN_ENDPOINT_TOL_MM) return false;
+
+  const aIn = endpointInwardTangent(aPts, aSide);
+  const bIn = endpointInwardTangent(bPts, bSide);
+  if (!aIn || !bIn) return false;
+
+  const dot = aIn.x * bIn.x + aIn.y * bIn.y;
+  return dot <= GUIDE_CHAIN_TANGENT_OPPOSITION_MAX_DOT;
+};
+
+const sideForRole = (reversed: boolean, role: 'entry' | 'exit'): EndpointSide => {
+  if (role === 'entry') return reversed ? 'end' : 'start';
+  return reversed ? 'start' : 'end';
+};
+
+const buildGuideChains = (straps: { id: string; transformed: Pt[] }[]) => {
+  const openStraps = straps.filter((strap) => isOpenPolyline(strap.transformed));
+  const byId = new Map(openStraps.map((strap) => [strap.id, strap]));
+  const endpoints: EndpointRef[] = [];
+  openStraps.forEach((strap) => {
+    endpoints.push({ strapId: strap.id, side: 'start' });
+    endpoints.push({ strapId: strap.id, side: 'end' });
+  });
+
+  const candidates = new Map<string, EndpointRef[]>();
+  endpoints.forEach((a) => {
+    const aPts = byId.get(a.strapId)?.transformed;
+    if (!aPts) return;
+    const key = endpointKey(a);
+    const list: EndpointRef[] = [];
+    endpoints.forEach((b) => {
+      if (a.strapId === b.strapId) return;
+      const bPts = byId.get(b.strapId)?.transformed;
+      if (!bPts) return;
+      if (seamIsCompatible(aPts, a.side, bPts, b.side)) list.push(b);
+    });
+    candidates.set(key, list);
+  });
+
+  const resolvedNeighbor = (ref: EndpointRef): EndpointRef | null => {
+    const key = endpointKey(ref);
+    const list = candidates.get(key) ?? [];
+    if (list.length !== 1) return null;
+    const only = list[0];
+    const back = candidates.get(endpointKey(only)) ?? [];
+    if (back.length !== 1) return null;
+    if (back[0].strapId !== ref.strapId || back[0].side !== ref.side) return null;
+    return only;
+  };
+
+  const strapAdj = new Map<string, { side: EndpointSide; otherId: string; otherSide: EndpointSide }[]>();
+  openStraps.forEach((strap) => strapAdj.set(strap.id, []));
+
+  endpoints.forEach((ref) => {
+    const mate = resolvedNeighbor(ref);
+    if (!mate) return;
+    if (ref.strapId.localeCompare(mate.strapId) > 0) return;
+    if (ref.strapId === mate.strapId && ref.side === 'end' && mate.side === 'start') return;
+    strapAdj.get(ref.strapId)?.push({ side: ref.side, otherId: mate.strapId, otherSide: mate.side });
+    strapAdj.get(mate.strapId)?.push({ side: mate.side, otherId: ref.strapId, otherSide: ref.side });
+  });
+
+  const meta = new Map<string, ChainMeta>();
+  const visited = new Set<string>();
+  const degree = (strapId: string) => (strapAdj.get(strapId)?.length ?? 0);
+
+  const starts = openStraps
+    .map((s) => s.id)
+    .filter((id) => degree(id) === 1)
+    .sort((a, b) => a.localeCompare(b));
+
+  starts.forEach((startId) => {
+    if (visited.has(startId)) return;
+    const links = strapAdj.get(startId) ?? [];
+    if (links.length !== 1) return;
+    let currentId = startId;
+    let prevId: string | null = null;
+    let offset = 0;
+
+    const startReversed = links[0].side === 'start';
+
+    while (true) {
+      if (visited.has(currentId)) break;
+      const pts = byId.get(currentId)?.transformed;
+      if (!pts) break;
+      const currentLinks = strapAdj.get(currentId) ?? [];
+      if (currentLinks.length > 2) break;
+
+      const currentReversed = prevId == null
+        ? startReversed
+        : (() => {
+            const incoming = currentLinks.find((l) => l.otherId === prevId);
+            if (!incoming) return false;
+            return incoming.side === 'end';
+          })();
+
+      meta.set(currentId, { reversed: currentReversed, offsetMM: offset });
+      visited.add(currentId);
+      offset += lengthOfPolyline(pts);
+
+      const exitSide = sideForRole(currentReversed, 'exit');
+      const next = currentLinks.find((l) => l.otherId !== prevId && l.side === exitSide);
+      if (!next) break;
+
+      prevId = currentId;
+      currentId = next.otherId;
+    }
+  });
+
+  return meta;
 };
 
 function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, rightAdornmentInteractive = false, adornmentClassName = 'right-3', children }: InsetLabeledFieldProps) {
@@ -639,42 +804,56 @@ export default function PathGuidesPage() {
     return out;
   };
 
-  const renderData = useMemo(() => straps.map((strap) => {
-    const sampled = samplePathDToPolyline(strap.d, 1.25);
-    const localCenter = centroid(sampled);
-    const centered = sampled.map((p) => ({ x: p.x - localCenter.x, y: p.y - localCenter.y }));
-    const transformed = transformPolyline(centered, {
-      scalePct: strap.scalePct,
-      rotDeg: strap.rotDeg,
-      flipX: strap.flip,
-      offset: { x: strap.offset.x + localCenter.x, y: strap.offset.y + localCenter.y },
+  const renderData = useMemo(() => {
+    const transformedByStrap = straps.map((strap) => {
+      const sampled = samplePathDToPolyline(strap.d, 1.25);
+      const localCenter = centroid(sampled);
+      const centered = sampled.map((p) => ({ x: p.x - localCenter.x, y: p.y - localCenter.y }));
+      const transformed = transformPolyline(centered, {
+        scalePct: strap.scalePct,
+        rotDeg: strap.rotDeg,
+        flipX: strap.flip,
+        offset: { x: strap.offset.x + localCenter.x, y: strap.offset.y + localCenter.y },
+      });
+      const metrics = guideMetrics(strap);
+      return { strap, transformed, metrics, localCenter, sampled };
     });
-    const metrics = guideMetrics(strap);
 
-    const guideSet =
-    ( transformed.length > 1 )
-      ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
-          baseline: transformed,
-          xMM: metrics.xMM,
-          ascMM: metrics.ascMM,
-          descMM: metrics.descMM,
-          tickStepMM: strap.script === 'Copperplate' ? Math.max(2, metrics.nibMM) : metrics.effectiveNibMM,
-          actualNibMM: metrics.nibMM,
-          invertGuides: strap.invertGuides,
-        })
-      : null;
+    const chainMetaById = buildGuideChains(transformedByStrap.map((entry) => ({
+      id: entry.strap.id,
+      transformed: entry.transformed,
+    })));
 
-    const transformedD = transformed.length > 1 ? pathD(transformed) : '';
-    const bandD = guideSet ? bandPolygonD(guideSet.ascLine, guideSet.descLine) : '';
-    const proxyBandD = guideSet
-      ? bandPolygonD(
-          decimatePolyline(guideSet.ascLine, 90),
-          decimatePolyline(guideSet.descLine, 90),
-        )
-      : '';
+    return transformedByStrap.map(({ strap, transformed, metrics, localCenter, sampled }) => {
+      const chainMeta = chainMetaById.get(strap.id);
+      const guideBaseline = chainMeta?.reversed ? [...transformed].reverse() : transformed;
 
-    return { strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter, sampled };
-  }), [straps]);
+      const guideSet =
+      ( guideBaseline.length > 1 )
+        ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
+            baseline: guideBaseline,
+            xMM: metrics.xMM,
+            ascMM: metrics.ascMM,
+            descMM: metrics.descMM,
+            tickStepMM: strap.script === 'Copperplate' ? Math.max(2, metrics.nibMM) : metrics.effectiveNibMM,
+            actualNibMM: metrics.nibMM,
+            invertGuides: strap.invertGuides,
+            tickAnchorS: chainMeta ? -chainMeta.offsetMM : undefined,
+          })
+        : null;
+
+      const transformedD = transformed.length > 1 ? pathD(transformed) : '';
+      const bandD = guideSet ? bandPolygonD(guideSet.ascLine, guideSet.descLine) : '';
+      const proxyBandD = guideSet
+        ? bandPolygonD(
+            decimatePolyline(guideSet.ascLine, 90),
+            decimatePolyline(guideSet.descLine, 90),
+          )
+        : '';
+
+      return { strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter, sampled };
+    });
+  }, [straps]);
   const totalSegments = useMemo(
     () => renderData.reduce((sum, r) => sum + Math.max(0, r.transformed.length - 1), 0),
     [renderData],
