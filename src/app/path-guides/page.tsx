@@ -520,7 +520,7 @@ export default function PathGuidesPage() {
   }, [orientation, paper]);
   const centerX = box.w / 2;
   const centerY = box.h / 2;
-  const [view, setView] = useState<ViewMode>('autofit');
+  const [view, setView] = useState<ViewMode>('fullpage');
   const [zoom, setZoom] = useState(1.35);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -1901,7 +1901,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
               {activeStrap.script === 'Copperplate' ? (
                 <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <InsetLabeledField label="X-height" rightAdornment="mm">
                       <input type="number" min={0.5} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.xHeightMMText ?? '6'} onChange={(e) => updateStrap(activeStrap.id, { xHeightMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
                     </InsetLabeledField>
@@ -1951,9 +1951,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 </>
               )}
 
-              <div className="grid grid-cols-1 gap-4 select-none">
-                <div>
-                  <div className="flex items-center justify-between gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 select-none">
+                <div className="min-w-0">
+                  <div className="flex items-center justify-between gap-3 min-w-0">
                     <label className="font-medium text-slate-700 shrink-0">Rotation (°)</label>
                     <div className="flex items-center gap-2 shrink-0">
                       <input
@@ -2015,7 +2015,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       </button>
                     </div>
                   </div>
-                  <div className="mt-2 flex items-center gap-3 flex-nowrap">
+                  <div className="mt-2 flex items-center gap-3 min-w-0">
                     <input
                       type="range"
                       min={-180}
@@ -2037,8 +2037,8 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     />
                   </div>
                 </div>
-                <div>
-                  <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center justify-between gap-3 min-w-0">
                     <label className="font-medium text-slate-700 shrink-0">Scale (%)</label>
                     <div className="flex items-center gap-2 shrink-0">
                       <input
