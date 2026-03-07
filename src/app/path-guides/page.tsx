@@ -50,7 +50,42 @@ type Strap = {
   flip: boolean;
   snapped: boolean;
   invertGuides: boolean;
+  joinedEndpoint?: {
+    start?: { otherId: string; otherSide: 'start' | 'end' };
+    end?: { otherId: string; otherSide: 'start' | 'end' };
+  };
 };
+
+type EndpointSide = 'start' | 'end';
+type EndpointLink = { otherId: string; otherSide: EndpointSide };
+type JoinCandidate = {
+  aId: string;
+  aSide: EndpointSide;
+  bId: string;
+  bSide: EndpointSide;
+  x: number;
+  y: number;
+  joined: boolean;
+};
+
+type ChainMember = {
+  strapId: string;
+  reversed: boolean;
+  startDistanceMM: number;
+  endDistanceMM: number;
+};
+
+type JoinedChain = {
+  chainId: string;
+  memberIds: string[];
+  members: Array<{ strapId: string; reversed: boolean }>;
+  displayName: string;
+  baseline: Pt[];
+};
+
+type VisibleLayerItem =
+  | { kind: 'strap'; id: string; strapId: string }
+  | { kind: 'chain'; id: string; chainId: string; memberIds: string[] };
 
 type StrapGroup = {
   id: string;
@@ -218,6 +253,453 @@ const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) 
       || left.crossing.id.localeCompare(right.crossing.id)
     ))
     .map((entry) => entry.crossing.id);
+};
+
+const JOIN_DISTANCE_MM = 12;
+const JOIN_OPPOSITION_MAX_DOT = -0.35;
+const JOIN_AMBIGUITY_SCORE_EPS = 1.35;
+const JOIN_SEAM_STITCH_EPS_MM = 1.5;
+const JOIN_DOT_SCORE_WEIGHT = 5;
+
+const endpointKey = (id: string, side: EndpointSide) => `${id}:${side}`;
+
+const isOpenPolyline = (pts: Pt[]) => {
+  if (pts.length < 2) return false;
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  return Math.hypot(first.x - last.x, first.y - last.y) > 0.05;
+};
+
+const getEndpointInfo = (pts: Pt[], side: EndpointSide) => {
+  if (!isOpenPolyline(pts)) return null;
+  if (side === 'start') {
+    const p0 = pts[0];
+    const p1 = pts[1];
+    const dx = p1.x - p0.x;
+    const dy = p1.y - p0.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) return null;
+    return { point: p0, inwardTangent: { x: dx / len, y: dy / len } };
+  }
+  const pn = pts[pts.length - 1];
+  const pm1 = pts[pts.length - 2];
+  const dx = pm1.x - pn.x;
+  const dy = pm1.y - pn.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return null;
+  return { point: pn, inwardTangent: { x: dx / len, y: dy / len } };
+};
+
+const normalizeJoinLinks = (straps: Strap[]) => {
+  const strapById = new Map(straps.map((s) => [s.id, s]));
+  const claimedTargets = new Map<string, string>();
+
+  const validLinks = new Map<string, EndpointLink>();
+
+  for (const strap of straps) {
+    for (const side of ['start', 'end'] as const) {
+      const link = strap.joinedEndpoint?.[side];
+      if (!link) continue;
+      if (link.otherId === strap.id) continue;
+
+      const other = strapById.get(link.otherId);
+      if (!other) continue;
+
+      const otherBack = other.joinedEndpoint?.[link.otherSide];
+      if (!otherBack) continue;
+      if (otherBack.otherId !== strap.id || otherBack.otherSide !== side) continue;
+
+      const srcKey = endpointKey(strap.id, side);
+      const dstKey = endpointKey(link.otherId, link.otherSide);
+
+      const existing = claimedTargets.get(dstKey);
+      if (existing && existing !== srcKey) continue;
+
+      claimedTargets.set(dstKey, srcKey);
+      validLinks.set(srcKey, { otherId: link.otherId, otherSide: link.otherSide });
+    }
+  }
+
+  return straps.map((strap) => {
+    const next: NonNullable<Strap['joinedEndpoint']> = {};
+    const start = validLinks.get(endpointKey(strap.id, 'start'));
+    const end = validLinks.get(endpointKey(strap.id, 'end'));
+    if (start) next.start = start;
+    if (end) next.end = end;
+    return {
+      ...strap,
+      joinedEndpoint: Object.keys(next).length ? next : undefined,
+    };
+  });
+};
+
+const buildJoinCandidates = ({
+  straps,
+  transformedById,
+}: {
+  straps: Strap[];
+  transformedById: Map<string, Pt[]>;
+}) => {
+  const endpoints: Array<{ strapId: string; side: EndpointSide; point: Pt; inwardTangent: Pt }> = [];
+  const occupied = new Set<string>();
+
+  straps.forEach((strap) => {
+    const pts = transformedById.get(strap.id) ?? [];
+    if (!isOpenPolyline(pts)) return;
+    (['start', 'end'] as const).forEach((side) => {
+      const info = getEndpointInfo(pts, side);
+      if (!info) return;
+      endpoints.push({ strapId: strap.id, side, point: info.point, inwardTangent: info.inwardTangent });
+      if (strap.joinedEndpoint?.[side]) occupied.add(endpointKey(strap.id, side));
+    });
+  });
+
+  type ScoredPair = {
+    aKey: string;
+    bKey: string;
+    aId: string;
+    aSide: EndpointSide;
+    bId: string;
+    bSide: EndpointSide;
+    score: number;
+    dist: number;
+  };
+
+  const scoredPairs: ScoredPair[] = [];
+  const optionsByEndpoint = new Map<string, ScoredPair[]>();
+
+  for (let i = 0; i < endpoints.length; i += 1) {
+    const a = endpoints[i];
+    for (let j = i + 1; j < endpoints.length; j += 1) {
+      const b = endpoints[j];
+      if (a.strapId === b.strapId) continue;
+
+      const aKey = endpointKey(a.strapId, a.side);
+      const bKey = endpointKey(b.strapId, b.side);
+      if (occupied.has(aKey) || occupied.has(bKey)) continue;
+
+      const dist = Math.hypot(a.point.x - b.point.x, a.point.y - b.point.y);
+      if (dist > JOIN_DISTANCE_MM) continue;
+
+      const dot = a.inwardTangent.x * b.inwardTangent.x + a.inwardTangent.y * b.inwardTangent.y;
+      if (dot > JOIN_OPPOSITION_MAX_DOT) continue;
+
+      const oppositionPenalty = (dot - (-1)) * 0.5;
+      const score = dist + oppositionPenalty * JOIN_DOT_SCORE_WEIGHT;
+      const pair: ScoredPair = {
+        aKey,
+        bKey,
+        aId: a.strapId,
+        aSide: a.side,
+        bId: b.strapId,
+        bSide: b.side,
+        score,
+        dist,
+      };
+      scoredPairs.push(pair);
+      if (!optionsByEndpoint.has(aKey)) optionsByEndpoint.set(aKey, []);
+      if (!optionsByEndpoint.has(bKey)) optionsByEndpoint.set(bKey, []);
+      optionsByEndpoint.get(aKey)!.push(pair);
+      optionsByEndpoint.get(bKey)!.push(pair);
+    }
+  }
+
+  const ambiguousEndpoints = new Set<string>();
+  const bestByEndpoint = new Map<string, ScoredPair>();
+
+  optionsByEndpoint.forEach((pairs, endpoint) => {
+    const sorted = [...pairs].sort((l, r) => l.score - r.score || l.dist - r.dist || `${l.aKey}|${l.bKey}`.localeCompare(`${r.aKey}|${r.bKey}`));
+    const best = sorted[0];
+    if (!best) return;
+    if (sorted[1] && (sorted[1].score - best.score) <= JOIN_AMBIGUITY_SCORE_EPS) {
+      ambiguousEndpoints.add(endpoint);
+      return;
+    }
+    bestByEndpoint.set(endpoint, best);
+  });
+
+  const candidates: JoinCandidate[] = [];
+  const accepted = new Set<string>();
+  scoredPairs
+    .sort((l, r) => l.score - r.score || l.dist - r.dist || `${l.aKey}|${l.bKey}`.localeCompare(`${r.aKey}|${r.bKey}`))
+    .forEach((pair) => {
+      if (ambiguousEndpoints.has(pair.aKey) || ambiguousEndpoints.has(pair.bKey)) return;
+      const bestA = bestByEndpoint.get(pair.aKey);
+      const bestB = bestByEndpoint.get(pair.bKey);
+      if (!bestA || !bestB) return;
+      const key = pair.aKey < pair.bKey ? `${pair.aKey}|${pair.bKey}` : `${pair.bKey}|${pair.aKey}`;
+      if (accepted.has(key)) return;
+
+      const bFromA = bestA.aKey === pair.aKey ? bestA.bKey : bestA.aKey;
+      const aFromB = bestB.aKey === pair.bKey ? bestB.bKey : bestB.aKey;
+      if (bFromA !== pair.bKey || aFromB !== pair.aKey) return;
+
+      const ordered = pair.aKey < pair.bKey
+        ? { aId: pair.aId, aSide: pair.aSide, bId: pair.bId, bSide: pair.bSide }
+        : { aId: pair.bId, aSide: pair.bSide, bId: pair.aId, bSide: pair.aSide };
+      const aInfo = getEndpointInfo(transformedById.get(ordered.aId) ?? [], ordered.aSide);
+      const bInfo = getEndpointInfo(transformedById.get(ordered.bId) ?? [], ordered.bSide);
+      if (!aInfo || !bInfo) return;
+
+      accepted.add(key);
+      candidates.push({
+        ...ordered,
+        x: (aInfo.point.x + bInfo.point.x) / 2,
+        y: (aInfo.point.y + bInfo.point.y) / 2,
+        joined: false,
+      });
+    });
+
+  const seen = new Set(candidates.map((c) => {
+    const aKey = endpointKey(c.aId, c.aSide);
+    const bKey = endpointKey(c.bId, c.bSide);
+    return aKey < bKey ? `${aKey}|${bKey}` : `${bKey}|${aKey}`;
+  }));
+
+  straps.forEach((strap) => {
+    (['start', 'end'] as const).forEach((side) => {
+      const link = strap.joinedEndpoint?.[side];
+      if (!link) return;
+      const aKey = endpointKey(strap.id, side);
+      const bKey = endpointKey(link.otherId, link.otherSide);
+      const key = aKey < bKey ? `${aKey}|${bKey}` : `${bKey}|${aKey}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      const aInfo = getEndpointInfo(transformedById.get(strap.id) ?? [], side);
+      const bInfo = getEndpointInfo(transformedById.get(link.otherId) ?? [], link.otherSide);
+      if (!aInfo || !bInfo) return;
+      const [aId, aSide, bId, bSide] = aKey < bKey
+        ? [strap.id, side, link.otherId, link.otherSide]
+        : [link.otherId, link.otherSide, strap.id, side];
+      candidates.push({
+        aId,
+        aSide,
+        bId,
+        bSide,
+        x: (aInfo.point.x + bInfo.point.x) / 2,
+        y: (aInfo.point.y + bInfo.point.y) / 2,
+        joined: true,
+      });
+    });
+  });
+
+  return candidates.sort((l, r) => `${l.aId}|${l.aSide}|${l.bId}|${l.bSide}`.localeCompare(`${r.aId}|${r.aSide}|${r.bId}|${r.bSide}`));
+};
+
+const buildJoinedChains = (straps: Strap[]) => {
+  const strapById = new Map(straps.map((s) => [s.id, s]));
+  const endpointNeighbor = new Map<string, { strapId: string; side: EndpointSide }>();
+
+  for (const strap of straps) {
+    for (const side of ['start', 'end'] as const) {
+      const link = strap.joinedEndpoint?.[side];
+      if (!link) continue;
+      if (!strapById.has(link.otherId) || link.otherId === strap.id) return [];
+
+      const srcKey = endpointKey(strap.id, side);
+      const dstKey = endpointKey(link.otherId, link.otherSide);
+      endpointNeighbor.set(srcKey, { strapId: link.otherId, side: link.otherSide });
+
+      const back = strapById.get(link.otherId)?.joinedEndpoint?.[link.otherSide];
+      if (!back || back.otherId !== strap.id || back.otherSide !== side) return [];
+      if (endpointKey(back.otherId, back.otherSide) !== srcKey) return [];
+    }
+  }
+
+  const degree = new Map<string, number>();
+  straps.forEach((s) => degree.set(s.id, 0));
+
+  const seenEdges = new Set<string>();
+  for (const [srcKey, dst] of endpointNeighbor.entries()) {
+    const [aId] = srcKey.split(':');
+    const bId = dst.strapId;
+    const edgeKey = aId < bId ? `${aId}|${bId}` : `${bId}|${aId}`;
+    if (seenEdges.has(edgeKey)) continue;
+    seenEdges.add(edgeKey);
+    degree.set(aId, (degree.get(aId) ?? 0) + 1);
+    degree.set(bId, (degree.get(bId) ?? 0) + 1);
+  }
+
+  if ([...degree.values()].some((d) => d > 2)) return [];
+
+  const endpointUsed = new Set<string>();
+  const chains: Array<{ id: string; members: Array<{ strapId: string; reversed: boolean }> }> = [];
+
+  const walkFrom = (startStrapId: string, startSide: EndpointSide) => {
+    const members: Array<{ strapId: string; reversed: boolean }> = [];
+    let currStrapId: string | null = startStrapId;
+    let entrySide: EndpointSide = startSide;
+
+    while (currStrapId) {
+      const memberKey = `${currStrapId}:${entrySide}`;
+      if (endpointUsed.has(memberKey)) break;
+
+      const reversed = entrySide === 'end';
+      members.push({ strapId: currStrapId, reversed });
+
+      endpointUsed.add(`${currStrapId}:start`);
+      endpointUsed.add(`${currStrapId}:end`);
+
+      const exitSide: EndpointSide = reversed ? 'start' : 'end';
+      const next = endpointNeighbor.get(endpointKey(currStrapId, exitSide));
+      if (!next) break;
+
+      currStrapId = next.strapId;
+      entrySide = next.side;
+    }
+
+      return members;
+  };
+
+  const componentStrapIds = straps
+    .filter((s) => (degree.get(s.id) ?? 0) > 0)
+    .map((s) => s.id);
+
+  const visitedStraps = new Set<string>();
+
+  for (const strapId of componentStrapIds) {
+    if (visitedStraps.has(strapId)) continue;
+
+    const d = degree.get(strapId) ?? 0;
+    const strap = strapById.get(strapId);
+    if (!strap || d === 0) continue;
+
+    let startSide: EndpointSide = 'start';
+
+    if (d === 1) {
+      startSide = strap.joinedEndpoint?.start ? 'end' : 'start';
+    } else {
+      startSide = 'start';
+    }
+
+    const members = walkFrom(strapId, startSide);
+    if (members.length < 2) continue;
+
+    members.forEach((m) => visitedStraps.add(m.strapId));
+    const memberIds = members.map((m) => m.strapId);
+    chains.push({
+      id: `chain-${memberIds.join('|')}`,
+      members,
+    });
+  }
+
+  return chains;
+};
+
+const buildVirtualBaselineForChain = ({
+  chain,
+  transformedById,
+}: {
+  chain: { id: string; members: Array<{ strapId: string; reversed: boolean }> };
+  transformedById: Map<string, Pt[]>;
+}) => {
+  const baseline: Pt[] = [];
+  const members: ChainMember[] = [];
+  let acc = 0;
+
+  for (const member of chain.members) {
+    const source = transformedById.get(member.strapId) ?? [];
+    if (source.length < 2 || !isOpenPolyline(source)) return null;
+
+    const ptsRaw = member.reversed ? [...source].reverse() : [...source];
+    if (ptsRaw.length < 2) return null;
+
+    let pts = ptsRaw;
+
+    if (!baseline.length) {
+      baseline.push(...pts);
+    } else {
+      const prev = baseline[baseline.length - 1];
+      const next0 = pts[0];
+      const gap = Math.hypot(prev.x - next0.x, prev.y - next0.y);
+
+      // If the seam is wildly wrong, the chain traversal is wrong.
+      // Abort the joined chain instead of drawing bogus connector segments.
+      if (gap > JOIN_DISTANCE_MM) return null;
+
+      // Stitch the seam exactly so SVG/path math does not create a fake straight bridge.
+      const seam =
+        gap <= 1e-6
+          ? prev
+          : {
+              x: (prev.x + next0.x) / 2,
+              y: (prev.y + next0.y) / 2,
+            };
+
+      baseline[baseline.length - 1] = seam;
+
+      pts = [seam, ...pts.slice(1)];
+
+      // Optional extra safety: if the second point is still absurdly far from the seam,
+      // the traversal/order is probably wrong, so bail out.
+      if (pts.length > 1) {
+        const firstSeg = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+        if (firstSeg > JOIN_DISTANCE_MM * 1.5) return null;
+      }
+
+      baseline.push(...pts.slice(1));
+    }
+
+    let segLen = 0;
+    for (let i = 1; i < pts.length; i += 1) {
+      segLen += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    }
+
+    const startDistanceMM = acc;
+    const endDistanceMM = acc + segLen;
+
+    members.push({
+      strapId: member.strapId,
+      reversed: member.reversed,
+      startDistanceMM,
+      endDistanceMM,
+    });
+
+    acc = endDistanceMM;
+  }
+
+  // Light dedupe for tiny seam duplicates.
+  const cleaned: Pt[] = [];
+  for (const pt of baseline) {
+    const prev = cleaned[cleaned.length - 1];
+    if (!prev) {
+      cleaned.push(pt);
+      continue;
+    }
+    const gap = Math.hypot(prev.x - pt.x, prev.y - pt.y);
+    if (gap > JOIN_SEAM_STITCH_EPS_MM * 0.02) cleaned.push(pt);
+  }
+
+  if (cleaned.length < 2) return null;
+
+  return { id: chain.id, baseline: cleaned, members };
+};
+
+const buildVisibleLayerItems = ({
+  straps,
+  chains,
+}: {
+  straps: Strap[];
+  chains: JoinedChain[];
+}): VisibleLayerItem[] => {
+  const chainByStrapId = new Map<string, JoinedChain>();
+  chains.forEach((chain) => {
+    chain.memberIds.forEach((id) => chainByStrapId.set(id, chain));
+  });
+
+  const seenChains = new Set<string>();
+  const items: VisibleLayerItem[] = [];
+  straps.forEach((strap) => {
+    const chain = chainByStrapId.get(strap.id);
+    if (!chain) {
+      items.push({ kind: 'strap', id: strap.id, strapId: strap.id });
+      return;
+    }
+    if (seenChains.has(chain.chainId)) return;
+    seenChains.add(chain.chainId);
+    items.push({ kind: 'chain', id: chain.chainId, chainId: chain.chainId, memberIds: chain.memberIds });
+  });
+  return items;
 };
 
 function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, rightAdornmentInteractive = false, adornmentClassName = 'right-3', children }: InsetLabeledFieldProps) {
@@ -639,7 +1121,7 @@ export default function PathGuidesPage() {
     return out;
   };
 
-  const renderData = useMemo(() => straps.map((strap) => {
+  const baseRenderData = useMemo(() => straps.map((strap) => {
     const sampled = samplePathDToPolyline(strap.d, 1.25);
     const localCenter = centroid(sampled);
     const centered = sampled.map((p) => ({ x: p.x - localCenter.x, y: p.y - localCenter.y }));
@@ -651,44 +1133,184 @@ export default function PathGuidesPage() {
     });
     const metrics = guideMetrics(strap);
 
-    const guideSet =
-    ( transformed.length > 1 )
-      ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
-          baseline: transformed,
-          xMM: metrics.xMM,
-          ascMM: metrics.ascMM,
-          descMM: metrics.descMM,
-          tickStepMM: strap.script === 'Copperplate' ? Math.max(2, metrics.nibMM) : metrics.effectiveNibMM,
-          actualNibMM: metrics.nibMM,
-          invertGuides: strap.invertGuides,
-        })
-      : null;
-
     const transformedD = transformed.length > 1 ? pathD(transformed) : '';
+    return { strap, transformed, transformedD, metrics, localCenter, sampled };
+  }), [straps]);
+
+  const transformedById = useMemo(() => new Map(baseRenderData.map((r) => [r.strap.id, r.transformed])), [baseRenderData]);
+
+  const joinedChains = useMemo(() => buildJoinedChains(straps), [straps]);
+
+  const canonicalJoinedChains = useMemo<JoinedChain[]>(() => {
+    return joinedChains
+      .map((chain) => {
+        const baselineData = buildVirtualBaselineForChain({ chain, transformedById });
+        if (!baselineData) return null;
+  
+        const memberIds = chain.members.map((m) => m.strapId);
+        const name = chain.members
+          .map((m) => straps.find((s) => s.id === m.strapId)?.name ?? m.strapId)
+          .join(' + ');
+  
+        return {
+          chainId: chain.id,
+          memberIds,
+          members: chain.members,
+          displayName: `Joined path: ${name}`,
+          baseline: baselineData.baseline,
+        } satisfies JoinedChain;
+      })
+      .filter((chain): chain is JoinedChain => !!chain && chain.memberIds.length > 1 && chain.baseline.length > 1);
+  }, [joinedChains, straps, transformedById]);
+
+
+  const chainByMemberId = useMemo(() => {
+    const map = new Map<string, string>();
+    canonicalJoinedChains.forEach((chain) => {
+      chain.memberIds.forEach((id) => map.set(id, chain.chainId));
+    });
+    return map;
+  }, [canonicalJoinedChains]);
+
+  const visibleLayerItems = useMemo(
+    () => buildVisibleLayerItems({ straps, chains: canonicalJoinedChains }),
+    [canonicalJoinedChains, straps],
+  );
+
+  const compatibleChainGuideData = useMemo(() => {
+    const out = new Map<
+      string,
+      {
+        chainId: string;
+        guideSet: NonNullable<ReturnType<typeof buildGuideSet>>;
+        memberClipBandDById: Map<string, string>;
+        colorThin: string;
+        colorBold: string;
+      }
+    >();
+  
+    canonicalJoinedChains.forEach((chain) => {
+      const membersWithData = chain.members
+        .map((member) => ({
+          ...member,
+          strap: straps.find((s) => s.id === member.strapId),
+          render: baseRenderData.find((r) => r.strap.id === member.strapId),
+        }))
+        .filter((entry): entry is {
+          strapId: string;
+          reversed: boolean;
+          strap: Strap;
+          render: (typeof baseRenderData)[number];
+        } => !!entry.strap && !!entry.render);
+  
+      if (membersWithData.length !== chain.members.length || membersWithData.length < 2) return;
+  
+      const first = membersWithData[0].strap;
+      const sameScript = membersWithData.every((m) => m.strap.script === first.script);
+      const sameInvert = membersWithData.every((m) => m.strap.invertGuides === first.invertGuides);
+      if (!sameScript || !sameInvert) return;
+  
+      const firstMetrics = guideMetrics(first);
+      const sameMetrics = membersWithData.every((m) => {
+        const mm = guideMetrics(m.strap);
+        return Math.abs(mm.xMM - firstMetrics.xMM) < 1e-6
+          && Math.abs(mm.ascMM - firstMetrics.ascMM) < 1e-6
+          && Math.abs(mm.descMM - firstMetrics.descMM) < 1e-6
+          && Math.abs(mm.nibMM - firstMetrics.nibMM) < 1e-6
+          && Math.abs(mm.effectiveNibMM - firstMetrics.effectiveNibMM) < 1e-6;
+      });
+      if (!sameMetrics) return;
+  
+      const chainGuideSet = buildGuideSet(
+        first.script === 'Copperplate' ? 'copperplate' : 'blackletter',
+        {
+          baseline: chain.baseline,
+          xMM: firstMetrics.xMM,
+          ascMM: firstMetrics.ascMM,
+          descMM: firstMetrics.descMM,
+          tickStepMM: first.script === 'Copperplate'
+            ? Math.max(2, firstMetrics.nibMM)
+            : firstMetrics.effectiveNibMM,
+          actualNibMM: firstMetrics.nibMM,
+          invertGuides: first.invertGuides,
+        },
+      );
+  
+      const memberClipBandDById = new Map<string, string>();
+  
+      membersWithData.forEach(({ strap, render }) => {
+        const mm = guideMetrics(strap);
+        const memberGuideSet =
+          render.transformed.length > 1
+            ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
+                baseline: render.transformed,
+                xMM: mm.xMM,
+                ascMM: mm.ascMM,
+                descMM: mm.descMM,
+                tickStepMM: strap.script === 'Copperplate'
+                  ? Math.max(2, mm.nibMM)
+                  : mm.effectiveNibMM,
+                actualNibMM: mm.nibMM,
+                invertGuides: strap.invertGuides,
+              })
+            : null;
+  
+        if (!memberGuideSet) return;
+  
+        const bandD = bandPolygonD(memberGuideSet.ascLine, memberGuideSet.descLine);
+        if (bandD) memberClipBandDById.set(strap.id, bandD);
+      });
+  
+      if (!memberClipBandDById.size) return;
+  
+      out.set(chain.chainId, {
+        chainId: chain.chainId,
+        guideSet: chainGuideSet,
+        memberClipBandDById,
+        colorThin: first.color,
+        colorBold: '#7c3aed',
+      });
+    });
+  
+    return out;
+  }, [canonicalJoinedChains, straps, baseRenderData]);
+
+  const renderData = useMemo(() => baseRenderData.map((entry) => {
+    const { strap, transformed, metrics } = entry;
+    const guideSet =
+      transformed.length > 1
+        ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
+            baseline: transformed,
+            xMM: metrics.xMM,
+            ascMM: metrics.ascMM,
+            descMM: metrics.descMM,
+            tickStepMM: strap.script === 'Copperplate' ? Math.max(2, metrics.nibMM) : metrics.effectiveNibMM,
+            actualNibMM: metrics.nibMM,
+            invertGuides: strap.invertGuides,
+          })
+        : null;
+  
     const bandD = guideSet ? bandPolygonD(guideSet.ascLine, guideSet.descLine) : '';
     const proxyBandD = guideSet
-      ? bandPolygonD(
-          decimatePolyline(guideSet.ascLine, 90),
-          decimatePolyline(guideSet.descLine, 90),
-        )
+      ? bandPolygonD(decimatePolyline(guideSet.ascLine, 90), decimatePolyline(guideSet.descLine, 90))
       : '';
+  
+    return { ...entry, guideSet, bandD, proxyBandD };
+  }), [baseRenderData]);
 
-    return { strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter, sampled };
-  }), [straps]);
   const totalSegments = useMemo(
     () => renderData.reduce((sum, r) => sum + Math.max(0, r.transformed.length - 1), 0),
     [renderData],
   );
-  const crossingPerformanceWarning = totalSegments > CROSSING_MAX_SEGMENTS;
-  const transformedById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r.transformed])), [renderData]);
 
+  const crossingPerformanceWarning = totalSegments > CROSSING_MAX_SEGMENTS;
   const baseCrossings = useMemo(() => {
     if (crossingPerformanceWarning) return [];
     return findCrossingsForStraps(
-      renderData.map((r) => ({ id: r.strap.id, pts: r.transformed })),
+      baseRenderData.map((r) => ({ id: r.strap.id, pts: r.transformed })),
       CROSS_EPS_MM,
     );
-  }, [crossingPerformanceWarning, renderData]);
+  }, [baseRenderData, crossingPerformanceWarning]);
 
   const pairSlotsByCrossingId = useMemo(() => {
     const slots = new Map<string, { key: PairKey; slot: number }>();
@@ -875,8 +1497,56 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     lastAppliedPresetStateRef.current = null;
   }, [selectedPresetId]);
 
+  const joinCandidates = useMemo(() => buildJoinCandidates({ straps, transformedById }), [straps, transformedById]);
+
+  const toggleJoinCandidate = useCallback((candidate: JoinCandidate) => {
+    markPresetDirty();
+    setStraps((prev) => {
+      const byId = new Map(prev.map((s) => [s.id, { ...s }]));
+      const a = byId.get(candidate.aId);
+      const b = byId.get(candidate.bId);
+      if (!a || !b) return prev;
+
+      const aLink = a.joinedEndpoint?.[candidate.aSide];
+      const joined = !!aLink && aLink.otherId === b.id && aLink.otherSide === candidate.bSide;
+
+      if (joined) {
+        const nextA = { ...(a.joinedEndpoint ?? {}) };
+        const nextB = { ...(b.joinedEndpoint ?? {}) };
+        delete nextA[candidate.aSide];
+        delete nextB[candidate.bSide];
+        a.joinedEndpoint = Object.keys(nextA).length ? nextA : undefined;
+        b.joinedEndpoint = Object.keys(nextB).length ? nextB : undefined;
+      } else {
+        const aPts = transformedById.get(a.id) ?? [];
+        const bPts = transformedById.get(b.id) ?? [];
+        const aInfo = getEndpointInfo(aPts, candidate.aSide);
+        const bInfo = getEndpointInfo(bPts, candidate.bSide);
+        if (!aInfo || !bInfo) return prev;
+
+        const moveA = activeId ? activeId === a.id : false;
+        const moveB = activeId ? activeId === b.id : false;
+        const aIndex = prev.findIndex((s) => s.id === a.id);
+        const bIndex = prev.findIndex((s) => s.id === b.id);
+        const moveId = moveA && !moveB ? a.id : moveB && !moveA ? b.id : (aIndex > bIndex ? a.id : b.id);
+        const dx = (moveId === a.id ? bInfo.point.x - aInfo.point.x : aInfo.point.x - bInfo.point.x);
+        const dy = (moveId === a.id ? bInfo.point.y - aInfo.point.y : aInfo.point.y - bInfo.point.y);
+
+        const mover = byId.get(moveId);
+        if (mover) mover.offset = { x: mover.offset.x + dx, y: mover.offset.y + dy };
+
+        const nextA = { ...(a.joinedEndpoint ?? {}), [candidate.aSide]: { otherId: b.id, otherSide: candidate.bSide } };
+        const nextB = { ...(b.joinedEndpoint ?? {}), [candidate.bSide]: { otherId: a.id, otherSide: candidate.aSide } };
+        a.joinedEndpoint = nextA;
+        b.joinedEndpoint = nextB;
+      }
+
+      return normalizeJoinLinks(prev.map((s) => byId.get(s.id) ?? s));
+    });
+  }, [activeId, markPresetDirty, transformedById]);
+
   const loadPreset = (preset: PathGuidesPresetV1) => {
-    const state = { ...preset.state, straps: assignDistinctColors(preset.state.straps) };
+    const state = { ...preset.state, straps: normalizeJoinLinks(assignDistinctColors(preset.state.straps)) };
     setPaper(state.paper);
     setOrientation(state.orientation);
     setView(state.view);
@@ -976,7 +1646,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
   const updateStrap = (id: string, patch: Partial<Strap>) => {
     markPresetDirty();
-    setStraps((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    setStraps((prev) => normalizeJoinLinks(prev.map((s) => (s.id === id ? { ...s, ...patch } : s))));
   };
 
   const requestScrubPaint = useCallback(() => {
@@ -1042,11 +1712,11 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     }
     
     markPresetDirty();
-    setStraps((prev) =>
-      prev.map((s) =>
-        s.id === strapId ? { ...s, rotDeg: finalRot, scalePct: finalScale } : s,
-      ),
-    );
+    setStraps((prev) => normalizeJoinLinks(
+      prev.map((s) => (
+        s.id === strapId ? { ...s, rotDeg: finalRot, scalePct: finalScale } : s
+      )),
+    ));
     
     scrubActiveRef.current = false;
     scrubStrapIdRef.current = null;
@@ -1181,9 +1851,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
         markPresetDirty();
         const finalOffset = finished.liveOffset;
         const finalSnapped = finished.liveSnapped ?? false;
-        setStraps((prev) =>
+        setStraps((prev) => normalizeJoinLinks(
           prev.map((s) => (s.id === finished.strapId ? { ...s, offset: finalOffset, snapped: finalSnapped } : s)),
-        );
+        ));
       }
       dragRef.current = { mode: 'none', pointerId: -1, startClient: { x: 0, y: 0 }, startPan: { x: 0, y: 0 } };
       liveDragTranslateRef.current = null;
@@ -1235,7 +1905,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       snapped: false,
       invertGuides: false,
     }, 'Copperplate');
-    setStraps((prev) => assignDistinctColors([...prev, next]));
+    setStraps((prev) => normalizeJoinLinks(assignDistinctColors([...prev, next])));
     setActiveId(next.id);
   };
 
@@ -1253,7 +1923,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       markPresetDirty();
       const finalOffset = { x: baseNow.baseOffset.x + liveNow.dx, y: baseNow.baseOffset.y + liveNow.dy };
       const finalSnapped = nudgeSnappedRef.current;
-      setStraps((prev) => prev.map((s) => (s.id === baseNow.strapId ? { ...s, offset: finalOffset, snapped: finalSnapped } : s)));
+        setStraps((prev) => normalizeJoinLinks(prev.map((s) => (s.id === baseNow.strapId ? { ...s, offset: finalOffset, snapped: finalSnapped } : s))));
     };
 
     const endNudgeSession = () => {
@@ -1364,7 +2034,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       snapped: false,
       invertGuides: false,
     }, 'Copperplate');
-    setStraps((prev) => assignDistinctColors([...prev, next]));
+    setStraps((prev) => normalizeJoinLinks(assignDistinctColors([...prev, next])));
     setActiveId(next.id);
   };
 
@@ -1407,20 +2077,29 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       return;
     }
 
-    setStraps((prev) => assignDistinctColors([...prev, ...created]));
+    setStraps((prev) => normalizeJoinLinks(assignDistinctColors([...prev, ...created])));
     setActiveId(created[0].id);
   };
 
-  const reorderStraps = (sourceId: string, targetId: string) => {
+  const reorderLayerItem = (sourceItemId: string, targetItemId: string) => {
+    if (sourceItemId === targetItemId) return;
+    const itemById = new Map(visibleLayerItems.map((item) => [item.id, item]));
+    const sourceItem = itemById.get(sourceItemId);
+    const targetItem = itemById.get(targetItemId);
+    if (!sourceItem || !targetItem) return;
+
+    const sourceIds = sourceItem.kind === 'chain' ? sourceItem.memberIds : [sourceItem.strapId];
+    const targetIds = targetItem.kind === 'chain' ? targetItem.memberIds : [targetItem.strapId];
+
     markPresetDirty();
     setStraps((prev) => {
-      const srcIdx = prev.findIndex((s) => s.id === sourceId);
-      const dstIdx = prev.findIndex((s) => s.id === targetId);
-      if (srcIdx < 0 || dstIdx < 0 || srcIdx === dstIdx) return prev;
-      const copy = [...prev];
-      const [item] = copy.splice(srcIdx, 1);
-      copy.splice(dstIdx, 0, item);
-      return copy;
+      const moving = prev.filter((s) => sourceIds.includes(s.id));
+      const remaining = prev.filter((s) => !sourceIds.includes(s.id));
+      if (!moving.length) return prev;
+      const targetIndex = remaining.findIndex((s) => targetIds.includes(s.id));
+      if (targetIndex < 0) return prev;
+      remaining.splice(targetIndex, 0, ...moving);
+      return normalizeJoinLinks(remaining);
     });
   };
 
@@ -1439,16 +2118,60 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       flip: strap.flip,
       snapped: false,
       invertGuides: strap.invertGuides,
+      joinedEndpoint: undefined,
     };
     duplicate.offset = clampOffsetToPage({ sampled, localCenter, strap: duplicate, box, marginMM: FIT_MARGIN_MM });
-    setStraps((prev) => assignDistinctColors([...prev, duplicate]));
+    setStraps((prev) => normalizeJoinLinks(assignDistinctColors([...prev, duplicate])));
+  };
+
+  const duplicateChainById = (chainId: string) => {
+    const chain = canonicalJoinedChains.find((c) => c.chainId === chainId);
+    if (!chain) return;
+    markPresetDirty();
+    setStraps((prev) => {
+      const clones: Strap[] = [];
+      chain.memberIds.forEach((id) => {
+        const strap = prev.find((s) => s.id === id);
+        if (!strap) return;
+        clones.push({
+          ...strap,
+          id: uid('strap'),
+          name: `${strap.name} copy`,
+          offset: { x: strap.offset.x + 8, y: strap.offset.y + 8 },
+          joinedEndpoint: undefined,
+          snapped: false,
+        });
+      });
+      return normalizeJoinLinks(assignDistinctColors([...prev, ...clones]));
+    });
   };
 
   const removeStrapById = (id: string) => {
     if (straps.length <= 1) return;
     markPresetDirty();
-    setStraps((prev) => prev.filter((strap) => strap.id !== id));
+    setStraps((prev) => normalizeJoinLinks(prev.filter((strap) => strap.id !== id)));
     if (activeId === id) setActiveId(straps.find((strap) => strap.id !== id)?.id ?? null);
+  };
+
+  const removeChainById = (chainId: string) => {
+    const chain = canonicalJoinedChains.find((c) => c.chainId === chainId);
+    if (!chain) return;
+    if (straps.length - chain.memberIds.length < 1) return;
+    markPresetDirty();
+    setStraps((prev) => normalizeJoinLinks(prev.filter((strap) => !chain.memberIds.includes(strap.id))));
+    if (activeId && chain.memberIds.includes(activeId)) {
+      const next = straps.find((strap) => !chain.memberIds.includes(strap.id));
+      setActiveId(next?.id ?? null);
+    }
+  };
+
+  const unjoinChainById = (chainId: string) => {
+    const chain = canonicalJoinedChains.find((c) => c.chainId === chainId);
+    if (!chain) return;
+    markPresetDirty();
+    setStraps((prev) => normalizeJoinLinks(prev.map((strap) => (
+      chain.memberIds.includes(strap.id) ? { ...strap, joinedEndpoint: undefined } : strap
+    ))));
   };
 
 
@@ -1490,9 +2213,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       if (event.key === 'ArrowDown') delta.y = step;
 
       markPresetDirty();
-      setStraps((prev) => prev.map((s) => (s.id === activeId
+      setStraps((prev) => normalizeJoinLinks(prev.map((s) => (s.id === activeId
         ? { ...s, offset: { x: s.offset.x + delta.x, y: s.offset.y + delta.y } }
-        : s)));
+        : s))));
       event.preventDefault();
     };
 
@@ -1714,6 +2437,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     />
   ) : null
 ) : (
+
   transformed.length > 1 ? (
     <path
       d={transformedD}
@@ -1727,8 +2451,10 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     />
   ) : null
 )}
-                    {!interactionActive && !isSimplifiedForThisStrap && guideSet && (
-                      <GuideOverlay
+
+
+{!interactionActive && !isSimplifiedForThisStrap && guideSet && !chainByMemberId.has(strap.id) && (
+  <GuideOverlay
                         guideSet={guideSet}
                         style={{
                           thin: 0.45,
@@ -1753,6 +2479,60 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                   </g>
                 );
               })}
+
+{!interactionActive && !previewSimplify && (
+  <defs>
+    {[...compatibleChainGuideData.values()].flatMap((chain) =>
+      [...chain.memberClipBandDById.entries()].map(([memberId, d]) => (
+        <clipPath
+          key={`clip-${chain.chainId}-${memberId}`}
+          id={`clip-${chain.chainId}-${memberId}`}
+          clipPathUnits="userSpaceOnUse"
+        >
+          <path d={d} />
+        </clipPath>
+      )),
+    )}
+  </defs>
+)}
+
+{!interactionActive && !previewSimplify && canonicalJoinedChains.map((chain) => {
+  const chainGuide = compatibleChainGuideData.get(chain.chainId);
+  if (!chainGuide) return null;
+
+  return (
+    <React.Fragment key={`joined-guides-${chain.chainId}`}>
+      {chain.memberIds.map((memberId) => {
+        const clipD = chainGuide.memberClipBandDById.get(memberId);
+        if (!clipD) return null;
+
+        const isUnderAtAnyCrossing = !!underCrossings.get(memberId)?.length;
+
+        return (
+          <g
+            key={`joined-guides-${chain.chainId}-${memberId}`}
+            clipPath={`url(#clip-${chain.chainId}-${memberId})`}
+            mask={isUnderAtAnyCrossing ? `url(#mask-${memberId})` : undefined}
+          >
+            <GuideOverlay
+              guideSet={chainGuide.guideSet}
+              style={{
+                thin: 0.45,
+                bold: 0.75,
+                colors: {
+                  thin: chainGuide.colorThin,
+                  bold: chainGuide.colorBold,
+                  tick: '#dbeafe',
+                  frame: 'transparent',
+                },
+              }}
+            />
+          </g>
+        );
+      })}
+    </React.Fragment>
+  );
+})}
 
               {simplify && !interactionActive && crossingsWithOverrides.map((crossing) => {
                 const over = strapById.get(crossing.overId);
@@ -1790,6 +2570,42 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                   )}
                   <circle cx={crossing.x} cy={crossing.y} r={1.8} fill="#ffffff" stroke="#111827" strokeWidth={0.7} vectorEffect="non-scaling-stroke" />
                   <text x={crossing.x + 2.6} y={crossing.y - 2.2} fontSize="3.2" fill="#111827" stroke="white" strokeWidth={0.15} paintOrder="stroke">{idx + 1}</text>
+                </g>
+              ))}
+
+              {joinCandidates.map((candidate) => (
+                <g
+                  key={`join-${candidate.aId}-${candidate.aSide}-${candidate.bId}-${candidate.bSide}`}
+                  style={{ cursor: interactionActive ? 'default' : 'pointer' }}
+                  onPointerDown={(e) => { if (!interactionActive) e.stopPropagation(); }}
+                  onClick={(e) => {
+                    if (interactionActive) return;
+                    e.stopPropagation();
+                    toggleJoinCandidate(candidate);
+                  }}
+                >
+                  <g opacity={interactionActive ? 0.55 : 1}>
+                    <rect
+                      x={candidate.x - 2.5}
+                      y={candidate.y - 2.5}
+                      width={5}
+                      height={5}
+                      rx={0.8}
+                      fill={candidate.joined ? '#10b981' : '#ffffff'}
+                      stroke={candidate.joined ? '#065f46' : '#0f766e'}
+                      strokeWidth={0.8}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <path
+                      d={candidate.joined
+                        ? `M ${candidate.x - 1.2} ${candidate.y} L ${candidate.x + 1.2} ${candidate.y}`
+                        : `M ${candidate.x - 1.2} ${candidate.y} L ${candidate.x + 1.2} ${candidate.y} M ${candidate.x} ${candidate.y - 1.2} L ${candidate.x} ${candidate.y + 1.2}`}
+                      stroke={candidate.joined ? '#064e3b' : '#0f766e'}
+                      strokeWidth={0.6}
+                      strokeLinecap="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  </g>
                 </g>
               ))}
             </svg>
@@ -1897,7 +2713,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               <InsetLabeledField label="Script">
                 <select className={INSET_CONTROL_BASE} value={activeStrap.script} onChange={(e) => {
                   const script = e.target.value as ScriptId;
-                  setStraps((prev) => prev.map((strap) => (strap.id === activeStrap.id ? applyScriptDefaults(strap, script) : strap)));
+                  setStraps((prev) => normalizeJoinLinks(prev.map((strap) => (strap.id === activeStrap.id ? applyScriptDefaults(strap, script) : strap))));
                 }}>
                   {Object.keys(SCRIPT_PROFILES).map((id) => <option key={id} value={id}>{id}</option>)}
                 </select>
@@ -2171,20 +2987,76 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
           <h2 className="text-lg font-semibold text-slate-800">Step 3 — Weave / Layer order</h2>
           <p className="mt-1 text-xs text-slate-600">Order controls render stack. First = back, last = front.</p>
           <div className="mt-3 space-y-2">
-            {straps.map((strap) => (
-              <div key={strap.id} draggable onDragStart={() => setDragListId(strap.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => {
-                if (dragListId) reorderStraps(dragListId, strap.id);
+            {visibleLayerItems.map((item) => {
+              const isChain = item.kind === 'chain';
+              const chain = isChain ? canonicalJoinedChains.find((c) => c.chainId === item.chainId) : null;
+              const strap = !isChain ? straps.find((s) => s.id === item.strapId) : null;
+              const rowName = chain?.displayName ?? strap?.name ?? item.id;
+              const rowColor = isChain
+                ? (straps.find((s) => s.id === chain?.memberIds[0])?.color ?? '#64748b')
+                : (strap?.color ?? '#64748b');
+              const selected = isChain
+                ? !!chain && !!activeId && chain.memberIds.includes(activeId)
+                : activeId === strap?.id;
+              const stackIdx = isChain
+                ? Math.max(...(chain?.memberIds.map((id) => straps.findIndex((s) => s.id === id)) ?? [-1])) + 1
+                : straps.findIndex((s) => s.id === strap?.id) + 1;
+
+              return (
+              <div key={item.id} draggable onDragStart={() => setDragListId(item.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => {
+                if (dragListId) reorderLayerItem(dragListId, item.id);
                 setDragListId(null);
               }} className="rounded-lg border border-slate-200 p-2 flex items-center gap-2 cursor-move">
-                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: strap.color }} />
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => setActiveId(strap.id)} className={`px-2 py-1 rounded border border-slate-300 ${activeId === strap.id ? 'border-indigo-300 text-indigo-700' : ''}`}>Select</button>
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => duplicateStrapById(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Duplicate strap" aria-label="Duplicate strap">⧉</button>
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapX(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Center on page" aria-label="Center on page">⌖</button>
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapY(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Center vertically" aria-label="Center vertically">↕</button>
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => removeStrapById(strap.id)} disabled={straps.length <= 1} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40" title="Delete strap" aria-label="Delete strap">✕</button>
-                <span className="text-xs text-slate-500 ml-auto">#{straps.findIndex((s) => s.id === strap.id) + 1}</span>
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: rowColor }} />
+                <button
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => {
+                    if (isChain && chain?.memberIds[0]) setActiveId(chain.memberIds[0]);
+                    if (!isChain && strap) setActiveId(strap.id);
+                  }}
+                  className={`px-2 py-1 rounded border border-slate-300 ${selected ? 'border-indigo-300 text-indigo-700' : ''}`}
+                >
+                  Select
+                </button>
+                <button
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => {
+                    if (isChain && chain) duplicateChainById(chain.chainId);
+                    if (!isChain && strap) duplicateStrapById(strap.id);
+                  }}
+                  className="px-2 py-1 rounded border border-slate-300"
+                  title={isChain ? 'Duplicate joined path' : 'Duplicate strap'}
+                  aria-label={isChain ? 'Duplicate joined path' : 'Duplicate strap'}
+                >
+                  ⧉
+                </button>
+                {!isChain && strap && (
+                  <>
+                    <button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapX(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Center on page" aria-label="Center on page">⌖</button>
+                    <button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapY(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Center vertically" aria-label="Center vertically">↕</button>
+                  </>
+                )}
+                {isChain && chain && (
+                  <button onPointerDown={(e) => e.stopPropagation()} onClick={() => unjoinChainById(chain.chainId)} className="px-2 py-1 rounded border border-slate-300" title="Unjoin chain" aria-label="Unjoin chain">Unjoin</button>
+                )}
+                <button
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => {
+                    if (isChain && chain) removeChainById(chain.chainId);
+                    if (!isChain && strap) removeStrapById(strap.id);
+                  }}
+                  disabled={straps.length <= 1}
+                  className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40"
+                  title={isChain ? 'Delete joined path' : 'Delete strap'}
+                  aria-label={isChain ? 'Delete joined path' : 'Delete strap'}
+                >
+                  ✕
+                </button>
+                <span className="truncate text-xs text-slate-600">{rowName}</span>
+                <span className="text-xs text-slate-500 ml-auto">#{stackIdx}</span>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
