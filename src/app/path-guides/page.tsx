@@ -50,6 +50,29 @@ type Strap = {
   flip: boolean;
   snapped: boolean;
   invertGuides: boolean;
+  joinedEndpoint?: {
+    start?: { otherId: string; otherSide: 'start' | 'end' };
+    end?: { otherId: string; otherSide: 'start' | 'end' };
+  };
+};
+
+type EndpointSide = 'start' | 'end';
+type EndpointLink = { otherId: string; otherSide: EndpointSide };
+type JoinCandidate = {
+  aId: string;
+  aSide: EndpointSide;
+  bId: string;
+  bSide: EndpointSide;
+  x: number;
+  y: number;
+  joined: boolean;
+};
+
+type ChainMember = {
+  strapId: string;
+  reversed: boolean;
+  startDistanceMM: number;
+  endDistanceMM: number;
 };
 
 type StrapGroup = {
@@ -218,6 +241,368 @@ const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) 
       || left.crossing.id.localeCompare(right.crossing.id)
     ))
     .map((entry) => entry.crossing.id);
+};
+
+const JOIN_DISTANCE_MM = 8;
+const JOIN_COS_MIN = 0.2;
+
+const endpointKey = (id: string, side: EndpointSide) => `${id}:${side}`;
+
+const isOpenPolyline = (pts: Pt[]) => {
+  if (pts.length < 2) return false;
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  return Math.hypot(first.x - last.x, first.y - last.y) > 0.05;
+};
+
+const getEndpointInfo = (pts: Pt[], side: EndpointSide) => {
+  if (!isOpenPolyline(pts)) return null;
+  if (side === 'start') {
+    const p0 = pts[0];
+    const p1 = pts[1];
+    const dx = p0.x - p1.x;
+    const dy = p0.y - p1.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) return null;
+    return { point: p0, tangent: { x: dx / len, y: dy / len } };
+  }
+  const pn = pts[pts.length - 1];
+  const pm1 = pts[pts.length - 2];
+  const dx = pn.x - pm1.x;
+  const dy = pn.y - pm1.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return null;
+  return { point: pn, tangent: { x: dx / len, y: dy / len } };
+};
+
+const normalizeJoinLinks = (straps: Strap[]) => {
+  const strapIds = new Set(straps.map((s) => s.id));
+  const incoming = new Map<string, EndpointLink>();
+
+  straps.forEach((strap) => {
+    (['start', 'end'] as const).forEach((side) => {
+      const link = strap.joinedEndpoint?.[side];
+      if (!link || !strapIds.has(link.otherId)) return;
+      const targetKey = endpointKey(link.otherId, link.otherSide);
+      if (!incoming.has(targetKey)) incoming.set(targetKey, { otherId: strap.id, otherSide: side });
+    });
+  });
+
+  const map = new Map<string, Strap>();
+  straps.forEach((strap) => map.set(strap.id, { ...strap, joinedEndpoint: undefined }));
+
+  const assign = (id: string, side: EndpointSide, link: EndpointLink) => {
+    const strap = map.get(id);
+    if (!strap) return;
+    const current = strap.joinedEndpoint ?? {};
+    strap.joinedEndpoint = { ...current, [side]: link };
+    map.set(id, strap);
+  };
+
+  straps.forEach((strap) => {
+    (['start', 'end'] as const).forEach((side) => {
+      const link = strap.joinedEndpoint?.[side];
+      if (!link || !strapIds.has(link.otherId)) return;
+      if (link.otherId === strap.id) return;
+      const target = map.get(link.otherId);
+      const back = target?.joinedEndpoint?.[link.otherSide];
+      if (!back || back.otherId !== strap.id || back.otherSide !== side) return;
+
+      const srcIn = incoming.get(endpointKey(strap.id, side));
+      const dstIn = incoming.get(endpointKey(link.otherId, link.otherSide));
+      if (!srcIn || srcIn.otherId !== link.otherId || srcIn.otherSide !== link.otherSide) return;
+      if (!dstIn || dstIn.otherId !== strap.id || dstIn.otherSide !== side) return;
+
+      assign(strap.id, side, { otherId: link.otherId, otherSide: link.otherSide });
+      assign(link.otherId, link.otherSide, { otherId: strap.id, otherSide: side });
+    });
+  });
+
+  return straps.map((s) => map.get(s.id) ?? s);
+};
+
+const buildJoinCandidates = ({
+  straps,
+  transformedById,
+}: {
+  straps: Strap[];
+  transformedById: Map<string, Pt[]>;
+}) => {
+  const strapById = new Map(straps.map((s) => [s.id, s]));
+  const endpoints: Array<{ strapId: string; side: EndpointSide; point: Pt; tangent: Pt }> = [];
+  const occupied = new Set<string>();
+
+  straps.forEach((strap) => {
+    const pts = transformedById.get(strap.id) ?? [];
+    if (!isOpenPolyline(pts)) return;
+    (['start', 'end'] as const).forEach((side) => {
+      const info = getEndpointInfo(pts, side);
+      if (!info) return;
+      endpoints.push({ strapId: strap.id, side, point: info.point, tangent: info.tangent });
+      if (strap.joinedEndpoint?.[side]) occupied.add(endpointKey(strap.id, side));
+    });
+  });
+
+  const candidates: JoinCandidate[] = [];
+  for (let i = 0; i < endpoints.length; i += 1) {
+    const a = endpoints[i];
+    for (let j = i + 1; j < endpoints.length; j += 1) {
+      const b = endpoints[j];
+      if (a.strapId === b.strapId) continue;
+      const dist = Math.hypot(a.point.x - b.point.x, a.point.y - b.point.y);
+      if (dist > JOIN_DISTANCE_MM) continue;
+
+      const dot = a.tangent.x * b.tangent.x + a.tangent.y * b.tangent.y;
+      if (dot < JOIN_COS_MIN) continue;
+
+      const aOccupied = occupied.has(endpointKey(a.strapId, a.side));
+      const bOccupied = occupied.has(endpointKey(b.strapId, b.side));
+      const aLink = strapById.get(a.strapId)?.joinedEndpoint?.[a.side];
+      const alreadyJoined = !!aLink && aLink.otherId === b.strapId && aLink.otherSide === b.side;
+      if ((aOccupied || bOccupied) && !alreadyJoined) continue;
+
+      candidates.push({
+        aId: a.strapId,
+        aSide: a.side,
+        bId: b.strapId,
+        bSide: b.side,
+        x: (a.point.x + b.point.x) / 2,
+        y: (a.point.y + b.point.y) / 2,
+        joined: alreadyJoined,
+      });
+    }
+  }
+
+  const seen = new Set(candidates.map((c) => `${endpointKey(c.aId, c.aSide)}|${endpointKey(c.bId, c.bSide)}`));
+  straps.forEach((strap) => {
+    (['start', 'end'] as const).forEach((side) => {
+      const link = strap.joinedEndpoint?.[side];
+      if (!link) return;
+      const aKey = endpointKey(strap.id, side);
+      const bKey = endpointKey(link.otherId, link.otherSide);
+      const key = aKey < bKey ? `${aKey}|${bKey}` : `${bKey}|${aKey}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      const aInfo = getEndpointInfo(transformedById.get(strap.id) ?? [], side);
+      const bInfo = getEndpointInfo(transformedById.get(link.otherId) ?? [], link.otherSide);
+      if (!aInfo || !bInfo) return;
+      const [aId, aSide, bId, bSide] = aKey < bKey
+        ? [strap.id, side, link.otherId, link.otherSide]
+        : [link.otherId, link.otherSide, strap.id, side];
+      candidates.push({
+        aId,
+        aSide,
+        bId,
+        bSide,
+        x: (aInfo.point.x + bInfo.point.x) / 2,
+        y: (aInfo.point.y + bInfo.point.y) / 2,
+        joined: true,
+      });
+    });
+  });
+
+  return candidates.sort((l, r) => `${l.aId}|${l.aSide}|${l.bId}|${l.bSide}`.localeCompare(`${r.aId}|${r.aSide}|${r.bId}|${r.bSide}`));
+};
+
+const buildJoinedChains = (straps: Strap[]) => {
+  const strapById = new Map(straps.map((s) => [s.id, s]));
+  const endpointLinks = new Map<string, string>();
+  let valid = true;
+
+  straps.forEach((strap) => {
+    (['start', 'end'] as const).forEach((side) => {
+      const link = strap.joinedEndpoint?.[side];
+      if (!link) return;
+      if (!strapById.has(link.otherId) || link.otherId === strap.id) {
+        valid = false;
+        return;
+      }
+      endpointLinks.set(endpointKey(strap.id, side), endpointKey(link.otherId, link.otherSide));
+    });
+  });
+
+  endpointLinks.forEach((dst, src) => {
+    const back = endpointLinks.get(dst);
+    if (back !== src) valid = false;
+  });
+
+  if (!valid) return [] as Array<{ id: string; members: Array<{ strapId: string; reversed: boolean }> }>;
+
+  const degree = new Map<string, number>();
+  straps.forEach((strap) => degree.set(strap.id, 0));
+  const edgeSeen = new Set<string>();
+  endpointLinks.forEach((dst, src) => {
+    const [aId] = src.split(':');
+    const [bId] = dst.split(':');
+    const key = aId < bId ? `${aId}|${bId}` : `${bId}|${aId}`;
+    if (edgeSeen.has(key)) return;
+    edgeSeen.add(key);
+    degree.set(aId, (degree.get(aId) ?? 0) + 1);
+    degree.set(bId, (degree.get(bId) ?? 0) + 1);
+  });
+
+  if ([...degree.values()].some((d) => d > 2)) return [];
+
+  const components: string[][] = [];
+  const visited = new Set<string>();
+  straps.forEach((strap) => {
+    const d = degree.get(strap.id) ?? 0;
+    if (d === 0 || visited.has(strap.id)) return;
+    const queue = [strap.id];
+    const comp: string[] = [];
+    visited.add(strap.id);
+    while (queue.length) {
+      const id = queue.shift()!;
+      comp.push(id);
+      (['start', 'end'] as const).forEach((side) => {
+        const link = strapById.get(id)?.joinedEndpoint?.[side];
+        if (!link || visited.has(link.otherId)) return;
+        visited.add(link.otherId);
+        queue.push(link.otherId);
+      });
+    }
+    components.push(comp);
+  });
+
+  return components.flatMap((comp, index) => {
+    const ends = comp.filter((id) => (degree.get(id) ?? 0) === 1).sort();
+    const isLoop = ends.length === 0;
+    if (!isLoop && ends.length !== 2) return [];
+
+    const startStrapId = isLoop ? [...comp].sort()[0] : ends[0];
+    const members: Array<{ strapId: string; reversed: boolean }> = [];
+    const used = new Set<string>();
+    let currId = startStrapId;
+    let prevId: string | null = null;
+
+    while (currId && !used.has(currId)) {
+      const curr = strapById.get(currId);
+      if (!curr) return [];
+      used.add(currId);
+
+      let entrySide: EndpointSide | null = null;
+      if (prevId) {
+        const startLink = curr.joinedEndpoint?.start;
+        const endLink = curr.joinedEndpoint?.end;
+        if (startLink?.otherId === prevId) entrySide = 'start';
+        else if (endLink?.otherId === prevId) entrySide = 'end';
+        else return [];
+      }
+      const reversed = entrySide === 'end';
+      members.push({ strapId: currId, reversed });
+
+      const exitSide: EndpointSide = reversed ? 'start' : 'end';
+      const nextLink = curr.joinedEndpoint?.[exitSide];
+      if (!nextLink) break;
+      prevId = currId;
+      currId = nextLink.otherId;
+      if (isLoop && currId === startStrapId) break;
+    }
+
+    if (members.length !== comp.length) return [];
+    return [{ id: `chain-${index}-${startStrapId}`, members }];
+  });
+};
+
+const buildVirtualBaselineForChain = ({
+  chain,
+  transformedById,
+}: {
+  chain: { id: string; members: Array<{ strapId: string; reversed: boolean }> };
+  transformedById: Map<string, Pt[]>;
+}) => {
+  const baseline: Pt[] = [];
+  const members: ChainMember[] = [];
+  let acc = 0;
+
+  chain.members.forEach((member, idx) => {
+    const source = transformedById.get(member.strapId) ?? [];
+    if (source.length < 2 || !isOpenPolyline(source)) return;
+    const pts = member.reversed ? [...source].reverse() : source;
+    let segLen = 0;
+    for (let i = 1; i < pts.length; i += 1) {
+      segLen += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    }
+    const startDistanceMM = acc;
+    const endDistanceMM = acc + segLen;
+    members.push({
+      strapId: member.strapId,
+      reversed: member.reversed,
+      startDistanceMM,
+      endDistanceMM,
+    });
+    acc = endDistanceMM;
+
+    if (!baseline.length) baseline.push(...pts);
+    else baseline.push(...pts.slice(idx > 0 ? 1 : 0));
+  });
+
+  return { id: chain.id, baseline, members };
+};
+
+const projectPointToPolylineDistance = (pt: Pt, baseline: Pt[]) => {
+  if (baseline.length < 2) return 0;
+  let bestS = 0;
+  let bestD2 = Number.POSITIVE_INFINITY;
+  let acc = 0;
+  for (let i = 1; i < baseline.length; i += 1) {
+    const a = baseline[i - 1];
+    const b = baseline[i];
+    const vx = b.x - a.x;
+    const vy = b.y - a.y;
+    const seg2 = vx * vx + vy * vy;
+    if (seg2 < 1e-12) continue;
+    const wx = pt.x - a.x;
+    const wy = pt.y - a.y;
+    const t = Math.max(0, Math.min(1, (wx * vx + wy * vy) / seg2));
+    const px = a.x + vx * t;
+    const py = a.y + vy * t;
+    const d2 = (pt.x - px) ** 2 + (pt.y - py) ** 2;
+    if (d2 < bestD2) {
+      bestD2 = d2;
+      bestS = acc + Math.sqrt(seg2) * t;
+    }
+    acc += Math.sqrt(seg2);
+  }
+  return bestS;
+};
+
+const sliceChainGuidesBackToMembers = ({
+  chainGuideSet,
+  virtual,
+}: {
+  chainGuideSet: NonNullable<ReturnType<typeof buildGuideSet>>;
+  virtual: { baseline: Pt[]; members: ChainMember[] };
+}) => {
+  const tickByMember = new Map<string, { a: Pt; b: Pt }[]>();
+  (chainGuideSet.ticks ?? []).forEach((tick) => {
+    const s = projectPointToPolylineDistance(tick.a, virtual.baseline);
+    const owner = virtual.members.find((m) => s >= m.startDistanceMM - 1e-6 && s <= m.endDistanceMM + 1e-6);
+    if (!owner) return;
+    if (!tickByMember.has(owner.strapId)) tickByMember.set(owner.strapId, []);
+    tickByMember.get(owner.strapId)!.push(tick);
+  });
+
+  const lineForMember = (line: Pt[], member: ChainMember) => {
+    const out = line.filter((pt) => {
+      const s = projectPointToPolylineDistance(pt, virtual.baseline);
+      return s >= member.startDistanceMM - 1e-6 && s <= member.endDistanceMM + 1e-6;
+    });
+    return out;
+  };
+
+  const byMember = new Map<string, NonNullable<ReturnType<typeof buildGuideSet>>>();
+  virtual.members.forEach((member) => {
+    byMember.set(member.strapId, {
+      ascLine: lineForMember(chainGuideSet.ascLine, member),
+      waistLine: lineForMember(chainGuideSet.waistLine, member),
+      baseLine: lineForMember(chainGuideSet.baseLine, member),
+      descLine: lineForMember(chainGuideSet.descLine, member),
+      ticks: tickByMember.get(member.strapId) ?? [],
+      hGuides: (chainGuideSet.hGuides ?? []).map((line) => lineForMember(line, member)).filter((line) => line.length > 1),
+    });
+  });
+  return byMember;
 };
 
 function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, rightAdornmentInteractive = false, adornmentClassName = 'right-3', children }: InsetLabeledFieldProps) {
@@ -639,7 +1024,7 @@ export default function PathGuidesPage() {
     return out;
   };
 
-  const renderData = useMemo(() => straps.map((strap) => {
+  const baseRenderData = useMemo(() => straps.map((strap) => {
     const sampled = samplePathDToPolyline(strap.d, 1.25);
     const localCenter = centroid(sampled);
     const centered = sampled.map((p) => ({ x: p.x - localCenter.x, y: p.y - localCenter.y }));
@@ -651,44 +1036,93 @@ export default function PathGuidesPage() {
     });
     const metrics = guideMetrics(strap);
 
-    const guideSet =
-    ( transformed.length > 1 )
-      ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
-          baseline: transformed,
-          xMM: metrics.xMM,
-          ascMM: metrics.ascMM,
-          descMM: metrics.descMM,
-          tickStepMM: strap.script === 'Copperplate' ? Math.max(2, metrics.nibMM) : metrics.effectiveNibMM,
-          actualNibMM: metrics.nibMM,
-          invertGuides: strap.invertGuides,
-        })
-      : null;
-
     const transformedD = transformed.length > 1 ? pathD(transformed) : '';
+    return { strap, transformed, transformedD, metrics, localCenter, sampled };
+  }), [straps]);
+
+  const transformedById = useMemo(() => new Map(baseRenderData.map((r) => [r.strap.id, r.transformed])), [baseRenderData]);
+
+  const joinedChains = useMemo(() => buildJoinedChains(straps), [straps]);
+
+  const joinedGuideSetByStrapId = useMemo(() => {
+    const out = new Map<string, NonNullable<ReturnType<typeof buildGuideSet>>>();
+    joinedChains.forEach((chain) => {
+      const membersWithData = chain.members
+        .map((member) => ({ ...member, strap: straps.find((s) => s.id === member.strapId) }))
+        .filter((entry): entry is { strapId: string; reversed: boolean; strap: Strap } => !!entry.strap);
+      if (membersWithData.length !== chain.members.length || membersWithData.length < 2) return;
+
+      const first = membersWithData[0].strap;
+      const sameScript = membersWithData.every((m) => m.strap.script === first.script);
+      const sameInvert = membersWithData.every((m) => m.strap.invertGuides === first.invertGuides);
+      if (!sameScript || !sameInvert) return;
+
+      const firstMetrics = guideMetrics(first);
+      const sameMetrics = membersWithData.every((m) => {
+        const mm = guideMetrics(m.strap);
+        return Math.abs(mm.xMM - firstMetrics.xMM) < 1e-6
+          && Math.abs(mm.ascMM - firstMetrics.ascMM) < 1e-6
+          && Math.abs(mm.descMM - firstMetrics.descMM) < 1e-6
+          && Math.abs(mm.nibMM - firstMetrics.nibMM) < 1e-6
+          && Math.abs(mm.effectiveNibMM - firstMetrics.effectiveNibMM) < 1e-6;
+      });
+      if (!sameMetrics) return;
+
+      const virtual = buildVirtualBaselineForChain({
+        chain,
+        transformedById,
+      });
+      if (virtual.baseline.length < 2 || virtual.members.length !== membersWithData.length) return;
+
+      const chainGuideSet = buildGuideSet(first.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
+        baseline: virtual.baseline,
+        xMM: firstMetrics.xMM,
+        ascMM: firstMetrics.ascMM,
+        descMM: firstMetrics.descMM,
+        tickStepMM: first.script === 'Copperplate' ? Math.max(2, firstMetrics.nibMM) : firstMetrics.effectiveNibMM,
+        actualNibMM: firstMetrics.nibMM,
+        invertGuides: first.invertGuides,
+      });
+
+      const sliced = sliceChainGuidesBackToMembers({ chainGuideSet, virtual });
+      sliced.forEach((guideSet, strapId) => out.set(strapId, guideSet));
+    });
+    return out;
+  }, [joinedChains, straps, transformedById]);
+
+  const renderData = useMemo(() => baseRenderData.map((entry) => {
+    const { strap, transformed, metrics } = entry;
+    const fallbackGuideSet =
+      transformed.length > 1
+        ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
+            baseline: transformed,
+            xMM: metrics.xMM,
+            ascMM: metrics.ascMM,
+            descMM: metrics.descMM,
+            tickStepMM: strap.script === 'Copperplate' ? Math.max(2, metrics.nibMM) : metrics.effectiveNibMM,
+            actualNibMM: metrics.nibMM,
+            invertGuides: strap.invertGuides,
+          })
+        : null;
+    const guideSet = joinedGuideSetByStrapId.get(strap.id) ?? fallbackGuideSet;
     const bandD = guideSet ? bandPolygonD(guideSet.ascLine, guideSet.descLine) : '';
     const proxyBandD = guideSet
-      ? bandPolygonD(
-          decimatePolyline(guideSet.ascLine, 90),
-          decimatePolyline(guideSet.descLine, 90),
-        )
+      ? bandPolygonD(decimatePolyline(guideSet.ascLine, 90), decimatePolyline(guideSet.descLine, 90))
       : '';
-
-    return { strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter, sampled };
-  }), [straps]);
+    return { ...entry, guideSet, bandD, proxyBandD };
+  }), [baseRenderData, joinedGuideSetByStrapId]);
   const totalSegments = useMemo(
     () => renderData.reduce((sum, r) => sum + Math.max(0, r.transformed.length - 1), 0),
     [renderData],
   );
   const crossingPerformanceWarning = totalSegments > CROSSING_MAX_SEGMENTS;
-  const transformedById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r.transformed])), [renderData]);
-
   const baseCrossings = useMemo(() => {
     if (crossingPerformanceWarning) return [];
     return findCrossingsForStraps(
-      renderData.map((r) => ({ id: r.strap.id, pts: r.transformed })),
+      baseRenderData.map((r) => ({ id: r.strap.id, pts: r.transformed })),
       CROSS_EPS_MM,
     );
-  }, [crossingPerformanceWarning, renderData]);
+  }, [baseRenderData, crossingPerformanceWarning]);
 
   const pairSlotsByCrossingId = useMemo(() => {
     const slots = new Map<string, { key: PairKey; slot: number }>();
@@ -875,8 +1309,56 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     lastAppliedPresetStateRef.current = null;
   }, [selectedPresetId]);
 
+  const joinCandidates = useMemo(() => buildJoinCandidates({ straps, transformedById }), [straps, transformedById]);
+
+  const toggleJoinCandidate = useCallback((candidate: JoinCandidate) => {
+    markPresetDirty();
+    setStraps((prev) => {
+      const byId = new Map(prev.map((s) => [s.id, { ...s }]));
+      const a = byId.get(candidate.aId);
+      const b = byId.get(candidate.bId);
+      if (!a || !b) return prev;
+
+      const aLink = a.joinedEndpoint?.[candidate.aSide];
+      const joined = !!aLink && aLink.otherId === b.id && aLink.otherSide === candidate.bSide;
+
+      if (joined) {
+        const nextA = { ...(a.joinedEndpoint ?? {}) };
+        const nextB = { ...(b.joinedEndpoint ?? {}) };
+        delete nextA[candidate.aSide];
+        delete nextB[candidate.bSide];
+        a.joinedEndpoint = Object.keys(nextA).length ? nextA : undefined;
+        b.joinedEndpoint = Object.keys(nextB).length ? nextB : undefined;
+      } else {
+        const aPts = transformedById.get(a.id) ?? [];
+        const bPts = transformedById.get(b.id) ?? [];
+        const aInfo = getEndpointInfo(aPts, candidate.aSide);
+        const bInfo = getEndpointInfo(bPts, candidate.bSide);
+        if (!aInfo || !bInfo) return prev;
+
+        const moveA = activeId ? activeId === a.id : false;
+        const moveB = activeId ? activeId === b.id : false;
+        const aIndex = prev.findIndex((s) => s.id === a.id);
+        const bIndex = prev.findIndex((s) => s.id === b.id);
+        const moveId = moveA && !moveB ? a.id : moveB && !moveA ? b.id : (aIndex > bIndex ? a.id : b.id);
+        const dx = (moveId === a.id ? bInfo.point.x - aInfo.point.x : aInfo.point.x - bInfo.point.x);
+        const dy = (moveId === a.id ? bInfo.point.y - aInfo.point.y : aInfo.point.y - bInfo.point.y);
+
+        const mover = byId.get(moveId);
+        if (mover) mover.offset = { x: mover.offset.x + dx, y: mover.offset.y + dy };
+
+        const nextA = { ...(a.joinedEndpoint ?? {}), [candidate.aSide]: { otherId: b.id, otherSide: candidate.bSide } };
+        const nextB = { ...(b.joinedEndpoint ?? {}), [candidate.bSide]: { otherId: a.id, otherSide: candidate.aSide } };
+        a.joinedEndpoint = nextA;
+        b.joinedEndpoint = nextB;
+      }
+
+      return normalizeJoinLinks(prev.map((s) => byId.get(s.id) ?? s));
+    });
+  }, [activeId, markPresetDirty, transformedById]);
+
   const loadPreset = (preset: PathGuidesPresetV1) => {
-    const state = { ...preset.state, straps: assignDistinctColors(preset.state.straps) };
+    const state = { ...preset.state, straps: normalizeJoinLinks(assignDistinctColors(preset.state.straps)) };
     setPaper(state.paper);
     setOrientation(state.orientation);
     setView(state.view);
@@ -976,7 +1458,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
   const updateStrap = (id: string, patch: Partial<Strap>) => {
     markPresetDirty();
-    setStraps((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    setStraps((prev) => normalizeJoinLinks(prev.map((s) => (s.id === id ? { ...s, ...patch } : s))));
   };
 
   const requestScrubPaint = useCallback(() => {
@@ -1042,11 +1524,11 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     }
     
     markPresetDirty();
-    setStraps((prev) =>
-      prev.map((s) =>
-        s.id === strapId ? { ...s, rotDeg: finalRot, scalePct: finalScale } : s,
-      ),
-    );
+    setStraps((prev) => normalizeJoinLinks(
+      prev.map((s) => (
+        s.id === strapId ? { ...s, rotDeg: finalRot, scalePct: finalScale } : s
+      )),
+    ));
     
     scrubActiveRef.current = false;
     scrubStrapIdRef.current = null;
@@ -1181,9 +1663,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
         markPresetDirty();
         const finalOffset = finished.liveOffset;
         const finalSnapped = finished.liveSnapped ?? false;
-        setStraps((prev) =>
+        setStraps((prev) => normalizeJoinLinks(
           prev.map((s) => (s.id === finished.strapId ? { ...s, offset: finalOffset, snapped: finalSnapped } : s)),
-        );
+        ));
       }
       dragRef.current = { mode: 'none', pointerId: -1, startClient: { x: 0, y: 0 }, startPan: { x: 0, y: 0 } };
       liveDragTranslateRef.current = null;
@@ -1235,7 +1717,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       snapped: false,
       invertGuides: false,
     }, 'Copperplate');
-    setStraps((prev) => assignDistinctColors([...prev, next]));
+    setStraps((prev) => normalizeJoinLinks(assignDistinctColors([...prev, next])));
     setActiveId(next.id);
   };
 
@@ -1253,7 +1735,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       markPresetDirty();
       const finalOffset = { x: baseNow.baseOffset.x + liveNow.dx, y: baseNow.baseOffset.y + liveNow.dy };
       const finalSnapped = nudgeSnappedRef.current;
-      setStraps((prev) => prev.map((s) => (s.id === baseNow.strapId ? { ...s, offset: finalOffset, snapped: finalSnapped } : s)));
+        setStraps((prev) => normalizeJoinLinks(prev.map((s) => (s.id === baseNow.strapId ? { ...s, offset: finalOffset, snapped: finalSnapped } : s))));
     };
 
     const endNudgeSession = () => {
@@ -1364,7 +1846,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       snapped: false,
       invertGuides: false,
     }, 'Copperplate');
-    setStraps((prev) => assignDistinctColors([...prev, next]));
+    setStraps((prev) => normalizeJoinLinks(assignDistinctColors([...prev, next])));
     setActiveId(next.id);
   };
 
@@ -1407,7 +1889,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       return;
     }
 
-    setStraps((prev) => assignDistinctColors([...prev, ...created]));
+    setStraps((prev) => normalizeJoinLinks(assignDistinctColors([...prev, ...created])));
     setActiveId(created[0].id);
   };
 
@@ -1420,7 +1902,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       const copy = [...prev];
       const [item] = copy.splice(srcIdx, 1);
       copy.splice(dstIdx, 0, item);
-      return copy;
+      return normalizeJoinLinks(copy);
     });
   };
 
@@ -1439,15 +1921,16 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       flip: strap.flip,
       snapped: false,
       invertGuides: strap.invertGuides,
+      joinedEndpoint: undefined,
     };
     duplicate.offset = clampOffsetToPage({ sampled, localCenter, strap: duplicate, box, marginMM: FIT_MARGIN_MM });
-    setStraps((prev) => assignDistinctColors([...prev, duplicate]));
+    setStraps((prev) => normalizeJoinLinks(assignDistinctColors([...prev, duplicate])));
   };
 
   const removeStrapById = (id: string) => {
     if (straps.length <= 1) return;
     markPresetDirty();
-    setStraps((prev) => prev.filter((strap) => strap.id !== id));
+    setStraps((prev) => normalizeJoinLinks(prev.filter((strap) => strap.id !== id)));
     if (activeId === id) setActiveId(straps.find((strap) => strap.id !== id)?.id ?? null);
   };
 
@@ -1490,9 +1973,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       if (event.key === 'ArrowDown') delta.y = step;
 
       markPresetDirty();
-      setStraps((prev) => prev.map((s) => (s.id === activeId
+      setStraps((prev) => normalizeJoinLinks(prev.map((s) => (s.id === activeId
         ? { ...s, offset: { x: s.offset.x + delta.x, y: s.offset.y + delta.y } }
-        : s)));
+        : s))));
       event.preventDefault();
     };
 
@@ -1792,6 +2275,30 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                   <text x={crossing.x + 2.6} y={crossing.y - 2.2} fontSize="3.2" fill="#111827" stroke="white" strokeWidth={0.15} paintOrder="stroke">{idx + 1}</text>
                 </g>
               ))}
+
+              {!interactionActive && joinCandidates.map((candidate) => (
+                <g
+                  key={`join-${candidate.aId}-${candidate.aSide}-${candidate.bId}-${candidate.bSide}`}
+                  style={{ cursor: 'pointer' }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleJoinCandidate(candidate);
+                  }}
+                >
+                  <rect
+                    x={candidate.x - 1.8}
+                    y={candidate.y - 1.8}
+                    width={3.6}
+                    height={3.6}
+                    rx={0.6}
+                    fill={candidate.joined ? '#10b981' : '#ffffff'}
+                    stroke={candidate.joined ? '#065f46' : '#0f766e'}
+                    strokeWidth={0.7}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </g>
+              ))}
             </svg>
           </div>
         </div>
@@ -1897,7 +2404,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               <InsetLabeledField label="Script">
                 <select className={INSET_CONTROL_BASE} value={activeStrap.script} onChange={(e) => {
                   const script = e.target.value as ScriptId;
-                  setStraps((prev) => prev.map((strap) => (strap.id === activeStrap.id ? applyScriptDefaults(strap, script) : strap)));
+                  setStraps((prev) => normalizeJoinLinks(prev.map((strap) => (strap.id === activeStrap.id ? applyScriptDefaults(strap, script) : strap))));
                 }}>
                   {Object.keys(SCRIPT_PROFILES).map((id) => <option key={id} value={id}>{id}</option>)}
                 </select>
