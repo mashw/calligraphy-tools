@@ -50,7 +50,14 @@ type Strap = {
   flip: boolean;
   snapped: boolean;
   invertGuides: boolean;
+  snappedEndpoint?: {
+    start?: { otherId: string; otherSide: 'start' | 'end' };
+    end?: { otherId: string; otherSide: 'start' | 'end' };
+  };
 };
+
+type EndpointSide = 'start' | 'end';
+type EndpointRef = { strapId: string; side: EndpointSide };
 
 type StrapGroup = {
   id: string;
@@ -84,6 +91,10 @@ type PathGuidesPresetV1 = {
 
 const SNAP_IN_MM = 6;
 const RELEASE_MM = 10;
+const ENDPOINT_SNAP_IN_MM = 4;
+const ENDPOINT_RELEASE_MM = 6;
+const ENDPOINT_TANGENT_DOT_MAX = -0.45;
+const SNAP_AMBIGUITY_MM = 0.75;
 const CROSS_EPS_MM = 1.2;
 const CROSSING_MAX_SEGMENTS = 2800;
 const FIT_MARGIN_MM = 12;
@@ -130,6 +141,28 @@ const boundsOf = (pts: Pt[]) => {
   });
   return { minX, maxX, minY, maxY, w: maxX - minX, h: maxY - minY };
 };
+
+const isClosedPolyline = (pts: Pt[]) => {
+  if (pts.length < 3) return false;
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  return Math.hypot(first.x - last.x, first.y - last.y) < 0.05;
+};
+
+const normalizeVec = (dx: number, dy: number) => {
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-9) return { x: 0, y: 0, valid: false };
+  return { x: dx / len, y: dy / len, valid: true };
+};
+
+const polylineLength = (pts: Pt[]) => {
+  let total = 0;
+  for (let i = 1; i < pts.length; i += 1) total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+  return total;
+};
+
+const oppositeSide = (side: EndpointSide): EndpointSide => (side === 'start' ? 'end' : 'start');
+const endpointKey = (strapId: string, side: EndpointSide) => `${strapId}:${side}`;
 
 const clampOffsetToPage = ({
   sampled,
@@ -581,6 +614,8 @@ export default function PathGuidesPage() {
     startOffset?: { x: number; y: number };
     startSnapped?: boolean;
     startLocalCenter?: { x: number; y: number };
+    startEndpointLink?: Strap['snappedEndpoint'];
+    liveEndpointLink?: Strap['snappedEndpoint'];
     liveOffset?: { x: number; y: number };
     liveSnapped?: boolean;
   }>({
@@ -594,7 +629,7 @@ export default function PathGuidesPage() {
   const liveDragTranslateRef = useRef<{ strapId: string; dx: number; dy: number } | null>(null);
   const nudgeActiveRef = useRef(false);
   const nudgeTimerRef = useRef<number | null>(null);
-  const nudgeBaseRef = useRef<{ strapId: string; baseOffset: { x: number; y: number }; baseSnapped: boolean } | null>(null);
+  const nudgeBaseRef = useRef<{ strapId: string; baseOffset: { x: number; y: number }; baseSnapped: boolean; baseEndpointLink?: Strap['snappedEndpoint'] } | null>(null);
   const nudgeSnappedRef = useRef<boolean>(false);
 
   // Live rotation/scale scrubbing (avoid heavy recompute while slider is being dragged)
@@ -605,6 +640,29 @@ export default function PathGuidesPage() {
 
   const activeStrap = straps.find((s) => s.id === (activeId ?? straps[0]?.id)) ?? straps[0] ?? null;
   const interactionActive = dragActive || nudgeActiveRef.current || scrubActiveRef.current;
+
+  const normalizeSeamLinks = useCallback((nextStraps: Strap[]) => {
+    const byId = new Map(nextStraps.map((s) => [s.id, s]));
+    return nextStraps.map((strap) => {
+      const snap = strap.snappedEndpoint;
+      if (!snap) return strap;
+      let changed = false;
+      const normalized: NonNullable<Strap['snappedEndpoint']> = {};
+      (['start', 'end'] as EndpointSide[]).forEach((side) => {
+        const link = snap[side];
+        if (!link) return;
+        const other = byId.get(link.otherId);
+        const otherBackLink = other?.snappedEndpoint?.[link.otherSide];
+        if (!other || !otherBackLink || otherBackLink.otherId !== strap.id || otherBackLink.otherSide !== side) {
+          changed = true;
+          return;
+        }
+        normalized[side] = link;
+      });
+      if (!changed) return strap;
+      return { ...strap, snappedEndpoint: Object.keys(normalized).length ? normalized : undefined };
+    });
+  }, []);
 
   // While scrubbing, the preview uses an SVG transform delta, but we don't update strap state until commit.
   // These derived "display" values keep the slider thumb + numbers responsive.
@@ -639,42 +697,151 @@ export default function PathGuidesPage() {
     return out;
   };
 
-  const renderData = useMemo(() => straps.map((strap) => {
-    const sampled = samplePathDToPolyline(strap.d, 1.25);
-    const localCenter = centroid(sampled);
-    const centered = sampled.map((p) => ({ x: p.x - localCenter.x, y: p.y - localCenter.y }));
-    const transformed = transformPolyline(centered, {
-      scalePct: strap.scalePct,
-      rotDeg: strap.rotDeg,
-      flipX: strap.flip,
-      offset: { x: strap.offset.x + localCenter.x, y: strap.offset.y + localCenter.y },
+  const renderData = useMemo(() => {
+    const baseData = straps.map((strap) => {
+      const sampled = samplePathDToPolyline(strap.d, 1.25);
+      const localCenter = centroid(sampled);
+      const centered = sampled.map((p) => ({ x: p.x - localCenter.x, y: p.y - localCenter.y }));
+      const transformed = transformPolyline(centered, {
+        scalePct: strap.scalePct,
+        rotDeg: strap.rotDeg,
+        flipX: strap.flip,
+        offset: { x: strap.offset.x + localCenter.x, y: strap.offset.y + localCenter.y },
+      });
+      const metrics = guideMetrics(strap);
+      const closed = isClosedPolyline(transformed);
+      const endpointInfo = (() => {
+        if (closed || transformed.length < 2) return null;
+        const start = transformed[0];
+        const startNext = transformed[1];
+        const end = transformed[transformed.length - 1];
+        const endPrev = transformed[transformed.length - 2];
+        const startTan = normalizeVec(startNext.x - start.x, startNext.y - start.y);
+        const endTan = normalizeVec(end.x - endPrev.x, end.y - endPrev.y);
+        if (!startTan.valid || !endTan.valid) return null;
+        return {
+          start: { point: start, tangentOut: { x: startTan.x, y: startTan.y } },
+          end: { point: end, tangentOut: { x: endTan.x, y: endTan.y } },
+        };
+      })();
+
+      return { strap, transformed, metrics, localCenter, sampled, closed, endpointInfo, lengthMM: polylineLength(transformed) };
     });
-    const metrics = guideMetrics(strap);
 
-    const guideSet =
-    ( transformed.length > 1 )
-      ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
-          baseline: transformed,
-          xMM: metrics.xMM,
-          ascMM: metrics.ascMM,
-          descMM: metrics.descMM,
-          tickStepMM: strap.script === 'Copperplate' ? Math.max(2, metrics.nibMM) : metrics.effectiveNibMM,
-          actualNibMM: metrics.nibMM,
-          invertGuides: strap.invertGuides,
-        })
-      : null;
+    type ChainEntry = { strapId: string; forward: boolean; cumulativeMM: number };
+    const chainPhaseByStrap = new Map<string, { anchorMM: number; forward: boolean }>();
+    const baseById = new Map(baseData.map((r) => [r.strap.id, r]));
+    const seamNeighborByNode = new Map<string, EndpointRef>();
 
-    const transformedD = transformed.length > 1 ? pathD(transformed) : '';
-    const bandD = guideSet ? bandPolygonD(guideSet.ascLine, guideSet.descLine) : '';
-    const proxyBandD = guideSet
-      ? bandPolygonD(
-          decimatePolyline(guideSet.ascLine, 90),
-          decimatePolyline(guideSet.descLine, 90),
-        )
-      : '';
+    for (const row of baseData) {
+      const snap = row.strap.snappedEndpoint;
+      if (!row.endpointInfo || !snap) continue;
+      (['start', 'end'] as EndpointSide[]).forEach((side) => {
+        const link = snap[side];
+        if (!link) return;
+        const other = baseById.get(link.otherId);
+        if (!other?.endpointInfo) return;
+        const otherBack = other.strap.snappedEndpoint?.[link.otherSide];
+        if (!otherBack || otherBack.otherId !== row.strap.id || otherBack.otherSide !== side) return;
+        const key = endpointKey(row.strap.id, side);
+        const hasExisting = seamNeighborByNode.get(key);
+        if (hasExisting && (hasExisting.strapId !== link.otherId || hasExisting.side !== link.otherSide)) return;
+        seamNeighborByNode.set(key, { strapId: link.otherId, side: link.otherSide });
+      });
+    }
 
-    return { strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter, sampled };
-  }), [straps]);
+    const adjacency = new Map<string, EndpointRef[]>();
+    for (const [nodeKey, to] of seamNeighborByNode) {
+      const [strapId, side] = nodeKey.split(':') as [string, EndpointSide];
+      const fromRef: EndpointRef = { strapId, side };
+      const toKey = endpointKey(to.strapId, to.side);
+      const back = seamNeighborByNode.get(toKey);
+      if (!back || back.strapId !== fromRef.strapId || back.side !== fromRef.side) continue;
+      const existingFrom = adjacency.get(nodeKey) ?? [];
+      if (!existingFrom.some((n) => n.strapId === to.strapId && n.side === to.side)) existingFrom.push(to);
+      adjacency.set(nodeKey, existingFrom);
+    }
+
+    const degreeByNode = new Map<string, number>([...adjacency.entries()].map(([k, v]) => [k, v.length]));
+    const ambiguous = [...degreeByNode.values()].some((d) => d > 1);
+
+    if (!ambiguous) {
+      const allNodeKeys = [...adjacency.keys()];
+      const visited = new Set<string>();
+      const chains: ChainEntry[][] = [];
+
+      const walk = (startKey: string) => {
+        const chain: ChainEntry[] = [];
+        let currentKey = startKey;
+        let cumulativeMM = 0;
+        while (true) {
+          if (visited.has(currentKey)) break;
+          visited.add(currentKey);
+          const [strapId, side] = currentKey.split(':') as [string, EndpointSide];
+          const base = baseById.get(strapId);
+          if (!base) break;
+          const forward = side === 'start';
+          chain.push({ strapId, forward, cumulativeMM });
+          cumulativeMM += base.lengthMM;
+          const exitKey = endpointKey(strapId, oppositeSide(side));
+          visited.add(exitKey);
+          const next = adjacency.get(exitKey)?.[0];
+          if (!next) break;
+          currentKey = endpointKey(next.strapId, next.side);
+        }
+        return chain;
+      };
+
+      const endpoints = allNodeKeys.filter((k) => (degreeByNode.get(k) ?? 0) === 1);
+      endpoints.forEach((k) => {
+        if (!visited.has(k)) {
+          const chain = walk(k);
+          if (chain.length > 1) chains.push(chain);
+        }
+      });
+      allNodeKeys.forEach((k) => {
+        if (!visited.has(k)) {
+          const chain = walk(k);
+          if (chain.length > 1) chains.push(chain);
+        }
+      });
+
+      chains.forEach((chain) => {
+        chain.forEach((entry) => {
+          chainPhaseByStrap.set(entry.strapId, { anchorMM: entry.cumulativeMM, forward: entry.forward });
+        });
+      });
+    }
+
+    return baseData.map(({ strap, transformed, metrics, localCenter, sampled }) => {
+      const chainMeta = chainPhaseByStrap.get(strap.id);
+      const baselineForGuides = chainMeta && !chainMeta.forward ? [...transformed].reverse() : transformed;
+      const guideSet =
+      ( baselineForGuides.length > 1 )
+        ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
+            baseline: baselineForGuides,
+            xMM: metrics.xMM,
+            ascMM: metrics.ascMM,
+            descMM: metrics.descMM,
+            tickStepMM: strap.script === 'Copperplate' ? Math.max(2, metrics.nibMM) : metrics.effectiveNibMM,
+            actualNibMM: metrics.nibMM,
+            invertGuides: strap.invertGuides,
+            tickAnchorS: chainMeta?.anchorMM,
+          })
+        : null;
+
+      const transformedD = transformed.length > 1 ? pathD(transformed) : '';
+      const bandD = guideSet ? bandPolygonD(guideSet.ascLine, guideSet.descLine) : '';
+      const proxyBandD = guideSet
+        ? bandPolygonD(
+            decimatePolyline(guideSet.ascLine, 90),
+            decimatePolyline(guideSet.descLine, 90),
+          )
+        : '';
+
+      return { strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter, sampled };
+    });
+  }, [straps]);
   const totalSegments = useMemo(
     () => renderData.reduce((sum, r) => sum + Math.max(0, r.transformed.length - 1), 0),
     [renderData],
@@ -733,6 +900,27 @@ export default function PathGuidesPage() {
   }, [box.h, box.w, pan, view, zoom]);
 
   const strapById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r])), [renderData]);
+  const openEndpointsByStrap = useMemo(() => {
+    const out = new Map<string, {
+      start: { point: Pt; tangentOut: Pt };
+      end: { point: Pt; tangentOut: Pt };
+    }>();
+    renderData.forEach((r) => {
+      if (r.transformed.length < 2 || isClosedPolyline(r.transformed)) return;
+      const start = r.transformed[0];
+      const startNext = r.transformed[1];
+      const end = r.transformed[r.transformed.length - 1];
+      const endPrev = r.transformed[r.transformed.length - 2];
+      const startTan = normalizeVec(startNext.x - start.x, startNext.y - start.y);
+      const endTan = normalizeVec(end.x - endPrev.x, end.y - endPrev.y);
+      if (!startTan.valid || !endTan.valid) return;
+      out.set(r.strap.id, {
+        start: { point: start, tangentOut: { x: startTan.x, y: startTan.y } },
+        end: { point: end, tangentOut: { x: endTan.x, y: endTan.y } },
+      });
+    });
+    return out;
+  }, [renderData]);
   function bandWindowDFromGuideSet(
     guideSet: NonNullable<(typeof renderData)[number]["guideSet"]>,
     segIdx: number,
@@ -1055,6 +1243,51 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     requestScrubPaint();
   }, [markPresetDirty, requestScrubPaint]);
 
+  const resolveEndpointSnap = useCallback((drag: {
+    strapId: string;
+    dxMM: number;
+    dyMM: number;
+  }) => {
+    const moving = openEndpointsByStrap.get(drag.strapId);
+    if (!moving) return null;
+    const links: NonNullable<Strap['snappedEndpoint']> = {};
+    const candidates: Array<{ movingSide: EndpointSide; target: EndpointRef; dist: number; shift: { x: number; y: number } }> = [];
+    const movedBy = { x: drag.dxMM, y: drag.dyMM };
+    (['start', 'end'] as EndpointSide[]).forEach((movingSide) => {
+      const movingEndpoint = moving[movingSide];
+      const movingPoint = { x: movingEndpoint.point.x + movedBy.x, y: movingEndpoint.point.y + movedBy.y };
+      const movingIn = { x: -movingEndpoint.tangentOut.x, y: -movingEndpoint.tangentOut.y };
+
+      openEndpointsByStrap.forEach((other, otherId) => {
+        if (otherId === drag.strapId) return;
+        (['start', 'end'] as EndpointSide[]).forEach((otherSide) => {
+          const target = other[otherSide];
+          const dist = Math.hypot(movingPoint.x - target.point.x, movingPoint.y - target.point.y);
+          if (dist > ENDPOINT_SNAP_IN_MM) return;
+          const dot = movingIn.x * target.tangentOut.x + movingIn.y * target.tangentOut.y;
+          if (dot > ENDPOINT_TANGENT_DOT_MAX) return;
+          candidates.push({
+            movingSide,
+            target: { strapId: otherId, side: otherSide },
+            dist,
+            shift: { x: target.point.x - movingPoint.x, y: target.point.y - movingPoint.y },
+          });
+        });
+      });
+    });
+
+    if (!candidates.length) return null;
+    candidates.sort((a, b) => a.dist - b.dist);
+    if (candidates[1] && (candidates[1].dist - candidates[0].dist) < SNAP_AMBIGUITY_MM) return null;
+    const winner = candidates[0];
+    links[winner.movingSide] = { otherId: winner.target.strapId, otherSide: winner.target.side };
+    return {
+      shift: winner.shift,
+      links,
+      seam: { moving: { strapId: drag.strapId, side: winner.movingSide }, target: winner.target },
+    };
+  }, [openEndpointsByStrap]);
+
   const applyViewPreset = (next: ViewMode) => {
     setView(next);
     if (next === 'autofit') {
@@ -1099,8 +1332,10 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       startOffset: strap.offset,
       startSnapped: strap.snapped,
       startLocalCenter: strapById.get(strapId)?.localCenter,
+      startEndpointLink: strap.snappedEndpoint,
       liveOffset: strap.offset,
       liveSnapped: strap.snapped,
+      liveEndpointLink: strap.snappedEndpoint,
     };
     svgRef.current.setPointerCapture(e.pointerId);
   };
@@ -1142,8 +1377,40 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       snapped = true;
     }
 
+    let endpointLink = drag.startEndpointLink;
+    const snappedNow = resolveEndpointSnap({
+      strapId: drag.strapId,
+      dxMM: nextX - drag.startOffset.x,
+      dyMM: nextY - drag.startOffset.y,
+    });
+    if (snappedNow) {
+      nextX += snappedNow.shift.x;
+      const nextYY = nextY + snappedNow.shift.y;
+      endpointLink = snappedNow.links;
+      drag.liveOffset = { x: nextX, y: nextYY };
+      drag.liveEndpointLink = endpointLink;
+      drag.liveSnapped = snapped;
+      const dx = nextX - drag.startOffset.x;
+      const dy = nextYY - drag.startOffset.y;
+      liveDragTranslateRef.current = { strapId: drag.strapId, dx, dy };
+      if (!pendingDragPaintRef.current) {
+        pendingDragPaintRef.current = true;
+        requestAnimationFrame(() => {
+          pendingDragPaintRef.current = false;
+          setDragPaintTick((t) => (t + 1) % 1000000);
+        });
+      }
+      return;
+    }
+
+    if (drag.startEndpointLink && drag.startOffset) {
+      const movedDist = Math.hypot(nextX - drag.startOffset.x, nextY - drag.startOffset.y);
+      endpointLink = movedDist > ENDPOINT_RELEASE_MM ? undefined : drag.startEndpointLink;
+    }
+
     drag.liveOffset = { x: nextX, y: nextY };
     drag.liveSnapped = snapped;
+    drag.liveEndpointLink = endpointLink;
     const dx = nextX - drag.startOffset.x;
     const dy = nextY - drag.startOffset.y;
     liveDragTranslateRef.current = { strapId: drag.strapId, dx, dy };
@@ -1181,9 +1448,37 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
         markPresetDirty();
         const finalOffset = finished.liveOffset;
         const finalSnapped = finished.liveSnapped ?? false;
-        setStraps((prev) =>
-          prev.map((s) => (s.id === finished.strapId ? { ...s, offset: finalOffset, snapped: finalSnapped } : s)),
-        );
+        const finalEndpoint = finished.liveEndpointLink;
+        setStraps((prev) => {
+          let next = prev.map((s) => ({ ...s }));
+          next = next.map((s) => {
+            const current = s.snappedEndpoint;
+            const cleaned: NonNullable<Strap['snappedEndpoint']> = {};
+            if (current?.start && current.start.otherId !== finished.strapId) cleaned.start = current.start;
+            if (current?.end && current.end.otherId !== finished.strapId) cleaned.end = current.end;
+            return { ...s, snappedEndpoint: Object.keys(cleaned).length ? cleaned : undefined };
+          });
+
+          next = next.map((s) => {
+            if (s.id !== finished.strapId) return s;
+            return { ...s, offset: finalOffset, snapped: finalSnapped, snappedEndpoint: finalEndpoint };
+          });
+
+          const linkSide = finalEndpoint?.start ? 'start' : finalEndpoint?.end ? 'end' : null;
+          if (linkSide) {
+            const link = finalEndpoint?.[linkSide];
+            if (link) {
+              next = next.map((s) => {
+                if (s.id !== link.otherId) return s;
+                const patch: NonNullable<Strap['snappedEndpoint']> = { ...(s.snappedEndpoint ?? {}) };
+                patch[link.otherSide] = { otherId: finished.strapId!, otherSide: linkSide };
+                return { ...s, snappedEndpoint: patch };
+              });
+            }
+          }
+
+          return normalizeSeamLinks(next);
+        });
       }
       dragRef.current = { mode: 'none', pointerId: -1, startClient: { x: 0, y: 0 }, startPan: { x: 0, y: 0 } };
       liveDragTranslateRef.current = null;
@@ -1253,7 +1548,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       markPresetDirty();
       const finalOffset = { x: baseNow.baseOffset.x + liveNow.dx, y: baseNow.baseOffset.y + liveNow.dy };
       const finalSnapped = nudgeSnappedRef.current;
-      setStraps((prev) => prev.map((s) => (s.id === baseNow.strapId ? { ...s, offset: finalOffset, snapped: finalSnapped } : s)));
+      const movedDist = Math.hypot(liveNow.dx, liveNow.dy);
+      const finalEndpoint = movedDist > ENDPOINT_RELEASE_MM ? undefined : baseNow.baseEndpointLink;
+      setStraps((prev) => normalizeSeamLinks(prev.map((s) => (s.id === baseNow.strapId ? { ...s, offset: finalOffset, snapped: finalSnapped, snappedEndpoint: finalEndpoint } : s))));
     };
 
     const endNudgeSession = () => {
@@ -1281,7 +1578,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       e.preventDefault();
 
       if (!nudgeBaseRef.current || nudgeBaseRef.current.strapId !== strapId) {
-        nudgeBaseRef.current = { strapId, baseOffset: strap.offset, baseSnapped: strap.snapped };
+        nudgeBaseRef.current = { strapId, baseOffset: strap.offset, baseSnapped: strap.snapped, baseEndpointLink: strap.snappedEndpoint };
         nudgeSnappedRef.current = strap.snapped;
       }
       nudgeActiveRef.current = true;
@@ -1336,7 +1633,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       window.removeEventListener('blur', endNudgeSession);
       if (nudgeTimerRef.current != null) window.clearTimeout(nudgeTimerRef.current);
     };
-  }, [activeId, centerX, markPresetDirty, requestNudgePaint, strapById, straps]);
+  }, [activeId, centerX, markPresetDirty, normalizeSeamLinks, requestNudgePaint, strapById, straps]);
 
   const addShape = () => {
     markPresetDirty();
@@ -1439,6 +1736,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       flip: strap.flip,
       snapped: false,
       invertGuides: strap.invertGuides,
+      snappedEndpoint: undefined,
     };
     duplicate.offset = clampOffsetToPage({ sampled, localCenter, strap: duplicate, box, marginMM: FIT_MARGIN_MM });
     setStraps((prev) => assignDistinctColors([...prev, duplicate]));
@@ -1447,7 +1745,14 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
   const removeStrapById = (id: string) => {
     if (straps.length <= 1) return;
     markPresetDirty();
-    setStraps((prev) => prev.filter((strap) => strap.id !== id));
+    setStraps((prev) => normalizeSeamLinks(prev.filter((strap) => strap.id !== id).map((strap) => {
+      const current = strap.snappedEndpoint;
+      if (!current) return strap;
+      const cleaned: NonNullable<Strap['snappedEndpoint']> = {};
+      if (current.start && current.start.otherId !== id) cleaned.start = current.start;
+      if (current.end && current.end.otherId !== id) cleaned.end = current.end;
+      return { ...strap, snappedEndpoint: Object.keys(cleaned).length ? cleaned : undefined };
+    })));
     if (activeId === id) setActiveId(straps.find((strap) => strap.id !== id)?.id ?? null);
   };
 
@@ -1457,7 +1762,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     if (!strap) return;
     const cx = box.w / 2;
     markPresetDirty();
-    updateStrap(strapId, { offset: { x: cx, y: strap.offset.y }, snapped: false });
+    updateStrap(strapId, { offset: { x: cx, y: strap.offset.y }, snapped: false, snappedEndpoint: undefined });
   };
 
   const centerStrapY = (strapId: string) => {
@@ -1465,7 +1770,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     if (!strap) return;
     const cy = box.h / 2;
     markPresetDirty();
-    updateStrap(strapId, { offset: { x: strap.offset.x, y: cy }, snapped: false });
+    updateStrap(strapId, { offset: { x: strap.offset.x, y: cy }, snapped: false, snappedEndpoint: undefined });
   };
 
   useEffect(() => {
@@ -1491,7 +1796,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
       markPresetDirty();
       setStraps((prev) => prev.map((s) => (s.id === activeId
-        ? { ...s, offset: { x: s.offset.x + delta.x, y: s.offset.y + delta.y } }
+        ? { ...s, offset: { x: s.offset.x + delta.x, y: s.offset.y + delta.y }, snappedEndpoint: undefined }
         : s)));
       event.preventDefault();
     };
