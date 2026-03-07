@@ -473,7 +473,7 @@ const buildGuideJoinChains = (straps: Strap[]): GuideJoinChain[] => {
         break;
       }
       visited.add(currentId);
-      members.push({ strapId: currentId, reversed: enterSide === 'start' });
+      members.push({ strapId: currentId, reversed: enterSide === 'end' });
       const exits = (['start', 'end'] as EndpointSide[]).filter((side) => side !== enterSide && !!nextIdBySide(currentId, side));
       if (exits.length > 1) {
         invalid = true;
@@ -517,18 +517,50 @@ const buildVirtualGuideBaselineForChain = ({
     const nextStart = pts[0];
     const seamGap = Math.hypot(prev.x - nextStart.x, prev.y - nextStart.y);
     if (seamGap > GUIDE_JOIN_MAX_SEAM_GAP_MM) return null;
-    points.push(...pts.slice(1));
+    
+    const seam =
+      seamGap < 1e-9
+        ? prev
+        : {
+            x: (prev.x + nextStart.x) / 2,
+            y: (prev.y + nextStart.y) / 2,
+          };
+    
+    points[points.length - 1] = seam;
+    points.push(...pts.slice(1).map((p, idx) => (idx === 0 ? p : p)));
   }
   if (points.length < 2) return null;
   return points;
 };
 
+const countReciprocalGuideJoinsForChain = (chain: GuideJoinChain, straps: Strap[]) => {
+  const strapIds = new Set(chain.members.map((m) => m.strapId));
+  const seen = new Set<string>();
+
+  straps.forEach((strap) => {
+    if (!strapIds.has(strap.id)) return;
+    (['start', 'end'] as EndpointSide[]).forEach((side) => {
+      const ref = strap.guideJoin?.[side];
+      if (!ref) return;
+      if (!strapIds.has(ref.otherId)) return;
+      const a = `${strap.id}:${side}`;
+      const b = `${ref.otherId}:${ref.otherSide}`;
+      const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+      seen.add(key);
+    });
+  });
+
+  return seen.size;
+};
+
 const buildCompatibleJoinedGuideData = ({
   chains,
+  straps,
   strapById,
   transformedById,
 }: {
   chains: GuideJoinChain[];
+  straps: Strap[];
   strapById: Map<string, { strap: Strap; metrics: ReturnType<typeof guideMetrics> }>;
   transformedById: Map<string, Pt[]>;
 }) => {
@@ -537,6 +569,11 @@ const buildCompatibleJoinedGuideData = ({
   chains.forEach((chain) => {
     const first = strapById.get(chain.members[0].strapId);
     if (!first) return;
+
+    const seamCount = countReciprocalGuideJoinsForChain(chain, straps);
+
+    if (chain.members.length === 2 && seamCount < 2) return;
+    
     const allCompatible = chain.members.every((m) => {
       const item = strapById.get(m.strapId);
       if (!item) return false;
@@ -1096,8 +1133,7 @@ export default function PathGuidesPage() {
   );
 
   const compatibleJoinedGuideData = useMemo(
-    () => buildCompatibleJoinedGuideData({ chains: guideJoinChains, strapById, transformedById }),
-    [guideJoinChains, strapById, transformedById],
+    () => buildCompatibleJoinedGuideData({ chains: guideJoinChains, straps, strapById, transformedById }),    [guideJoinChains, strapById, transformedById],
   );
 
   const joinedGuideMemberIds = useMemo(() => {
@@ -1592,7 +1628,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     });
 
     const next = applyScriptDefaults({
-      id: uid('strap'),
+      id: 'strap-initial',
       name,
       d: baseD,
       color: PALETTE[straps.length % PALETTE.length],
