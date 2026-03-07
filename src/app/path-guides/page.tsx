@@ -236,6 +236,7 @@ type GuideJoinChainMember = {
 type GuideJoinChain = {
   id: string;
   members: GuideJoinChainMember[];
+  closed: boolean;
 };
 
 const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) => {
@@ -419,76 +420,83 @@ const buildGuideJoinCandidates = ({
 
 const buildGuideJoinChains = (straps: Strap[]): GuideJoinChain[] => {
   const byId = new Map(straps.map((s) => [s.id, s]));
-  const endpointLinks = new Map<string, { strapId: string; side: EndpointSide }>();
-  const strapNeighbors = new Map<string, Array<{ otherId: string; side: EndpointSide; otherSide: EndpointSide }>>();
 
+  const reciprocalLink = (strapId: string, side: EndpointSide) => {
+    const strap = byId.get(strapId);
+    const ref = strap?.guideJoin?.[side];
+    if (!ref) return null;
+    const other = byId.get(ref.otherId);
+    const back = other?.guideJoin?.[ref.otherSide];
+    if (!back || back.otherId !== strapId || back.otherSide !== side) return null;
+    return { strapId: ref.otherId, side: ref.otherSide as EndpointSide };
+  };
+
+  const nodeKey = (strapId: string, side: EndpointSide) => `${strapId}:${side}`;
+  const otherSide = (side: EndpointSide): EndpointSide => (side === 'start' ? 'end' : 'start');
+
+  const allNodes: Array<{ strapId: string; side: EndpointSide }> = [];
   straps.forEach((strap) => {
     (['start', 'end'] as EndpointSide[]).forEach((side) => {
-      const ref = strap.guideJoin?.[side];
-      if (!ref) return;
-      const other = byId.get(ref.otherId);
-      if (!other) return;
-      const back = other.guideJoin?.[ref.otherSide];
-      if (!back || back.otherId !== strap.id || back.otherSide !== side) return;
-      const key = endpointKey(strap.id, side);
-      if (endpointLinks.has(key)) return;
-      endpointLinks.set(key, { strapId: ref.otherId, side: ref.otherSide });
-      const arr = strapNeighbors.get(strap.id) ?? [];
-      arr.push({ otherId: ref.otherId, side, otherSide: ref.otherSide });
-      strapNeighbors.set(strap.id, arr);
+      if (reciprocalLink(strap.id, side)) allNodes.push({ strapId: strap.id, side });
     });
   });
 
-  for (const strap of straps) {
-    const deg = (strapNeighbors.get(strap.id) ?? []).length;
-    if (deg > 2) return [];
-  }
+  const degreeByStrap = new Map<string, number>();
+  straps.forEach((strap) => {
+    let deg = 0;
+    if (reciprocalLink(strap.id, 'start')) deg += 1;
+    if (reciprocalLink(strap.id, 'end')) deg += 1;
+    degreeByStrap.set(strap.id, deg);
+  });
 
-  const visited = new Set<string>();
+  if ([...degreeByStrap.values()].some((deg) => deg > 2)) return [];
+
+  const visitedNodes = new Set<string>();
   const chains: GuideJoinChain[] = [];
-  const nextIdBySide = (strapId: string, side: EndpointSide) => {
-    const node = endpointLinks.get(endpointKey(strapId, side));
-    return node ? node : null;
-  };
 
-  const chainStartIds = straps
-    .filter((s) => (strapNeighbors.get(s.id) ?? []).length <= 1)
-    .map((s) => s.id);
-  const remainingIds = straps.map((s) => s.id);
-  const orderedSeeds = [...chainStartIds, ...remainingIds];
+  const openStarts = allNodes.filter(({ strapId }) => (degreeByStrap.get(strapId) ?? 0) === 1);
+  const closedStarts = allNodes.filter(({ strapId }) => (degreeByStrap.get(strapId) ?? 0) === 2);
+  const orderedStarts = [...openStarts, ...closedStarts].sort((a, b) =>
+    nodeKey(a.strapId, a.side).localeCompare(nodeKey(b.strapId, b.side)),
+  );
 
-  for (const seed of orderedSeeds) {
-    if (visited.has(seed)) continue;
-    const deg = (strapNeighbors.get(seed) ?? []).length;
-    if (deg === 0) continue;
+  for (const start of orderedStarts) {
+    const startKey = nodeKey(start.strapId, start.side);
+    if (visitedNodes.has(startKey)) continue;
 
-    let currentId = seed;
-    let enterSide: EndpointSide | null = null;
     const members: GuideJoinChainMember[] = [];
-    let invalid = false;
+    const seenMemberSteps = new Set<string>();
+
+    let currentNode = start;
+    let closed = false;
 
     while (true) {
-      if (visited.has(currentId)) {
-        invalid = true;
+      const stepKey = nodeKey(currentNode.strapId, currentNode.side);
+      if (seenMemberSteps.has(stepKey)) {
+        closed = stepKey === startKey;
         break;
       }
-      visited.add(currentId);
-      members.push({ strapId: currentId, reversed: enterSide === 'end' });
-      const exits = (['start', 'end'] as EndpointSide[]).filter((side) => side !== enterSide && !!nextIdBySide(currentId, side));
-      if (exits.length > 1) {
-        invalid = true;
-        break;
-      }
-      if (!exits.length) break;
-      const exitSide = exits[0];
-      const next = nextIdBySide(currentId, exitSide);
-      if (!next) break;
-      currentId = next.strapId;
-      enterSide = next.side;
+      seenMemberSteps.add(stepKey);
+      visitedNodes.add(stepKey);
+
+      members.push({
+        strapId: currentNode.strapId,
+        reversed: currentNode.side === 'end',
+      });
+
+      const exitSide = otherSide(currentNode.side);
+      const exitKey = nodeKey(currentNode.strapId, exitSide);
+      visitedNodes.add(exitKey);
+
+      const nextNode = reciprocalLink(currentNode.strapId, exitSide);
+      if (!nextNode) break;
+
+      currentNode = nextNode;
     }
 
-    if (!invalid && members.length > 1) {
-      chains.push({ id: members.map((m) => m.strapId).join('|'), members });
+    if (members.length > 1) {
+      const id = members.map((m) => `${m.strapId}:${m.reversed ? 'rev' : 'fwd'}`).join('|');
+      chains.push({ id, members, closed });
     }
   }
 
@@ -503,54 +511,45 @@ const buildVirtualGuideBaselineForChain = ({
   transformedById: Map<string, Pt[]>;
 }) => {
   const points: Pt[] = [];
+
+  const stitchPoint = (a: Pt, b: Pt) => {
+    const seamGap = Math.hypot(a.x - b.x, a.y - b.y);
+    if (seamGap > GUIDE_JOIN_MAX_SEAM_GAP_MM) return null;
+    if (seamGap < 1e-9) return a;
+    return {
+      x: (a.x + b.x) / 2,
+      y: (a.y + b.y) / 2,
+    };
+  };
+
   for (let i = 0; i < chain.members.length; i += 1) {
     const member = chain.members[i];
     const raw = transformedById.get(member.strapId) ?? [];
-    if (!isOpenPolyline(raw)) return null;
+    if (!isOpenPolyline(raw) || raw.length < 2) return null;
+
     const pts = member.reversed ? [...raw].reverse() : raw;
-    if (pts.length < 2) return null;
+
     if (!points.length) {
       points.push(...pts);
       continue;
     }
-    const prev = points[points.length - 1];
-    const nextStart = pts[0];
-    const seamGap = Math.hypot(prev.x - nextStart.x, prev.y - nextStart.y);
-    if (seamGap > GUIDE_JOIN_MAX_SEAM_GAP_MM) return null;
-    
-    const seam =
-      seamGap < 1e-9
-        ? prev
-        : {
-            x: (prev.x + nextStart.x) / 2,
-            y: (prev.y + nextStart.y) / 2,
-          };
-    
+
+    const seam = stitchPoint(points[points.length - 1], pts[0]);
+    if (!seam) return null;
+
     points[points.length - 1] = seam;
-    points.push(...pts.slice(1).map((p, idx) => (idx === 0 ? p : p)));
+    points.push(...pts.slice(1));
   }
-  if (points.length < 2) return null;
-  return points;
-};
 
-const countReciprocalGuideJoinsForChain = (chain: GuideJoinChain, straps: Strap[]) => {
-  const strapIds = new Set(chain.members.map((m) => m.strapId));
-  const seen = new Set<string>();
+  if (chain.closed && points.length >= 2) {
+    const seam = stitchPoint(points[points.length - 1], points[0]);
+    if (!seam) return null;
+    points[points.length - 1] = seam;
+    points[0] = seam;
+    points.push({ ...seam });
+  }
 
-  straps.forEach((strap) => {
-    if (!strapIds.has(strap.id)) return;
-    (['start', 'end'] as EndpointSide[]).forEach((side) => {
-      const ref = strap.guideJoin?.[side];
-      if (!ref) return;
-      if (!strapIds.has(ref.otherId)) return;
-      const a = `${strap.id}:${side}`;
-      const b = `${ref.otherId}:${ref.otherSide}`;
-      const key = a < b ? `${a}|${b}` : `${b}|${a}`;
-      seen.add(key);
-    });
-  });
-
-  return seen.size;
+  return points.length >= 2 ? points : null;
 };
 
 const buildCompatibleJoinedGuideData = ({
@@ -570,9 +569,7 @@ const buildCompatibleJoinedGuideData = ({
     const first = strapById.get(chain.members[0].strapId);
     if (!first) return;
 
-    const seamCount = countReciprocalGuideJoinsForChain(chain, straps);
 
-    if (chain.members.length === 2 && seamCount < 2) return;
     
     const allCompatible = chain.members.every((m) => {
       const item = strapById.get(m.strapId);
@@ -1122,18 +1119,20 @@ export default function PathGuidesPage() {
   }, [box.h, box.w, pan, view, zoom]);
 
   const strapById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r])), [renderData]);
+
   const guideJoinCandidates = useMemo(
     () => buildGuideJoinCandidates({ straps, transformedById }),
     [straps, transformedById],
   );
-
+  
   const guideJoinChains = useMemo(
     () => buildGuideJoinChains(straps),
     [straps],
   );
-
+  
   const compatibleJoinedGuideData = useMemo(
-    () => buildCompatibleJoinedGuideData({ chains: guideJoinChains, straps, strapById, transformedById }),    [guideJoinChains, strapById, transformedById],
+    () => buildCompatibleJoinedGuideData({ chains: guideJoinChains, straps, strapById, transformedById }),
+    [guideJoinChains, straps, strapById, transformedById],
   );
 
   const joinedGuideMemberIds = useMemo(() => {
@@ -1628,7 +1627,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     });
 
     const next = applyScriptDefaults({
-      id: 'strap-initial',
+      id: uid('strap'),
       name,
       d: baseD,
       color: PALETTE[straps.length % PALETTE.length],
