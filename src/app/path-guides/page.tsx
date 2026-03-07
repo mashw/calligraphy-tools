@@ -17,6 +17,17 @@ type PaperId = keyof typeof PAPERS_MM;
 type Orientation = 'portrait' | 'landscape';
 type PairKey = string;
 type PairOverrides = Record<PairKey, Record<number, string>>;
+type EndpointSide = 'start' | 'end';
+
+type GuideJoinRef = {
+  otherId: string;
+  otherSide: EndpointSide;
+};
+
+type GuideJoin = {
+  start?: GuideJoinRef;
+  end?: GuideJoinRef;
+};
 
 type InsetLabeledFieldProps = {
   label: string;
@@ -50,6 +61,7 @@ type Strap = {
   flip: boolean;
   snapped: boolean;
   invertGuides: boolean;
+  guideJoin?: GuideJoin;
 };
 
 type StrapGroup = {
@@ -86,6 +98,9 @@ const SNAP_IN_MM = 6;
 const RELEASE_MM = 10;
 const CROSS_EPS_MM = 1.2;
 const CROSSING_MAX_SEGMENTS = 2800;
+const GUIDE_JOIN_MAX_DIST_MM = 10;
+const GUIDE_JOIN_MAX_SEAM_GAP_MM = 1.5;
+const GUIDE_JOIN_OPPOSED_DOT_MAX = -0.3;
 const FIT_MARGIN_MM = 12;
 const PALETTE = ['#5778A4', '#E49444', '#D1615D', '#85B6B2', '#6A9F58', '#E7CA60', '#A87C9F', '#F1A2A9', '#967662', '#B8B0AC'];
 const INSET_CONTROL_BASE = 'w-full border-0 rounded-none px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed';
@@ -192,6 +207,37 @@ const bandPolygonD = (asc: Pt[], desc: Pt[]) => {
   return `M ${a} L ${d} Z`;
 };
 
+
+
+type EndpointInfo = {
+  strapId: string;
+  side: EndpointSide;
+  point: Pt;
+  inward: Pt;
+};
+
+type GuideJoinCandidate = {
+  key: string;
+  aId: string;
+  aSide: EndpointSide;
+  bId: string;
+  bSide: EndpointSide;
+  x: number;
+  y: number;
+  distanceMM: number;
+  alreadyJoined: boolean;
+};
+
+type GuideJoinChainMember = {
+  strapId: string;
+  reversed: boolean;
+};
+
+type GuideJoinChain = {
+  id: string;
+  members: GuideJoinChainMember[];
+};
+
 const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) => {
   const ca = centroid(aPts);
   const cb = centroid(bPts);
@@ -219,6 +265,311 @@ const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) 
     ))
     .map((entry) => entry.crossing.id);
 };
+
+
+const endpointKey = (strapId: string, side: EndpointSide) => `${strapId}:${side}`;
+
+const isOpenPolyline = (pts: Pt[]) => {
+  if (pts.length < 2) return false;
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  return Math.hypot(first.x - last.x, first.y - last.y) > 0.05;
+};
+
+const getEndpointInfo = (strapId: string, pts: Pt[], side: EndpointSide): EndpointInfo | null => {
+  if (!isOpenPolyline(pts) || pts.length < 2) return null;
+  if (side === 'start') {
+    const p0 = pts[0];
+    const p1 = pts[1];
+    const vx = p1.x - p0.x;
+    const vy = p1.y - p0.y;
+    const len = Math.hypot(vx, vy);
+    if (len < 1e-6) return null;
+    return { strapId, side, point: p0, inward: { x: vx / len, y: vy / len } };
+  }
+  const n = pts.length;
+  const pn = pts[n - 1];
+  const pprev = pts[n - 2];
+  const vx = pprev.x - pn.x;
+  const vy = pprev.y - pn.y;
+  const len = Math.hypot(vx, vy);
+  if (len < 1e-6) return null;
+  return { strapId, side, point: pn, inward: { x: vx / len, y: vy / len } };
+};
+
+const normalizeGuideJoinLinks = (straps: Strap[]): Strap[] => {
+  const byId = new Map(straps.map((s) => [s.id, s]));
+  const next = straps.map((strap) => ({ ...strap, guideJoin: strap.guideJoin ? { ...strap.guideJoin } : undefined }));
+  const nextById = new Map(next.map((s) => [s.id, s]));
+
+  const clearLink = (strap: Strap, side: EndpointSide) => {
+    if (!strap.guideJoin) return;
+    delete strap.guideJoin[side];
+    if (!strap.guideJoin.start && !strap.guideJoin.end) delete strap.guideJoin;
+  };
+
+  next.forEach((strap) => {
+    const join = strap.guideJoin;
+    if (!join) return;
+    (['start', 'end'] as EndpointSide[]).forEach((side) => {
+      const ref = join[side];
+      if (!ref) return;
+      if (ref.otherId === strap.id) {
+        clearLink(strap, side);
+        return;
+      }
+      const otherOrig = byId.get(ref.otherId);
+      const other = nextById.get(ref.otherId);
+      if (!otherOrig || !other) {
+        clearLink(strap, side);
+        return;
+      }
+      const back = otherOrig.guideJoin?.[ref.otherSide];
+      if (!back || back.otherId !== strap.id || back.otherSide !== side) {
+        clearLink(strap, side);
+        return;
+      }
+      if (!other.guideJoin) other.guideJoin = {};
+      other.guideJoin[ref.otherSide] = { otherId: strap.id, otherSide: side };
+    });
+  });
+
+  return next.map((strap) => {
+    if (strap.guideJoin && !strap.guideJoin.start && !strap.guideJoin.end) {
+      return { ...strap, guideJoin: undefined };
+    }
+    return strap;
+  });
+};
+
+const buildGuideJoinCandidates = ({
+  straps,
+  transformedById,
+}: {
+  straps: Strap[];
+  transformedById: Map<string, Pt[]>;
+}): GuideJoinCandidate[] => {
+  const endpoints: EndpointInfo[] = [];
+  straps.forEach((strap) => {
+    const pts = transformedById.get(strap.id) ?? [];
+    const start = getEndpointInfo(strap.id, pts, 'start');
+    const end = getEndpointInfo(strap.id, pts, 'end');
+    if (start) endpoints.push(start);
+    if (end) endpoints.push(end);
+  });
+
+  const bestByEndpoint = new Map<string, GuideJoinCandidate>();
+  const addBest = (cand: GuideJoinCandidate) => {
+    const keys = [endpointKey(cand.aId, cand.aSide), endpointKey(cand.bId, cand.bSide)];
+    keys.forEach((key) => {
+      const prev = bestByEndpoint.get(key);
+      if (!prev || cand.distanceMM < prev.distanceMM - 1e-6 || (Math.abs(cand.distanceMM - prev.distanceMM) < 1e-6 && cand.key < prev.key)) {
+        bestByEndpoint.set(key, cand);
+      }
+    });
+  };
+
+  for (let i = 0; i < endpoints.length; i += 1) {
+    for (let j = i + 1; j < endpoints.length; j += 1) {
+      const a = endpoints[i];
+      const b = endpoints[j];
+      if (a.strapId === b.strapId) continue;
+      const dx = a.point.x - b.point.x;
+      const dy = a.point.y - b.point.y;
+      const distanceMM = Math.hypot(dx, dy);
+      if (distanceMM > GUIDE_JOIN_MAX_DIST_MM) continue;
+      const dot = a.inward.x * b.inward.x + a.inward.y * b.inward.y;
+      if (dot > GUIDE_JOIN_OPPOSED_DOT_MAX) continue;
+      const aStrap = straps.find((s) => s.id === a.strapId);
+      const bStrap = straps.find((s) => s.id === b.strapId);
+      const alreadyJoined = aStrap?.guideJoin?.[a.side]?.otherId === b.strapId
+        && aStrap?.guideJoin?.[a.side]?.otherSide === b.side
+        && bStrap?.guideJoin?.[b.side]?.otherId === a.strapId
+        && bStrap?.guideJoin?.[b.side]?.otherSide === a.side;
+      const pairA = `${a.strapId}:${a.side}`;
+      const pairB = `${b.strapId}:${b.side}`;
+      const key = pairA < pairB ? `${pairA}|${pairB}` : `${pairB}|${pairA}`;
+      addBest({
+        key,
+        aId: a.strapId,
+        aSide: a.side,
+        bId: b.strapId,
+        bSide: b.side,
+        x: (a.point.x + b.point.x) / 2,
+        y: (a.point.y + b.point.y) / 2,
+        distanceMM,
+        alreadyJoined,
+      });
+    }
+  }
+
+  const selected = new Map<string, GuideJoinCandidate>();
+  bestByEndpoint.forEach((cand) => {
+    const aSel = bestByEndpoint.get(endpointKey(cand.aId, cand.aSide));
+    const bSel = bestByEndpoint.get(endpointKey(cand.bId, cand.bSide));
+    const aJoined = straps.find((s) => s.id === cand.aId)?.guideJoin?.[cand.aSide]?.otherId === cand.bId;
+    const bJoined = straps.find((s) => s.id === cand.bId)?.guideJoin?.[cand.bSide]?.otherId === cand.aId;
+    if ((aSel?.key === cand.key && bSel?.key === cand.key) || aJoined || bJoined || cand.alreadyJoined) {
+      selected.set(cand.key, cand);
+    }
+  });
+
+  return [...selected.values()].sort((l, r) => l.key.localeCompare(r.key));
+};
+
+const buildGuideJoinChains = (straps: Strap[]): GuideJoinChain[] => {
+  const byId = new Map(straps.map((s) => [s.id, s]));
+  const endpointLinks = new Map<string, { strapId: string; side: EndpointSide }>();
+  const strapNeighbors = new Map<string, Array<{ otherId: string; side: EndpointSide; otherSide: EndpointSide }>>();
+
+  straps.forEach((strap) => {
+    (['start', 'end'] as EndpointSide[]).forEach((side) => {
+      const ref = strap.guideJoin?.[side];
+      if (!ref) return;
+      const other = byId.get(ref.otherId);
+      if (!other) return;
+      const back = other.guideJoin?.[ref.otherSide];
+      if (!back || back.otherId !== strap.id || back.otherSide !== side) return;
+      const key = endpointKey(strap.id, side);
+      if (endpointLinks.has(key)) return;
+      endpointLinks.set(key, { strapId: ref.otherId, side: ref.otherSide });
+      const arr = strapNeighbors.get(strap.id) ?? [];
+      arr.push({ otherId: ref.otherId, side, otherSide: ref.otherSide });
+      strapNeighbors.set(strap.id, arr);
+    });
+  });
+
+  for (const strap of straps) {
+    const deg = (strapNeighbors.get(strap.id) ?? []).length;
+    if (deg > 2) return [];
+  }
+
+  const visited = new Set<string>();
+  const chains: GuideJoinChain[] = [];
+  const nextIdBySide = (strapId: string, side: EndpointSide) => {
+    const node = endpointLinks.get(endpointKey(strapId, side));
+    return node ? node : null;
+  };
+
+  const chainStartIds = straps
+    .filter((s) => (strapNeighbors.get(s.id) ?? []).length <= 1)
+    .map((s) => s.id);
+  const remainingIds = straps.map((s) => s.id);
+  const orderedSeeds = [...chainStartIds, ...remainingIds];
+
+  for (const seed of orderedSeeds) {
+    if (visited.has(seed)) continue;
+    const deg = (strapNeighbors.get(seed) ?? []).length;
+    if (deg === 0) continue;
+
+    let currentId = seed;
+    let enterSide: EndpointSide | null = null;
+    const members: GuideJoinChainMember[] = [];
+    let invalid = false;
+
+    while (true) {
+      if (visited.has(currentId)) {
+        invalid = true;
+        break;
+      }
+      visited.add(currentId);
+      members.push({ strapId: currentId, reversed: enterSide === 'start' });
+      const exits = (['start', 'end'] as EndpointSide[]).filter((side) => side !== enterSide && !!nextIdBySide(currentId, side));
+      if (exits.length > 1) {
+        invalid = true;
+        break;
+      }
+      if (!exits.length) break;
+      const exitSide = exits[0];
+      const next = nextIdBySide(currentId, exitSide);
+      if (!next) break;
+      currentId = next.strapId;
+      enterSide = next.side;
+    }
+
+    if (!invalid && members.length > 1) {
+      chains.push({ id: members.map((m) => m.strapId).join('|'), members });
+    }
+  }
+
+  return chains;
+};
+
+const buildVirtualGuideBaselineForChain = ({
+  chain,
+  transformedById,
+}: {
+  chain: GuideJoinChain;
+  transformedById: Map<string, Pt[]>;
+}) => {
+  const points: Pt[] = [];
+  for (let i = 0; i < chain.members.length; i += 1) {
+    const member = chain.members[i];
+    const raw = transformedById.get(member.strapId) ?? [];
+    if (!isOpenPolyline(raw)) return null;
+    const pts = member.reversed ? [...raw].reverse() : raw;
+    if (pts.length < 2) return null;
+    if (!points.length) {
+      points.push(...pts);
+      continue;
+    }
+    const prev = points[points.length - 1];
+    const nextStart = pts[0];
+    const seamGap = Math.hypot(prev.x - nextStart.x, prev.y - nextStart.y);
+    if (seamGap > GUIDE_JOIN_MAX_SEAM_GAP_MM) return null;
+    points.push(...pts.slice(1));
+  }
+  if (points.length < 2) return null;
+  return points;
+};
+
+const buildCompatibleJoinedGuideData = ({
+  chains,
+  strapById,
+  transformedById,
+}: {
+  chains: GuideJoinChain[];
+  strapById: Map<string, { strap: Strap; metrics: ReturnType<typeof guideMetrics> }>;
+  transformedById: Map<string, Pt[]>;
+}) => {
+  const result: Array<{ chainId: string; members: GuideJoinChainMember[]; guideSet: ReturnType<typeof buildGuideSet> }> = [];
+
+  chains.forEach((chain) => {
+    const first = strapById.get(chain.members[0].strapId);
+    if (!first) return;
+    const allCompatible = chain.members.every((m) => {
+      const item = strapById.get(m.strapId);
+      if (!item) return false;
+      if (item.strap.script !== first.strap.script) return false;
+      if (item.strap.invertGuides !== first.strap.invertGuides) return false;
+      const a = item.metrics;
+      const b = first.metrics;
+      return Math.abs(a.xMM - b.xMM) < 1e-6
+        && Math.abs(a.ascMM - b.ascMM) < 1e-6
+        && Math.abs(a.descMM - b.descMM) < 1e-6
+        && Math.abs(a.nibMM - b.nibMM) < 1e-6
+        && Math.abs(a.effectiveNibMM - b.effectiveNibMM) < 1e-6;
+    });
+    if (!allCompatible) return;
+
+    const baseline = buildVirtualGuideBaselineForChain({ chain, transformedById });
+    if (!baseline) return;
+
+    const g = buildGuideSet(first.strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
+      baseline,
+      xMM: first.metrics.xMM,
+      ascMM: first.metrics.ascMM,
+      descMM: first.metrics.descMM,
+      tickStepMM: first.strap.script === 'Copperplate' ? Math.max(2, first.metrics.nibMM) : first.metrics.effectiveNibMM,
+      actualNibMM: first.metrics.nibMM,
+      invertGuides: first.strap.invertGuides,
+    });
+    result.push({ chainId: chain.id, members: chain.members, guideSet: g });
+  });
+
+  return result;
+};
+
 
 function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, rightAdornmentInteractive = false, adornmentClassName = 'right-3', children }: InsetLabeledFieldProps) {
   return (
@@ -682,6 +1033,7 @@ export default function PathGuidesPage() {
   const crossingPerformanceWarning = totalSegments > CROSSING_MAX_SEGMENTS;
   const transformedById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r.transformed])), [renderData]);
 
+
   const baseCrossings = useMemo(() => {
     if (crossingPerformanceWarning) return [];
     return findCrossingsForStraps(
@@ -733,6 +1085,27 @@ export default function PathGuidesPage() {
   }, [box.h, box.w, pan, view, zoom]);
 
   const strapById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r])), [renderData]);
+  const guideJoinCandidates = useMemo(
+    () => buildGuideJoinCandidates({ straps, transformedById }),
+    [straps, transformedById],
+  );
+
+  const guideJoinChains = useMemo(
+    () => buildGuideJoinChains(straps),
+    [straps],
+  );
+
+  const compatibleJoinedGuideData = useMemo(
+    () => buildCompatibleJoinedGuideData({ chains: guideJoinChains, strapById, transformedById }),
+    [guideJoinChains, strapById, transformedById],
+  );
+
+  const joinedGuideMemberIds = useMemo(() => {
+    const set = new Set<string>();
+    compatibleJoinedGuideData.forEach((chain) => chain.members.forEach((m) => set.add(m.strapId)));
+    return set;
+  }, [compatibleJoinedGuideData]);
+
   function bandWindowDFromGuideSet(
     guideSet: NonNullable<(typeof renderData)[number]["guideSet"]>,
     segIdx: number,
@@ -876,7 +1249,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
   }, [selectedPresetId]);
 
   const loadPreset = (preset: PathGuidesPresetV1) => {
-    const state = { ...preset.state, straps: assignDistinctColors(preset.state.straps) };
+    const state = { ...preset.state, straps: normalizeGuideJoinLinks(assignDistinctColors(preset.state.straps)) };
     setPaper(state.paper);
     setOrientation(state.orientation);
     setView(state.view);
@@ -1235,7 +1608,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       snapped: false,
       invertGuides: false,
     }, 'Copperplate');
-    setStraps((prev) => assignDistinctColors([...prev, next]));
+    setStraps((prev) => normalizeGuideJoinLinks(assignDistinctColors([...prev, next])));
     setActiveId(next.id);
   };
 
@@ -1338,6 +1711,62 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     };
   }, [activeId, centerX, markPresetDirty, requestNudgePaint, strapById, straps]);
 
+
+  const toggleGuideJoin = useCallback((cand: GuideJoinCandidate) => {
+    markPresetDirty();
+    setStraps((prev) => {
+      const aIdx = prev.findIndex((s) => s.id === cand.aId);
+      const bIdx = prev.findIndex((s) => s.id === cand.bId);
+      if (aIdx < 0 || bIdx < 0) return prev;
+      const next = prev.map((s) => ({ ...s, guideJoin: s.guideJoin ? { ...s.guideJoin } : undefined }));
+      const a = next[aIdx];
+      const b = next[bIdx];
+      const isJoined = a.guideJoin?.[cand.aSide]?.otherId === b.id
+        && a.guideJoin?.[cand.aSide]?.otherSide === cand.bSide
+        && b.guideJoin?.[cand.bSide]?.otherId === a.id
+        && b.guideJoin?.[cand.bSide]?.otherSide === cand.aSide;
+
+      const clearSide = (strap: Strap, side: EndpointSide) => {
+        if (!strap.guideJoin) return;
+        delete strap.guideJoin[side];
+        if (!strap.guideJoin.start && !strap.guideJoin.end) delete strap.guideJoin;
+      };
+
+      if (isJoined) {
+        clearSide(a, cand.aSide);
+        clearSide(b, cand.bSide);
+        return normalizeGuideJoinLinks(next);
+      }
+
+      const aPts = transformedById.get(a.id) ?? [];
+      const bPts = transformedById.get(b.id) ?? [];
+      const aEnd = getEndpointInfo(a.id, aPts, cand.aSide);
+      const bEnd = getEndpointInfo(b.id, bPts, cand.bSide);
+      if (!aEnd || !bEnd) return prev;
+
+      let moveId = a.id;
+      if (activeId === a.id) moveId = a.id;
+      else if (activeId === b.id) moveId = b.id;
+      else moveId = aIdx > bIdx ? a.id : b.id;
+
+      const dx = moveId === a.id ? (bEnd.point.x - aEnd.point.x) : (aEnd.point.x - bEnd.point.x);
+      const dy = moveId === a.id ? (bEnd.point.y - aEnd.point.y) : (aEnd.point.y - bEnd.point.y);
+
+      const moveIdx = next.findIndex((s) => s.id === moveId);
+      if (moveIdx >= 0) {
+        const move = next[moveIdx];
+        move.offset = { x: move.offset.x + dx, y: move.offset.y + dy };
+        move.snapped = false;
+      }
+
+      if (!a.guideJoin) a.guideJoin = {};
+      if (!b.guideJoin) b.guideJoin = {};
+      a.guideJoin[cand.aSide] = { otherId: b.id, otherSide: cand.bSide };
+      b.guideJoin[cand.bSide] = { otherId: a.id, otherSide: cand.aSide };
+      return normalizeGuideJoinLinks(next);
+    });
+  }, [activeId, markPresetDirty, transformedById]);
+
   const addShape = () => {
     markPresetDirty();
     const selected = SHAPE_OPTIONS.find((shape) => shape.kind === shapeKind) ?? SHAPE_OPTIONS[0];
@@ -1364,7 +1793,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       snapped: false,
       invertGuides: false,
     }, 'Copperplate');
-    setStraps((prev) => assignDistinctColors([...prev, next]));
+    setStraps((prev) => normalizeGuideJoinLinks(assignDistinctColors([...prev, next])));
     setActiveId(next.id);
   };
 
@@ -1407,7 +1836,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       return;
     }
 
-    setStraps((prev) => assignDistinctColors([...prev, ...created]));
+    setStraps((prev) => normalizeGuideJoinLinks(assignDistinctColors([...prev, ...created])));
     setActiveId(created[0].id);
   };
 
@@ -1441,13 +1870,13 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       invertGuides: strap.invertGuides,
     };
     duplicate.offset = clampOffsetToPage({ sampled, localCenter, strap: duplicate, box, marginMM: FIT_MARGIN_MM });
-    setStraps((prev) => assignDistinctColors([...prev, duplicate]));
+    setStraps((prev) => normalizeGuideJoinLinks(assignDistinctColors([...prev, { ...duplicate, guideJoin: undefined }])));
   };
 
   const removeStrapById = (id: string) => {
     if (straps.length <= 1) return;
     markPresetDirty();
-    setStraps((prev) => prev.filter((strap) => strap.id !== id));
+    setStraps((prev) => normalizeGuideJoinLinks(prev.filter((strap) => strap.id !== id)));
     if (activeId === id) setActiveId(straps.find((strap) => strap.id !== id)?.id ?? null);
   };
 
@@ -1551,6 +1980,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
             >
 {!previewSimplify && (
   <defs>
+    {renderData.map(({ strap, bandD }) => (
+      bandD ? <clipPath key={`guide-clip-${strap.id}`} id={`guide-clip-${strap.id}`} clipPathUnits="userSpaceOnUse"><path d={bandD} /></clipPath> : null
+    ))}
     {[...underCrossings.entries()].map(([underId, list]) => (
       <mask
         key={`mask-${underId}`}
@@ -1727,7 +2159,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     />
   ) : null
 )}
-                    {!interactionActive && !isSimplifiedForThisStrap && guideSet && (
+                    {!interactionActive && !isSimplifiedForThisStrap && guideSet && !joinedGuideMemberIds.has(strap.id) && (
                       <GuideOverlay
                         guideSet={guideSet}
                         style={{
@@ -1753,6 +2185,35 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                   </g>
                 );
               })}
+
+              {!interactionActive && !simplify && compatibleJoinedGuideData.map((chain) => (
+                chain.members.map((member) => {
+                  const strapEntry = strapById.get(member.strapId);
+                  if (!strapEntry?.bandD) return null;
+                  return (
+                    <g
+                      key={`joined-guide-${chain.chainId}-${member.strapId}`}
+                      clipPath={`url(#guide-clip-${member.strapId})`}
+                      mask={underCrossings.get(member.strapId)?.length ? `url(#mask-${member.strapId})` : undefined}
+                    >
+                      <GuideOverlay
+                        guideSet={chain.guideSet}
+                        style={{
+                          thin: 0.45,
+                          bold: 0.75,
+                          colors: {
+                            thin: strapEntry.strap.color,
+                            bold: activeStrap?.id === member.strapId ? '#7c3aed' : strapEntry.strap.color,
+                            tick: '#dbeafe',
+                            frame: 'transparent',
+                          },
+                        }}
+                        interactive={{ onGuidePointerDown: beginStrapDrag(member.strapId), hitStrokeWidthMM: 6 }}
+                      />
+                    </g>
+                  );
+                })
+              ))}
 
               {simplify && !interactionActive && crossingsWithOverrides.map((crossing) => {
                 const over = strapById.get(crossing.overId);
@@ -1792,6 +2253,33 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                   <text x={crossing.x + 2.6} y={crossing.y - 2.2} fontSize="3.2" fill="#111827" stroke="white" strokeWidth={0.15} paintOrder="stroke">{idx + 1}</text>
                 </g>
               ))}
+
+              {!interactionActive && guideJoinCandidates.map((candidate) => (
+                <g
+                  key={`guide-join-${candidate.key}`}
+                  style={{ cursor: 'pointer' }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleGuideJoin(candidate);
+                  }}
+                >
+                  <rect
+                    x={candidate.x - 2.4}
+                    y={candidate.y - 2.4}
+                    width={4.8}
+                    height={4.8}
+                    rx={0.8}
+                    ry={0.8}
+                    fill={candidate.alreadyJoined ? '#eef2ff' : '#ffffff'}
+                    stroke="#1f2937"
+                    strokeWidth={0.5}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <text x={candidate.x} y={candidate.y + 1.05} textAnchor="middle" fontSize="3.1" fill="#111827" paintOrder="stroke" stroke="white" strokeWidth={0.2}>{candidate.alreadyJoined ? '−' : '+'}</text>
+                </g>
+              ))}
+
             </svg>
           </div>
         </div>
