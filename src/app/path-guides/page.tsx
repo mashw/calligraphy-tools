@@ -243,8 +243,10 @@ const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) 
     .map((entry) => entry.crossing.id);
 };
 
-const JOIN_DISTANCE_MM = 8;
-const JOIN_COS_MIN = 0.2;
+const JOIN_DISTANCE_MM = 12;
+const JOIN_OPPOSITION_MAX_DOT = -0.35;
+const JOIN_AMBIGUITY_SCORE_EPS = 1.35;
+const JOIN_DOT_SCORE_WEIGHT = 5;
 
 const endpointKey = (id: string, side: EndpointSide) => `${id}:${side}`;
 
@@ -260,19 +262,19 @@ const getEndpointInfo = (pts: Pt[], side: EndpointSide) => {
   if (side === 'start') {
     const p0 = pts[0];
     const p1 = pts[1];
-    const dx = p0.x - p1.x;
-    const dy = p0.y - p1.y;
+    const dx = p1.x - p0.x;
+    const dy = p1.y - p0.y;
     const len = Math.hypot(dx, dy);
     if (len < 1e-6) return null;
-    return { point: p0, tangent: { x: dx / len, y: dy / len } };
+    return { point: p0, inwardTangent: { x: dx / len, y: dy / len } };
   }
   const pn = pts[pts.length - 1];
   const pm1 = pts[pts.length - 2];
-  const dx = pn.x - pm1.x;
-  const dy = pn.y - pm1.y;
+  const dx = pm1.x - pn.x;
+  const dy = pm1.y - pn.y;
   const len = Math.hypot(dx, dy);
   if (len < 1e-6) return null;
-  return { point: pn, tangent: { x: dx / len, y: dy / len } };
+  return { point: pn, inwardTangent: { x: dx / len, y: dy / len } };
 };
 
 const normalizeJoinLinks = (straps: Strap[]) => {
@@ -328,8 +330,7 @@ const buildJoinCandidates = ({
   straps: Strap[];
   transformedById: Map<string, Pt[]>;
 }) => {
-  const strapById = new Map(straps.map((s) => [s.id, s]));
-  const endpoints: Array<{ strapId: string; side: EndpointSide; point: Pt; tangent: Pt }> = [];
+  const endpoints: Array<{ strapId: string; side: EndpointSide; point: Pt; inwardTangent: Pt }> = [];
   const occupied = new Set<string>();
 
   straps.forEach((strap) => {
@@ -338,42 +339,113 @@ const buildJoinCandidates = ({
     (['start', 'end'] as const).forEach((side) => {
       const info = getEndpointInfo(pts, side);
       if (!info) return;
-      endpoints.push({ strapId: strap.id, side, point: info.point, tangent: info.tangent });
+      endpoints.push({ strapId: strap.id, side, point: info.point, inwardTangent: info.inwardTangent });
       if (strap.joinedEndpoint?.[side]) occupied.add(endpointKey(strap.id, side));
     });
   });
 
-  const candidates: JoinCandidate[] = [];
+  type ScoredPair = {
+    aKey: string;
+    bKey: string;
+    aId: string;
+    aSide: EndpointSide;
+    bId: string;
+    bSide: EndpointSide;
+    score: number;
+    dist: number;
+  };
+
+  const scoredPairs: ScoredPair[] = [];
+  const optionsByEndpoint = new Map<string, ScoredPair[]>();
+
   for (let i = 0; i < endpoints.length; i += 1) {
     const a = endpoints[i];
     for (let j = i + 1; j < endpoints.length; j += 1) {
       const b = endpoints[j];
       if (a.strapId === b.strapId) continue;
+
+      const aKey = endpointKey(a.strapId, a.side);
+      const bKey = endpointKey(b.strapId, b.side);
+      if (occupied.has(aKey) || occupied.has(bKey)) continue;
+
       const dist = Math.hypot(a.point.x - b.point.x, a.point.y - b.point.y);
       if (dist > JOIN_DISTANCE_MM) continue;
 
-      const dot = a.tangent.x * b.tangent.x + a.tangent.y * b.tangent.y;
-      if (dot < JOIN_COS_MIN) continue;
+      const dot = a.inwardTangent.x * b.inwardTangent.x + a.inwardTangent.y * b.inwardTangent.y;
+      if (dot > JOIN_OPPOSITION_MAX_DOT) continue;
 
-      const aOccupied = occupied.has(endpointKey(a.strapId, a.side));
-      const bOccupied = occupied.has(endpointKey(b.strapId, b.side));
-      const aLink = strapById.get(a.strapId)?.joinedEndpoint?.[a.side];
-      const alreadyJoined = !!aLink && aLink.otherId === b.strapId && aLink.otherSide === b.side;
-      if ((aOccupied || bOccupied) && !alreadyJoined) continue;
-
-      candidates.push({
+      const oppositionPenalty = (dot - (-1)) * 0.5;
+      const score = dist + oppositionPenalty * JOIN_DOT_SCORE_WEIGHT;
+      const pair: ScoredPair = {
+        aKey,
+        bKey,
         aId: a.strapId,
         aSide: a.side,
         bId: b.strapId,
         bSide: b.side,
-        x: (a.point.x + b.point.x) / 2,
-        y: (a.point.y + b.point.y) / 2,
-        joined: alreadyJoined,
-      });
+        score,
+        dist,
+      };
+      scoredPairs.push(pair);
+      if (!optionsByEndpoint.has(aKey)) optionsByEndpoint.set(aKey, []);
+      if (!optionsByEndpoint.has(bKey)) optionsByEndpoint.set(bKey, []);
+      optionsByEndpoint.get(aKey)!.push(pair);
+      optionsByEndpoint.get(bKey)!.push(pair);
     }
   }
 
-  const seen = new Set(candidates.map((c) => `${endpointKey(c.aId, c.aSide)}|${endpointKey(c.bId, c.bSide)}`));
+  const ambiguousEndpoints = new Set<string>();
+  const bestByEndpoint = new Map<string, ScoredPair>();
+
+  optionsByEndpoint.forEach((pairs, endpoint) => {
+    const sorted = [...pairs].sort((l, r) => l.score - r.score || l.dist - r.dist || `${l.aKey}|${l.bKey}`.localeCompare(`${r.aKey}|${r.bKey}`));
+    const best = sorted[0];
+    if (!best) return;
+    if (sorted[1] && (sorted[1].score - best.score) <= JOIN_AMBIGUITY_SCORE_EPS) {
+      ambiguousEndpoints.add(endpoint);
+      return;
+    }
+    bestByEndpoint.set(endpoint, best);
+  });
+
+  const candidates: JoinCandidate[] = [];
+  const accepted = new Set<string>();
+  scoredPairs
+    .sort((l, r) => l.score - r.score || l.dist - r.dist || `${l.aKey}|${l.bKey}`.localeCompare(`${r.aKey}|${r.bKey}`))
+    .forEach((pair) => {
+      if (ambiguousEndpoints.has(pair.aKey) || ambiguousEndpoints.has(pair.bKey)) return;
+      const bestA = bestByEndpoint.get(pair.aKey);
+      const bestB = bestByEndpoint.get(pair.bKey);
+      if (!bestA || !bestB) return;
+      const key = pair.aKey < pair.bKey ? `${pair.aKey}|${pair.bKey}` : `${pair.bKey}|${pair.aKey}`;
+      if (accepted.has(key)) return;
+
+      const bFromA = bestA.aKey === pair.aKey ? bestA.bKey : bestA.aKey;
+      const aFromB = bestB.aKey === pair.bKey ? bestB.bKey : bestB.aKey;
+      if (bFromA !== pair.bKey || aFromB !== pair.aKey) return;
+
+      const ordered = pair.aKey < pair.bKey
+        ? { aId: pair.aId, aSide: pair.aSide, bId: pair.bId, bSide: pair.bSide }
+        : { aId: pair.bId, aSide: pair.bSide, bId: pair.aId, bSide: pair.aSide };
+      const aInfo = getEndpointInfo(transformedById.get(ordered.aId) ?? [], ordered.aSide);
+      const bInfo = getEndpointInfo(transformedById.get(ordered.bId) ?? [], ordered.bSide);
+      if (!aInfo || !bInfo) return;
+
+      accepted.add(key);
+      candidates.push({
+        ...ordered,
+        x: (aInfo.point.x + bInfo.point.x) / 2,
+        y: (aInfo.point.y + bInfo.point.y) / 2,
+        joined: false,
+      });
+    });
+
+  const seen = new Set(candidates.map((c) => {
+    const aKey = endpointKey(c.aId, c.aSide);
+    const bKey = endpointKey(c.bId, c.bSide);
+    return aKey < bKey ? `${aKey}|${bKey}` : `${bKey}|${aKey}`;
+  }));
+
   straps.forEach((strap) => {
     (['start', 'end'] as const).forEach((side) => {
       const link = strap.joinedEndpoint?.[side];
@@ -405,7 +477,6 @@ const buildJoinCandidates = ({
 };
 
 const buildJoinedChains = (straps: Strap[]) => {
-  const strapById = new Map(straps.map((s) => [s.id, s]));
   const endpointLinks = new Map<string, string>();
   let valid = true;
 
@@ -2276,27 +2347,37 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 </g>
               ))}
 
-              {!interactionActive && joinCandidates.map((candidate) => (
+              {joinCandidates.map((candidate) => (
                 <g
                   key={`join-${candidate.aId}-${candidate.aSide}-${candidate.bId}-${candidate.bSide}`}
-                  style={{ cursor: 'pointer' }}
-                  onPointerDown={(e) => e.stopPropagation()}
+                  style={{ cursor: interactionActive ? 'default' : 'pointer' }}
+                  onPointerDown={(e) => { if (!interactionActive) e.stopPropagation(); }}
                   onClick={(e) => {
+                    if (interactionActive) return;
                     e.stopPropagation();
                     toggleJoinCandidate(candidate);
                   }}
                 >
-                  <rect
-                    x={candidate.x - 1.8}
-                    y={candidate.y - 1.8}
-                    width={3.6}
-                    height={3.6}
-                    rx={0.6}
-                    fill={candidate.joined ? '#10b981' : '#ffffff'}
-                    stroke={candidate.joined ? '#065f46' : '#0f766e'}
-                    strokeWidth={0.7}
-                    vectorEffect="non-scaling-stroke"
-                  />
+                  <g opacity={interactionActive ? 0.55 : 1}>
+                    <rect
+                      x={candidate.x - 2.5}
+                      y={candidate.y - 2.5}
+                      width={5}
+                      height={5}
+                      rx={0.8}
+                      fill={candidate.joined ? '#10b981' : '#ffffff'}
+                      stroke={candidate.joined ? '#065f46' : '#0f766e'}
+                      strokeWidth={0.8}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <path
+                      d={`M ${candidate.x - 1.2} ${candidate.y} L ${candidate.x + 1.2} ${candidate.y} M ${candidate.x} ${candidate.y - 1.2} L ${candidate.x} ${candidate.y + 1.2}`}
+                      stroke={candidate.joined ? '#064e3b' : '#0f766e'}
+                      strokeWidth={0.6}
+                      strokeLinecap="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  </g>
                 </g>
               ))}
             </svg>
