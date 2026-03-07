@@ -17,6 +17,17 @@ type PaperId = keyof typeof PAPERS_MM;
 type Orientation = 'portrait' | 'landscape';
 type PairKey = string;
 type PairOverrides = Record<PairKey, Record<number, string>>;
+type EndpointSide = 'start' | 'end';
+
+type EndpointLink = {
+  otherId: string;
+  otherSide: EndpointSide;
+};
+
+type SnappedEndpoints = {
+  start?: EndpointLink;
+  end?: EndpointLink;
+};
 
 type InsetLabeledFieldProps = {
   label: string;
@@ -50,6 +61,7 @@ type Strap = {
   flip: boolean;
   snapped: boolean;
   invertGuides: boolean;
+  snappedEndpoint?: SnappedEndpoints;
 };
 
 type StrapGroup = {
@@ -84,6 +96,10 @@ type PathGuidesPresetV1 = {
 
 const SNAP_IN_MM = 6;
 const RELEASE_MM = 10;
+const ENDPOINT_JOIN_SNAP_IN_MM = 5;
+const ENDPOINT_JOIN_RELEASE_MM = 6;
+const ENDPOINT_JOIN_AMBIGUOUS_MM = 0.8;
+const ENDPOINT_TANGENT_MIN_DOT = 0.55;
 const CROSS_EPS_MM = 1.2;
 const CROSSING_MAX_SEGMENTS = 2800;
 const FIT_MARGIN_MM = 12;
@@ -185,10 +201,253 @@ const fitStrapToPage = ({
 };
 
 
+type OpenEndpoint = {
+  strapId: string;
+  side: EndpointSide;
+  point: Pt;
+  tangent: Pt;
+};
+
+type JoinResolution = {
+  offset: { x: number; y: number };
+  snappedToCenter: boolean;
+  join?: { movingSide: EndpointSide; otherId: string; otherSide: EndpointSide };
+};
+
+type ChainTraversal = {
+  reverse: boolean;
+  phaseStartS: number;
+};
+
+const endpointOtherSide = (side: EndpointSide): EndpointSide => (side === 'start' ? 'end' : 'start');
+
+const distPt = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y);
+
+const normalize = (v: Pt): Pt => {
+  const len = Math.hypot(v.x, v.y);
+  if (len < 1e-9) return { x: 0, y: 0 };
+  return { x: v.x / len, y: v.y / len };
+};
+
+const dot = (a: Pt, b: Pt) => (a.x * b.x) + (a.y * b.y);
+
+const baselineIsOpen = (pts: Pt[]) => {
+  if (pts.length < 2) return false;
+  if (pts.length < 3) return true;
+  return distPt(pts[0], pts[pts.length - 1]) > 0.05;
+};
+
+const endpointInfoForBaseline = (strapId: string, baseline: Pt[]): OpenEndpoint[] => {
+  if (!baselineIsOpen(baseline) || baseline.length < 2) return [];
+  const startTan = normalize({ x: baseline[1].x - baseline[0].x, y: baseline[1].y - baseline[0].y });
+  const n = baseline.length;
+  const endTan = normalize({ x: baseline[n - 1].x - baseline[n - 2].x, y: baseline[n - 1].y - baseline[n - 2].y });
+  return [
+    { strapId, side: 'start', point: baseline[0], tangent: startTan },
+    { strapId, side: 'end', point: baseline[n - 1], tangent: endTan },
+  ];
+};
+
+const tangentCompatible = (movingSide: EndpointSide, movingTangent: Pt, targetSide: EndpointSide, targetTangent: Pt) => {
+  const movingAway = movingSide === 'start' ? { x: -movingTangent.x, y: -movingTangent.y } : movingTangent;
+  const targetAway = targetSide === 'start' ? { x: -targetTangent.x, y: -targetTangent.y } : targetTangent;
+  return dot(movingAway, targetAway) >= ENDPOINT_TANGENT_MIN_DOT;
+};
+
+const normalizeEndpointLinks = (input: Strap[]): Strap[] => {
+  const byId = new Map(input.map((strap) => [strap.id, strap]));
+  const out = input.map((strap) => ({ ...strap, snappedEndpoint: strap.snappedEndpoint ? { ...strap.snappedEndpoint } : undefined }));
+  const outById = new Map(out.map((strap) => [strap.id, strap]));
+
+  const validPair = (aId: string, aSide: EndpointSide, link: EndpointLink) => {
+    const other = byId.get(link.otherId);
+    if (!other || other.id === aId) return false;
+    const back = other.snappedEndpoint?.[link.otherSide];
+    return !!back && back.otherId === aId && back.otherSide === aSide;
+  };
+
+  out.forEach((strap) => {
+    const next: SnappedEndpoints = {};
+    const start = strap.snappedEndpoint?.start;
+    const end = strap.snappedEndpoint?.end;
+    if (start && validPair(strap.id, 'start', start)) next.start = start;
+    if (end && validPair(strap.id, 'end', end)) next.end = end;
+    if (!next.start && !next.end) {
+      strap.snappedEndpoint = undefined;
+    } else {
+      strap.snappedEndpoint = next;
+    }
+  });
+
+  // Ensure no strap has both endpoints linked to same target endpoint.
+  out.forEach((strap) => {
+    const start = strap.snappedEndpoint?.start;
+    const end = strap.snappedEndpoint?.end;
+    if (!start || !end) return;
+    if (start.otherId === end.otherId && start.otherSide === end.otherSide) {
+      const other = outById.get(start.otherId);
+      const otherKeep = other?.snappedEndpoint?.[start.otherSide];
+      if (otherKeep?.otherId === strap.id && otherKeep.otherSide === 'start') {
+        strap.snappedEndpoint = { start };
+      } else {
+        strap.snappedEndpoint = { end };
+      }
+    }
+  });
+
+  return out;
+};
+
+const clearLinksForStrap = (list: Strap[], strapId: string): Strap[] => normalizeEndpointLinks(list.map((strap) => {
+  if (strap.id === strapId) return { ...strap, snappedEndpoint: undefined };
+  if (!strap.snappedEndpoint) return strap;
+  const next: SnappedEndpoints = {};
+  if (strap.snappedEndpoint.start && strap.snappedEndpoint.start.otherId !== strapId) next.start = strap.snappedEndpoint.start;
+  if (strap.snappedEndpoint.end && strap.snappedEndpoint.end.otherId !== strapId) next.end = strap.snappedEndpoint.end;
+  return { ...strap, snappedEndpoint: next.start || next.end ? next : undefined };
+}));
+
+const applyJoinPair = (list: Strap[], aId: string, aSide: EndpointSide, bId: string, bSide: EndpointSide): Strap[] => {
+  const out = clearLinksForStrap(clearLinksForStrap(list, aId), bId).map((strap) => {
+    if (strap.id !== aId && strap.id !== bId) return strap;
+    const current = strap.snappedEndpoint ? { ...strap.snappedEndpoint } : {};
+    if (strap.id === aId) current[aSide] = { otherId: bId, otherSide: bSide };
+    if (strap.id === bId) current[bSide] = { otherId: aId, otherSide: aSide };
+    return { ...strap, snappedEndpoint: current };
+  });
+  return normalizeEndpointLinks(out);
+};
+
+const resolveJoinCandidate = ({
+  movingStrapId,
+  movingPts,
+  allById,
+  toleranceMM,
+}: {
+  movingStrapId: string;
+  movingPts: Pt[];
+  allById: Map<string, Pt[]>;
+  toleranceMM: number;
+}) => {
+  const movingEndpoints = endpointInfoForBaseline(movingStrapId, movingPts);
+  if (!movingEndpoints.length) return null;
+
+  const candidates: Array<{ movingSide: EndpointSide; targetId: string; targetSide: EndpointSide; distance: number }> = [];
+  allById.forEach((pts, otherId) => {
+    if (otherId === movingStrapId) return;
+    const endpoints = endpointInfoForBaseline(otherId, pts);
+    endpoints.forEach((target) => {
+      movingEndpoints.forEach((moving) => {
+        const d = distPt(moving.point, target.point);
+        if (d > toleranceMM) return;
+        if (!tangentCompatible(moving.side, moving.tangent, target.side, target.tangent)) return;
+        candidates.push({ movingSide: moving.side, targetId: target.strapId, targetSide: target.side, distance: d });
+      });
+    });
+  });
+
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => a.distance - b.distance || a.targetId.localeCompare(b.targetId) || a.movingSide.localeCompare(b.movingSide) || a.targetSide.localeCompare(b.targetSide));
+  const best = candidates[0];
+  const second = candidates[1];
+  if (second && Math.abs(second.distance - best.distance) < ENDPOINT_JOIN_AMBIGUOUS_MM) return null;
+  return best;
+};
+
+const computeChainTraversal = (straps: Strap[], transformedById: Map<string, Pt[]>): Map<string, ChainTraversal> => {
+  const byId = new Map(straps.map((strap) => [strap.id, strap]));
+  const result = new Map<string, ChainTraversal>();
+
+  const followNeighbor = (strapId: string, exitSide: EndpointSide) => {
+    const link = byId.get(strapId)?.snappedEndpoint?.[exitSide];
+    if (!link) return null;
+    const other = byId.get(link.otherId);
+    if (!other) return null;
+    const back = other.snappedEndpoint?.[link.otherSide];
+    if (!back || back.otherId !== strapId || back.otherSide !== exitSide) return null;
+    return { nextId: other.id, entrySide: link.otherSide };
+  };
+
+  const arcLen = (id: string) => {
+    const pts = transformedById.get(id) ?? [];
+    let sum = 0;
+    for (let i = 1; i < pts.length; i += 1) sum += distPt(pts[i - 1], pts[i]);
+    return sum;
+  };
+
+  const openIds = straps
+    .filter((strap) => baselineIsOpen(transformedById.get(strap.id) ?? []))
+    .map((strap) => strap.id)
+    .sort();
+
+  const componentIds = (seedId: string) => {
+    const seen = new Set<string>();
+    const stack = [seedId];
+    while (stack.length) {
+      const id = stack.pop()!;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      (['start', 'end'] as EndpointSide[]).forEach((side) => {
+        const next = byId.get(id)?.snappedEndpoint?.[side]?.otherId;
+        if (next && byId.has(next) && !seen.has(next)) stack.push(next);
+      });
+    }
+    return [...seen].sort();
+  };
+
+  openIds.forEach((seedId) => {
+    if (result.has(seedId)) return;
+    const comp = componentIds(seedId);
+    if (comp.length < 2) return;
+
+    const endpointCandidate = comp.find((id) => {
+      const strap = byId.get(id);
+      if (!strap) return false;
+      const deg = (strap.snappedEndpoint?.start ? 1 : 0) + (strap.snappedEndpoint?.end ? 1 : 0);
+      return deg <= 1;
+    });
+    if (!endpointCandidate) return;
+
+    const endpointStrap = byId.get(endpointCandidate);
+    if (!endpointStrap) return;
+    const initialEntry: EndpointSide = endpointStrap.snappedEndpoint?.start ? 'end' : 'start';
+
+    const chain: Array<{ id: string; reverse: boolean }> = [];
+    const seen = new Set<string>();
+    let currentId = endpointCandidate;
+    let entrySide: EndpointSide = initialEntry;
+    let valid = true;
+
+    while (true) {
+      if (seen.has(currentId)) {
+        valid = false;
+        break;
+      }
+      seen.add(currentId);
+      chain.push({ id: currentId, reverse: entrySide === 'end' });
+
+      const exitSide = endpointOtherSide(entrySide);
+      const next = followNeighbor(currentId, exitSide);
+      if (!next) break;
+      currentId = next.nextId;
+      entrySide = next.entrySide;
+    }
+
+    if (!valid || chain.length !== comp.length) return;
+    let phase = 0;
+    chain.forEach((item) => {
+      result.set(item.id, { reverse: item.reverse, phaseStartS: phase });
+      phase += arcLen(item.id);
+    });
+  });
+
+  return result;
+};
+
 const bandPolygonD = (asc: Pt[], desc: Pt[]) => {
   if (!asc?.length || !desc?.length) return '';
-  const a = asc.map((p) => `${p.x},${p.y}`).join(' L ');
-  const d = [...desc].reverse().map((p) => `${p.x},${p.y}`).join(' L ');
+  const a = asc.map((pt) => `${pt.x},${pt.y}`).join(' L ');
+  const d = [...desc].reverse().map((pt) => `${pt.x},${pt.y}`).join(' L ');
   return `M ${a} L ${d} Z`;
 };
 
@@ -219,6 +478,7 @@ const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) 
     ))
     .map((entry) => entry.crossing.id);
 };
+
 
 function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, rightAdornmentInteractive = false, adornmentClassName = 'right-3', children }: InsetLabeledFieldProps) {
   return (
@@ -546,6 +806,7 @@ export default function PathGuidesPage() {
   const [scaleInputText, setScaleInputText] = useState('');
   const [rotationInputText, setRotationInputText] = useState('');
   const [nudgePaintTick, setNudgePaintTick] = useState(0);
+  const [activeJoinPreview, setActiveJoinPreview] = useState<{ strapId: string; movingSide: EndpointSide; otherId: string; otherSide: EndpointSide } | null>(null);
   const [scrubPaintTick, setScrubPaintTick] = useState(0);
 
   const [straps, setStraps] = useState<Strap[]>(() => ([applyScriptDefaults({
@@ -583,6 +844,7 @@ export default function PathGuidesPage() {
     startLocalCenter?: { x: number; y: number };
     liveOffset?: { x: number; y: number };
     liveSnapped?: boolean;
+    liveJoin?: { movingSide: EndpointSide; otherId: string; otherSide: EndpointSide } | null;
   }>({
     mode: 'none',
     pointerId: -1,
@@ -596,6 +858,7 @@ export default function PathGuidesPage() {
   const nudgeTimerRef = useRef<number | null>(null);
   const nudgeBaseRef = useRef<{ strapId: string; baseOffset: { x: number; y: number }; baseSnapped: boolean } | null>(null);
   const nudgeSnappedRef = useRef<boolean>(false);
+  const nudgeJoinRef = useRef<{ movingSide: EndpointSide; otherId: string; otherSide: EndpointSide } | null>(null);
 
   // Live rotation/scale scrubbing (avoid heavy recompute while slider is being dragged)
   const scrubActiveRef = useRef(false);
@@ -639,42 +902,53 @@ export default function PathGuidesPage() {
     return out;
   };
 
-  const renderData = useMemo(() => straps.map((strap) => {
-    const sampled = samplePathDToPolyline(strap.d, 1.25);
-    const localCenter = centroid(sampled);
-    const centered = sampled.map((p) => ({ x: p.x - localCenter.x, y: p.y - localCenter.y }));
-    const transformed = transformPolyline(centered, {
-      scalePct: strap.scalePct,
-      rotDeg: strap.rotDeg,
-      flipX: strap.flip,
-      offset: { x: strap.offset.x + localCenter.x, y: strap.offset.y + localCenter.y },
+  const renderData = useMemo(() => {
+    const baseData = straps.map((strap) => {
+      const sampled = samplePathDToPolyline(strap.d, 1.25);
+      const localCenter = centroid(sampled);
+      const centered = sampled.map((pt) => ({ x: pt.x - localCenter.x, y: pt.y - localCenter.y }));
+      const transformed = transformPolyline(centered, {
+        scalePct: strap.scalePct,
+        rotDeg: strap.rotDeg,
+        flipX: strap.flip,
+        offset: { x: strap.offset.x + localCenter.x, y: strap.offset.y + localCenter.y },
+      });
+      const metrics = guideMetrics(strap);
+      return { strap, transformed, metrics, localCenter, sampled };
     });
-    const metrics = guideMetrics(strap);
 
-    const guideSet =
-    ( transformed.length > 1 )
-      ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
-          baseline: transformed,
-          xMM: metrics.xMM,
-          ascMM: metrics.ascMM,
-          descMM: metrics.descMM,
-          tickStepMM: strap.script === 'Copperplate' ? Math.max(2, metrics.nibMM) : metrics.effectiveNibMM,
-          actualNibMM: metrics.nibMM,
-          invertGuides: strap.invertGuides,
-        })
-      : null;
+    const transformedMap = new Map(baseData.map((entry) => [entry.strap.id, entry.transformed]));
+    const chainTraversal = computeChainTraversal(straps, transformedMap);
 
-    const transformedD = transformed.length > 1 ? pathD(transformed) : '';
-    const bandD = guideSet ? bandPolygonD(guideSet.ascLine, guideSet.descLine) : '';
-    const proxyBandD = guideSet
-      ? bandPolygonD(
-          decimatePolyline(guideSet.ascLine, 90),
-          decimatePolyline(guideSet.descLine, 90),
-        )
-      : '';
+    return baseData.map(({ strap, transformed, metrics, localCenter, sampled }) => {
+      const chain = chainTraversal.get(strap.id);
+      const guideBaseline = chain?.reverse ? [...transformed].reverse() : transformed;
+      const guideSet =
+        (guideBaseline.length > 1)
+          ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
+              baseline: guideBaseline,
+              xMM: metrics.xMM,
+              ascMM: metrics.ascMM,
+              descMM: metrics.descMM,
+              tickStepMM: strap.script === 'Copperplate' ? Math.max(2, metrics.nibMM) : metrics.effectiveNibMM,
+              actualNibMM: metrics.nibMM,
+              invertGuides: strap.invertGuides,
+              tickAnchorS: chain?.phaseStartS,
+            })
+          : null;
 
-    return { strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter, sampled };
-  }), [straps]);
+      const transformedD = transformed.length > 1 ? pathD(transformed) : '';
+      const bandD = guideSet ? bandPolygonD(guideSet.ascLine, guideSet.descLine) : '';
+      const proxyBandD = guideSet
+        ? bandPolygonD(
+            decimatePolyline(guideSet.ascLine, 90),
+            decimatePolyline(guideSet.descLine, 90),
+          )
+        : '';
+
+      return { strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter, sampled };
+    });
+  }, [straps]);
   const totalSegments = useMemo(
     () => renderData.reduce((sum, r) => sum + Math.max(0, r.transformed.length - 1), 0),
     [renderData],
@@ -733,6 +1007,64 @@ export default function PathGuidesPage() {
   }, [box.h, box.w, pan, view, zoom]);
 
   const strapById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r])), [renderData]);
+
+
+  const transformedForOffset = useCallback((strap: Strap, offset: { x: number; y: number }) => {
+    const sampled = samplePathDToPolyline(strap.d, 1.25);
+    const localCenter = centroid(sampled);
+    const centered = sampled.map((pt) => ({ x: pt.x - localCenter.x, y: pt.y - localCenter.y }));
+    return transformPolyline(centered, {
+      scalePct: strap.scalePct,
+      rotDeg: strap.rotDeg,
+      flipX: strap.flip,
+      offset: { x: offset.x + localCenter.x, y: offset.y + localCenter.y },
+    });
+  }, []);
+
+  const resolveOffsetAndJoin = useCallback((
+    strapId: string,
+    nextOffset: { x: number; y: number },
+    startSnapped: boolean,
+    joinToleranceMM: number,
+  ): JoinResolution => {
+    const moving = straps.find((strap) => strap.id === strapId);
+    if (!moving) return { offset: nextOffset, snappedToCenter: false };
+
+    let finalX = nextOffset.x;
+    const cX = strapById.get(strapId)?.localCenter?.x ?? 0;
+    let snappedToCenter = startSnapped;
+    if (snappedToCenter) {
+      if (Math.abs((finalX + cX) - centerX) > RELEASE_MM) snappedToCenter = false;
+      else finalX = centerX - cX;
+    }
+    if (!snappedToCenter && Math.abs((finalX + cX) - centerX) <= SNAP_IN_MM) {
+      finalX = centerX - cX;
+      snappedToCenter = true;
+    }
+
+    const offset = { x: finalX, y: nextOffset.y };
+    const movedPts = transformedForOffset(moving, offset);
+    const others = new Map<string, Pt[]>();
+    renderData.forEach((entry) => {
+      if (entry.strap.id === strapId) return;
+      others.set(entry.strap.id, entry.transformed);
+    });
+    const join = resolveJoinCandidate({ movingStrapId: strapId, movingPts: movedPts, allById: others, toleranceMM: joinToleranceMM });
+    if (!join) return { offset, snappedToCenter };
+
+    const movingEndpoint = endpointInfoForBaseline(strapId, movedPts).find((ep) => ep.side === join.movingSide);
+    const targetPts = others.get(join.targetId) ?? [];
+    const targetEndpoint = endpointInfoForBaseline(join.targetId, targetPts).find((ep) => ep.side === join.targetSide);
+    if (!movingEndpoint || !targetEndpoint) return { offset, snappedToCenter };
+
+    const dx = targetEndpoint.point.x - movingEndpoint.point.x;
+    const dy = targetEndpoint.point.y - movingEndpoint.point.y;
+    return {
+      offset: { x: offset.x + dx, y: offset.y + dy },
+      snappedToCenter: false,
+      join: { movingSide: join.movingSide, otherId: join.targetId, otherSide: join.targetSide },
+    };
+  }, [centerX, renderData, strapById, straps, transformedForOffset]);
   function bandWindowDFromGuideSet(
     guideSet: NonNullable<(typeof renderData)[number]["guideSet"]>,
     segIdx: number,
@@ -876,7 +1208,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
   }, [selectedPresetId]);
 
   const loadPreset = (preset: PathGuidesPresetV1) => {
-    const state = { ...preset.state, straps: assignDistinctColors(preset.state.straps) };
+    const state = { ...preset.state, straps: normalizeEndpointLinks(assignDistinctColors(preset.state.straps)) };
     setPaper(state.paper);
     setOrientation(state.orientation);
     setView(state.view);
@@ -896,6 +1228,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setScaleInputText('');
     setRotationInputText('');
     setDragSimplifyStrapId(null);
+    setActiveJoinPreview(null);
     dragRef.current = { mode: 'none', pointerId: -1, startClient: { x: 0, y: 0 }, startPan: { x: 0, y: 0 } };
     liveDragTranslateRef.current = null;
     nudgeActiveRef.current = false;
@@ -976,7 +1309,11 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
   const updateStrap = (id: string, patch: Partial<Strap>) => {
     markPresetDirty();
-    setStraps((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    const clearsJoin = !!(patch.offset || patch.scalePct != null || patch.rotDeg != null || patch.flip != null || patch.d != null);
+    setStraps((prev) => {
+      const base = clearsJoin ? clearLinksForStrap(prev, id) : prev;
+      return normalizeEndpointLinks(base.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    });
   };
 
   const requestScrubPaint = useCallback(() => {
@@ -1101,6 +1438,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       startLocalCenter: strapById.get(strapId)?.localCenter,
       liveOffset: strap.offset,
       liveSnapped: strap.snapped,
+      liveJoin: null,
     };
     svgRef.current.setPointerCapture(e.pointerId);
   };
@@ -1128,24 +1466,20 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     }
 
     if (!drag.strapId || !drag.startOffset) return;
-    let nextX = drag.startOffset.x + dxMM;
-    const nextY = drag.startOffset.y + dyMM;
-    let snapped = drag.startSnapped ?? false;
+    const tentative = { x: drag.startOffset.x + dxMM, y: drag.startOffset.y + dyMM };
+    const resolved = resolveOffsetAndJoin(
+      drag.strapId,
+      tentative,
+      drag.startSnapped ?? false,
+      ENDPOINT_JOIN_SNAP_IN_MM,
+    );
 
-    const cX = drag.startLocalCenter?.x ?? 0;
-    if (snapped) {
-      if (Math.abs((nextX + cX) - centerX) > RELEASE_MM) snapped = false;
-      else nextX = centerX - cX;
-    }
-    if (!snapped && Math.abs((nextX + cX) - centerX) <= SNAP_IN_MM) {
-      nextX = centerX - cX;
-      snapped = true;
-    }
-
-    drag.liveOffset = { x: nextX, y: nextY };
-    drag.liveSnapped = snapped;
-    const dx = nextX - drag.startOffset.x;
-    const dy = nextY - drag.startOffset.y;
+    drag.liveOffset = resolved.offset;
+    drag.liveSnapped = resolved.snappedToCenter;
+    drag.liveJoin = resolved.join ?? null;
+    setActiveJoinPreview(resolved.join ? { strapId: drag.strapId, ...resolved.join } : null);
+    const dx = resolved.offset.x - drag.startOffset.x;
+    const dy = resolved.offset.y - drag.startOffset.y;
     liveDragTranslateRef.current = { strapId: drag.strapId, dx, dy };
 
     if (!pendingDragPaintRef.current) {
@@ -1181,12 +1515,17 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
         markPresetDirty();
         const finalOffset = finished.liveOffset;
         const finalSnapped = finished.liveSnapped ?? false;
-        setStraps((prev) =>
-          prev.map((s) => (s.id === finished.strapId ? { ...s, offset: finalOffset, snapped: finalSnapped } : s)),
-        );
+        setStraps((prev) => {
+          let next = clearLinksForStrap(prev, finished.strapId!);
+          if (finished.liveJoin) {
+            next = applyJoinPair(next, finished.strapId!, finished.liveJoin.movingSide, finished.liveJoin.otherId, finished.liveJoin.otherSide);
+          }
+          return normalizeEndpointLinks(next.map((s) => (s.id === finished.strapId ? { ...s, offset: finalOffset, snapped: finalSnapped } : s)));
+        });
       }
       dragRef.current = { mode: 'none', pointerId: -1, startClient: { x: 0, y: 0 }, startPan: { x: 0, y: 0 } };
       liveDragTranslateRef.current = null;
+      setActiveJoinPreview(null);
       setDragSimplifyStrapId(null);
     }
   };
@@ -1235,7 +1574,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       snapped: false,
       invertGuides: false,
     }, 'Copperplate');
-    setStraps((prev) => assignDistinctColors([...prev, next]));
+    setStraps((prev) => normalizeEndpointLinks(assignDistinctColors([...prev, next])));
     setActiveId(next.id);
   };
 
@@ -1253,7 +1592,12 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       markPresetDirty();
       const finalOffset = { x: baseNow.baseOffset.x + liveNow.dx, y: baseNow.baseOffset.y + liveNow.dy };
       const finalSnapped = nudgeSnappedRef.current;
-      setStraps((prev) => prev.map((s) => (s.id === baseNow.strapId ? { ...s, offset: finalOffset, snapped: finalSnapped } : s)));
+      const finalJoin = nudgeJoinRef.current;
+      setStraps((prev) => {
+        let next = clearLinksForStrap(prev, baseNow.strapId);
+        if (finalJoin) next = applyJoinPair(next, baseNow.strapId, finalJoin.movingSide, finalJoin.otherId, finalJoin.otherSide);
+        return normalizeEndpointLinks(next.map((s) => (s.id === baseNow.strapId ? { ...s, offset: finalOffset, snapped: finalSnapped } : s)));
+      });
     };
 
     const endNudgeSession = () => {
@@ -1264,7 +1608,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       commitNudge();
       nudgeActiveRef.current = false;
       nudgeBaseRef.current = null;
+      nudgeJoinRef.current = null;
       liveDragTranslateRef.current = null;
+      setActiveJoinPreview(null);
       requestNudgePaint();
     };
 
@@ -1294,26 +1640,24 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       const prevDx = live && live.strapId === strapId ? live.dx : 0;
       const prevDy = live && live.strapId === strapId ? live.dy : 0;
 
-      let nextDx = prevDx + keyDx;
+      const nextDxRaw = prevDx + keyDx;
       const nextDy = prevDy + keyDy;
 
-      const rd = strapById.get(strapId);
-      const cX = rd?.localCenter?.x ?? 0;
-      const startX = nudgeBaseRef.current.baseOffset.x;
-      let snapped = nudgeSnappedRef.current;
-      let finalX = startX + nextDx;
-      if (snapped) {
-        if (Math.abs((finalX + cX) - centerX) > RELEASE_MM) snapped = false;
-        else finalX = centerX - cX;
-      }
-      if (!snapped && Math.abs((finalX + cX) - centerX) <= SNAP_IN_MM) {
-        finalX = centerX - cX;
-        snapped = true;
-      }
-      nextDx = finalX - startX;
-      nudgeSnappedRef.current = snapped;
+      const resolved = resolveOffsetAndJoin(
+        strapId,
+        { x: nudgeBaseRef.current.baseOffset.x + nextDxRaw, y: nudgeBaseRef.current.baseOffset.y + nextDy },
+        nudgeSnappedRef.current,
+        ENDPOINT_JOIN_RELEASE_MM,
+      );
+      nudgeSnappedRef.current = resolved.snappedToCenter;
+      nudgeJoinRef.current = resolved.join ?? null;
+      setActiveJoinPreview(resolved.join ? { strapId, ...resolved.join } : null);
 
-      liveDragTranslateRef.current = { strapId, dx: nextDx, dy: nextDy };
+      liveDragTranslateRef.current = {
+        strapId,
+        dx: resolved.offset.x - nudgeBaseRef.current.baseOffset.x,
+        dy: resolved.offset.y - nudgeBaseRef.current.baseOffset.y,
+      };
       requestNudgePaint();
 
       if (nudgeTimerRef.current != null) window.clearTimeout(nudgeTimerRef.current);
@@ -1321,7 +1665,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
         commitNudge();
         nudgeActiveRef.current = false;
         nudgeBaseRef.current = null;
+        nudgeJoinRef.current = null;
         liveDragTranslateRef.current = null;
+        setActiveJoinPreview(null);
         requestNudgePaint();
       }, NUDGE_COMMIT_IDLE_MS);
     };
@@ -1336,7 +1682,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       window.removeEventListener('blur', endNudgeSession);
       if (nudgeTimerRef.current != null) window.clearTimeout(nudgeTimerRef.current);
     };
-  }, [activeId, centerX, markPresetDirty, requestNudgePaint, strapById, straps]);
+  }, [activeId, markPresetDirty, requestNudgePaint, resolveOffsetAndJoin, straps]);
 
   const addShape = () => {
     markPresetDirty();
@@ -1364,7 +1710,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       snapped: false,
       invertGuides: false,
     }, 'Copperplate');
-    setStraps((prev) => assignDistinctColors([...prev, next]));
+    setStraps((prev) => normalizeEndpointLinks(assignDistinctColors([...prev, next])));
     setActiveId(next.id);
   };
 
@@ -1407,7 +1753,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       return;
     }
 
-    setStraps((prev) => assignDistinctColors([...prev, ...created]));
+    setStraps((prev) => normalizeEndpointLinks(assignDistinctColors([...prev, ...created])));
     setActiveId(created[0].id);
   };
 
@@ -1441,13 +1787,14 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       invertGuides: strap.invertGuides,
     };
     duplicate.offset = clampOffsetToPage({ sampled, localCenter, strap: duplicate, box, marginMM: FIT_MARGIN_MM });
-    setStraps((prev) => assignDistinctColors([...prev, duplicate]));
+    duplicate.snappedEndpoint = undefined;
+    setStraps((prev) => normalizeEndpointLinks(assignDistinctColors([...prev, duplicate])));
   };
 
   const removeStrapById = (id: string) => {
     if (straps.length <= 1) return;
     markPresetDirty();
-    setStraps((prev) => prev.filter((strap) => strap.id !== id));
+    setStraps((prev) => clearLinksForStrap(prev, id).filter((strap) => strap.id !== id));
     if (activeId === id) setActiveId(straps.find((strap) => strap.id !== id)?.id ?? null);
   };
 
@@ -1468,37 +1815,6 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     updateStrap(strapId, { offset: { x: strap.offset.x, y: cy }, snapped: false });
   };
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!activeId) return;
-      if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
-
-      const target = event.target as HTMLElement | null;
-      if (target) {
-        const tagName = target.tagName.toLowerCase();
-        if (tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target.isContentEditable) return;
-      }
-
-      const strap = straps.find((s) => s.id === activeId);
-      if (!strap) return;
-
-      const step = event.shiftKey ? 5 : event.altKey ? 0.5 : 1;
-      const delta = { x: 0, y: 0 };
-      if (event.key === 'ArrowLeft') delta.x = -step;
-      if (event.key === 'ArrowRight') delta.x = step;
-      if (event.key === 'ArrowUp') delta.y = -step;
-      if (event.key === 'ArrowDown') delta.y = step;
-
-      markPresetDirty();
-      setStraps((prev) => prev.map((s) => (s.id === activeId
-        ? { ...s, offset: { x: s.offset.x + delta.x, y: s.offset.y + delta.y } }
-        : s)));
-      event.preventDefault();
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeId, markPresetDirty, straps]);
 
   return (
     <main className="min-h-screen text-sm text-slate-900 relative">
@@ -1605,6 +1921,35 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               <rect x={vb.minX} y={vb.minY} width={vb.vw} height={vb.vh} fill="#cbd5e1" />
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
               <line x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+
+              {activeJoinPreview && (() => {
+                const moving = renderData.find((entry) => entry.strap.id === activeJoinPreview.strapId);
+                const target = renderData.find((entry) => entry.strap.id === activeJoinPreview.otherId);
+                if (!moving || !target) return null;
+                const live = liveDragTranslateRef.current;
+                const dx = live?.strapId === moving.strap.id ? live.dx : 0;
+                const dy = live?.strapId === moving.strap.id ? live.dy : 0;
+                const movingEndpoint = endpointInfoForBaseline(moving.strap.id, moving.transformed)
+                  .find((ep) => ep.side === activeJoinPreview.movingSide);
+                const targetEndpoint = endpointInfoForBaseline(target.strap.id, target.transformed)
+                  .find((ep) => ep.side === activeJoinPreview.otherSide);
+                if (!movingEndpoint || !targetEndpoint) return null;
+                return (
+                  <g pointerEvents="none">
+                    <line
+                      x1={movingEndpoint.point.x + dx}
+                      y1={movingEndpoint.point.y + dy}
+                      x2={targetEndpoint.point.x}
+                      y2={targetEndpoint.point.y}
+                      stroke="#4f46e5"
+                      strokeWidth={0.8}
+                      strokeDasharray="2 2"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <circle cx={targetEndpoint.point.x} cy={targetEndpoint.point.y} r={1.5} fill="#4f46e5" />
+                  </g>
+                );
+              })()}
 
               {renderData.map(({ strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter }) => {
                 const isSimplifiedForThisStrap = simplify || interactionActive;
