@@ -75,6 +75,18 @@ type ChainMember = {
   endDistanceMM: number;
 };
 
+type JoinedChain = {
+  chainId: string;
+  memberIds: string[];
+  members: Array<{ strapId: string; reversed: boolean }>;
+  displayName: string;
+  baseline: Pt[];
+};
+
+type VisibleLayerItem =
+  | { kind: 'strap'; id: string; strapId: string }
+  | { kind: 'chain'; id: string; chainId: string; memberIds: string[] };
+
 type StrapGroup = {
   id: string;
   name: string;
@@ -477,6 +489,7 @@ const buildJoinCandidates = ({
 };
 
 const buildJoinedChains = (straps: Strap[]) => {
+  const strapById = new Map(straps.map((s) => [s.id, s]));
   const endpointLinks = new Map<string, string>();
   let valid = true;
 
@@ -535,7 +548,7 @@ const buildJoinedChains = (straps: Strap[]) => {
     components.push(comp);
   });
 
-  return components.flatMap((comp, index) => {
+  return components.flatMap((comp) => {
     const ends = comp.filter((id) => (degree.get(id) ?? 0) === 1).sort();
     const isLoop = ends.length === 0;
     if (!isLoop && ends.length !== 2) return [];
@@ -571,7 +584,9 @@ const buildJoinedChains = (straps: Strap[]) => {
     }
 
     if (members.length !== comp.length) return [];
-    return [{ id: `chain-${index}-${startStrapId}`, members }];
+    const memberIds = members.map((m) => m.strapId);
+    const chainId = `chain-${memberIds.join('|')}`;
+    return [{ id: chainId, members }];
   });
 };
 
@@ -674,6 +689,33 @@ const sliceChainGuidesBackToMembers = ({
     });
   });
   return byMember;
+};
+
+const buildVisibleLayerItems = ({
+  straps,
+  chains,
+}: {
+  straps: Strap[];
+  chains: JoinedChain[];
+}): VisibleLayerItem[] => {
+  const chainByStrapId = new Map<string, JoinedChain>();
+  chains.forEach((chain) => {
+    chain.memberIds.forEach((id) => chainByStrapId.set(id, chain));
+  });
+
+  const seenChains = new Set<string>();
+  const items: VisibleLayerItem[] = [];
+  straps.forEach((strap) => {
+    const chain = chainByStrapId.get(strap.id);
+    if (!chain) {
+      items.push({ kind: 'strap', id: strap.id, strapId: strap.id });
+      return;
+    }
+    if (seenChains.has(chain.chainId)) return;
+    seenChains.add(chain.chainId);
+    items.push({ kind: 'chain', id: chain.chainId, chainId: chain.chainId, memberIds: chain.memberIds });
+  });
+  return items;
 };
 
 function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, rightAdornmentInteractive = false, adornmentClassName = 'right-3', children }: InsetLabeledFieldProps) {
@@ -1115,9 +1157,29 @@ export default function PathGuidesPage() {
 
   const joinedChains = useMemo(() => buildJoinedChains(straps), [straps]);
 
+  const canonicalJoinedChains = useMemo<JoinedChain[]>(() => joinedChains.map((chain) => {
+    const baselineData = buildVirtualBaselineForChain({ chain, transformedById });
+    const memberIds = chain.members.map((m) => m.strapId);
+    const name = chain.members
+      .map((m) => straps.find((s) => s.id === m.strapId)?.name ?? m.strapId)
+      .join(' + ');
+    return {
+      chainId: chain.id,
+      memberIds,
+      members: chain.members,
+      displayName: `Joined path: ${name}`,
+      baseline: baselineData.baseline,
+    };
+  }).filter((chain) => chain.memberIds.length > 1 && chain.baseline.length > 1), [joinedChains, straps, transformedById]);
+
+  const visibleLayerItems = useMemo(
+    () => buildVisibleLayerItems({ straps, chains: canonicalJoinedChains }),
+    [canonicalJoinedChains, straps],
+  );
+
   const joinedGuideSetByStrapId = useMemo(() => {
     const out = new Map<string, NonNullable<ReturnType<typeof buildGuideSet>>>();
-    joinedChains.forEach((chain) => {
+    canonicalJoinedChains.forEach((chain) => {
       const membersWithData = chain.members
         .map((member) => ({ ...member, strap: straps.find((s) => s.id === member.strapId) }))
         .filter((entry): entry is { strapId: string; reversed: boolean; strap: Strap } => !!entry.strap);
@@ -1126,6 +1188,9 @@ export default function PathGuidesPage() {
       const first = membersWithData[0].strap;
       const sameScript = membersWithData.every((m) => m.strap.script === first.script);
       const sameInvert = membersWithData.every((m) => m.strap.invertGuides === first.invertGuides);
+      // Fallback rule for incompatible settings:
+      // chains are still canonical for Step 3 + join state, but we only run one shared
+      // guide pass when members have compatible guide parameters.
       if (!sameScript || !sameInvert) return;
 
       const firstMetrics = guideMetrics(first);
@@ -1139,10 +1204,14 @@ export default function PathGuidesPage() {
       });
       if (!sameMetrics) return;
 
-      const virtual = buildVirtualBaselineForChain({
-        chain,
-        transformedById,
-      });
+      const virtual = {
+        id: chain.chainId,
+        baseline: chain.baseline,
+        members: buildVirtualBaselineForChain({
+          chain: { id: chain.chainId, members: chain.members },
+          transformedById,
+        }).members,
+      };
       if (virtual.baseline.length < 2 || virtual.members.length !== membersWithData.length) return;
 
       const chainGuideSet = buildGuideSet(first.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
@@ -1159,7 +1228,7 @@ export default function PathGuidesPage() {
       sliced.forEach((guideSet, strapId) => out.set(strapId, guideSet));
     });
     return out;
-  }, [joinedChains, straps, transformedById]);
+  }, [canonicalJoinedChains, straps, transformedById]);
 
   const renderData = useMemo(() => baseRenderData.map((entry) => {
     const { strap, transformed, metrics } = entry;
@@ -1964,16 +2033,25 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setActiveId(created[0].id);
   };
 
-  const reorderStraps = (sourceId: string, targetId: string) => {
+  const reorderLayerItem = (sourceItemId: string, targetItemId: string) => {
+    if (sourceItemId === targetItemId) return;
+    const itemById = new Map(visibleLayerItems.map((item) => [item.id, item]));
+    const sourceItem = itemById.get(sourceItemId);
+    const targetItem = itemById.get(targetItemId);
+    if (!sourceItem || !targetItem) return;
+
+    const sourceIds = sourceItem.kind === 'chain' ? sourceItem.memberIds : [sourceItem.strapId];
+    const targetIds = targetItem.kind === 'chain' ? targetItem.memberIds : [targetItem.strapId];
+
     markPresetDirty();
     setStraps((prev) => {
-      const srcIdx = prev.findIndex((s) => s.id === sourceId);
-      const dstIdx = prev.findIndex((s) => s.id === targetId);
-      if (srcIdx < 0 || dstIdx < 0 || srcIdx === dstIdx) return prev;
-      const copy = [...prev];
-      const [item] = copy.splice(srcIdx, 1);
-      copy.splice(dstIdx, 0, item);
-      return normalizeJoinLinks(copy);
+      const moving = prev.filter((s) => sourceIds.includes(s.id));
+      const remaining = prev.filter((s) => !sourceIds.includes(s.id));
+      if (!moving.length) return prev;
+      const targetIndex = remaining.findIndex((s) => targetIds.includes(s.id));
+      if (targetIndex < 0) return prev;
+      remaining.splice(targetIndex, 0, ...moving);
+      return normalizeJoinLinks(remaining);
     });
   };
 
@@ -1998,11 +2076,54 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setStraps((prev) => normalizeJoinLinks(assignDistinctColors([...prev, duplicate])));
   };
 
+  const duplicateChainById = (chainId: string) => {
+    const chain = canonicalJoinedChains.find((c) => c.chainId === chainId);
+    if (!chain) return;
+    markPresetDirty();
+    setStraps((prev) => {
+      const clones: Strap[] = [];
+      chain.memberIds.forEach((id) => {
+        const strap = prev.find((s) => s.id === id);
+        if (!strap) return;
+        clones.push({
+          ...strap,
+          id: uid('strap'),
+          name: `${strap.name} copy`,
+          offset: { x: strap.offset.x + 8, y: strap.offset.y + 8 },
+          joinedEndpoint: undefined,
+          snapped: false,
+        });
+      });
+      return normalizeJoinLinks(assignDistinctColors([...prev, ...clones]));
+    });
+  };
+
   const removeStrapById = (id: string) => {
     if (straps.length <= 1) return;
     markPresetDirty();
     setStraps((prev) => normalizeJoinLinks(prev.filter((strap) => strap.id !== id)));
     if (activeId === id) setActiveId(straps.find((strap) => strap.id !== id)?.id ?? null);
+  };
+
+  const removeChainById = (chainId: string) => {
+    const chain = canonicalJoinedChains.find((c) => c.chainId === chainId);
+    if (!chain) return;
+    if (straps.length - chain.memberIds.length < 1) return;
+    markPresetDirty();
+    setStraps((prev) => normalizeJoinLinks(prev.filter((strap) => !chain.memberIds.includes(strap.id))));
+    if (activeId && chain.memberIds.includes(activeId)) {
+      const next = straps.find((strap) => !chain.memberIds.includes(strap.id));
+      setActiveId(next?.id ?? null);
+    }
+  };
+
+  const unjoinChainById = (chainId: string) => {
+    const chain = canonicalJoinedChains.find((c) => c.chainId === chainId);
+    if (!chain) return;
+    markPresetDirty();
+    setStraps((prev) => normalizeJoinLinks(prev.map((strap) => (
+      chain.memberIds.includes(strap.id) ? { ...strap, joinedEndpoint: undefined } : strap
+    ))));
   };
 
 
@@ -2371,7 +2492,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       vectorEffect="non-scaling-stroke"
                     />
                     <path
-                      d={`M ${candidate.x - 1.2} ${candidate.y} L ${candidate.x + 1.2} ${candidate.y} M ${candidate.x} ${candidate.y - 1.2} L ${candidate.x} ${candidate.y + 1.2}`}
+                      d={candidate.joined
+                        ? `M ${candidate.x - 1.2} ${candidate.y} L ${candidate.x + 1.2} ${candidate.y}`
+                        : `M ${candidate.x - 1.2} ${candidate.y} L ${candidate.x + 1.2} ${candidate.y} M ${candidate.x} ${candidate.y - 1.2} L ${candidate.x} ${candidate.y + 1.2}`}
                       stroke={candidate.joined ? '#064e3b' : '#0f766e'}
                       strokeWidth={0.6}
                       strokeLinecap="round"
@@ -2759,20 +2882,76 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
           <h2 className="text-lg font-semibold text-slate-800">Step 3 — Weave / Layer order</h2>
           <p className="mt-1 text-xs text-slate-600">Order controls render stack. First = back, last = front.</p>
           <div className="mt-3 space-y-2">
-            {straps.map((strap) => (
-              <div key={strap.id} draggable onDragStart={() => setDragListId(strap.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => {
-                if (dragListId) reorderStraps(dragListId, strap.id);
+            {visibleLayerItems.map((item) => {
+              const isChain = item.kind === 'chain';
+              const chain = isChain ? canonicalJoinedChains.find((c) => c.chainId === item.chainId) : null;
+              const strap = !isChain ? straps.find((s) => s.id === item.strapId) : null;
+              const rowName = chain?.displayName ?? strap?.name ?? item.id;
+              const rowColor = isChain
+                ? (straps.find((s) => s.id === chain?.memberIds[0])?.color ?? '#64748b')
+                : (strap?.color ?? '#64748b');
+              const selected = isChain
+                ? !!chain && !!activeId && chain.memberIds.includes(activeId)
+                : activeId === strap?.id;
+              const stackIdx = isChain
+                ? Math.max(...(chain?.memberIds.map((id) => straps.findIndex((s) => s.id === id)) ?? [-1])) + 1
+                : straps.findIndex((s) => s.id === strap?.id) + 1;
+
+              return (
+              <div key={item.id} draggable onDragStart={() => setDragListId(item.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => {
+                if (dragListId) reorderLayerItem(dragListId, item.id);
                 setDragListId(null);
               }} className="rounded-lg border border-slate-200 p-2 flex items-center gap-2 cursor-move">
-                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: strap.color }} />
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => setActiveId(strap.id)} className={`px-2 py-1 rounded border border-slate-300 ${activeId === strap.id ? 'border-indigo-300 text-indigo-700' : ''}`}>Select</button>
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => duplicateStrapById(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Duplicate strap" aria-label="Duplicate strap">⧉</button>
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapX(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Center on page" aria-label="Center on page">⌖</button>
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapY(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Center vertically" aria-label="Center vertically">↕</button>
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => removeStrapById(strap.id)} disabled={straps.length <= 1} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40" title="Delete strap" aria-label="Delete strap">✕</button>
-                <span className="text-xs text-slate-500 ml-auto">#{straps.findIndex((s) => s.id === strap.id) + 1}</span>
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: rowColor }} />
+                <button
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => {
+                    if (isChain && chain?.memberIds[0]) setActiveId(chain.memberIds[0]);
+                    if (!isChain && strap) setActiveId(strap.id);
+                  }}
+                  className={`px-2 py-1 rounded border border-slate-300 ${selected ? 'border-indigo-300 text-indigo-700' : ''}`}
+                >
+                  Select
+                </button>
+                <button
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => {
+                    if (isChain && chain) duplicateChainById(chain.chainId);
+                    if (!isChain && strap) duplicateStrapById(strap.id);
+                  }}
+                  className="px-2 py-1 rounded border border-slate-300"
+                  title={isChain ? 'Duplicate joined path' : 'Duplicate strap'}
+                  aria-label={isChain ? 'Duplicate joined path' : 'Duplicate strap'}
+                >
+                  ⧉
+                </button>
+                {!isChain && strap && (
+                  <>
+                    <button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapX(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Center on page" aria-label="Center on page">⌖</button>
+                    <button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapY(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Center vertically" aria-label="Center vertically">↕</button>
+                  </>
+                )}
+                {isChain && chain && (
+                  <button onPointerDown={(e) => e.stopPropagation()} onClick={() => unjoinChainById(chain.chainId)} className="px-2 py-1 rounded border border-slate-300" title="Unjoin chain" aria-label="Unjoin chain">Unjoin</button>
+                )}
+                <button
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => {
+                    if (isChain && chain) removeChainById(chain.chainId);
+                    if (!isChain && strap) removeStrapById(strap.id);
+                  }}
+                  disabled={straps.length <= 1}
+                  className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40"
+                  title={isChain ? 'Delete joined path' : 'Delete strap'}
+                  aria-label={isChain ? 'Delete joined path' : 'Delete strap'}
+                >
+                  ✕
+                </button>
+                <span className="truncate text-xs text-slate-600">{rowName}</span>
+                <span className="text-xs text-slate-500 ml-auto">#{stackIdx}</span>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
