@@ -239,6 +239,19 @@ type GuideJoinChain = {
   closed: boolean;
 };
 
+type JoinedPairComposite = {
+  id: string;
+  memberIds: [string, string];
+};
+
+type Step3Row = {
+  id: string;
+  memberIds: string[];
+  label: string;
+  color: string;
+  indexLabel: string;
+};
+
 
 const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) => {
   const ca = centroid(aPts);
@@ -510,6 +523,66 @@ const buildGuideJoinChains = (straps: Strap[]): GuideJoinChain[] => {
   // Closed loops are deliberately not emitted yet.
   // They need a stable phase anchor before joined guide continuity is safe.
   return chains;
+};
+
+
+const findPairCompanionCandidate = (candidates: GuideJoinCandidate[], base: GuideJoinCandidate) => {
+  const samePair = candidates.filter((cand) => (
+    pairKey(cand.aId, cand.bId) === pairKey(base.aId, base.bId)
+    && cand.key !== base.key
+  ));
+  if (!samePair.length) return null;
+  return samePair.find((cand) => (
+    cand.aId === base.aId
+    && cand.bId === base.bId
+    && cand.aSide !== base.aSide
+    && cand.bSide !== base.bSide
+  )) ?? samePair[0];
+};
+
+const buildJoinedPairComposites = (straps: Strap[]): JoinedPairComposite[] => {
+  const byId = new Map(straps.map((strap) => [strap.id, strap]));
+  const indexById = new Map(straps.map((strap, index) => [strap.id, index]));
+  const seenPairs = new Set<string>();
+  const composites: JoinedPairComposite[] = [];
+
+  const reciprocal = (strapId: string, side: EndpointSide) => {
+    const strap = byId.get(strapId);
+    const ref = strap?.guideJoin?.[side];
+    if (!ref) return null;
+    const other = byId.get(ref.otherId);
+    const back = other?.guideJoin?.[ref.otherSide];
+    if (!back || back.otherId !== strapId || back.otherSide !== side) return null;
+    return { otherId: ref.otherId, otherSide: ref.otherSide };
+  };
+
+  straps.forEach((strap) => {
+    const neighbors = new Set<string>();
+    (['start', 'end'] as EndpointSide[]).forEach((side) => {
+      const link = reciprocal(strap.id, side);
+      if (link) neighbors.add(link.otherId);
+    });
+    if (neighbors.size !== 1) return;
+    const otherId = [...neighbors][0];
+    const other = byId.get(otherId);
+    if (!other) return;
+
+    const otherNeighbors = new Set<string>();
+    (['start', 'end'] as EndpointSide[]).forEach((side) => {
+      const link = reciprocal(other.id, side);
+      if (link) otherNeighbors.add(link.otherId);
+    });
+    if (otherNeighbors.size !== 1 || !otherNeighbors.has(strap.id)) return;
+
+    const key = pairKey(strap.id, other.id);
+    if (seenPairs.has(key)) return;
+    seenPairs.add(key);
+
+    const sorted = [strap.id, other.id].sort((a, b) => (indexById.get(a) ?? 0) - (indexById.get(b) ?? 0)) as [string, string];
+    composites.push({ id: `pair:${key}`, memberIds: sorted });
+  });
+
+  return composites;
 };
 
 const buildVirtualGuideBaselineForChain = ({
@@ -1140,7 +1213,66 @@ export default function PathGuidesPage() {
     () => buildGuideJoinCandidates({ straps, transformedById }),
     [straps, transformedById],
   );
-  
+
+  const joinedPairComposites = useMemo(
+    () => buildJoinedPairComposites(straps),
+    [straps],
+  );
+
+  const compositeByMemberId = useMemo(() => {
+    const map = new Map<string, JoinedPairComposite>();
+    joinedPairComposites.forEach((composite) => {
+      composite.memberIds.forEach((memberId) => map.set(memberId, composite));
+    });
+    return map;
+  }, [joinedPairComposites]);
+
+  const updateCompositeSettings = useCallback((baseId: string, patch: Partial<Strap>) => {
+    const composite = compositeByMemberId.get(baseId);
+    const ids = composite ? new Set(composite.memberIds) : new Set([baseId]);
+    markPresetDirty();
+    setStraps((prev) => normalizeGuideJoinLinks(prev.map((strap) => (
+      ids.has(strap.id) ? { ...strap, ...patch } : strap
+    ))));
+  }, [compositeByMemberId, markPresetDirty]);
+
+  const step3Rows = useMemo<Step3Row[]>(() => {
+    const rows: Step3Row[] = [];
+    const consumed = new Set<string>();
+    straps.forEach((strap) => {
+      if (consumed.has(strap.id)) return;
+      const composite = compositeByMemberId.get(strap.id);
+      if (composite) {
+        const members = composite.memberIds
+          .map((id) => straps.find((s) => s.id === id))
+          .filter((s): s is Strap => !!s);
+        members.forEach((member) => consumed.add(member.id));
+        rows.push({
+          id: composite.id,
+          memberIds: members.map((member) => member.id),
+          label: members.map((member) => member.name).join(' + '),
+          color: members[0]?.color ?? strap.color,
+          indexLabel: members.map((member) => `#${straps.findIndex((s) => s.id === member.id) + 1}`).join(', '),
+        });
+        return;
+      }
+      consumed.add(strap.id);
+      rows.push({
+        id: strap.id,
+        memberIds: [strap.id],
+        label: strap.name,
+        color: strap.color,
+        indexLabel: `#${straps.findIndex((s) => s.id === strap.id) + 1}`,
+      });
+    });
+    return rows;
+  }, [compositeByMemberId, straps]);
+
+  const rowIdForActive = useMemo(() => {
+    if (!activeId) return null;
+    return compositeByMemberId.get(activeId)?.id ?? activeId;
+  }, [activeId, compositeByMemberId]);
+
   const guideJoinChains = useMemo(
     () => buildGuideJoinChains(straps),
     [straps],
@@ -1406,7 +1538,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     markPresetDirty();
     setStraps((prev) =>
       normalizeGuideJoinLinks(
-        prev.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+        prev.map((strap) => (strap.id === id ? { ...strap, ...patch } : strap)),
       ),
     );
   };
@@ -1785,13 +1917,27 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       const aIdx = prev.findIndex((s) => s.id === cand.aId);
       const bIdx = prev.findIndex((s) => s.id === cand.bId);
       if (aIdx < 0 || bIdx < 0) return prev;
+
       const next = prev.map((s) => ({ ...s, guideJoin: s.guideJoin ? { ...s.guideJoin } : undefined }));
       const a = next[aIdx];
       const b = next[bIdx];
-      const isJoined = a.guideJoin?.[cand.aSide]?.otherId === b.id
-        && a.guideJoin?.[cand.aSide]?.otherSide === cand.bSide
-        && b.guideJoin?.[cand.bSide]?.otherId === a.id
-        && b.guideJoin?.[cand.bSide]?.otherSide === cand.aSide;
+
+      const pairCompanion = findPairCompanionCandidate(guideJoinCandidates, cand);
+      const seams: Array<Pick<GuideJoinCandidate, 'aSide' | 'bSide'>> = [{ aSide: cand.aSide, bSide: cand.bSide }];
+      if (pairCompanion) {
+        if (pairCompanion.aId === cand.aId && pairCompanion.bId === cand.bId) {
+          seams.push({ aSide: pairCompanion.aSide, bSide: pairCompanion.bSide });
+        } else if (pairCompanion.aId === cand.bId && pairCompanion.bId === cand.aId) {
+          seams.push({ aSide: pairCompanion.bSide, bSide: pairCompanion.aSide });
+        }
+      }
+
+      const isSeamJoined = (aSide: EndpointSide, bSide: EndpointSide) => (
+        a.guideJoin?.[aSide]?.otherId === b.id
+        && a.guideJoin?.[aSide]?.otherSide === bSide
+        && b.guideJoin?.[bSide]?.otherId === a.id
+        && b.guideJoin?.[bSide]?.otherSide === aSide
+      );
 
       const clearSide = (strap: Strap, side: EndpointSide) => {
         if (!strap.guideJoin) return;
@@ -1799,9 +1945,12 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
         if (!strap.guideJoin.start && !strap.guideJoin.end) delete strap.guideJoin;
       };
 
-      if (isJoined) {
-        clearSide(a, cand.aSide);
-        clearSide(b, cand.bSide);
+      const pairFullyJoined = seams.every((seam) => isSeamJoined(seam.aSide, seam.bSide));
+      if (pairFullyJoined) {
+        seams.forEach((seam) => {
+          clearSide(a, seam.aSide);
+          clearSide(b, seam.bSide);
+        });
         return normalizeGuideJoinLinks(next);
       }
 
@@ -1828,11 +1977,13 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
       if (!a.guideJoin) a.guideJoin = {};
       if (!b.guideJoin) b.guideJoin = {};
-      a.guideJoin[cand.aSide] = { otherId: b.id, otherSide: cand.bSide };
-      b.guideJoin[cand.bSide] = { otherId: a.id, otherSide: cand.aSide };
+      seams.forEach((seam) => {
+        a.guideJoin![seam.aSide] = { otherId: b.id, otherSide: seam.bSide };
+        b.guideJoin![seam.bSide] = { otherId: a.id, otherSide: seam.aSide };
+      });
       return normalizeGuideJoinLinks(next);
     });
-  }, [activeId, markPresetDirty, transformedById]);
+  }, [activeId, guideJoinCandidates, markPresetDirty, transformedById]);
 
   const addShape = () => {
     markPresetDirty();
@@ -1907,44 +2058,64 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setActiveId(created[0].id);
   };
 
-  const reorderStraps = (sourceId: string, targetId: string) => {
+  const reorderStraps = (sourceRowId: string, targetRowId: string) => {
     markPresetDirty();
     setStraps((prev) => {
-      const srcIdx = prev.findIndex((s) => s.id === sourceId);
-      const dstIdx = prev.findIndex((s) => s.id === targetId);
-      if (srcIdx < 0 || dstIdx < 0 || srcIdx === dstIdx) return prev;
-      const copy = [...prev];
-      const [item] = copy.splice(srcIdx, 1);
-      copy.splice(dstIdx, 0, item);
-      return normalizeGuideJoinLinks(copy);
+      const composites = buildJoinedPairComposites(prev);
+      const membersForRow = (rowId: string) => {
+        const composite = composites.find((item) => item.id === rowId);
+        if (composite) return [...composite.memberIds];
+        return [rowId];
+      };
+      const sourceIds = membersForRow(sourceRowId);
+      const targetIds = membersForRow(targetRowId);
+      if (!sourceIds.length || !targetIds.length) return prev;
+
+      const sourceSet = new Set(sourceIds);
+      const reduced = prev.filter((strap) => !sourceSet.has(strap.id));
+      const targetIndex = reduced.findIndex((strap) => strap.id === targetIds[0]);
+      if (targetIndex < 0) return prev;
+      const moving = prev.filter((strap) => sourceSet.has(strap.id));
+      reduced.splice(targetIndex, 0, ...moving);
+      return normalizeGuideJoinLinks(reduced);
     });
   };
 
-  const duplicateStrapById = (id: string) => {
-    const strap = straps.find((s) => s.id === id);
-    if (!strap) return;
+  const duplicateRowById = (rowId: string) => {
+    const sourceIds = step3Rows.find((row) => row.id === rowId)?.memberIds ?? [rowId];
+    const sourceStraps = sourceIds.map((id) => straps.find((strap) => strap.id === id)).filter((strap): strap is Strap => !!strap);
+    if (!sourceStraps.length) return;
     markPresetDirty();
-    const sampled = samplePathDToPolyline(strap.d, 1.25);
-    const localCenter = centroid(sampled);
-    const duplicate = {
-      ...strap,
-      id: uid('strap'),
-      name: `${strap.name} copy`,
-      color: PALETTE[(straps.length + 1) % PALETTE.length],
-      offset: { x: strap.offset.x + 8, y: strap.offset.y + 8 },
-      flip: strap.flip,
-      snapped: false,
-      invertGuides: strap.invertGuides,
-    };
-    duplicate.offset = clampOffsetToPage({ sampled, localCenter, strap: duplicate, box, marginMM: FIT_MARGIN_MM });
-    setStraps((prev) => normalizeGuideJoinLinks(assignDistinctColors([...prev, { ...duplicate, guideJoin: undefined }])));
+
+    const duplicates = sourceStraps.map((strap, index) => {
+      const sampled = samplePathDToPolyline(strap.d, 1.25);
+      const localCenter = centroid(sampled);
+      const duplicate: Strap = {
+        ...strap,
+        id: uid('strap'),
+        name: `${strap.name} copy`,
+        color: PALETTE[(straps.length + index + 1) % PALETTE.length],
+        offset: { x: strap.offset.x + 8, y: strap.offset.y + 8 },
+        snapped: false,
+        guideJoin: undefined,
+      };
+      duplicate.offset = clampOffsetToPage({ sampled, localCenter, strap: duplicate, box, marginMM: FIT_MARGIN_MM });
+      return duplicate;
+    });
+
+    setStraps((prev) => normalizeGuideJoinLinks(assignDistinctColors([...prev, ...duplicates])));
+    setActiveId(duplicates[0]?.id ?? null);
   };
 
-  const removeStrapById = (id: string) => {
-    if (straps.length <= 1) return;
+  const removeRowById = (rowId: string) => {
+    const ids = step3Rows.find((row) => row.id === rowId)?.memberIds ?? [rowId];
+    if (straps.length <= ids.length) return;
     markPresetDirty();
-    setStraps((prev) => normalizeGuideJoinLinks(prev.filter((strap) => strap.id !== id)));
-    if (activeId === id) setActiveId(straps.find((strap) => strap.id !== id)?.id ?? null);
+    const toRemove = new Set(ids);
+    setStraps((prev) => normalizeGuideJoinLinks(prev.filter((strap) => !toRemove.has(strap.id))));
+    if (activeId && toRemove.has(activeId)) {
+      setActiveId(straps.find((strap) => !toRemove.has(strap.id))?.id ?? null);
+    }
   };
 
 
@@ -2464,11 +2635,11 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
   onChange={(e) => {
     markPresetDirty();
     const script = e.target.value as ScriptId;
+    const composite = compositeByMemberId.get(activeStrap.id);
+    const ids = composite ? new Set(composite.memberIds) : new Set([activeStrap.id]);
     setStraps((prev) =>
       normalizeGuideJoinLinks(
-        prev.map((strap) =>
-          strap.id === activeStrap.id ? applyScriptDefaults(strap, script) : strap,
-        ),
+        prev.map((strap) => (ids.has(strap.id) ? applyScriptDefaults(strap, script) : strap)),
       ),
     );
   }}
@@ -2481,10 +2652,10 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 <>
                   <div className="grid grid-cols-2 gap-2">
                     <InsetLabeledField label="X-height" rightAdornment="mm">
-                      <input type="number" min={0.5} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.xHeightMMText ?? '6'} onChange={(e) => updateStrap(activeStrap.id, { xHeightMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
+                      <input type="number" min={0.5} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.xHeightMMText ?? '6'} onChange={(e) => updateCompositeSettings(activeStrap.id, { xHeightMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
                     </InsetLabeledField>
                     <InsetLabeledField label="Guideline ratio">
-                      <select className={INSET_CONTROL_BASE} value={activeStrap.copperplateRatioPreset ?? '3:2:3'} onChange={(e) => updateStrap(activeStrap.id, { copperplateRatioPreset: e.target.value as CopperplateRatioPreset })}>
+                      <select className={INSET_CONTROL_BASE} value={activeStrap.copperplateRatioPreset ?? '3:2:3'} onChange={(e) => updateCompositeSettings(activeStrap.id, { copperplateRatioPreset: e.target.value as CopperplateRatioPreset })}>
                         <option value="3:2:3">3 : 2 : 3</option><option value="2:1:2">2 : 1 : 2</option><option value="1:1:1">1 : 1 : 1</option><option value="custom">Custom</option>
                       </select>
                     </InsetLabeledField>
@@ -2492,13 +2663,13 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                   {(activeStrap.copperplateRatioPreset ?? '3:2:3') === 'custom' && (
                     <div className="grid grid-cols-3 gap-2">
                       <InsetLabeledField label="Desc units">
-                        <input type="number" step="0.5" min={0} className={INSET_CONTROL_BASE} value={activeStrap.copperplateDescUnitsText ?? '3'} onChange={(e) => updateStrap(activeStrap.id, { copperplateDescUnitsText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.copperplateDescUnitsText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { copperplateDescUnitsText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.copperplateDescUnitsText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateStrap(activeStrap.id, { copperplateDescUnitsText: String(next) }); }} />
+                        <input type="number" step="0.5" min={0} className={INSET_CONTROL_BASE} value={activeStrap.copperplateDescUnitsText ?? '3'} onChange={(e) => updateCompositeSettings(activeStrap.id, { copperplateDescUnitsText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.copperplateDescUnitsText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateCompositeSettings(activeStrap.id, { copperplateDescUnitsText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.copperplateDescUnitsText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateCompositeSettings(activeStrap.id, { copperplateDescUnitsText: String(next) }); }} />
                       </InsetLabeledField>
                       <InsetLabeledField label="X units">
-                        <input type="number" step="0.5" min={0.5} className={INSET_CONTROL_BASE} value={activeStrap.copperplateXUnitsText ?? '2'} onChange={(e) => updateStrap(activeStrap.id, { copperplateXUnitsText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.copperplateXUnitsText ?? '2') || 2; const next = Math.max(0.5, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { copperplateXUnitsText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.copperplateXUnitsText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0.5, snapHalf(parsed)) : 2; updateStrap(activeStrap.id, { copperplateXUnitsText: String(next) }); }} />
+                        <input type="number" step="0.5" min={0.5} className={INSET_CONTROL_BASE} value={activeStrap.copperplateXUnitsText ?? '2'} onChange={(e) => updateCompositeSettings(activeStrap.id, { copperplateXUnitsText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.copperplateXUnitsText ?? '2') || 2; const next = Math.max(0.5, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateCompositeSettings(activeStrap.id, { copperplateXUnitsText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.copperplateXUnitsText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0.5, snapHalf(parsed)) : 2; updateCompositeSettings(activeStrap.id, { copperplateXUnitsText: String(next) }); }} />
                       </InsetLabeledField>
                       <InsetLabeledField label="Asc units">
-                        <input type="number" step="0.5" min={0} className={INSET_CONTROL_BASE} value={activeStrap.copperplateAscUnitsText ?? '3'} onChange={(e) => updateStrap(activeStrap.id, { copperplateAscUnitsText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.copperplateAscUnitsText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { copperplateAscUnitsText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.copperplateAscUnitsText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateStrap(activeStrap.id, { copperplateAscUnitsText: String(next) }); }} />
+                        <input type="number" step="0.5" min={0} className={INSET_CONTROL_BASE} value={activeStrap.copperplateAscUnitsText ?? '3'} onChange={(e) => updateCompositeSettings(activeStrap.id, { copperplateAscUnitsText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.copperplateAscUnitsText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateCompositeSettings(activeStrap.id, { copperplateAscUnitsText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.copperplateAscUnitsText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateCompositeSettings(activeStrap.id, { copperplateAscUnitsText: String(next) }); }} />
                       </InsetLabeledField>
                     </div>
                   )}
@@ -2507,22 +2678,22 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <InsetLabeledField label="Nib size" rightAdornment="mm">
-                      <input type="number" min={0.2} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.nibMMText} onChange={(e) => updateStrap(activeStrap.id, { nibMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
+                      <input type="number" min={0.2} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.nibMMText} onChange={(e) => updateCompositeSettings(activeStrap.id, { nibMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
                     </InsetLabeledField>
                     <InsetLabeledField label="x-height (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
-                      <input type="number" step="0.5" min={1} className={INSET_CONTROL_WIDE} value={activeStrap.xNibText ?? '5'} onChange={(e) => updateStrap(activeStrap.id, { xNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.xNibText ?? '5') || 5; const next = Math.max(1, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { xNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.xNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(1, snapHalf(parsed)) : 5; updateStrap(activeStrap.id, { xNibText: String(next) }); }} />
+                      <input type="number" step="0.5" min={1} className={INSET_CONTROL_WIDE} value={activeStrap.xNibText ?? '5'} onChange={(e) => updateCompositeSettings(activeStrap.id, { xNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.xNibText ?? '5') || 5; const next = Math.max(1, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateCompositeSettings(activeStrap.id, { xNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.xNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(1, snapHalf(parsed)) : 5; updateCompositeSettings(activeStrap.id, { xNibText: String(next) }); }} />
                     </InsetLabeledField>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <InsetLabeledField label="Ascender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
-                      <input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.ascNibText ?? '3'} onChange={(e) => updateStrap(activeStrap.id, { ascNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.ascNibText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { ascNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.ascNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateStrap(activeStrap.id, { ascNibText: String(next) }); }} />
+                      <input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.ascNibText ?? '3'} onChange={(e) => updateCompositeSettings(activeStrap.id, { ascNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.ascNibText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateCompositeSettings(activeStrap.id, { ascNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.ascNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateCompositeSettings(activeStrap.id, { ascNibText: String(next) }); }} />
                     </InsetLabeledField>
                     <InsetLabeledField label="Descender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
-                      <input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.descNibText ?? '2'} onChange={(e) => updateStrap(activeStrap.id, { descNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.descNibText ?? '2') || 2; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { descNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.descNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 2; updateStrap(activeStrap.id, { descNibText: String(next) }); }} />
+                      <input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.descNibText ?? '2'} onChange={(e) => updateCompositeSettings(activeStrap.id, { descNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.descNibText ?? '2') || 2; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateCompositeSettings(activeStrap.id, { descNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.descNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 2; updateCompositeSettings(activeStrap.id, { descNibText: String(next) }); }} />
                     </InsetLabeledField>
                   </div>
                   <InsetLabeledField label="Nib angle (°)">
-                    <select className={INSET_CONTROL_BASE} value={activeStrap.nibAngleDeg} onChange={(e) => updateStrap(activeStrap.id, { nibAngleDeg: Number(e.target.value) as 35 | 40 | 45 })}>
+                    <select className={INSET_CONTROL_BASE} value={activeStrap.nibAngleDeg} onChange={(e) => updateCompositeSettings(activeStrap.id, { nibAngleDeg: Number(e.target.value) as 35 | 40 | 45 })}>
                       <option value={35}>35°</option><option value={40}>40°</option><option value={45}>45°</option>
                     </select>
                   </InsetLabeledField>
@@ -2724,7 +2895,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     role="switch"
                     aria-checked={activeStrap.invertGuides}
                     aria-label="Invert guidelines"
-                    onClick={() => updateStrap(activeStrap.id, { invertGuides: !activeStrap.invertGuides })}
+                    onClick={() => updateCompositeSettings(activeStrap.id, { invertGuides: !activeStrap.invertGuides })}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                       activeStrap.invertGuides ? 'bg-indigo-600' : 'bg-slate-300'
                     }`}
@@ -2745,18 +2916,19 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
           <h2 className="text-lg font-semibold text-slate-800">Step 3 — Weave / Layer order</h2>
           <p className="mt-1 text-xs text-slate-600">Order controls render stack. First = back, last = front.</p>
           <div className="mt-3 space-y-2">
-            {straps.map((strap) => (
-              <div key={strap.id} draggable onDragStart={() => setDragListId(strap.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => {
-                if (dragListId) reorderStraps(dragListId, strap.id);
+            {step3Rows.map((row) => (
+              <div key={row.id} draggable onDragStart={() => setDragListId(row.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => {
+                if (dragListId) reorderStraps(dragListId, row.id);
                 setDragListId(null);
               }} className="rounded-lg border border-slate-200 p-2 flex items-center gap-2 cursor-move">
-                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: strap.color }} />
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => setActiveId(strap.id)} className={`px-2 py-1 rounded border border-slate-300 ${activeId === strap.id ? 'border-indigo-300 text-indigo-700' : ''}`}>Select</button>
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => duplicateStrapById(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Duplicate strap" aria-label="Duplicate strap">⧉</button>
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapX(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Center on page" aria-label="Center on page">⌖</button>
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapY(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Center vertically" aria-label="Center vertically">↕</button>
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => removeStrapById(strap.id)} disabled={straps.length <= 1} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40" title="Delete strap" aria-label="Delete strap">✕</button>
-                <span className="text-xs text-slate-500 ml-auto">#{straps.findIndex((s) => s.id === strap.id) + 1}</span>
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: row.color }} />
+                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => setActiveId(row.memberIds[0] ?? null)} className={`px-2 py-1 rounded border border-slate-300 ${rowIdForActive === row.id ? 'border-indigo-300 text-indigo-700' : ''}`}>Select</button>
+                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => duplicateRowById(row.id)} className="px-2 py-1 rounded border border-slate-300" title="Duplicate strap" aria-label="Duplicate strap">⧉</button>
+                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapX(row.memberIds[0])} className="px-2 py-1 rounded border border-slate-300" title="Center on page" aria-label="Center on page">⌖</button>
+                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapY(row.memberIds[0])} className="px-2 py-1 rounded border border-slate-300" title="Center vertically" aria-label="Center vertically">↕</button>
+                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => removeRowById(row.id)} disabled={straps.length <= row.memberIds.length} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40" title="Delete strap" aria-label="Delete strap">✕</button>
+                <span className="text-xs text-slate-500">{row.label}</span>
+                <span className="text-xs text-slate-500 ml-auto">{row.indexLabel}</span>
               </div>
             ))}
           </div>
