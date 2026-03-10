@@ -239,6 +239,7 @@ type GuideJoinChain = {
   closed: boolean;
 };
 
+
 const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) => {
   const ca = centroid(aPts);
   const cb = centroid(bPts);
@@ -431,15 +432,8 @@ const buildGuideJoinChains = (straps: Strap[]): GuideJoinChain[] => {
     return { strapId: ref.otherId, side: ref.otherSide as EndpointSide };
   };
 
-  const nodeKey = (strapId: string, side: EndpointSide) => `${strapId}:${side}`;
-  const otherSide = (side: EndpointSide): EndpointSide => (side === 'start' ? 'end' : 'start');
-
-  const allNodes: Array<{ strapId: string; side: EndpointSide }> = [];
-  straps.forEach((strap) => {
-    (['start', 'end'] as EndpointSide[]).forEach((side) => {
-      if (reciprocalLink(strap.id, side)) allNodes.push({ strapId: strap.id, side });
-    });
-  });
+  const otherSide = (side: EndpointSide): EndpointSide =>
+    (side === 'start' ? 'end' : 'start');
 
   const degreeByStrap = new Map<string, number>();
   straps.forEach((strap) => {
@@ -449,57 +443,72 @@ const buildGuideJoinChains = (straps: Strap[]): GuideJoinChain[] => {
     degreeByStrap.set(strap.id, deg);
   });
 
+  // Any degree > 2 is invalid for simple chain traversal.
   if ([...degreeByStrap.values()].some((deg) => deg > 2)) return [];
 
-  const visitedNodes = new Set<string>();
+  const usedStrapIds = new Set<string>();
   const chains: GuideJoinChain[] = [];
 
-  const openStarts = allNodes.filter(({ strapId }) => (degreeByStrap.get(strapId) ?? 0) === 1);
-  const closedStarts = allNodes.filter(({ strapId }) => (degreeByStrap.get(strapId) ?? 0) === 2);
-  const orderedStarts = [...openStarts, ...closedStarts].sort((a, b) =>
-    nodeKey(a.strapId, a.side).localeCompare(nodeKey(b.strapId, b.side)),
-  );
+  const openStartIds = straps
+    .filter((strap) => (degreeByStrap.get(strap.id) ?? 0) === 1)
+    .map((strap) => strap.id)
+    .sort();
 
-  for (const start of orderedStarts) {
-    const startKey = nodeKey(start.strapId, start.side);
-    if (visitedNodes.has(startKey)) continue;
+  for (const startId of openStartIds) {
+    if (usedStrapIds.has(startId)) continue;
+
+    // For an open chain, traversal must begin at the FREE side,
+    // not at the joined side. That preserves seam continuity.
+    const startHasJoinAtStart = !!reciprocalLink(startId, 'start');
+    const startHasJoinAtEnd = !!reciprocalLink(startId, 'end');
+
+    let enterSide: EndpointSide;
+    if (startHasJoinAtStart && !startHasJoinAtEnd) {
+      enterSide = 'end';
+    } else if (!startHasJoinAtStart && startHasJoinAtEnd) {
+      enterSide = 'start';
+    } else {
+      // Not a valid open-chain start.
+      continue;
+    }
 
     const members: GuideJoinChainMember[] = [];
-    const seenMemberSteps = new Set<string>();
-
-    let currentNode = start;
+    const seenInThisChain = new Set<string>();
+    let currentId = startId;
+    let currentEnterSide = enterSide;
     let closed = false;
 
     while (true) {
-      const stepKey = nodeKey(currentNode.strapId, currentNode.side);
-      if (seenMemberSteps.has(stepKey)) {
-        closed = stepKey === startKey;
+      if (seenInThisChain.has(currentId)) {
+        closed = true;
         break;
       }
-      seenMemberSteps.add(stepKey);
-      visitedNodes.add(stepKey);
+      seenInThisChain.add(currentId);
+      usedStrapIds.add(currentId);
 
       members.push({
-        strapId: currentNode.strapId,
-        reversed: currentNode.side === 'end',
+        strapId: currentId,
+        reversed: currentEnterSide === 'end',
       });
 
-      const exitSide = otherSide(currentNode.side);
-      const exitKey = nodeKey(currentNode.strapId, exitSide);
-      visitedNodes.add(exitKey);
+      const exitSide = otherSide(currentEnterSide);
+      const next = reciprocalLink(currentId, exitSide);
+      if (!next) break;
 
-      const nextNode = reciprocalLink(currentNode.strapId, exitSide);
-      if (!nextNode) break;
-
-      currentNode = nextNode;
+      currentId = next.strapId;
+      currentEnterSide = next.side;
     }
 
-    if (members.length > 1) {
-      const id = members.map((m) => `${m.strapId}:${m.reversed ? 'rev' : 'fwd'}`).join('|');
-      chains.push({ id, members, closed });
+    if (members.length > 1 && !closed) {
+      const id = members
+        .map((m) => `${m.strapId}:${m.reversed ? 'rev' : 'fwd'}`)
+        .join('|');
+      chains.push({ id, members, closed: false });
     }
   }
 
+  // Closed loops are deliberately not emitted yet.
+  // They need a stable phase anchor before joined guide continuity is safe.
   return chains;
 };
 
@@ -541,36 +550,32 @@ const buildVirtualGuideBaselineForChain = ({
     points.push(...pts.slice(1));
   }
 
-  if (chain.closed && points.length >= 2) {
-    const seam = stitchPoint(points[points.length - 1], points[0]);
-    if (!seam) return null;
-    points[points.length - 1] = seam;
-    points[0] = seam;
-    points.push({ ...seam });
-  }
+  if (chain.closed) return null;
 
-  return points.length >= 2 ? points : null;
+  return points.length >= 2 ? { baseline: points } : null;
 };
+
 
 const buildCompatibleJoinedGuideData = ({
   chains,
-  straps,
   strapById,
   transformedById,
 }: {
   chains: GuideJoinChain[];
-  straps: Strap[];
   strapById: Map<string, { strap: Strap; metrics: ReturnType<typeof guideMetrics> }>;
   transformedById: Map<string, Pt[]>;
 }) => {
-  const result: Array<{ chainId: string; members: GuideJoinChainMember[]; guideSet: ReturnType<typeof buildGuideSet> }> = [];
+  const result: Array<{
+    chainId: string;
+    members: GuideJoinChainMember[];
+    guideSet: ReturnType<typeof buildGuideSet>;
+  }> = [];
 
   chains.forEach((chain) => {
+    if (chain.closed) return;
     const first = strapById.get(chain.members[0].strapId);
     if (!first) return;
 
-
-    
     const allCompatible = chain.members.every((m) => {
       const item = strapById.get(m.strapId);
       if (!item) return false;
@@ -586,19 +591,30 @@ const buildCompatibleJoinedGuideData = ({
     });
     if (!allCompatible) return;
 
-    const baseline = buildVirtualGuideBaselineForChain({ chain, transformedById });
-    if (!baseline) return;
+    const virtual = buildVirtualGuideBaselineForChain({ chain, transformedById });
+    if (!virtual) return;
 
-    const g = buildGuideSet(first.strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
-      baseline,
-      xMM: first.metrics.xMM,
-      ascMM: first.metrics.ascMM,
-      descMM: first.metrics.descMM,
-      tickStepMM: first.strap.script === 'Copperplate' ? Math.max(2, first.metrics.nibMM) : first.metrics.effectiveNibMM,
-      actualNibMM: first.metrics.nibMM,
-      invertGuides: first.strap.invertGuides,
+    const guideSet = buildGuideSet(
+      first.strap.script === 'Copperplate' ? 'copperplate' : 'blackletter',
+      {
+        baseline: virtual.baseline,
+        xMM: first.metrics.xMM,
+        ascMM: first.metrics.ascMM,
+        descMM: first.metrics.descMM,
+        tickStepMM:
+          first.strap.script === 'Copperplate'
+            ? Math.max(2, first.metrics.nibMM)
+            : first.metrics.effectiveNibMM,
+        actualNibMM: first.metrics.nibMM,
+        invertGuides: first.strap.invertGuides,
+      },
+    );
+
+    result.push({
+      chainId: chain.id,
+      members: chain.members,
+      guideSet,
     });
-    result.push({ chainId: chain.id, members: chain.members, guideSet: g });
   });
 
   return result;
@@ -1131,13 +1147,17 @@ export default function PathGuidesPage() {
   );
   
   const compatibleJoinedGuideData = useMemo(
-    () => buildCompatibleJoinedGuideData({ chains: guideJoinChains, straps, strapById, transformedById }),
-    [guideJoinChains, straps, strapById, transformedById],
+    () => buildCompatibleJoinedGuideData({ chains: guideJoinChains, strapById, transformedById }),
+    [guideJoinChains, strapById, transformedById],
   );
 
   const joinedGuideMemberIds = useMemo(() => {
     const set = new Set<string>();
-    compatibleJoinedGuideData.forEach((chain) => chain.members.forEach((m) => set.add(m.strapId)));
+    compatibleJoinedGuideData.forEach((chain) => {
+      chain.members.forEach((member) => {
+        set.add(member.strapId);
+      });
+    });
     return set;
   }, [compatibleJoinedGuideData]);
 
@@ -1384,7 +1404,11 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
   const updateStrap = (id: string, patch: Partial<Strap>) => {
     markPresetDirty();
-    setStraps((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    setStraps((prev) =>
+      normalizeGuideJoinLinks(
+        prev.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+      ),
+    );
   };
 
   const requestScrubPaint = useCallback(() => {
@@ -1451,8 +1475,10 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     
     markPresetDirty();
     setStraps((prev) =>
-      prev.map((s) =>
-        s.id === strapId ? { ...s, rotDeg: finalRot, scalePct: finalScale } : s,
+      normalizeGuideJoinLinks(
+        prev.map((s) =>
+          s.id === strapId ? { ...s, rotDeg: finalRot, scalePct: finalScale } : s,
+        ),
       ),
     );
     
@@ -1590,7 +1616,13 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
         const finalOffset = finished.liveOffset;
         const finalSnapped = finished.liveSnapped ?? false;
         setStraps((prev) =>
-          prev.map((s) => (s.id === finished.strapId ? { ...s, offset: finalOffset, snapped: finalSnapped } : s)),
+          normalizeGuideJoinLinks(
+            prev.map((s) =>
+              s.id === finished.strapId
+                ? { ...s, offset: finalOffset, snapped: finalSnapped }
+                : s,
+            ),
+          ),
         );
       }
       dragRef.current = { mode: 'none', pointerId: -1, startClient: { x: 0, y: 0 }, startPan: { x: 0, y: 0 } };
@@ -1884,7 +1916,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       const copy = [...prev];
       const [item] = copy.splice(srcIdx, 1);
       copy.splice(dstIdx, 0, item);
-      return copy;
+      return normalizeGuideJoinLinks(copy);
     });
   };
 
@@ -1954,9 +1986,15 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       if (event.key === 'ArrowDown') delta.y = step;
 
       markPresetDirty();
-      setStraps((prev) => prev.map((s) => (s.id === activeId
-        ? { ...s, offset: { x: s.offset.x + delta.x, y: s.offset.y + delta.y } }
-        : s)));
+      setStraps((prev) =>
+        normalizeGuideJoinLinks(
+          prev.map((s) => (
+            s.id === activeId
+              ? { ...s, offset: { x: s.offset.x + delta.x, y: s.offset.y + delta.y } }
+              : s
+          )),
+        ),
+      );
       event.preventDefault();
     };
 
@@ -2015,9 +2053,17 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
             >
 {!previewSimplify && (
   <defs>
-    {renderData.map(({ strap, bandD }) => (
-      bandD ? <clipPath key={`guide-clip-${strap.id}`} id={`guide-clip-${strap.id}`} clipPathUnits="userSpaceOnUse"><path d={bandD} /></clipPath> : null
-    ))}
+{renderData.map(({ strap, bandD }) => (
+  bandD ? (
+    <clipPath
+      key={`guide-clip-${strap.id}`}
+      id={`guide-clip-${strap.id}`}
+      clipPathUnits="userSpaceOnUse"
+    >
+      <path d={bandD} />
+    </clipPath>
+  ) : null
+))}
     {[...underCrossings.entries()].map(([underId, list]) => (
       <mask
         key={`mask-${underId}`}
@@ -2036,21 +2082,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
           const overId = c.overId;
           const over = strapById.get(overId);
           if (!over?.guideSet) return null;
-
+          
           const overSeg = overId === c.aId ? c.aSeg : c.bSeg;
-
-          // Intersections give a *segment* index; center the window on the next point.
           const centerIdx = overSeg + 1;
-          
-          const bandD = bandWindowDFromGuideSet(
-            over.guideSet,
-            centerIdx,
-            Math.max(12, over.metrics.bandWidthMM * 2.5),
-          );
-          
-          
-          if (!bandD) return null;
-
           const windowMM = Math.max(12, over.metrics.bandWidthMM * 2.5);
           
           const d0 = bandWindowDFromGuideSet(over.guideSet, centerIdx - 1, windowMM);
@@ -2221,54 +2255,60 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 );
               })}
 
-              {!interactionActive && !simplify && compatibleJoinedGuideData.map((chain) => (
-                chain.members.map((member) => {
-                  const strapEntry = strapById.get(member.strapId);
-                  if (!strapEntry?.bandD) return null;
-                  return (
-                    <g
-                      key={`joined-guide-${chain.chainId}-${member.strapId}`}
-                      clipPath={`url(#guide-clip-${member.strapId})`}
-                      mask={underCrossings.get(member.strapId)?.length ? `url(#mask-${member.strapId})` : undefined}
-                    >
-                      <GuideOverlay
-                        guideSet={chain.guideSet}
-                        style={{
-                          thin: 0.45,
-                          bold: 0.75,
-                          colors: {
-                            thin: strapEntry.strap.color,
-                            bold: activeStrap?.id === member.strapId ? '#7c3aed' : strapEntry.strap.color,
-                            tick: '#dbeafe',
-                            frame: 'transparent',
-                          },
-                        }}
-                        interactive={{ onGuidePointerDown: beginStrapDrag(member.strapId), hitStrokeWidthMM: 6 }}
-                      />
-                    </g>
-                  );
-                })
-              ))}
+{!interactionActive && !simplify && compatibleJoinedGuideData.map((chain) =>
+  chain.members.map((member) => {
+    const strapEntry = strapById.get(member.strapId);
+    if (!strapEntry) return null;
 
-              {simplify && !interactionActive && crossingsWithOverrides.map((crossing) => {
-                const over = strapById.get(crossing.overId);
-                if (!over?.guideSet) return null;
+    return (
+      <g
+        key={`joined-guide-${chain.chainId}-${member.strapId}`}
+        clipPath={`url(#guide-clip-${member.strapId})`}
+        mask={underCrossings.get(member.strapId)?.length ? `url(#mask-${member.strapId})` : undefined}
+      >
+        <GuideOverlay
+          guideSet={chain.guideSet}
+          style={{
+            thin: 0.45,
+            bold: 0.75,
+            colors: {
+              thin: strapEntry.strap.color,
+              bold: activeStrap?.id === member.strapId ? '#7c3aed' : strapEntry.strap.color,
+              tick: '#dbeafe',
+              frame: 'transparent',
+            },
+          }}
+          interactive={{ onGuidePointerDown: beginStrapDrag(member.strapId), hitStrokeWidthMM: 6 }}
+        />
+      </g>
+    );
+  }),
+)}
 
-                const overSeg = crossing.overId === crossing.aId ? crossing.aSeg : crossing.bSeg;
-                const centerIdx = overSeg + 1;
-                const dOver = bandWindowDFromGuideSet(
-                  over.guideSet,
-                  centerIdx,
-                  Math.max(12, over.metrics.bandWidthMM * 2.5),
-                );
-                if (!dOver) return null;
+{simplify && !interactionActive && crossingsWithOverrides.map((crossing) => {
+  const over = strapById.get(crossing.overId);
+  if (!over?.guideSet) return null;
 
-                return (
-                  <g key={`weave-${crossing.id}`} pointerEvents="none">
-                    <path d={dOver} fill={over.strap.color} stroke="none" vectorEffect="non-scaling-stroke" />
-                  </g>
-                );
-              })}
+  const overSeg = crossing.overId === crossing.aId ? crossing.aSeg : crossing.bSeg;
+  const centerIdx = overSeg + 1;
+  const dOver = bandWindowDFromGuideSet(
+    over.guideSet,
+    centerIdx,
+    Math.max(12, over.metrics.bandWidthMM * 2.5),
+  );
+  if (!dOver) return null;
+
+  return (
+    <g key={`weave-${crossing.id}`} pointerEvents="none">
+      <path
+        d={dOver}
+        fill={over.strap.color}
+        stroke="none"
+        vectorEffect="non-scaling-stroke"
+      />
+    </g>
+  );
+})}
 
               {showCrossings && !interactionActive && crossingsWithOverrides.map((crossing, idx) => (
                 <g
@@ -2418,10 +2458,21 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
           {activeStrap && (
             <div className="mt-3 space-y-3">
               <InsetLabeledField label="Script">
-                <select className={INSET_CONTROL_BASE} value={activeStrap.script} onChange={(e) => {
-                  const script = e.target.value as ScriptId;
-                  setStraps((prev) => prev.map((strap) => (strap.id === activeStrap.id ? applyScriptDefaults(strap, script) : strap)));
-                }}>
+              <select
+  className={INSET_CONTROL_BASE}
+  value={activeStrap.script}
+  onChange={(e) => {
+    markPresetDirty();
+    const script = e.target.value as ScriptId;
+    setStraps((prev) =>
+      normalizeGuideJoinLinks(
+        prev.map((strap) =>
+          strap.id === activeStrap.id ? applyScriptDefaults(strap, script) : strap,
+        ),
+      ),
+    );
+  }}
+>
                   {Object.keys(SCRIPT_PROFILES).map((id) => <option key={id} value={id}>{id}</option>)}
                 </select>
               </InsetLabeledField>
