@@ -1227,14 +1227,6 @@ export default function PathGuidesPage() {
     return map;
   }, [joinedPairComposites]);
 
-  const updateCompositeSettings = useCallback((baseId: string, patch: Partial<Strap>) => {
-    const composite = compositeByMemberId.get(baseId);
-    const ids = composite ? new Set(composite.memberIds) : new Set([baseId]);
-    markPresetDirty();
-    setStraps((prev) => normalizeGuideJoinLinks(prev.map((strap) => (
-      ids.has(strap.id) ? { ...strap, ...patch } : strap
-    ))));
-  }, [compositeByMemberId, markPresetDirty]);
 
   const step3Rows = useMemo<Step3Row[]>(() => {
     const rows: Step3Row[] = [];
@@ -1434,6 +1426,19 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setSelectedPresetId('custom');
     lastAppliedPresetStateRef.current = null;
   }, [selectedPresetId]);
+
+  const updateCompositeSettings = useCallback((baseId: string, patch: Partial<Strap>) => {
+    const composite = compositeByMemberId.get(baseId);
+    const ids = composite ? new Set(composite.memberIds) : new Set([baseId]);
+    markPresetDirty();
+    setStraps((prev) =>
+      normalizeGuideJoinLinks(
+        prev.map((strap) => (
+          ids.has(strap.id) ? { ...strap, ...patch } : strap
+        )),
+      ),
+    );
+  }, [compositeByMemberId, markPresetDirty]);
 
   const loadPreset = (preset: PathGuidesPresetV1) => {
     const state = { ...preset.state, straps: normalizeGuideJoinLinks(assignDistinctColors(preset.state.straps)) };
