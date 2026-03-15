@@ -1373,14 +1373,14 @@ export default function PathGuidesPage() {
     [guideJoinChains, strapById, transformedById],
   );
 
-  const joinedGuideMemberIds = useMemo(() => {
-    const set = new Set<string>();
+  const joinedGuideByStrapId = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof buildGuideSet>>();
     compatibleJoinedGuideData.forEach((chain) => {
       chain.members.forEach((member) => {
-        set.add(member.strapId);
+        map.set(member.strapId, chain.guideSet);
       });
     });
-    return set;
+    return map;
   }, [compatibleJoinedGuideData]);
 
   function bandWindowDFromGuideSet(
@@ -2374,6 +2374,8 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
               {renderData.map(({ strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter }) => {
                 const isSimplifiedForThisStrap = simplify || interactionActive;
+                const joinedGuideSet = joinedGuideByStrapId.get(strap.id);
+                const guideSetForRender = joinedGuideSet ?? guideSet;
                 // Use paint tick so ref-driven translation repaints without heavy recompute.
                 // eslint-disable-next-line @typescript-eslint/no-unused-expressions
                 dragPaintTick;
@@ -2496,16 +2498,30 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     />
   ) : null
 )}
-                    {!interactionActive && !isSimplifiedForThisStrap && guideSet && !joinedGuideMemberIds.has(strap.id) && (
-                      <GuideOverlay
-                        guideSet={guideSet}
-                        style={{
-                          thin: guideStroke.thin,
-                          bold: guideStroke.bold,
-                          colors: guideOverlayColors(strap.id, strap.color),
-                        }}
-                        interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
-                      />
+                    {!interactionActive && !isSimplifiedForThisStrap && guideSetForRender && (
+                      joinedGuideSet ? (
+                        <g clipPath={`url(#guide-clip-${strap.id})`}>
+                          <GuideOverlay
+                            guideSet={guideSetForRender}
+                            style={{
+                              thin: guideStroke.thin,
+                              bold: guideStroke.bold,
+                              colors: guideOverlayColors(strap.id, strap.color),
+                            }}
+                            interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
+                          />
+                        </g>
+                      ) : (
+                        <GuideOverlay
+                          guideSet={guideSetForRender}
+                          style={{
+                            thin: guideStroke.thin,
+                            bold: guideStroke.bold,
+                            colors: guideOverlayColors(strap.id, strap.color),
+                          }}
+                          interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
+                        />
+                      )
                     )}
 
                     {showDebugPoints && !isSimplifiedForThisStrap && transformed.map((pt, i) => (
@@ -2517,31 +2533,6 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                   </g>
                 );
               })}
-
-{!interactionActive && !simplify && compatibleJoinedGuideData.map((chain) =>
-  chain.members.map((member) => {
-    const strapEntry = strapById.get(member.strapId);
-    if (!strapEntry) return null;
-
-    return (
-      <g
-        key={`joined-guide-${chain.chainId}-${member.strapId}`}
-        clipPath={`url(#guide-clip-${member.strapId})`}
-        mask={underCrossings.get(member.strapId)?.length ? `url(#mask-${member.strapId})` : undefined}
-      >
-        <GuideOverlay
-          guideSet={chain.guideSet}
-          style={{
-            thin: guideStroke.thin,
-            bold: guideStroke.bold,
-            colors: guideOverlayColors(member.strapId, strapEntry.strap.color),
-          }}
-          interactive={{ onGuidePointerDown: beginStrapDrag(member.strapId), hitStrokeWidthMM: 6 }}
-        />
-      </g>
-    );
-  }),
-)}
 
 {simplify && !interactionActive && crossingsWithOverrides.map((crossing) => {
   const over = strapById.get(crossing.overId);
