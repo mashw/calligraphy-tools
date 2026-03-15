@@ -456,7 +456,6 @@ const buildGuideJoinChains = (straps: Strap[]): GuideJoinChain[] => {
     degreeByStrap.set(strap.id, deg);
   });
 
-  // Any degree > 2 is invalid for simple chain traversal.
   if ([...degreeByStrap.values()].some((deg) => deg > 2)) return [];
 
   const usedStrapIds = new Set<string>();
@@ -470,8 +469,6 @@ const buildGuideJoinChains = (straps: Strap[]): GuideJoinChain[] => {
   for (const startId of openStartIds) {
     if (usedStrapIds.has(startId)) continue;
 
-    // For an open chain, traversal must begin at the FREE side,
-    // not at the joined side. That preserves seam continuity.
     const startHasJoinAtStart = !!reciprocalLink(startId, 'start');
     const startHasJoinAtEnd = !!reciprocalLink(startId, 'end');
 
@@ -481,7 +478,6 @@ const buildGuideJoinChains = (straps: Strap[]): GuideJoinChain[] => {
     } else if (!startHasJoinAtStart && startHasJoinAtEnd) {
       enterSide = 'start';
     } else {
-      // Not a valid open-chain start.
       continue;
     }
 
@@ -520,8 +516,62 @@ const buildGuideJoinChains = (straps: Strap[]): GuideJoinChain[] => {
     }
   }
 
-  // Closed loops are deliberately not emitted yet.
-  // They need a stable phase anchor before joined guide continuity is safe.
+  const traceClosedCycle = (startId: string, startEnterSide: EndpointSide) => {
+    const members: GuideJoinChainMember[] = [];
+    const seenStates = new Set<string>();
+    let currentId = startId;
+    let currentEnterSide = startEnterSide;
+
+    while (true) {
+      if (members.length > 0 && currentId === startId && currentEnterSide === startEnterSide) {
+        return members;
+      }
+
+      const stateKey = `${currentId}:${currentEnterSide}`;
+      if (seenStates.has(stateKey)) return null;
+      seenStates.add(stateKey);
+
+      members.push({
+        strapId: currentId,
+        reversed: currentEnterSide === 'end',
+      });
+
+      const exitSide = otherSide(currentEnterSide);
+      const next = reciprocalLink(currentId, exitSide);
+      if (!next) return null;
+
+      currentId = next.strapId;
+      currentEnterSide = next.side;
+    }
+  };
+
+  const closedStartIds = straps
+    .filter((strap) => (degreeByStrap.get(strap.id) ?? 0) === 2 && !usedStrapIds.has(strap.id))
+    .map((strap) => strap.id)
+    .sort();
+
+  for (const startId of closedStartIds) {
+    if (usedStrapIds.has(startId)) continue;
+
+    const traced =
+      traceClosedCycle(startId, 'start')
+      ?? traceClosedCycle(startId, 'end');
+
+    if (!traced || traced.length < 2) continue;
+
+    // Safety guard: only enable closed joined continuity for a simple paired loop for now.
+    const uniqueIds = [...new Set(traced.map((m) => m.strapId))];
+    if (uniqueIds.length !== 2) continue;
+
+    uniqueIds.forEach((id) => usedStrapIds.add(id));
+
+    const id = traced
+      .map((m) => `${m.strapId}:${m.reversed ? 'rev' : 'fwd'}`)
+      .join('|');
+
+    chains.push({ id, members: traced, closed: true });
+  }
+
   return chains;
 };
 
@@ -623,7 +673,12 @@ const buildVirtualGuideBaselineForChain = ({
     points.push(...pts.slice(1));
   }
 
-  if (chain.closed) return null;
+  if (chain.closed && points.length >= 2) {
+    const seam = stitchPoint(points[points.length - 1], points[0]);
+    if (!seam) return null;
+    points[points.length - 1] = seam;
+    points[0] = seam;
+  }
 
   return points.length >= 2 ? { baseline: points } : null;
 };
@@ -645,7 +700,6 @@ const buildCompatibleJoinedGuideData = ({
   }> = [];
 
   chains.forEach((chain) => {
-    if (chain.closed) return;
     const first = strapById.get(chain.members[0].strapId);
     if (!first) return;
 
@@ -680,6 +734,7 @@ const buildCompatibleJoinedGuideData = ({
             : first.metrics.effectiveNibMM,
         actualNibMM: first.metrics.nibMM,
         invertGuides: first.strap.invertGuides,
+        tickAnchorS: 0,
       },
     );
 
@@ -1126,8 +1181,8 @@ export default function PathGuidesPage() {
     const metrics = guideMetrics(strap);
 
     const guideSet =
-    ( transformed.length > 1 )
-      ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
+      (transformed.length > 1)
+        ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
           baseline: transformed,
           xMM: metrics.xMM,
           ascMM: metrics.ascMM,
@@ -1136,15 +1191,15 @@ export default function PathGuidesPage() {
           actualNibMM: metrics.nibMM,
           invertGuides: strap.invertGuides,
         })
-      : null;
+        : null;
 
     const transformedD = transformed.length > 1 ? pathD(transformed) : '';
     const bandD = guideSet ? bandPolygonD(guideSet.ascLine, guideSet.descLine) : '';
     const proxyBandD = guideSet
       ? bandPolygonD(
-          decimatePolyline(guideSet.ascLine, 90),
-          decimatePolyline(guideSet.descLine, 90),
-        )
+        decimatePolyline(guideSet.ascLine, 90),
+        decimatePolyline(guideSet.descLine, 90),
+      )
       : '';
 
     return { strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter, sampled };
@@ -1269,20 +1324,20 @@ export default function PathGuidesPage() {
     () => buildGuideJoinChains(straps),
     [straps],
   );
-  
+
   const compatibleJoinedGuideData = useMemo(
     () => buildCompatibleJoinedGuideData({ chains: guideJoinChains, strapById, transformedById }),
     [guideJoinChains, strapById, transformedById],
   );
 
-  const joinedGuideMemberIds = useMemo(() => {
-    const set = new Set<string>();
+  const joinedGuideSetByMemberId = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof buildGuideSet>>();
     compatibleJoinedGuideData.forEach((chain) => {
       chain.members.forEach((member) => {
-        set.add(member.strapId);
+        map.set(member.strapId, chain.guideSet);
       });
     });
-    return set;
+    return map;
   }, [compatibleJoinedGuideData]);
 
   function bandWindowDFromGuideSet(
@@ -1293,10 +1348,10 @@ export default function PathGuidesPage() {
     const asc0 = guideSet.ascLine;
     const desc0 = guideSet.descLine;
     if (!asc0?.length || !desc0?.length) return "";
-  
+
     const ascN0 = asc0.length;
     const descN0 = desc0.length;
-  
+
     // Detect "closed" by first ~= last (tiny tolerance in mm coords).
     const ascIsClosed =
       ascN0 > 2 &&
@@ -1304,26 +1359,26 @@ export default function PathGuidesPage() {
     const descIsClosed =
       descN0 > 2 &&
       Math.hypot(desc0[0].x - desc0[descN0 - 1].x, desc0[0].y - desc0[descN0 - 1].y) < 0.05;
-  
+
     // If closed, drop duplicate last point.
     const asc = ascIsClosed ? asc0.slice(0, -1) : asc0;
     const desc = descIsClosed ? desc0.slice(0, -1) : desc0;
-  
+
     const n = Math.min(asc.length, desc.length);
     if (n < 2) return "";
-  
+
     // segIdx comes from intersections; treat as point-ish index and clamp.
     const center = Math.max(0, Math.min(n - 1, segIdx));
-  
+
     const wrap = ascIsClosed && descIsClosed;
-  
+
     const dist = (i: number, j: number) =>
       Math.hypot(asc[i].x - asc[j].x, asc[i].y - asc[j].y);
-  
+
     // Walk backward/forward from center until we hit ~windowMM along the asc polyline.
     let left = center;
     let right = center;
-  
+
     // Backwards
     let acc = 0;
     while (acc < windowMM && (wrap ? acc < windowMM : left > 0)) {
@@ -1334,7 +1389,7 @@ export default function PathGuidesPage() {
       if (!wrap && left === 0) break;
       if (wrap && left === center) break;
     }
-  
+
     // Forwards
     acc = 0;
     while (acc < windowMM && (wrap ? acc < windowMM : right < n - 1)) {
@@ -1345,11 +1400,11 @@ export default function PathGuidesPage() {
       if (!wrap && right === n - 1) break;
       if (wrap && right === center) break;
     }
-  
+
     // Collect indices from left..right (wrap-aware)
     const ascPts: { x: number; y: number }[] = [];
     const descPts: { x: number; y: number }[] = [];
-  
+
     if (wrap && left > right) {
       // left..end, 0..right
       for (let i = left; i < n; i++) {
@@ -1366,9 +1421,9 @@ export default function PathGuidesPage() {
         descPts.push(desc[i]);
       }
     }
-  
+
     if (ascPts.length < 2 || descPts.length < 2) return "";
-  
+
     const a = ascPts.map((p) => `${p.x},${p.y}`).join(" L ");
     const d = descPts
       .slice()
@@ -1378,30 +1433,30 @@ export default function PathGuidesPage() {
     return `M ${a} L ${d} Z`;
   }
 
-// --- Weave masking: for each UNDER strap, collect the crossings where it is UNDER ---
-const underCrossings = useMemo(() => {
-  const map = new Map<string, typeof crossingsWithOverrides>();
-  crossingsWithOverrides.forEach((c) => {
-    const under = c.aId === c.overId ? c.bId : c.aId;
-    if (!map.has(under)) map.set(under, []);
-    map.get(under)!.push(c);
-  });
-  return map;
-}, [crossingsWithOverrides]);
+  // --- Weave masking: for each UNDER strap, collect the crossings where it is UNDER ---
+  const underCrossings = useMemo(() => {
+    const map = new Map<string, typeof crossingsWithOverrides>();
+    crossingsWithOverrides.forEach((c) => {
+      const under = c.aId === c.overId ? c.bId : c.aId;
+      if (!map.has(under)) map.set(under, []);
+      map.get(under)!.push(c);
+    });
+    return map;
+  }, [crossingsWithOverrides]);
 
-const setCrossingOver = (crossing: Crossing, overId: string) => {
-  const slotMeta = pairSlotsByCrossingId.get(crossing.id);
-  if (!slotMeta) return;
+  const setCrossingOver = (crossing: Crossing, overId: string) => {
+    const slotMeta = pairSlotsByCrossingId.get(crossing.id);
+    if (!slotMeta) return;
 
-  setCrossingOverrides((prev) => ({
-    ...prev,
-    [slotMeta.key]: {
-      ...(prev[slotMeta.key] ?? {}),
-      [slotMeta.slot]: overId,
-    },
-  }));
-  setActiveCrossingId(crossing.id);
-};
+    setCrossingOverrides((prev) => ({
+      ...prev,
+      [slotMeta.key]: {
+        ...(prev[slotMeta.key] ?? {}),
+        [slotMeta.slot]: overId,
+      },
+    }));
+    setActiveCrossingId(crossing.id);
+  };
 
   const buildExportedState = (): ExportedStateV1 => ({
     // Export canonical placement fields for each strap: d, offset, scalePct, rotDeg, flip, and array order.
@@ -1595,12 +1650,12 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     }
     const finalRot = Math.round(base.rotDeg + live.dRot);
     const finalScale = base.scalePct * live.dScale;
-    
+
     // If nothing actually changed, don't mark dirty and don't write state.
     // This avoids flipping presets back to "custom" on click-without-move.
     const rotChanged = finalRot !== base.rotDeg;
     const scaleChanged = Math.abs(finalScale - base.scalePct) > 1e-6;
-    
+
     if (!rotChanged && !scaleChanged) {
       scrubActiveRef.current = false;
       scrubStrapIdRef.current = null;
@@ -1609,7 +1664,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       requestScrubPaint();
       return;
     }
-    
+
     markPresetDirty();
     setStraps((prev) =>
       normalizeGuideJoinLinks(
@@ -1618,7 +1673,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
         ),
       ),
     );
-    
+
     scrubActiveRef.current = false;
     scrubStrapIdRef.current = null;
     scrubBaseRef.current = null;
@@ -1651,30 +1706,30 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
   };
 
   const beginStrapDrag =
-  (strapId: string) =>
-  (e: React.PointerEvent<SVGPathElement | SVGLineElement | SVGPolylineElement>) => {    
-    if (e.button !== 0) return;
-    e.stopPropagation();
-    const strap = straps.find((s) => s.id === strapId);
-    if (!strap || !svgRef.current) return;
-    setActiveId(strapId);
-    setDragSimplifyStrapId(strapId);
-    dragRef.current = {
-      mode: 'strap',
-      pointerId: e.pointerId,
-      startClient: { x: e.clientX, y: e.clientY },
-      startPan: pan,
-      rect: svgRef.current.getBoundingClientRect ? { w: svgRef.current.getBoundingClientRect().width, h: svgRef.current.getBoundingClientRect().height } : undefined,
-      vb: { vw: vb.vw, vh: vb.vh },
-      strapId,
-      startOffset: strap.offset,
-      startSnapped: strap.snapped,
-      startLocalCenter: strapById.get(strapId)?.localCenter,
-      liveOffset: strap.offset,
-      liveSnapped: strap.snapped,
-    };
-    svgRef.current.setPointerCapture(e.pointerId);
-  };
+    (strapId: string) =>
+      (e: React.PointerEvent<SVGPathElement | SVGLineElement | SVGPolylineElement>) => {
+        if (e.button !== 0) return;
+        e.stopPropagation();
+        const strap = straps.find((s) => s.id === strapId);
+        if (!strap || !svgRef.current) return;
+        setActiveId(strapId);
+        setDragSimplifyStrapId(strapId);
+        dragRef.current = {
+          mode: 'strap',
+          pointerId: e.pointerId,
+          startClient: { x: e.clientX, y: e.clientY },
+          startPan: pan,
+          rect: svgRef.current.getBoundingClientRect ? { w: svgRef.current.getBoundingClientRect().width, h: svgRef.current.getBoundingClientRect().height } : undefined,
+          vb: { vw: vb.vw, vh: vb.vh },
+          strapId,
+          startOffset: strap.offset,
+          startSnapped: strap.snapped,
+          startLocalCenter: strapById.get(strapId)?.localCenter,
+          liveOffset: strap.offset,
+          liveSnapped: strap.snapped,
+        };
+        svgRef.current.setPointerCapture(e.pointerId);
+      };
 
   const onSvgPointerMove: React.PointerEventHandler<SVGSVGElement> = (e) => {
     const drag = dragRef.current;
@@ -2227,63 +2282,66 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               onPointerCancel={onSvgPointerUp}
               onPointerLeave={onSvgPointerUp}
             >
-{!previewSimplify && (
-  <defs>
-{renderData.map(({ strap, bandD }) => (
-  bandD ? (
-    <clipPath
-      key={`guide-clip-${strap.id}`}
-      id={`guide-clip-${strap.id}`}
-      clipPathUnits="userSpaceOnUse"
-    >
-      <path d={bandD} />
-    </clipPath>
-  ) : null
-))}
-    {[...underCrossings.entries()].map(([underId, list]) => (
-      <mask
-        key={`mask-${underId}`}
-        id={`mask-${underId}`}
-        maskUnits="userSpaceOnUse"
-        x={0}
-        y={0}
-        width={box.w}
-        height={box.h}
-      >
-        {/* Always start fully visible over the whole page (NOT viewBox). */}
-        <rect x={0} y={0} width={box.w} height={box.h} fill="white" />
+              {!previewSimplify && (
+                <defs>
+                  {renderData.map(({ strap, bandD }) => (
+                    bandD ? (
+                      <clipPath
+                        key={`guide-clip-${strap.id}`}
+                        id={`guide-clip-${strap.id}`}
+                        clipPathUnits="userSpaceOnUse"
+                      >
+                        <path d={bandD} />
+                      </clipPath>
+                    ) : null
+                  ))}
+                  {[...underCrossings.entries()].map(([underId, list]) => (
+                    <mask
+                      key={`mask-${underId}`}
+                      id={`mask-${underId}`}
+                      maskUnits="userSpaceOnUse"
+                      x={0}
+                      y={0}
+                      width={box.w}
+                      height={box.h}
+                    >
+                      {/* Always start fully visible over the whole page (NOT viewBox). */}
+                      <rect x={0} y={0} width={box.w} height={box.h} fill="white" />
 
-        {/* For every crossing where this strap is UNDER, cut out the OVER strap band near that crossing. */}
-        {list.map((c) => {
-          const overId = c.overId;
-          const over = strapById.get(overId);
-          if (!over?.guideSet) return null;
-          
-          const overSeg = overId === c.aId ? c.aSeg : c.bSeg;
-          const centerIdx = overSeg + 1;
-          const windowMM = Math.max(12, over.metrics.bandWidthMM * 2.5);
-          
-          const d0 = bandWindowDFromGuideSet(over.guideSet, centerIdx - 1, windowMM);
-          const d1 = bandWindowDFromGuideSet(over.guideSet, centerIdx, windowMM);
-          const d2 = bandWindowDFromGuideSet(over.guideSet, centerIdx + 1, windowMM);
-          
-          return (
-            <g key={`hole-${underId}-${c.id}`}>
-              {d0 ? <path d={d0} fill="black" /> : null}
-              {d1 ? <path d={d1} fill="black" /> : null}
-              {d2 ? <path d={d2} fill="black" /> : null}
-            </g>
-          );
-        })}
-      </mask>
-    ))}
-  </defs>
-)}
+                      {/* For every crossing where this strap is UNDER, cut out the OVER strap band near that crossing. */}
+                      {list.map((c) => {
+                        const overId = c.overId;
+                        const over = strapById.get(overId);
+                        if (!over?.guideSet) return null;
+
+                        const overSeg = overId === c.aId ? c.aSeg : c.bSeg;
+                        const centerIdx = overSeg + 1;
+                        const windowMM = Math.max(12, over.metrics.bandWidthMM * 2.5);
+
+                        const d0 = bandWindowDFromGuideSet(over.guideSet, centerIdx - 1, windowMM);
+                        const d1 = bandWindowDFromGuideSet(over.guideSet, centerIdx, windowMM);
+                        const d2 = bandWindowDFromGuideSet(over.guideSet, centerIdx + 1, windowMM);
+
+                        return (
+                          <g key={`hole-${underId}-${c.id}`}>
+                            {d0 ? <path d={d0} fill="black" /> : null}
+                            {d1 ? <path d={d1} fill="black" /> : null}
+                            {d2 ? <path d={d2} fill="black" /> : null}
+                          </g>
+                        );
+                      })}
+                    </mask>
+                  ))}
+                </defs>
+              )}
               <rect x={vb.minX} y={vb.minY} width={vb.vw} height={vb.vh} fill="#cbd5e1" />
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
               <line x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
 
               {renderData.map(({ strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter }) => {
+  const joinedGuideSet = joinedGuideSetByMemberId.get(strap.id);
+  const visibleGuideSet = joinedGuideSet ?? guideSet;
+
                 const isSimplifiedForThisStrap = simplify || interactionActive;
                 // Use paint tick so ref-driven translation repaints without heavy recompute.
                 // eslint-disable-next-line @typescript-eslint/no-unused-expressions
@@ -2361,65 +2419,66 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                         />
                       ) : null
                     )}
-{isSimplifiedForThisStrap ? (
-  guideSet ? (
-    <path
-      d={interactionActive ? proxyBandD : bandD}
-      fill={strap.color}
-      stroke="none"
-      vectorEffect="non-scaling-stroke"
-      pointerEvents="fill"
-      onPointerDown={(e) => {
-        if (dragActive) return;
-        beginStrapDrag(strap.id)(e);
-      }}
-    />
-  ) : transformed.length > 1 ? (
-    <path
-      d={transformedD}
-      fill="none"
-      stroke={strap.color}
-      strokeWidth={metrics.bandWidthMM}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      vectorEffect="non-scaling-stroke"
-      pointerEvents="stroke"
-      onPointerDown={(e) => {
-        if (dragActive) return;
-        beginStrapDrag(strap.id)(e);
-      }}
-    />
-  ) : null
-) : (
-  transformed.length > 1 ? (
-    <path
-      d={transformedD}
-      fill="none"
-      stroke={strap.color}
-      strokeWidth={0.9}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      vectorEffect="non-scaling-stroke"
-      pointerEvents="none"
-    />
-  ) : null
-)}
-                    {!interactionActive && !isSimplifiedForThisStrap && guideSet && !joinedGuideMemberIds.has(strap.id) && (
-                      <GuideOverlay
-                        guideSet={guideSet}
-                        style={{
-                          thin: 0.45,
-                          bold: 0.75,
-                          colors: {
-                            thin: strap.color,
-                            bold: activeStrap?.id === strap.id ? '#7c3aed' : strap.color,
-                            tick: '#dbeafe',
-                            frame: 'transparent',
-                          },
-                        }}
-                        interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
-                      />
+                    {isSimplifiedForThisStrap ? (
+                      guideSet ? (
+                        <path
+                          d={interactionActive ? proxyBandD : bandD}
+                          fill={strap.color}
+                          stroke="none"
+                          vectorEffect="non-scaling-stroke"
+                          pointerEvents="fill"
+                          onPointerDown={(e) => {
+                            if (dragActive) return;
+                            beginStrapDrag(strap.id)(e);
+                          }}
+                        />
+                      ) : transformed.length > 1 ? (
+                        <path
+                          d={transformedD}
+                          fill="none"
+                          stroke={strap.color}
+                          strokeWidth={metrics.bandWidthMM}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          vectorEffect="non-scaling-stroke"
+                          pointerEvents="stroke"
+                          onPointerDown={(e) => {
+                            if (dragActive) return;
+                            beginStrapDrag(strap.id)(e);
+                          }}
+                        />
+                      ) : null
+                    ) : (
+                      transformed.length > 1 ? (
+                        <path
+                          d={transformedD}
+                          fill="none"
+                          stroke={strap.color}
+                          strokeWidth={0.9}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          vectorEffect="non-scaling-stroke"
+                          pointerEvents="none"
+                        />
+                      ) : null
                     )}
+
+{!interactionActive && !isSimplifiedForThisStrap && visibleGuideSet && (
+  <GuideOverlay
+    guideSet={visibleGuideSet}
+    style={{
+      thin: 0.45,
+      bold: 0.75,
+      colors: {
+        thin: strap.color,
+        bold: activeStrap?.id === strap.id ? '#7c3aed' : strap.color,
+        tick: '#dbeafe',
+        frame: 'transparent',
+      },
+    }}
+    interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
+  />
+)}
 
                     {showDebugPoints && !isSimplifiedForThisStrap && transformed.map((pt, i) => (
                       <g key={`dbg-${strap.id}-${i}`}>
@@ -2431,60 +2490,30 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 );
               })}
 
-{!interactionActive && !simplify && compatibleJoinedGuideData.map((chain) =>
-  chain.members.map((member) => {
-    const strapEntry = strapById.get(member.strapId);
-    if (!strapEntry) return null;
+              {simplify && !interactionActive && crossingsWithOverrides.map((crossing) => {
+                const over = strapById.get(crossing.overId);
+                if (!over?.guideSet) return null;
 
-    return (
-      <g
-        key={`joined-guide-${chain.chainId}-${member.strapId}`}
-        clipPath={`url(#guide-clip-${member.strapId})`}
-        mask={underCrossings.get(member.strapId)?.length ? `url(#mask-${member.strapId})` : undefined}
-      >
-        <GuideOverlay
-          guideSet={chain.guideSet}
-          style={{
-            thin: 0.45,
-            bold: 0.75,
-            colors: {
-              thin: strapEntry.strap.color,
-              bold: activeStrap?.id === member.strapId ? '#7c3aed' : strapEntry.strap.color,
-              tick: '#dbeafe',
-              frame: 'transparent',
-            },
-          }}
-          interactive={{ onGuidePointerDown: beginStrapDrag(member.strapId), hitStrokeWidthMM: 6 }}
-        />
-      </g>
-    );
-  }),
-)}
+                const overSeg = crossing.overId === crossing.aId ? crossing.aSeg : crossing.bSeg;
+                const centerIdx = overSeg + 1;
+                const dOver = bandWindowDFromGuideSet(
+                  over.guideSet,
+                  centerIdx,
+                  Math.max(12, over.metrics.bandWidthMM * 2.5),
+                );
+                if (!dOver) return null;
 
-{simplify && !interactionActive && crossingsWithOverrides.map((crossing) => {
-  const over = strapById.get(crossing.overId);
-  if (!over?.guideSet) return null;
-
-  const overSeg = crossing.overId === crossing.aId ? crossing.aSeg : crossing.bSeg;
-  const centerIdx = overSeg + 1;
-  const dOver = bandWindowDFromGuideSet(
-    over.guideSet,
-    centerIdx,
-    Math.max(12, over.metrics.bandWidthMM * 2.5),
-  );
-  if (!dOver) return null;
-
-  return (
-    <g key={`weave-${crossing.id}`} pointerEvents="none">
-      <path
-        d={dOver}
-        fill={over.strap.color}
-        stroke="none"
-        vectorEffect="non-scaling-stroke"
-      />
-    </g>
-  );
-})}
+                return (
+                  <g key={`weave-${crossing.id}`} pointerEvents="none">
+                    <path
+                      d={dOver}
+                      fill={over.strap.color}
+                      stroke="none"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  </g>
+                );
+              })}
 
               {showCrossings && !interactionActive && crossingsWithOverrides.map((crossing, idx) => (
                 <g
@@ -2634,21 +2663,21 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
           {activeStrap && (
             <div className="mt-3 space-y-3">
               <InsetLabeledField label="Script">
-              <select
-  className={INSET_CONTROL_BASE}
-  value={activeStrap.script}
-  onChange={(e) => {
-    markPresetDirty();
-    const script = e.target.value as ScriptId;
-    const composite = compositeByMemberId.get(activeStrap.id);
-    const ids = composite ? new Set(composite.memberIds) : new Set([activeStrap.id]);
-    setStraps((prev) =>
-      normalizeGuideJoinLinks(
-        prev.map((strap) => (ids.has(strap.id) ? applyScriptDefaults(strap, script) : strap)),
-      ),
-    );
-  }}
->
+                <select
+                  className={INSET_CONTROL_BASE}
+                  value={activeStrap.script}
+                  onChange={(e) => {
+                    markPresetDirty();
+                    const script = e.target.value as ScriptId;
+                    const composite = compositeByMemberId.get(activeStrap.id);
+                    const ids = composite ? new Set(composite.memberIds) : new Set([activeStrap.id]);
+                    setStraps((prev) =>
+                      normalizeGuideJoinLinks(
+                        prev.map((strap) => (ids.has(strap.id) ? applyScriptDefaults(strap, script) : strap)),
+                      ),
+                    );
+                  }}
+                >
                   {Object.keys(SCRIPT_PROFILES).map((id) => <option key={id} value={id}>{id}</option>)}
                 </select>
               </InsetLabeledField>
@@ -2881,14 +2910,12 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     aria-checked={activeStrap.flip}
                     aria-label="Mirror path"
                     onClick={() => updateStrap(activeStrap.id, { flip: !activeStrap.flip })}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      activeStrap.flip ? 'bg-indigo-600' : 'bg-slate-300'
-                    }`}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${activeStrap.flip ? 'bg-indigo-600' : 'bg-slate-300'
+                      }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        activeStrap.flip ? 'translate-x-6' : 'translate-x-1'
-                      }`}
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${activeStrap.flip ? 'translate-x-6' : 'translate-x-1'
+                        }`}
                     />
                   </button>
                 </label>
@@ -2901,14 +2928,12 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     aria-checked={activeStrap.invertGuides}
                     aria-label="Invert guidelines"
                     onClick={() => updateCompositeSettings(activeStrap.id, { invertGuides: !activeStrap.invertGuides })}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      activeStrap.invertGuides ? 'bg-indigo-600' : 'bg-slate-300'
-                    }`}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${activeStrap.invertGuides ? 'bg-indigo-600' : 'bg-slate-300'
+                      }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        activeStrap.invertGuides ? 'translate-x-6' : 'translate-x-1'
-                      }`}
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${activeStrap.invertGuides ? 'translate-x-6' : 'translate-x-1'
+                        }`}
                     />
                   </button>
                 </label>

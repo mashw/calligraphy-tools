@@ -223,18 +223,20 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
   const anchor = Number.isFinite(tickAnchorS as number) ? (tickAnchorS as number) : 0;
 
   if (isClosed) {
-    const count = Math.max(1, Math.round(arcLen / step));
-    const evenStep = arcLen / count;
-
-    for (let i = 0; i < count; i += 1) {
-      const s = anchor + i * evenStep;
-
+    // Closed joined loops must preserve the exact Copperplate phase step.
+    // Do NOT redistribute to arcLen / count, or the slant family drifts around the loop.
+    const EPS = 1e-9;
+    const kMax = Math.max(0, Math.floor((arcLen - EPS) / step));
+  
+    for (let k = 0; k <= kMax; k += 1) {
+      const s = anchor + k * step;
+  
       const sTop = s - topScalar * cot * normalSign;
       const sBot = s - botScalar * cot * normalSign;
-
+  
       const Ct = pointAt(baseline, wrap(sTop));
       const Cb = pointAt(baseline, wrap(sBot));
-
+  
       ticks.push({
         a: { x: Ct.p.x + Ct.n.x * topScalar * normalSign, y: Ct.p.y + Ct.n.y * topScalar * normalSign },
         b: { x: Cb.p.x + Cb.n.x * botScalar * normalSign, y: Cb.p.y + Cb.n.y * botScalar * normalSign },
