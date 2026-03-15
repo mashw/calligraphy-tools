@@ -79,6 +79,7 @@ type ExportedStateV1 = {
   zoom: number;
   pan: { x: number; y: number };
   simplify: boolean;
+  highContrastMode?: boolean;
   showCrossings: boolean;
   activeCrossingId: string | null;
   crossingsFilter: CrossingsFilter;
@@ -1096,6 +1097,7 @@ export default function PathGuidesPage() {
   const [dragListId, setDragListId] = useState<string | null>(null);
   const [groups, setGroups] = useState<StrapGroup[]>([]);
   const [simplify, setSimplify] = useState(true);
+  const [highContrastMode, setHighContrastMode] = useState(false);
   const [showCrossings, setShowCrossings] = useState(true);
   const [activeCrossingId, setActiveCrossingId] = useState<string | null>(null);
   const [crossingsFilter, setCrossingsFilter] = useState<CrossingsFilter>('all');
@@ -1169,6 +1171,22 @@ export default function PathGuidesPage() {
 
   const activeStrap = straps.find((s) => s.id === (activeId ?? straps[0]?.id)) ?? straps[0] ?? null;
   const interactionActive = dragActive || nudgeActiveRef.current || scrubActiveRef.current;
+  const guideStroke = highContrastMode
+    ? { thin: 0.6, bold: 1.0, tick: '#64748b' }
+    : { thin: 0.45, bold: 0.75, tick: '#dbeafe' };
+  const guideOverlayColors = (strapId: string, strapColor: string) => (highContrastMode
+    ? {
+      thin: '#1f2937',
+      bold: activeStrap?.id === strapId ? '#7c3aed' : '#0f172a',
+      tick: '#64748b',
+      frame: 'transparent',
+    }
+    : {
+      thin: strapColor,
+      bold: activeStrap?.id === strapId ? '#7c3aed' : strapColor,
+      tick: '#dbeafe',
+      frame: 'transparent',
+    });
 
   // While scrubbing, the preview uses an SVG transform delta, but we don't update strap state until commit.
   // These derived "display" values keep the slider thumb + numbers responsive.
@@ -1491,6 +1509,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     zoom,
     pan,
     simplify,
+    highContrastMode,
     showCrossings,
     activeCrossingId,
     crossingsFilter,
@@ -1515,6 +1534,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setZoom(state.zoom);
     setPan(state.pan);
     setSimplify(state.simplify);
+    setHighContrastMode(state.highContrastMode ?? false);
     setShowCrossings(state.showCrossings);
     setActiveCrossingId(state.activeCrossingId);
     setCrossingsFilter(state.crossingsFilter);
@@ -1548,6 +1568,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     zoom,
     pan,
     simplify,
+    highContrastMode,
     showCrossings,
     activeCrossingId,
     crossingsFilter,
@@ -1563,6 +1584,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     zoom,
     pan,
     simplify,
+    highContrastMode,
     showCrossings,
     activeCrossingId,
     crossingsFilter,
@@ -2348,7 +2370,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 )}
               <rect id="stage-bg" x={vb.minX} y={vb.minY} width={vb.vw} height={vb.vh} fill="#cbd5e1" />
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
-              <line x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+              <line data-no-export="true" x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
 
               {renderData.map(({ strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter }) => {
                 const isSimplifiedForThisStrap = simplify || interactionActive;
@@ -2393,6 +2415,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       isSimplifiedForThisStrap ? (
                         guideSet ? (
                           <path
+                            data-no-export="true"
                             d={(interactionActive ? proxyBandD : bandD) || ''}
                             fill="none"
                             stroke="#4f46e5"
@@ -2403,6 +2426,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                           />
                         ) : transformedD ? (
                           <path
+                            data-no-export="true"
                             d={transformedD}
                             fill="none"
                             stroke="#4f46e5"
@@ -2416,6 +2440,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                         ) : null
                       ) : transformedD ? (
                         <path
+                          data-no-export="true"
                           d={transformedD}
                           fill="none"
                           stroke="#4f46e5"
@@ -2475,21 +2500,16 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       <GuideOverlay
                         guideSet={guideSet}
                         style={{
-                          thin: 0.45,
-                          bold: 0.75,
-                          colors: {
-                            thin: strap.color,
-                            bold: activeStrap?.id === strap.id ? '#7c3aed' : strap.color,
-                            tick: '#dbeafe',
-                            frame: 'transparent',
-                          },
+                          thin: guideStroke.thin,
+                          bold: guideStroke.bold,
+                          colors: guideOverlayColors(strap.id, strap.color),
                         }}
                         interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
                       />
                     )}
 
                     {showDebugPoints && !isSimplifiedForThisStrap && transformed.map((pt, i) => (
-                      <g key={`dbg-${strap.id}-${i}`}>
+                      <g key={`dbg-${strap.id}-${i}`} data-no-export="true">
                         <circle cx={pt.x} cy={pt.y} r={0.8} fill="#ef4444" vectorEffect="non-scaling-stroke" />
                         <text x={pt.x + 1} y={pt.y - 1} fontSize="2.6" fill="#b91c1c">{i}</text>
                       </g>
@@ -2512,14 +2532,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
         <GuideOverlay
           guideSet={chain.guideSet}
           style={{
-            thin: 0.45,
-            bold: 0.75,
-            colors: {
-              thin: strapEntry.strap.color,
-              bold: activeStrap?.id === member.strapId ? '#7c3aed' : strapEntry.strap.color,
-              tick: '#dbeafe',
-              frame: 'transparent',
-            },
+            thin: guideStroke.thin,
+            bold: guideStroke.bold,
+            colors: guideOverlayColors(member.strapId, strapEntry.strap.color),
           }}
           interactive={{ onGuidePointerDown: beginStrapDrag(member.strapId), hitStrokeWidthMM: 6 }}
         />
@@ -2556,6 +2571,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               {showCrossings && !interactionActive && crossingsWithOverrides.map((crossing, idx) => (
                 <g
                   key={`marker-${crossing.id}`}
+                  data-no-export="true"
                   style={{ cursor: 'pointer' }}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
@@ -2575,6 +2591,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               {!interactionActive && guideJoinCandidates.map((candidate) => (
                 <g
                   key={`guide-join-${candidate.key}`}
+                  data-no-export="true"
                   style={{ cursor: 'pointer' }}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
@@ -2638,6 +2655,25 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 <option value="landscape">Landscape</option>
               </select>
             </InsetLabeledField>
+          </div>
+          <div className="mt-3">
+            <label className="inline-flex items-center gap-3 text-sm font-medium text-slate-700 select-none">
+              <span>High-contrast</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={highContrastMode}
+                onClick={() => {
+                  markPresetDirty();
+                  setHighContrastMode((v) => !v);
+                }}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full border transition ${highContrastMode ? 'bg-indigo-600 border-indigo-600' : 'bg-slate-200 border-slate-300'}`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${highContrastMode ? 'translate-x-6' : 'translate-x-1'}`}
+                />
+              </button>
+            </label>
           </div>
           <div className="mt-3">
             <InsetLabeledField label="Presets:" className="w-full">
