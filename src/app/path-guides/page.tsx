@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import GuideOverlay from '@/components/preview/GuideOverlay';
 import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
+import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 import { buildGuideSet } from '@/lib/guides/guide-template';
 import { findCrossingsForStraps, type Crossing, type Pt } from '@/lib/paths/intersections';
 import { samplePathDToPolyline } from '@/lib/paths/sample-svg-path';
@@ -112,6 +113,168 @@ const INLINE_RESET_BUTTON = 'inline-flex h-8 w-8 shrink-0 items-center justify-c
 const INLINE_SLIDER = 'h-2 min-w-0 flex-1 appearance-none rounded-full bg-indigo-100 accent-indigo-600';
 const SCALE_MIN_PCT = 1;
 const SCALE_MAX_PCT = 220;
+
+function stripNoExport(svg: SVGSVGElement) {
+  svg.querySelectorAll('[data-no-export="true"]').forEach(n => n.remove());
+
+  const stage = svg.querySelector('#stage-bg');
+  if (stage) stage.remove();
+
+  svg.querySelectorAll('filter').forEach(f => f.remove());
+}
+
+function bakeExportStrokes(source: SVGSVGElement, clone: SVGSVGElement, boxW: number) {
+  const rect = source.getBoundingClientRect();
+  if (!rect.width) return;
+  const pxPerMM = rect.width / boxW;
+  const sourceEls = Array.from(source.querySelectorAll<SVGElement>('*'));
+  const cloneEls = Array.from(clone.querySelectorAll<SVGElement>('*'));
+
+  sourceEls.forEach((el, idx) => {
+    const cloneEl = cloneEls[idx];
+    if (!cloneEl) return;
+    const style = window.getComputedStyle(el);
+    const strokeWidthPx = parseFloat(style.strokeWidth || '0');
+    const hasStroke = (style.stroke && style.stroke !== 'none') || strokeWidthPx > 0;
+    if (!hasStroke) {
+      cloneEl.removeAttribute('vector-effect');
+      return;
+    }
+
+    if (style.stroke && style.stroke !== 'none') {
+      cloneEl.setAttribute('stroke', style.stroke);
+    }
+    if (!Number.isNaN(strokeWidthPx)) {
+      cloneEl.setAttribute('stroke-width', String(strokeWidthPx / pxPerMM));
+    }
+    const dasharray = style.strokeDasharray;
+    if (dasharray && dasharray !== 'none') {
+      const baked = dasharray
+        .split(/[\s,]+/)
+        .filter(Boolean)
+        .map(entry => {
+          const num = parseFloat(entry);
+          return Number.isNaN(num) ? entry : String(num / pxPerMM);
+        })
+        .join(' ');
+      cloneEl.setAttribute('stroke-dasharray', baked);
+    } else if (dasharray === 'none') {
+      cloneEl.removeAttribute('stroke-dasharray');
+    }
+    if (style.strokeLinecap) cloneEl.setAttribute('stroke-linecap', style.strokeLinecap);
+    if (style.strokeLinejoin) cloneEl.setAttribute('stroke-linejoin', style.strokeLinejoin);
+    if (style.strokeMiterlimit) cloneEl.setAttribute('stroke-miterlimit', style.strokeMiterlimit);
+    if (style.strokeOpacity) cloneEl.setAttribute('stroke-opacity', style.strokeOpacity);
+
+    cloneEl.removeAttribute('vector-effect');
+  });
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function b64ToUint8(base64: string): Uint8Array {
+  const bin = atob(base64);
+  const len = bin.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+function makeSimplePdfFromJpeg(
+  jpegDataUrl: string,
+  pageWpt: number,
+  pageHpt: number,
+  imgW: number,
+  imgH: number,
+): Blob {
+  const base64 = jpegDataUrl.split(',')[1];
+  const imgBytes = b64ToUint8(base64);
+
+  const EOL = '\n';
+  const header = `%PDF-1.4${EOL}`;
+
+  const obj1 = `1 0 obj${EOL}<< /Type /Catalog /Pages 2 0 R >>${EOL}endobj${EOL}`;
+  const obj2 = `2 0 obj${EOL}<< /Type /Pages /Count 1 /Kids [3 0 R] >>${EOL}endobj${EOL}`;
+  const obj3 =
+    `3 0 obj${EOL}`
+    + `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWpt} ${pageHpt}] `
+    + `/Resources << /XObject << /Im0 4 0 R >> /ProcSet [/PDF /ImageC] >> /Contents 5 0 R >>${EOL}`
+    + `endobj${EOL}`;
+
+  const contentStream = `q ${pageWpt} 0 0 ${pageHpt} 0 0 cm /Im0 Do Q`;
+  const obj5 =
+    `5 0 obj${EOL}`
+    + `<< /Length ${contentStream.length} >>${EOL}`
+    + `stream${EOL}${contentStream}${EOL}endstream${EOL}`
+    + `endobj${EOL}`;
+
+  const obj4Head =
+    `4 0 obj${EOL}`
+    + `<< /Type /XObject /Subtype /Image /ColorSpace /DeviceRGB /BitsPerComponent 8 `
+    + `/Filter /DCTDecode /Width ${imgW} /Height ${imgH} /Length ${imgBytes.byteLength} >>${EOL}`
+    + `stream${EOL}`;
+  const obj4Tail = `${EOL}endstream${EOL}endobj${EOL}`;
+
+  const chunks: (string | Uint8Array)[] = [header];
+
+  const xref: number[] = [];
+  let offset = header.length;
+
+  const pushStr = (s: string) => {
+    chunks.push(s);
+    offset += s.length;
+  };
+  const pushBytes = (b: Uint8Array) => {
+    chunks.push(b);
+    offset += b.byteLength;
+  };
+
+  xref.push(offset);
+  pushStr(obj1);
+
+  xref.push(offset);
+  pushStr(obj2);
+
+  xref.push(offset);
+  pushStr(obj3);
+
+  xref.push(offset);
+  pushStr(obj4Head);
+  pushBytes(imgBytes);
+  pushStr(obj4Tail);
+
+  xref.push(offset);
+  pushStr(obj5);
+
+  const xrefStart = offset;
+  let xrefTable =
+    `xref${EOL}`
+    + `0 ${xref.length + 1}${EOL}`
+    + `0000000000 65535 f ${EOL}`;
+  for (const off of xref) {
+    xrefTable += `${off.toString().padStart(10, '0')} 00000 n ${EOL}`;
+  }
+
+  const trailer =
+    `trailer${EOL}`
+    + `<< /Size ${xref.length + 1} /Root 1 0 R >>${EOL}`
+    + `startxref${EOL}`
+    + `${xrefStart}${EOL}`
+    + '%%EOF';
+
+  chunks.push(xrefTable, trailer);
+
+  return new Blob(chunks as unknown as BlobPart[], { type: 'application/pdf' });
+}
 
 const snapHalf = (v: number) => Math.round(v * 2) / 2;
 
@@ -1134,6 +1297,47 @@ export default function PathGuidesPage() {
     return { minX, minY, vw, vh, str: `${minX} ${minY} ${vw} ${vh}` };
   }, [box.h, box.w, pan, view, zoom]);
 
+  function downloadSVG() {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('viewBox', `0 0 ${box.w} ${box.h}`);
+    clone.setAttribute('width', `${box.w}mm`);
+    clone.setAttribute('height', `${box.h}mm`);
+
+    bakeExportStrokes(svg, clone, box.w);
+    stripNoExport(clone);
+
+    const blob = new Blob([clone.outerHTML], { type: 'image/svg+xml;charset=utf-8' });
+    downloadBlob(blob, 'path-guides.svg');
+  }
+
+  async function downloadPDF() {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const { wPx, hPx } = computeRasterPxPerMM(box.w, box.h);
+
+    const clone = cloneSvgForRasterExport(svg, box.w, box.h, wPx, hPx, bakeExportStrokes, stripNoExport);
+    const dataUrl = await renderSvgCloneToJpegDataUrl(clone, wPx, hPx);
+
+    const pdfBlob = makeSimplePdfFromJpeg(dataUrl, mmToPt(box.w), mmToPt(box.h), wPx, hPx);
+    downloadBlob(pdfBlob, 'path-guides.pdf');
+  }
+
+  async function printToScale() {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const { wPx, hPx } = computeRasterPxPerMM(box.w, box.h);
+
+    const clone = cloneSvgForRasterExport(svg, box.w, box.h, wPx, hPx, bakeExportStrokes, stripNoExport);
+    const dataUrl = await renderSvgCloneToJpegDataUrl(clone, wPx, hPx);
+    printJpegDataUrlToScale(dataUrl, box.w, box.h);
+  }
+
   const strapById = useMemo(() => new Map(renderData.map((r) => [r.strap.id, r])), [renderData]);
 
   const guideJoinCandidates = useMemo(
@@ -2027,9 +2231,48 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               <button onClick={() => setShowCrossings((v) => !v)} className={`px-2 py-1 text-sm rounded-lg border ${showCrossings ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white'}`}>Crossings</button>
             </div>
             <div className="flex flex-wrap items-center gap-2 ml-auto">
-              <button onClick={() => { setView('custom'); setZoom((z) => Math.max(0.35, z * 0.9)); }} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">–</button>
-              <button onClick={() => { setView('custom'); setZoom((z) => Math.min(6, z * 1.1)); }} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">+</button>
-              <button onClick={() => applyViewPreset('autofit')} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">Reset view</button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { setView('custom'); setZoom((z) => Math.max(0.35, z * 0.9)); }}
+                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+              >
+                –
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { setView('custom'); setZoom((z) => Math.min(6, z * 1.1)); }}
+                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+              >
+                +
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => applyViewPreset('autofit')}
+                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+              >
+                Reset view
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={downloadSVG}
+                className="shrink-0 ml-2 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+              >
+                SVG
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={downloadPDF}
+                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+              >
+                PDF
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={printToScale}
+                className="shrink-0 px-3 py-1.5 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+              >
+                Print
+              </button>
             </div>
           </div>
 
@@ -2103,7 +2346,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     ))}
   </defs>
 )}
-              <rect x={vb.minX} y={vb.minY} width={vb.vw} height={vb.vh} fill="#cbd5e1" />
+              <rect id="stage-bg" x={vb.minX} y={vb.minY} width={vb.vw} height={vb.vh} fill="#cbd5e1" />
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
               <line x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
 
