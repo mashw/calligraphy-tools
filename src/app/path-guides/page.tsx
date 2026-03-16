@@ -857,13 +857,12 @@ const buildCompatibleJoinedGuideData = ({
   strapById: Map<string, { strap: Strap; metrics: ReturnType<typeof guideMetrics> }>;
 }) => {
   const result: Array<{
-    chainId: string;
+    routeId: string;
     members: GuideJoinChainMember[];
     guideSet: ReturnType<typeof buildGuideSet>;
   }> = [];
 
   routes.forEach((route) => {
-    if (route.closed) return;
     const first = strapById.get(route.members[0].strapId);
     if (!first) return;
 
@@ -900,7 +899,7 @@ const buildCompatibleJoinedGuideData = ({
     );
 
     result.push({
-      chainId: route.id,
+      routeId: route.id,
       members: route.members.map((m) => ({ strapId: m.strapId, reversed: m.reversed })),
       guideSet,
     });
@@ -1526,19 +1525,35 @@ export default function PathGuidesPage() {
       })),
     }))
   ), [joinedGuideRoutes]);
+
+  const openJoinedGuideRoutes = useMemo(
+    () => joinedGuideRoutes.filter((route) => !route.closed),
+    [joinedGuideRoutes],
+  );
+
+  const joinedGuideRouteByStrapId = useMemo(() => {
+    const byStrapId = new Map<string, { routeId: string; memberIndex: number; route: JoinedGuideRoute }>();
+    joinedGuideRoutes.forEach((route) => {
+      route.members.forEach((member, memberIndex) => {
+        byStrapId.set(member.strapId, { routeId: route.id, memberIndex, route });
+      });
+    });
+    return byStrapId;
+  }, [joinedGuideRoutes]);
   
   const compatibleJoinedGuideData = useMemo(
-    () => buildCompatibleJoinedGuideData({ routes: joinedGuideRoutes, strapById }),
-    [joinedGuideRoutes, strapById],
+    () => buildCompatibleJoinedGuideData({ routes: openJoinedGuideRoutes, strapById }),
+    [openJoinedGuideRoutes, strapById],
   );
 
   void guideJoinChainSummary;
   void joinedGuideRouteSummary;
+  void joinedGuideRouteByStrapId;
 
   const joinedGuideMemberIds = useMemo(() => {
     const set = new Set<string>();
-    compatibleJoinedGuideData.forEach((chain) => {
-      chain.members.forEach((member) => {
+    compatibleJoinedGuideData.forEach((route) => {
+      route.members.forEach((member) => {
         set.add(member.strapId);
       });
     });
@@ -2680,19 +2695,20 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 );
               })}
 
-{!interactionActive && !simplify && compatibleJoinedGuideData.map((chain) =>
-  chain.members.map((member) => {
+{/* TODO: Closed-route guide rendering should clip canonical route overlays by member span, not full-route overlay only. */}
+{!interactionActive && !simplify && compatibleJoinedGuideData.map((route) =>
+  route.members.map((member) => {
     const strapEntry = strapById.get(member.strapId);
     if (!strapEntry) return null;
 
     return (
       <g
-        key={`joined-guide-${chain.chainId}-${member.strapId}`}
+        key={`joined-guide-${route.routeId}-${member.strapId}`}
         clipPath={`url(#guide-clip-${member.strapId})`}
         mask={underCrossings.get(member.strapId)?.length ? `url(#mask-${member.strapId})` : undefined}
       >
         <GuideOverlay
-          guideSet={chain.guideSet}
+          guideSet={route.guideSet}
           style={{
             thin: guideStroke.thin,
             bold: guideStroke.bold,
