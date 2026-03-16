@@ -405,6 +405,21 @@ type GuideJoinChain = {
   canonicalMemberOrderKey: string;
 };
 
+type JoinedGuideRouteMember = {
+  strapId: string;
+  reversed: boolean;
+  startIndex: number;
+  endIndex: number;
+};
+
+type JoinedGuideRoute = {
+  id: string;
+  closed: boolean;
+  baseline: Pt[];
+  members: JoinedGuideRouteMember[];
+  canonicalMemberOrderKey: string;
+};
+
 
 const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) => {
   const ca = centroid(aPts);
@@ -759,14 +774,15 @@ const buildGuideJoinChains = (straps: Strap[]): GuideJoinChain[] => {
   return chains;
 };
 
-const buildVirtualGuideBaselineForChain = ({
+const buildJoinedGuideRouteForChain = ({
   chain,
   transformedById,
 }: {
   chain: GuideJoinChain;
   transformedById: Map<string, Pt[]>;
-}) => {
-  const points: Pt[] = [];
+}): JoinedGuideRoute | null => {
+  const baseline: Pt[] = [];
+  const members: JoinedGuideRouteMember[] = [];
 
   const stitchPoint = (a: Pt, b: Pt) => {
     const seamGap = Math.hypot(a.x - b.x, a.y - b.y);
@@ -785,32 +801,60 @@ const buildVirtualGuideBaselineForChain = ({
 
     const pts = member.reversed ? [...raw].reverse() : raw;
 
-    if (!points.length) {
-      points.push(...pts);
+    if (!baseline.length) {
+      const startIndex = 0;
+      baseline.push(...pts);
+      const endIndex = baseline.length - 1;
+      members.push({
+        strapId: member.strapId,
+        reversed: member.reversed,
+        startIndex,
+        endIndex,
+      });
       continue;
     }
 
-    const seam = stitchPoint(points[points.length - 1], pts[0]);
+    const seam = stitchPoint(baseline[baseline.length - 1], pts[0]);
     if (!seam) return null;
 
-    points[points.length - 1] = seam;
-    points.push(...pts.slice(1));
+    baseline[baseline.length - 1] = seam;
+    const startIndex = baseline.length - 1;
+    baseline.push(...pts.slice(1));
+    const endIndex = baseline.length - 1;
+    members.push({
+      strapId: member.strapId,
+      reversed: member.reversed,
+      startIndex,
+      endIndex,
+    });
   }
 
-  if (chain.closed) return null;
+  if (chain.closed) {
+    if (baseline.length < 3) return null;
+    const seam = stitchPoint(baseline[baseline.length - 1], baseline[0]);
+    if (!seam) return null;
+    baseline[0] = seam;
+    baseline[baseline.length - 1] = seam;
+  }
 
-  return points.length >= 2 ? { baseline: points } : null;
+  if (baseline.length < 2) return null;
+
+  return {
+    id: chain.id,
+    closed: chain.closed,
+    baseline,
+    members,
+    canonicalMemberOrderKey: chain.canonicalMemberOrderKey,
+  };
 };
 
 
 const buildCompatibleJoinedGuideData = ({
-  chains,
+  routes,
   strapById,
-  transformedById,
 }: {
-  chains: GuideJoinChain[];
+  routes: JoinedGuideRoute[];
   strapById: Map<string, { strap: Strap; metrics: ReturnType<typeof guideMetrics> }>;
-  transformedById: Map<string, Pt[]>;
 }) => {
   const result: Array<{
     chainId: string;
@@ -818,12 +862,12 @@ const buildCompatibleJoinedGuideData = ({
     guideSet: ReturnType<typeof buildGuideSet>;
   }> = [];
 
-  chains.forEach((chain) => {
-    if (chain.closed) return;
-    const first = strapById.get(chain.members[0].strapId);
+  routes.forEach((route) => {
+    if (route.closed) return;
+    const first = strapById.get(route.members[0].strapId);
     if (!first) return;
 
-    const allCompatible = chain.members.every((m) => {
+    const allCompatible = route.members.every((m) => {
       const item = strapById.get(m.strapId);
       if (!item) return false;
       if (item.strap.script !== first.strap.script) return false;
@@ -838,13 +882,11 @@ const buildCompatibleJoinedGuideData = ({
     });
     if (!allCompatible) return;
 
-    const virtual = buildVirtualGuideBaselineForChain({ chain, transformedById });
-    if (!virtual) return;
 
     const guideSet = buildGuideSet(
       first.strap.script === 'Copperplate' ? 'copperplate' : 'blackletter',
       {
-        baseline: virtual.baseline,
+        baseline: route.baseline,
         xMM: first.metrics.xMM,
         ascMM: first.metrics.ascMM,
         descMM: first.metrics.descMM,
@@ -858,8 +900,8 @@ const buildCompatibleJoinedGuideData = ({
     );
 
     result.push({
-      chainId: chain.id,
-      members: chain.members,
+      chainId: route.id,
+      members: route.members.map((m) => ({ strapId: m.strapId, reversed: m.reversed })),
       guideSet,
     });
   });
@@ -1463,13 +1505,35 @@ export default function PathGuidesPage() {
       })),
     };
   }, [guideJoinChains]);
+
+  const joinedGuideRoutes = useMemo(
+    () => guideJoinChains
+      .map((chain) => buildJoinedGuideRouteForChain({ chain, transformedById }))
+      .filter((route): route is JoinedGuideRoute => route !== null),
+    [guideJoinChains, transformedById],
+  );
+
+  const joinedGuideRouteSummary = useMemo(() => (
+    joinedGuideRoutes.map((route) => ({
+      routeId: route.id,
+      closed: route.closed,
+      baselinePointCount: route.baseline.length,
+      memberStrapIds: route.members.map((member) => member.strapId),
+      memberIndexSpans: route.members.map((member) => ({
+        strapId: member.strapId,
+        startIndex: member.startIndex,
+        endIndex: member.endIndex,
+      })),
+    }))
+  ), [joinedGuideRoutes]);
   
   const compatibleJoinedGuideData = useMemo(
-    () => buildCompatibleJoinedGuideData({ chains: guideJoinChains, strapById, transformedById }),
-    [guideJoinChains, strapById, transformedById],
+    () => buildCompatibleJoinedGuideData({ routes: joinedGuideRoutes, strapById }),
+    [joinedGuideRoutes, strapById],
   );
 
   void guideJoinChainSummary;
+  void joinedGuideRouteSummary;
 
   const joinedGuideMemberIds = useMemo(() => {
     const set = new Set<string>();
