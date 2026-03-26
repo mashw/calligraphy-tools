@@ -429,7 +429,46 @@ const sampleRouteAtArcLength = (pts: Pt[], cumulative: number[], s: number): Pt 
   return pts[pts.length - 1];
 };
 
+const extractTightCrossingWindowAroundArcLength = (
+  pts: Pt[],
+  sCenter: number,
+  halfWindowMM: number,
+  closed = false,
+): Pt[] => {
+  const arc = buildArcLengthTable(pts);
+  if (arc.pts.length < 2 || arc.total <= 0) return [];
+
+  const sampleCount = 10;
+
+  if (closed) {
+    const total = arc.total;
+    const center = ((sCenter % total) + total) % total;
+    const out: Pt[] = [];
+    for (let i = 0; i <= sampleCount; i += 1) {
+      const t = i / sampleCount;
+      const rawS = center - halfWindowMM + ((halfWindowMM * 2) * t);
+      const wrappedS = ((rawS % total) + total) % total;
+      out.push(sampleRouteAtArcLength(arc.pts, arc.cumulative, wrappedS));
+    }
+    return out;
+  }
+
+  const start = Math.max(0, sCenter - halfWindowMM);
+  const end = Math.min(arc.total, sCenter + halfWindowMM);
+  if (end - start <= 1e-6) return [];
+
+  const out: Pt[] = [];
+  for (let i = 0; i <= sampleCount; i += 1) {
+    const t = i / sampleCount;
+    const s = start + ((end - start) * t);
+    out.push(sampleRouteAtArcLength(arc.pts, arc.cumulative, s));
+  }
+  return out;
+};
+
 const extractRouteWindowAroundArcLength = (pts: Pt[], sCenter: number, windowMM: number, closed = false): Pt[] => {
+
+
   const arc = buildArcLengthTable(pts);
   if (arc.pts.length < 2 || arc.total <= 0) return [];
 
@@ -1441,8 +1480,8 @@ export default function PathGuidesPage() {
     const metrics = guideMetrics(strap);
 
     const guideSet =
-    ( transformed.length > 1 )
-      ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
+      (transformed.length > 1)
+        ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
           baseline: transformed,
           xMM: metrics.xMM,
           ascMM: metrics.ascMM,
@@ -1451,24 +1490,24 @@ export default function PathGuidesPage() {
           actualNibMM: metrics.nibMM,
           invertGuides: strap.invertGuides,
         })
-      : null;
+        : null;
 
     const transformedD = transformed.length > 1 ? pathD(transformed) : '';
     const bandD = guideSet ? bandPolygonD(guideSet.ascLine, guideSet.descLine) : '';
     const proxyBandD = guideSet
       ? bandPolygonD(
-          decimatePolyline(guideSet.ascLine, 90),
-          decimatePolyline(guideSet.descLine, 90),
-        )
+        decimatePolyline(guideSet.ascLine, 90),
+        decimatePolyline(guideSet.descLine, 90),
+      )
       : '';
 
     const selfOverlap =
       ENABLE_SELF_OVERLAP_ROUTE_PROTOTYPE
         ? buildPrototypeSelfOverlapConfig({
-            transformed,
-            metrics,
-            existing: strap.selfOverlap,
-          })
+          transformed,
+          metrics,
+          existing: strap.selfOverlap,
+        })
         : null;
 
     return {
@@ -1590,12 +1629,12 @@ export default function PathGuidesPage() {
     () => buildGuideJoinCandidates({ straps, transformedById }),
     [straps, transformedById],
   );
-  
+
   const guideJoinChains = useMemo(
     () => buildGuideJoinChains(straps),
     [straps],
   );
-  
+
   const compatibleJoinedGuideData = useMemo(
     () => buildCompatibleJoinedGuideData({ chains: guideJoinChains, strapById, transformedById }),
     [guideJoinChains, strapById, transformedById],
@@ -1619,10 +1658,10 @@ export default function PathGuidesPage() {
     const asc0 = guideSet.ascLine;
     const desc0 = guideSet.descLine;
     if (!asc0?.length || !desc0?.length) return "";
-  
+
     const ascN0 = asc0.length;
     const descN0 = desc0.length;
-  
+
     // Detect "closed" by first ~= last (tiny tolerance in mm coords).
     const ascIsClosed =
       ascN0 > 2 &&
@@ -1630,26 +1669,26 @@ export default function PathGuidesPage() {
     const descIsClosed =
       descN0 > 2 &&
       Math.hypot(desc0[0].x - desc0[descN0 - 1].x, desc0[0].y - desc0[descN0 - 1].y) < 0.05;
-  
+
     // If closed, drop duplicate last point.
     const asc = ascIsClosed ? asc0.slice(0, -1) : asc0;
     const desc = descIsClosed ? desc0.slice(0, -1) : desc0;
-  
+
     const n = Math.min(asc.length, desc.length);
     if (n < 2) return "";
-  
+
     // segIdx comes from intersections; treat as point-ish index and clamp.
     const center = Math.max(0, Math.min(n - 1, segIdx));
-  
+
     const wrap = ascIsClosed && descIsClosed;
-  
+
     const dist = (i: number, j: number) =>
       Math.hypot(asc[i].x - asc[j].x, asc[i].y - asc[j].y);
-  
+
     // Walk backward/forward from center until we hit ~windowMM along the asc polyline.
     let left = center;
     let right = center;
-  
+
     // Backwards
     let acc = 0;
     while (acc < windowMM && (wrap ? acc < windowMM : left > 0)) {
@@ -1660,7 +1699,7 @@ export default function PathGuidesPage() {
       if (!wrap && left === 0) break;
       if (wrap && left === center) break;
     }
-  
+
     // Forwards
     acc = 0;
     while (acc < windowMM && (wrap ? acc < windowMM : right < n - 1)) {
@@ -1671,11 +1710,11 @@ export default function PathGuidesPage() {
       if (!wrap && right === n - 1) break;
       if (wrap && right === center) break;
     }
-  
+
     // Collect indices from left..right (wrap-aware)
     const ascPts: { x: number; y: number }[] = [];
     const descPts: { x: number; y: number }[] = [];
-  
+
     if (wrap && left > right) {
       // left..end, 0..right
       for (let i = left; i < n; i++) {
@@ -1692,9 +1731,9 @@ export default function PathGuidesPage() {
         descPts.push(desc[i]);
       }
     }
-  
+
     if (ascPts.length < 2 || descPts.length < 2) return "";
-  
+
     const a = ascPts.map((p) => `${p.x},${p.y}`).join(" L ");
     const d = descPts
       .slice()
@@ -1704,30 +1743,30 @@ export default function PathGuidesPage() {
     return `M ${a} L ${d} Z`;
   }
 
-// --- Weave masking: for each UNDER strap, collect the crossings where it is UNDER ---
-const underCrossings = useMemo(() => {
-  const map = new Map<string, typeof crossingsWithOverrides>();
-  crossingsWithOverrides.forEach((c) => {
-    const under = c.aId === c.overId ? c.bId : c.aId;
-    if (!map.has(under)) map.set(under, []);
-    map.get(under)!.push(c);
-  });
-  return map;
-}, [crossingsWithOverrides]);
+  // --- Weave masking: for each UNDER strap, collect the crossings where it is UNDER ---
+  const underCrossings = useMemo(() => {
+    const map = new Map<string, typeof crossingsWithOverrides>();
+    crossingsWithOverrides.forEach((c) => {
+      const under = c.aId === c.overId ? c.bId : c.aId;
+      if (!map.has(under)) map.set(under, []);
+      map.get(under)!.push(c);
+    });
+    return map;
+  }, [crossingsWithOverrides]);
 
-const setCrossingOver = (crossing: Crossing, overId: string) => {
-  const slotMeta = pairSlotsByCrossingId.get(crossing.id);
-  if (!slotMeta) return;
+  const setCrossingOver = (crossing: Crossing, overId: string) => {
+    const slotMeta = pairSlotsByCrossingId.get(crossing.id);
+    if (!slotMeta) return;
 
-  setCrossingOverrides((prev) => ({
-    ...prev,
-    [slotMeta.key]: {
-      ...(prev[slotMeta.key] ?? {}),
-      [slotMeta.slot]: overId,
-    },
-  }));
-  setActiveCrossingId(crossing.id);
-};
+    setCrossingOverrides((prev) => ({
+      ...prev,
+      [slotMeta.key]: {
+        ...(prev[slotMeta.key] ?? {}),
+        [slotMeta.slot]: overId,
+      },
+    }));
+    setActiveCrossingId(crossing.id);
+  };
 
   const buildExportedState = (): ExportedStateV1 => ({
     // Export canonical placement fields for each strap: d, offset, scalePct, rotDeg, flip, and array order.
@@ -1912,12 +1951,12 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     }
     const finalRot = Math.round(base.rotDeg + live.dRot);
     const finalScale = base.scalePct * live.dScale;
-    
+
     // If nothing actually changed, don't mark dirty and don't write state.
     // This avoids flipping presets back to "custom" on click-without-move.
     const rotChanged = finalRot !== base.rotDeg;
     const scaleChanged = Math.abs(finalScale - base.scalePct) > 1e-6;
-    
+
     if (!rotChanged && !scaleChanged) {
       scrubActiveRef.current = false;
       scrubStrapIdRef.current = null;
@@ -1926,7 +1965,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       requestScrubPaint();
       return;
     }
-    
+
     markPresetDirty();
     setStraps((prev) =>
       normalizeGuideJoinLinks(
@@ -1935,7 +1974,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
         ),
       ),
     );
-    
+
     scrubActiveRef.current = false;
     scrubStrapIdRef.current = null;
     scrubBaseRef.current = null;
@@ -1968,30 +2007,30 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
   };
 
   const beginStrapDrag =
-  (strapId: string) =>
-  (e: React.PointerEvent<SVGPathElement | SVGLineElement | SVGPolylineElement>) => {    
-    if (e.button !== 0) return;
-    e.stopPropagation();
-    const strap = straps.find((s) => s.id === strapId);
-    if (!strap || !svgRef.current) return;
-    setActiveId(strapId);
-    setDragSimplifyStrapId(strapId);
-    dragRef.current = {
-      mode: 'strap',
-      pointerId: e.pointerId,
-      startClient: { x: e.clientX, y: e.clientY },
-      startPan: pan,
-      rect: svgRef.current.getBoundingClientRect ? { w: svgRef.current.getBoundingClientRect().width, h: svgRef.current.getBoundingClientRect().height } : undefined,
-      vb: { vw: vb.vw, vh: vb.vh },
-      strapId,
-      startOffset: strap.offset,
-      startSnapped: strap.snapped,
-      startLocalCenter: strapById.get(strapId)?.localCenter,
-      liveOffset: strap.offset,
-      liveSnapped: strap.snapped,
-    };
-    svgRef.current.setPointerCapture(e.pointerId);
-  };
+    (strapId: string) =>
+      (e: React.PointerEvent<SVGPathElement | SVGLineElement | SVGPolylineElement>) => {
+        if (e.button !== 0) return;
+        e.stopPropagation();
+        const strap = straps.find((s) => s.id === strapId);
+        if (!strap || !svgRef.current) return;
+        setActiveId(strapId);
+        setDragSimplifyStrapId(strapId);
+        dragRef.current = {
+          mode: 'strap',
+          pointerId: e.pointerId,
+          startClient: { x: e.clientX, y: e.clientY },
+          startPan: pan,
+          rect: svgRef.current.getBoundingClientRect ? { w: svgRef.current.getBoundingClientRect().width, h: svgRef.current.getBoundingClientRect().height } : undefined,
+          vb: { vw: vb.vw, vh: vb.vh },
+          strapId,
+          startOffset: strap.offset,
+          startSnapped: strap.snapped,
+          startLocalCenter: strapById.get(strapId)?.localCenter,
+          liveOffset: strap.offset,
+          liveSnapped: strap.snapped,
+        };
+        svgRef.current.setPointerCapture(e.pointerId);
+      };
 
   const onSvgPointerMove: React.PointerEventHandler<SVGSVGElement> = (e) => {
     const drag = dragRef.current;
@@ -2544,58 +2583,112 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               onPointerCancel={onSvgPointerUp}
               onPointerLeave={onSvgPointerUp}
             >
-{!previewSimplify && (
-  <defs>
-{renderData.map(({ strap, bandD }) => (
-  bandD ? (
-    <clipPath
-      key={`guide-clip-${strap.id}`}
-      id={`guide-clip-${strap.id}`}
-      clipPathUnits="userSpaceOnUse"
-    >
-      <path d={bandD} />
-    </clipPath>
-  ) : null
-))}
-    {[...underCrossings.entries()].map(([underId, list]) => (
-      <mask
-        key={`mask-${underId}`}
-        id={`mask-${underId}`}
-        maskUnits="userSpaceOnUse"
-        x={0}
-        y={0}
-        width={box.w}
-        height={box.h}
-      >
-        {/* Always start fully visible over the whole page (NOT viewBox). */}
-        <rect x={0} y={0} width={box.w} height={box.h} fill="white" />
+              {!previewSimplify && (
+                <defs>
+                  {renderData.map(({ strap, bandD }) => (
+                    bandD ? (
+                      <clipPath
+                        key={`guide-clip-${strap.id}`}
+                        id={`guide-clip-${strap.id}`}
+                        clipPathUnits="userSpaceOnUse"
+                      >
+                        <path d={bandD} />
+                      </clipPath>
+                    ) : null
+                  ))}
+                  {[...underCrossings.entries()].map(([underId, list]) => (
+                    <mask
+                      key={`mask-${underId}`}
+                      id={`mask-${underId}`}
+                      maskUnits="userSpaceOnUse"
+                      x={0}
+                      y={0}
+                      width={box.w}
+                      height={box.h}
+                    >
+                      {/* Always start fully visible over the whole page (NOT viewBox). */}
+                      <rect x={0} y={0} width={box.w} height={box.h} fill="white" />
 
-        {/* For every crossing where this strap is UNDER, cut out the OVER strap band near that crossing. */}
-        {list.map((c) => {
-          const overId = c.overId;
-          const over = strapById.get(overId);
-          if (!over?.guideSet) return null;
-          
-          const overSeg = overId === c.aId ? c.aSeg : c.bSeg;
-          const centerIdx = overSeg + 1;
-          const windowMM = Math.max(12, over.metrics.bandWidthMM * 2.5);
-          
-          const d0 = bandWindowDFromGuideSet(over.guideSet, centerIdx - 1, windowMM);
-          const d1 = bandWindowDFromGuideSet(over.guideSet, centerIdx, windowMM);
-          const d2 = bandWindowDFromGuideSet(over.guideSet, centerIdx + 1, windowMM);
-          
-          return (
-            <g key={`hole-${underId}-${c.id}`}>
-              {d0 ? <path d={d0} fill="black" /> : null}
-              {d1 ? <path d={d1} fill="black" /> : null}
-              {d2 ? <path d={d2} fill="black" /> : null}
-            </g>
-          );
-        })}
-      </mask>
-    ))}
-  </defs>
-)}
+                      {/* For every crossing where this strap is UNDER, cut out the OVER strap band near that crossing. */}
+                      {list.map((c) => {
+                        const overId = c.overId;
+                        const over = strapById.get(overId);
+                        if (!over?.guideSet) return null;
+
+                        const overSeg = overId === c.aId ? c.aSeg : c.bSeg;
+                        const centerIdx = overSeg + 1;
+                        const windowMM = Math.max(12, over.metrics.bandWidthMM * 2.5);
+
+                        const d0 = bandWindowDFromGuideSet(over.guideSet, centerIdx - 1, windowMM);
+                        const d1 = bandWindowDFromGuideSet(over.guideSet, centerIdx, windowMM);
+                        const d2 = bandWindowDFromGuideSet(over.guideSet, centerIdx + 1, windowMM);
+
+                        return (
+                          <g key={`hole-${underId}-${c.id}`}>
+                            {d0 ? <path d={d0} fill="black" /> : null}
+                            {d1 ? <path d={d1} fill="black" /> : null}
+                            {d2 ? <path d={d2} fill="black" /> : null}
+                          </g>
+                        );
+                      })}
+                    </mask>
+                  ))}
+                  {renderData.map(({ strap, transformed, metrics, selfOverlap, isClosed }) => {
+                    const selfOverlapMode =
+                      ENABLE_SELF_OVERLAP_ROUTE_PROTOTYPE
+                      && !!selfOverlap?.enabled
+                      && !!selfOverlap?.crossings.length
+                      && !!isClosed;
+
+                    if (!selfOverlapMode) return null;
+
+                    return (
+                      <mask
+                        key={`mask-self-overlap-${strap.id}`}
+                        id={`mask-self-overlap-${strap.id}`}
+                        maskUnits="userSpaceOnUse"
+                        x={0}
+                        y={0}
+                        width={box.w}
+                        height={box.h}
+                      >
+                        <rect x={0} y={0} width={box.w} height={box.h} fill="white" />
+
+                        {selfOverlap.crossings.map((crossing) => {
+                          const underS = crossing.overVisit === 'a' ? crossing.sB : crossing.sA;
+                          const underHalfWindowMM = Math.max(metrics.bandWidthMM * 0.55, 1.4);
+                          const underRoute = extractTightCrossingWindowAroundArcLength(
+                            transformed,
+                            underS,
+                            underHalfWindowMM,
+                            true,
+                          );
+                          const underGuideSet = buildGuideSetForRouteWindow({
+                            route: underRoute,
+                            script: strap.script,
+                            metrics,
+                            invertGuides: strap.invertGuides,
+                          });
+                          const underBandD = underGuideSet
+                            ? bandPolygonD(underGuideSet.ascLine, underGuideSet.descLine)
+                            : '';
+
+                          return underBandD ? (
+                            <path
+                              key={`self-overlap-hole-${strap.id}-${crossing.id}`}
+                              d={underBandD}
+                              fill="black"
+                              stroke="none"
+                            />
+                          ) : null;
+                        })}
+                      </mask>
+                    );
+                  })}
+
+
+                </defs>
+              )}
               <rect id="stage-bg" x={vb.minX} y={vb.minY} width={vb.vw} height={vb.vh} fill="#cbd5e1" />
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
               <line data-no-export="true" x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
@@ -2639,8 +2732,14 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     key={strap.id}
                     transform={gTransform.trim() ? gTransform : undefined}
                     mask={
-                      !interactionActive && !isSimplifiedForThisStrap && underCrossings.get(strap.id)?.length
-                        ? `url(#mask-${strap.id})`
+                      !interactionActive && !isSimplifiedForThisStrap
+                        ? (
+                          selfOverlapMode
+                            ? `url(#mask-self-overlap-${strap.id})`
+                            : underCrossings.get(strap.id)?.length
+                              ? `url(#mask-${strap.id})`
+                              : undefined
+                        )
                         : undefined
                     }
                   >
@@ -2708,9 +2807,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                               {selfOverlapConfig?.crossings.map((crossing) => {
                                 const underS = crossing.overVisit === 'a' ? crossing.sB : crossing.sA;
                                 const overS = crossing.overVisit === 'a' ? crossing.sA : crossing.sB;
-                                const underRoute = extractRouteWindowAroundArcLength(transformed, underS, crossing.windowMM, true);
-                                const overRoute = extractRouteWindowAroundArcLength(transformed, overS, crossing.windowMM, true);
-                                const underGuideSet = buildGuideSetForRouteWindow({
+                                const tightHalfWindowMM = Math.max(metrics.bandWidthMM * 0.55, 1.4);
+                                const underRoute = extractTightCrossingWindowAroundArcLength(transformed, underS, tightHalfWindowMM, true);
+                                const overRoute = extractTightCrossingWindowAroundArcLength(transformed, overS, tightHalfWindowMM, true); const underGuideSet = buildGuideSetForRouteWindow({
                                   route: underRoute,
                                   script: strap.script,
                                   metrics,
@@ -2727,7 +2826,6 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
                                 return (
                                   <g key={`self-overlap-band-${strap.id}-${crossing.id}`} pointerEvents="none">
-                                    {underBandD ? <path d={underBandD} fill="#ffffff" stroke="none" vectorEffect="non-scaling-stroke" /> : null}
                                     {overBandD ? <path d={overBandD} fill={strap.color} stroke="none" vectorEffect="non-scaling-stroke" /> : null}
                                   </g>
                                 );
@@ -2777,9 +2875,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                                 {selfOverlapConfig?.crossings.map((crossing) => {
                                   const underS = crossing.overVisit === 'a' ? crossing.sB : crossing.sA;
                                   const overS = crossing.overVisit === 'a' ? crossing.sA : crossing.sB;
-                                  const underRoute = extractRouteWindowAroundArcLength(transformed, underS, crossing.windowMM, true);
-                                  const overRoute = extractRouteWindowAroundArcLength(transformed, overS, crossing.windowMM, true);
-                                  const underGuideSet = buildGuideSetForRouteWindow({
+                                  const tightHalfWindowMM = Math.max(metrics.bandWidthMM * 0.55, 1.4);
+                                  const underRoute = extractTightCrossingWindowAroundArcLength(transformed, underS, tightHalfWindowMM, true);
+                                  const overRoute = extractTightCrossingWindowAroundArcLength(transformed, overS, tightHalfWindowMM, true); const underGuideSet = buildGuideSetForRouteWindow({
                                     route: underRoute,
                                     script: strap.script,
                                     metrics,
@@ -2794,25 +2892,6 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
                                   return (
                                     <g key={`self-overlap-guides-${strap.id}-${crossing.id}`} pointerEvents="none">
-                                      {underGuideSet ? (
-                                        <GuideOverlay
-                                          guideSet={underGuideSet}
-                                          style={{
-                                            thin: guideStroke.thin,
-                                            bold: guideStroke.bold,
-                                            colors: {
-                                              thin: '#ffffff',
-                                              bold: '#ffffff',
-                                              asc: '#ffffff',
-                                              waist: '#ffffff',
-                                              base: '#ffffff',
-                                              desc: '#ffffff',
-                                              tick: '#ffffff',
-                                              frame: 'transparent',
-                                            },
-                                          }}
-                                        />
-                                      ) : null}
                                       {overGuideSet ? (
                                         <GuideOverlay
                                           guideSet={overGuideSet}
@@ -2900,55 +2979,55 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 );
               })}
 
-{!interactionActive && !simplify && compatibleJoinedGuideData.map((chain) =>
-  chain.members.map((member) => {
-    const strapEntry = strapById.get(member.strapId);
-    if (!strapEntry) return null;
+              {!interactionActive && !simplify && compatibleJoinedGuideData.map((chain) =>
+                chain.members.map((member) => {
+                  const strapEntry = strapById.get(member.strapId);
+                  if (!strapEntry) return null;
 
-    return (
-      <g
-        key={`joined-guide-${chain.chainId}-${member.strapId}`}
-        clipPath={`url(#guide-clip-${member.strapId})`}
-        mask={underCrossings.get(member.strapId)?.length ? `url(#mask-${member.strapId})` : undefined}
-      >
-        <GuideOverlay
-          guideSet={chain.guideSet}
-          style={{
-            thin: guideStroke.thin,
-            bold: guideStroke.bold,
-            colors: guideOverlayColors(member.strapId, strapEntry.strap.color),
-          }}
-          interactive={{ onGuidePointerDown: beginStrapDrag(member.strapId), hitStrokeWidthMM: 6 }}
-        />
-      </g>
-    );
-  }),
-)}
+                  return (
+                    <g
+                      key={`joined-guide-${chain.chainId}-${member.strapId}`}
+                      clipPath={`url(#guide-clip-${member.strapId})`}
+                      mask={underCrossings.get(member.strapId)?.length ? `url(#mask-${member.strapId})` : undefined}
+                    >
+                      <GuideOverlay
+                        guideSet={chain.guideSet}
+                        style={{
+                          thin: guideStroke.thin,
+                          bold: guideStroke.bold,
+                          colors: guideOverlayColors(member.strapId, strapEntry.strap.color),
+                        }}
+                        interactive={{ onGuidePointerDown: beginStrapDrag(member.strapId), hitStrokeWidthMM: 6 }}
+                      />
+                    </g>
+                  );
+                }),
+              )}
 
-{simplify && !interactionActive && crossingsWithOverrides.map((crossing) => {
-  const over = strapById.get(crossing.overId);
-  if (!over?.guideSet) return null;
+              {simplify && !interactionActive && !renderData.some((r) => r.selfOverlap?.enabled && r.selfOverlap.crossings.length && r.isClosed) && crossingsWithOverrides.map((crossing) => {
+                const over = strapById.get(crossing.overId);
+                if (!over?.guideSet) return null;
 
-  const overSeg = crossing.overId === crossing.aId ? crossing.aSeg : crossing.bSeg;
-  const centerIdx = overSeg + 1;
-  const dOver = bandWindowDFromGuideSet(
-    over.guideSet,
-    centerIdx,
-    Math.max(12, over.metrics.bandWidthMM * 2.5),
-  );
-  if (!dOver) return null;
+                const overSeg = crossing.overId === crossing.aId ? crossing.aSeg : crossing.bSeg;
+                const centerIdx = overSeg + 1;
+                const dOver = bandWindowDFromGuideSet(
+                  over.guideSet,
+                  centerIdx,
+                  Math.max(12, over.metrics.bandWidthMM * 2.5),
+                );
+                if (!dOver) return null;
 
-  return (
-    <g key={`weave-${crossing.id}`} pointerEvents="none">
-      <path
-        d={dOver}
-        fill={over.strap.color}
-        stroke="none"
-        vectorEffect="non-scaling-stroke"
-      />
-    </g>
-  );
-})}
+                return (
+                  <g key={`weave-${crossing.id}`} pointerEvents="none">
+                    <path
+                      d={dOver}
+                      fill={over.strap.color}
+                      stroke="none"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  </g>
+                );
+              })}
 
               {showCrossings && !interactionActive && crossingsWithOverrides.map((crossing, idx) => (
                 <g
@@ -3119,21 +3198,21 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
           {activeStrap && (
             <div className="mt-3 space-y-3">
               <InsetLabeledField label="Script">
-              <select
-  className={INSET_CONTROL_BASE}
-  value={activeStrap.script}
-  onChange={(e) => {
-    markPresetDirty();
-    const script = e.target.value as ScriptId;
-    setStraps((prev) =>
-      normalizeGuideJoinLinks(
-        prev.map((strap) =>
-          strap.id === activeStrap.id ? applyScriptDefaults(strap, script) : strap,
-        ),
-      ),
-    );
-  }}
->
+                <select
+                  className={INSET_CONTROL_BASE}
+                  value={activeStrap.script}
+                  onChange={(e) => {
+                    markPresetDirty();
+                    const script = e.target.value as ScriptId;
+                    setStraps((prev) =>
+                      normalizeGuideJoinLinks(
+                        prev.map((strap) =>
+                          strap.id === activeStrap.id ? applyScriptDefaults(strap, script) : strap,
+                        ),
+                      ),
+                    );
+                  }}
+                >
                   {Object.keys(SCRIPT_PROFILES).map((id) => <option key={id} value={id}>{id}</option>)}
                 </select>
               </InsetLabeledField>
@@ -3366,14 +3445,12 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     aria-checked={activeStrap.flip}
                     aria-label="Mirror path"
                     onClick={() => updateStrap(activeStrap.id, { flip: !activeStrap.flip })}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      activeStrap.flip ? 'bg-indigo-600' : 'bg-slate-300'
-                    }`}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${activeStrap.flip ? 'bg-indigo-600' : 'bg-slate-300'
+                      }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        activeStrap.flip ? 'translate-x-6' : 'translate-x-1'
-                      }`}
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${activeStrap.flip ? 'translate-x-6' : 'translate-x-1'
+                        }`}
                     />
                   </button>
                 </label>
@@ -3386,14 +3463,12 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     aria-checked={activeStrap.invertGuides}
                     aria-label="Invert guidelines"
                     onClick={() => updateStrap(activeStrap.id, { invertGuides: !activeStrap.invertGuides })}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      activeStrap.invertGuides ? 'bg-indigo-600' : 'bg-slate-300'
-                    }`}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${activeStrap.invertGuides ? 'bg-indigo-600' : 'bg-slate-300'
+                      }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        activeStrap.invertGuides ? 'translate-x-6' : 'translate-x-1'
-                      }`}
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${activeStrap.invertGuides ? 'translate-x-6' : 'translate-x-1'
+                        }`}
                     />
                   </button>
                 </label>
