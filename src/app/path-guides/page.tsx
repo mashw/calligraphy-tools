@@ -466,39 +466,8 @@ const extractTightCrossingWindowAroundArcLength = (
   return out;
 };
 
-const extractRouteWindowAroundArcLength = (pts: Pt[], sCenter: number, windowMM: number, closed = false): Pt[] => {
-
-
-  const arc = buildArcLengthTable(pts);
-  if (arc.pts.length < 2 || arc.total <= 0) return [];
-
-  if (closed) {
-    const total = arc.total;
-    const center = ((sCenter % total) + total) % total;
-    const start = center - windowMM;
-    const end = center + windowMM;
-    const sampleCount = Math.max(8, Math.ceil((windowMM * 2) / 1.5));
-    const out: Pt[] = [];
-    for (let i = 0; i <= sampleCount; i += 1) {
-      const rawS = start + (((end - start) * i) / sampleCount);
-      const wrappedS = ((rawS % total) + total) % total;
-      out.push(sampleRouteAtArcLength(arc.pts, arc.cumulative, wrappedS));
-    }
-    return out;
-  }
-
-  const start = Math.max(0, sCenter - windowMM);
-  const end = Math.min(arc.total, sCenter + windowMM);
-  if (end - start <= 1e-6) return [];
-
-  const out: Pt[] = [sampleRouteAtArcLength(arc.pts, arc.cumulative, start)];
-  for (let i = 1; i < arc.pts.length - 1; i += 1) {
-    const s = arc.cumulative[i];
-    if (s > start && s < end) out.push(arc.pts[i]);
-  }
-  out.push(sampleRouteAtArcLength(arc.pts, arc.cumulative, end));
-  return out;
-};
+const selfOverlapTightHalfWindowMM = (metrics: ReturnType<typeof guideMetrics>): number =>
+  Math.max(metrics.bandWidthMM * 0.35, 0.9);
 
 const buildGuideSetForRouteWindow = ({
   route,
@@ -2656,7 +2625,7 @@ export default function PathGuidesPage() {
 
                         {selfOverlap.crossings.map((crossing) => {
                           const underS = crossing.overVisit === 'a' ? crossing.sB : crossing.sA;
-                          const underHalfWindowMM = Math.max(metrics.bandWidthMM * 0.55, 1.4);
+                          const underHalfWindowMM = selfOverlapTightHalfWindowMM(metrics);
                           const underRoute = extractTightCrossingWindowAroundArcLength(
                             transformed,
                             underS,
@@ -2732,15 +2701,14 @@ export default function PathGuidesPage() {
                     key={strap.id}
                     transform={gTransform.trim() ? gTransform : undefined}
                     mask={
-                      !interactionActive && !isSimplifiedForThisStrap
+                      !interactionActive
                         ? (
                           selfOverlapMode
                             ? `url(#mask-self-overlap-${strap.id})`
-                            : underCrossings.get(strap.id)?.length
+                            : !isSimplifiedForThisStrap && underCrossings.get(strap.id)?.length
                               ? `url(#mask-${strap.id})`
                               : undefined
-                        )
-                        : undefined
+                        ) : undefined
                     }
                   >
                     {/* Selected indicator: subtle halo that works in both simplify and full guideline view */}
@@ -2805,23 +2773,20 @@ export default function PathGuidesPage() {
                                 }}
                               />
                               {selfOverlapConfig?.crossings.map((crossing) => {
-                                const underS = crossing.overVisit === 'a' ? crossing.sB : crossing.sA;
                                 const overS = crossing.overVisit === 'a' ? crossing.sA : crossing.sB;
-                                const tightHalfWindowMM = Math.max(metrics.bandWidthMM * 0.55, 1.4);
-                                const underRoute = extractTightCrossingWindowAroundArcLength(transformed, underS, tightHalfWindowMM, true);
-                                const overRoute = extractTightCrossingWindowAroundArcLength(transformed, overS, tightHalfWindowMM, true); const underGuideSet = buildGuideSetForRouteWindow({
-                                  route: underRoute,
-                                  script: strap.script,
-                                  metrics,
-                                  invertGuides: strap.invertGuides,
-                                });
+                                const tightHalfWindowMM = selfOverlapTightHalfWindowMM(metrics);
+                                const overRoute = extractTightCrossingWindowAroundArcLength(
+                                  transformed,
+                                  overS,
+                                  tightHalfWindowMM,
+                                  true,
+                                );
                                 const overGuideSet = buildGuideSetForRouteWindow({
                                   route: overRoute,
                                   script: strap.script,
                                   metrics,
                                   invertGuides: strap.invertGuides,
                                 });
-                                const underBandD = underGuideSet ? bandPolygonD(underGuideSet.ascLine, underGuideSet.descLine) : '';
                                 const overBandD = overGuideSet ? bandPolygonD(overGuideSet.ascLine, overGuideSet.descLine) : '';
 
                                 return (
@@ -2873,16 +2838,14 @@ export default function PathGuidesPage() {
                                   interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
                                 />
                                 {selfOverlapConfig?.crossings.map((crossing) => {
-                                  const underS = crossing.overVisit === 'a' ? crossing.sB : crossing.sA;
                                   const overS = crossing.overVisit === 'a' ? crossing.sA : crossing.sB;
-                                  const tightHalfWindowMM = Math.max(metrics.bandWidthMM * 0.55, 1.4);
-                                  const underRoute = extractTightCrossingWindowAroundArcLength(transformed, underS, tightHalfWindowMM, true);
-                                  const overRoute = extractTightCrossingWindowAroundArcLength(transformed, overS, tightHalfWindowMM, true); const underGuideSet = buildGuideSetForRouteWindow({
-                                    route: underRoute,
-                                    script: strap.script,
-                                    metrics,
-                                    invertGuides: strap.invertGuides,
-                                  });
+                                  const tightHalfWindowMM = selfOverlapTightHalfWindowMM(metrics);
+                                  const overRoute = extractTightCrossingWindowAroundArcLength(
+                                    transformed,
+                                    overS,
+                                    tightHalfWindowMM,
+                                    true,
+                                  );
                                   const overGuideSet = buildGuideSetForRouteWindow({
                                     route: overRoute,
                                     script: strap.script,
