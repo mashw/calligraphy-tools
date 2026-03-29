@@ -131,6 +131,31 @@ const INLINE_RESET_BUTTON = 'inline-flex h-8 w-8 shrink-0 items-center justify-c
 const INLINE_SLIDER = 'h-2 min-w-0 flex-1 appearance-none rounded-full bg-indigo-100 accent-indigo-600';
 const SCALE_MIN_PCT = 1;
 const SCALE_MAX_PCT = 220;
+const COPPERPLATE_SEAM_BRIDGE_LENGTH_MM = 18;
+const COPPERPLATE_SEAM_BRIDGE_WIDTH_MM = 22;
+const COPPERPLATE_SEAM_BRIDGE_SLANT_SPACING_MM = 2.5;
+const COPPERPLATE_SEAM_BRIDGE_OVERSCAN_MM = 6;
+
+type CopperplateSeamBridge = {
+  key: string;
+  clipId: string;
+  capsuleD: string;
+  lines: Array<{ a: Pt; b: Pt }>;
+};
+
+const add = (a: Pt, b: Pt): Pt => ({ x: a.x + b.x, y: a.y + b.y });
+const subtract = (a: Pt, b: Pt): Pt => ({ x: a.x - b.x, y: a.y - b.y });
+const scale = (v: Pt, s: number): Pt => ({ x: v.x * s, y: v.y * s });
+const dot = (a: Pt, b: Pt): number => a.x * b.x + a.y * b.y;
+const midpoint = (a: Pt, b: Pt): Pt => scale(add(a, b), 0.5);
+const perp = (v: Pt): Pt => ({ x: -v.y, y: v.x });
+const normalize = (v: Pt): Pt | null => {
+  const len = Math.hypot(v.x, v.y);
+  if (len < 1e-6) return null;
+  return { x: v.x / len, y: v.y / len };
+};
+const alignDirection = (dir: Pt, reference: Pt): Pt => (dot(dir, reference) < 0 ? scale(dir, -1) : dir);
+const sanitizeSvgId = (value: string): string => value.replace(/[^a-zA-Z0-9_-]/g, '-');
 
 function stripNoExport(svg: SVGSVGElement) {
   svg.querySelectorAll('[data-no-export="true"]').forEach(n => n.remove());
@@ -985,6 +1010,7 @@ const buildCompatibleJoinedGuideData = ({
     if (chain.closed) return;
     const first = strapById.get(chain.members[0].strapId);
     if (!first) return;
+    if (first.strap.script === 'Copperplate') return;
 
     const allCompatible = chain.members.every((m) => {
       const item = strapById.get(m.strapId);
@@ -1005,16 +1031,13 @@ const buildCompatibleJoinedGuideData = ({
     if (!virtual) return;
 
     const guideSet = buildGuideSet(
-      first.strap.script === 'Copperplate' ? 'copperplate' : 'blackletter',
+      'blackletter',
       {
         baseline: virtual.baseline,
         xMM: first.metrics.xMM,
         ascMM: first.metrics.ascMM,
         descMM: first.metrics.descMM,
-        tickStepMM:
-          first.strap.script === 'Copperplate'
-            ? Math.max(2, first.metrics.nibMM)
-            : first.metrics.effectiveNibMM,
+        tickStepMM: first.metrics.effectiveNibMM,
         actualNibMM: first.metrics.nibMM,
         invertGuides: first.strap.invertGuides,
       },
@@ -1028,6 +1051,118 @@ const buildCompatibleJoinedGuideData = ({
   });
 
   return result;
+};
+
+const getGuideTickDirAtEndpoint = (
+  guideSet: ReturnType<typeof buildGuideSet> | undefined,
+  side: EndpointSide,
+): Pt | null => {
+  const ticks = guideSet?.ticks;
+  if (!ticks?.length) return null;
+  const tick = side === 'start' ? ticks[0] : ticks[ticks.length - 1];
+  return normalize(subtract(tick.b, tick.a));
+};
+
+const buildCapsulePathD = (center: Pt, axisDir: Pt, halfLength: number, halfWidth: number) => {
+  const axis = normalize(axisDir);
+  if (!axis) return '';
+  const normal = perp(axis);
+  const start = add(center, scale(axis, -halfLength));
+  const end = add(center, scale(axis, halfLength));
+  const startTop = add(start, scale(normal, halfWidth));
+  const endTop = add(end, scale(normal, halfWidth));
+  const startBottom = add(start, scale(normal, -halfWidth));
+  const endBottom = add(end, scale(normal, -halfWidth));
+  return [
+    `M ${startTop.x} ${startTop.y}`,
+    `L ${endTop.x} ${endTop.y}`,
+    `A ${halfWidth} ${halfWidth} 0 0 1 ${endBottom.x} ${endBottom.y}`,
+    `L ${startBottom.x} ${startBottom.y}`,
+    `A ${halfWidth} ${halfWidth} 0 0 1 ${startTop.x} ${startTop.y}`,
+    'Z',
+  ].join(' ');
+};
+
+const buildCopperplateSeamBridges = ({
+  straps,
+  strapById,
+  transformedById,
+}: {
+  straps: Strap[];
+  strapById: Map<string, { strap: Strap; metrics: ReturnType<typeof guideMetrics>; guideSet: ReturnType<typeof buildGuideSet> | null }>;
+  transformedById: Map<string, Pt[]>;
+}): CopperplateSeamBridge[] => {
+  const bridges: CopperplateSeamBridge[] = [];
+  const seen = new Set<string>();
+
+  straps.forEach((strap) => {
+    if (strap.script !== 'Copperplate') return;
+    (['start', 'end'] as EndpointSide[]).forEach((side) => {
+      const ref = strap.guideJoin?.[side];
+      if (!ref) return;
+
+      const other = strapById.get(ref.otherId)?.strap;
+      if (!other || other.script !== 'Copperplate') return;
+      const back = other.guideJoin?.[ref.otherSide];
+      if (!back || back.otherId !== strap.id || back.otherSide !== side) return;
+
+      const endpointA = `${strap.id}:${side}`;
+      const endpointB = `${other.id}:${ref.otherSide}`;
+      const seamKey = endpointA < endpointB ? `${endpointA}|${endpointB}` : `${endpointB}|${endpointA}`;
+      if (seen.has(seamKey)) return;
+      seen.add(seamKey);
+
+      const ptsA = transformedById.get(strap.id) ?? [];
+      const ptsB = transformedById.get(other.id) ?? [];
+      const endA = getEndpointInfo(strap.id, ptsA, side);
+      const endB = getEndpointInfo(other.id, ptsB, ref.otherSide);
+      if (!endA || !endB) return;
+
+      const center = midpoint(endA.point, endB.point);
+      const inwardB = alignDirection(endB.inward, endA.inward);
+      const seamAxis = normalize(add(endA.inward, inwardB));
+      if (!seamAxis) return;
+
+      const tickDirA = getGuideTickDirAtEndpoint(strapById.get(strap.id)?.guideSet ?? undefined, side);
+      const tickDirBRaw = getGuideTickDirAtEndpoint(strapById.get(other.id)?.guideSet ?? undefined, ref.otherSide);
+      const slantDir = (() => {
+        if (tickDirA && tickDirBRaw) {
+          const tickDirB = alignDirection(tickDirBRaw, tickDirA);
+          return normalize(add(tickDirA, tickDirB));
+        }
+        if (tickDirA) return tickDirA;
+        if (tickDirBRaw) return tickDirBRaw;
+        return normalize(perp(seamAxis));
+      })();
+      if (!slantDir) return;
+
+      const halfLength = COPPERPLATE_SEAM_BRIDGE_LENGTH_MM / 2;
+      const halfWidth = COPPERPLATE_SEAM_BRIDGE_WIDTH_MM / 2;
+      const capsuleD = buildCapsulePathD(center, seamAxis, halfLength, halfWidth);
+      if (!capsuleD) return;
+
+      const slantNormal = perp(slantDir);
+      const offsetMax = halfWidth + COPPERPLATE_SEAM_BRIDGE_OVERSCAN_MM;
+      const lineHalf = halfLength + halfWidth + COPPERPLATE_SEAM_BRIDGE_OVERSCAN_MM;
+      const lines: Array<{ a: Pt; b: Pt }> = [];
+      for (let off = -offsetMax; off <= offsetMax + 1e-6; off += COPPERPLATE_SEAM_BRIDGE_SLANT_SPACING_MM) {
+        const base = add(center, scale(slantNormal, off));
+        lines.push({
+          a: add(base, scale(slantDir, -lineHalf)),
+          b: add(base, scale(slantDir, lineHalf)),
+        });
+      }
+
+      bridges.push({
+        key: seamKey,
+        clipId: sanitizeSvgId(`copperplate-seam-clip-${seamKey}`),
+        capsuleD,
+        lines,
+      });
+    });
+  });
+
+  return bridges;
 };
 
 
@@ -1635,20 +1770,25 @@ export default function PathGuidesPage() {
     [straps],
   );
 
-  const compatibleJoinedGuideData = useMemo(
+  const blackletterJoinedGuideData = useMemo(
     () => buildCompatibleJoinedGuideData({ chains: guideJoinChains, strapById, transformedById }),
     [guideJoinChains, strapById, transformedById],
   );
 
-  const joinedGuideMemberIds = useMemo(() => {
+  const blackletterJoinedMemberIds = useMemo(() => {
     const set = new Set<string>();
-    compatibleJoinedGuideData.forEach((chain) => {
+    blackletterJoinedGuideData.forEach((chain) => {
       chain.members.forEach((member) => {
         set.add(member.strapId);
       });
     });
     return set;
-  }, [compatibleJoinedGuideData]);
+  }, [blackletterJoinedGuideData]);
+
+  const copperplateSeamBridges = useMemo(
+    () => buildCopperplateSeamBridges({ straps, strapById, transformedById }),
+    [straps, strapById, transformedById],
+  );
 
   function bandWindowDFromGuideSet(
     guideSet: NonNullable<(typeof renderData)[number]["guideSet"]>,
@@ -2955,7 +3095,7 @@ export default function PathGuidesPage() {
                             />
                           ) : null
                         )}
-                        {!interactionActive && !isSimplifiedForThisStrap && guideSet && !joinedGuideMemberIds.has(strap.id) && (
+                        {!interactionActive && !isSimplifiedForThisStrap && guideSet && !blackletterJoinedMemberIds.has(strap.id) && (
                           <GuideOverlay
                             guideSet={guideSet}
                             style={{
@@ -2979,7 +3119,7 @@ export default function PathGuidesPage() {
                 );
               })}
 
-              {!interactionActive && !simplify && compatibleJoinedGuideData.map((chain) =>
+              {!interactionActive && !simplify && blackletterJoinedGuideData.map((chain) =>
                 chain.members.map((member) => {
                   const strapEntry = strapById.get(member.strapId);
                   if (!strapEntry) return null;
@@ -3003,6 +3143,36 @@ export default function PathGuidesPage() {
                   );
                 }),
               )}
+
+              {!interactionActive && !simplify && copperplateSeamBridges.map((bridge) => (
+                <g key={`copperplate-seam-bridge-${bridge.key}`} pointerEvents="none">
+                  <defs>
+                    <clipPath id={bridge.clipId}>
+                      <path d={bridge.capsuleD} />
+                    </clipPath>
+                  </defs>
+                  <path
+                    d={bridge.capsuleD}
+                    fill="white"
+                    fillOpacity={0.96}
+                    stroke="none"
+                  />
+                  <g clipPath={`url(#${bridge.clipId})`}>
+                    {bridge.lines.map((line, idx) => (
+                      <line
+                        key={`${bridge.key}-slant-${idx}`}
+                        x1={line.a.x}
+                        y1={line.a.y}
+                        x2={line.b.x}
+                        y2={line.b.y}
+                        stroke={guideStroke.tick}
+                        strokeWidth={guideStroke.thin}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    ))}
+                  </g>
+                </g>
+              ))}
 
               {simplify && !interactionActive && !renderData.some((r) => r.selfOverlap?.enabled && r.selfOverlap.crossings.length && r.isClosed) && crossingsWithOverrides.map((crossing) => {
                 const over = strapById.get(crossing.overId);
