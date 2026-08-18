@@ -8,10 +8,11 @@ import { pageSize, type LayoutElement, type PageElement } from '@/lib/layout/typ
 import { constrainFrameToSquare, createDefaultShapeSettings, isConstrainedShape, SHAPE_OPTIONS, type ShapeAppearance, type ShapeKind } from '@/lib/layout/shape';
 import CurvedTitleSettingsPanel from '@/components/curved-title/CurvedTitleSettingsPanel';
 import CalligramSettingsPanel from '@/components/calligram/CalligramSettingsPanel';
+import { SettingsAccordion } from '@/components/layout/SettingsAccordion';
 
 const input = 'w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm';
 const smallButton = 'rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500';
-const sectionClass = 'xl:w-[300px] xl:self-start';
+const sectionClass = 'xl:w-[300px] xl:shrink-0 xl:self-start';
 
 function MillimetreField({ label, value, onChange, min, whole = false }: { label: string; value: number; onChange: (value: number) => void; min?: number; whole?: boolean }) {
   const displayed = whole ? Math.round(value) : value;
@@ -54,7 +55,7 @@ export default function LayoutInspector({ element, page, onChange }: { element: 
 
   return <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
     <h2 className="font-semibold text-slate-800">Settings <span className="font-normal text-slate-400">—</span> {element.name}</h2>
-    <div className="mt-4 space-y-3 xl:flex xl:flex-wrap xl:items-start xl:gap-4 xl:space-y-0">
+    <SettingsAccordion sessionKey={element.id}>
       {element.type === 'page' ? <>
         <DisclosureSection title="Page" defaultOpen className={sectionClass}><div className="space-y-3"><label className="block space-y-1 text-xs font-medium text-slate-600">Paper size<select className={input} value={element.settings.paper} onChange={event => { const paper = event.target.value as PaperId; const settings = { ...element.settings, paper, orientation: PAPERS_MM[paper].defaultOrientation }; const size = pageSize({ ...element, settings }); onChange({ ...element, settings, frame: { x: 0, y: 0, ...size } }); }}>{Object.entries(PAPERS_MM).map(([id, paper]) => <option key={id} value={id}>{paper.label}</option>)}</select></label><label className="block space-y-1 text-xs font-medium text-slate-600">Orientation<select className={input} value={element.settings.orientation} onChange={event => { const settings = { ...element.settings, orientation: event.target.value as Orientation }; const size = pageSize({ ...element, settings }); onChange({ ...element, settings, frame: { x: 0, y: 0, ...size } }); }}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label></div></DisclosureSection>
         <DisclosureSection title="Page margins" defaultOpen className={sectionClass}><div className="grid grid-cols-2 gap-3">{(['top', 'right', 'bottom', 'left'] as const).map(key => <MillimetreField key={key} label={key} min={0} value={element.settings.margins[key]} onChange={value => onChange({ ...element, settings: { ...element.settings, margins: { ...element.settings.margins, [key]: value } } })} />)}</div></DisclosureSection>
@@ -70,6 +71,6 @@ export default function LayoutInspector({ element, page, onChange }: { element: 
           <DisclosureSection title="Appearance" defaultOpen className={sectionClass}><div className="space-y-3"><label className="block space-y-1 text-xs font-medium text-slate-600">Mode<select className={input} value={element.settings.appearance} onChange={event => onChange({ ...element, settings: { ...element.settings, appearance: event.target.value as ShapeAppearance } })}><option value="reserve">Reserve space only</option><option value="fill">Fill</option><option value="border">Border</option><option value="fillAndBorder">Fill + border</option></select></label>{(element.settings.appearance === 'fill' || element.settings.appearance === 'fillAndBorder') && <label className="block space-y-1 text-xs font-medium text-slate-600">Fill colour<input type="color" className="h-9 w-full rounded border border-slate-300" value={element.settings.fillColor} onChange={event => onChange({ ...element, settings: { ...element.settings, fillColor: event.target.value } })} /></label>}{(element.settings.appearance === 'border' || element.settings.appearance === 'fillAndBorder') && <><label className="block space-y-1 text-xs font-medium text-slate-600">Border colour<input type="color" className="h-9 w-full rounded border border-slate-300" value={element.settings.borderColor} onChange={event => onChange({ ...element, settings: { ...element.settings, borderColor: event.target.value } })} /></label><MillimetreField label="Border width" min={0} value={element.settings.borderWidthMM} onChange={value => onChange({ ...element, settings: { ...element.settings, borderWidthMM: value } })} /></>}</div></DisclosureSection>
         </> : element.type === 'curved-title' ? <CurvedTitleSettingsPanel value={element.settings} box={{ w: element.frame.width, h: element.frame.height }} paddingMM={element.paddingMM} onPaddingChange={paddingMM => onChange({ ...element, paddingMM })} onChange={settings => onChange({ ...element, settings })} /> : <CalligramSettingsPanel value={element.settings} box={{ w: element.frame.width, h: element.frame.height }} paddingMM={element.paddingMM} onPaddingChange={paddingMM => onChange({ ...element, paddingMM })} onChange={settings => { const diameter=element.frame.width+2*(settings.radiusMM-element.settings.radiusMM); onChange({...element,frame:{...element.frame,x:element.frame.x+(element.frame.width-diameter)/2,y:element.frame.y+(element.frame.height-diameter)/2,width:diameter,height:diameter},settings}); }} />}
       </>}
-    </div>
+    </SettingsAccordion>
   </section>;
 }
