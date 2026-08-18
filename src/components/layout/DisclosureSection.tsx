@@ -12,13 +12,15 @@ export default function DisclosureSection({ title, defaultOpen = false, classNam
   const accordion = useSettingsAccordion();
   const [localOpen, setLocalOpen] = useState(defaultOpen);
   const open = accordion ? accordion.isOpen(title) : localOpen;
-  const wideRail = !!accordion?.wide && !open;
+  const horizontal = !!accordion && accordion.mode !== 'compact';
+  const horizontalRail = horizontal && !open;
+  const width = accordion?.panelWidth(title, open);
   const toggle = () => accordion ? accordion.toggle(title) : setLocalOpen(value => !value);
-  const direction = accordion?.wide ? 'right' : open ? 'up' : 'down';
-  return <section data-settings-section={title} className={`rounded-lg border border-slate-200 bg-white transition-[width] ${wideRail ? 'w-11 shrink-0 self-stretch' : `w-full ${className}`}`}>
-    <div className={`flex items-center ${wideRail ? 'h-full min-h-44 flex-col' : ''}`}><button type="button" aria-expanded={open} aria-label={`${open ? 'Collapse' : 'Expand'} ${title}`} onClick={toggle} className={`group flex min-h-10 min-w-0 flex-1 rounded-lg font-semibold transition hover:bg-slate-50 active:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 ${wideRail ? 'w-full flex-col items-center justify-between gap-3 px-2 py-3' : 'items-center justify-between gap-3 px-3 py-2 text-left'}`}>
-      <span className={wideRail ? '[writing-mode:vertical-rl] rotate-180' : ''}>{title}</span><span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center text-slate-500 group-hover:text-indigo-600"><ChevronIcon direction={direction} /></span>
-    </button>{headerAction && !wideRail && <div className="shrink-0 pr-2">{headerAction}</div>}</div>
+  const direction = horizontal ? 'right' : open ? 'up' : 'down';
+  return <section data-settings-section={title} className={`rounded-lg border border-slate-200 bg-white transition-[width] ${horizontal ? 'shrink-0 self-stretch' : `w-full ${className}`}`} style={width === null || width === undefined ? undefined : { width, minWidth: width, flex: `0 0 ${width}px` }}>
+    <div className={`flex items-center ${horizontalRail ? 'h-full min-h-44 flex-col' : ''}`}><button type="button" aria-expanded={open} aria-label={`${open ? 'Collapse' : 'Expand'} ${title}`} onClick={toggle} className={`group flex min-h-10 min-w-0 flex-1 rounded-lg font-semibold transition hover:bg-slate-50 active:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 ${horizontalRail ? 'w-full flex-col items-center justify-between gap-3 px-2 py-3' : 'items-center justify-between gap-3 px-3 py-2 text-left'}`}>
+      <span className={horizontalRail ? '[writing-mode:vertical-rl] rotate-180' : ''}>{title}</span><span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center text-slate-500 group-hover:text-indigo-600"><ChevronIcon direction={direction} /></span>
+    </button>{headerAction && !horizontalRail && <div className="shrink-0 pr-2">{headerAction}</div>}</div>
     {open && <div className="border-t border-slate-100 p-3">{children}</div>}
   </section>;
 }

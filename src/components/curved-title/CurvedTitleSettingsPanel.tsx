@@ -5,7 +5,7 @@ import type { CopperplateRatioPreset, CurvedTitleSettings } from '@/lib/curved-t
 import type { CurvePresetId } from '@/lib/curve-helpers';
 import type { ScriptId } from '@/lib/scripts';
 
-const input='w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm',section='xl:w-[300px] xl:self-start';
+const input='w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm',section='';
 const curves:[CurvePresetId,string][]=[['simpleArch','Simple Arch'],['highArch','High Arch'],['shallowArch','Shallow Arch'],['compoundArch','Compound Arch'],['zanerian','Zanerian Resolution']];
 const scripts:[ScriptId,string][]=[['Copperplate','Copperplate'],['Fraktur','Fraktur'],['TexturaQuadrata','Textura Quadrata']];
 function Field({label,value,onChange,min,step=.5}:{label:string;value:number|string;onChange:(v:string)=>void;min?:number;step?:number}){return <label className="block space-y-1 text-xs font-medium text-slate-600">{label}<input className={input} type="number" value={value} min={min} step={step} onChange={e=>onChange(e.target.value)}/></label>}

@@ -13,7 +13,7 @@ import { getNearestCompleteGuidelinesHeight } from '@/lib/guides/straight/model'
 
 const input = 'w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm';
 const smallButton = 'rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500';
-const sectionClass = 'xl:w-[300px] xl:shrink-0 xl:self-start';
+const sectionClass = '';
 
 function MillimetreField({ label, value, onChange, min, whole = false }: { label: string; value: number; onChange: (value: number) => void; min?: number; whole?: boolean }) {
   const displayed = whole ? Math.round(value) : value;
