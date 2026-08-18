@@ -8,13 +8,14 @@ import GuidelinesRenderer from '@/components/guidelines/GuidelinesRenderer';
 import ShapeElementRenderer from '@/components/layout/ShapeElementRenderer';
 import { PAGE_BACKGROUND } from '@/lib/layout/shape';
 import CurvedTitleRenderer from '@/components/curved-title/CurvedTitleRenderer';
+import { buildCurvedTitleModel } from '@/lib/curved-title/model';
 
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type Interaction =
   | { mode: 'none' }
   | { mode: 'pan'; pointerId: number; startClient: { x: number; y: number }; startPan: { x: number; y: number }; rect: DOMRect; vb: { w: number; h: number } }
-  | { mode: 'move'; pointerId: number; elementId: string; startClient: { x: number; y: number }; original: Frame; rect: DOMRect; vb: { w: number; h: number }; live: Frame; snap: SnapState }
-  | { mode: 'resize'; pointerId: number; elementId: string; handle: ResizeHandle; startClient: { x: number; y: number }; original: Frame; rect: DOMRect; vb: { w: number; h: number }; live: Frame; proportional: boolean };
+  | { mode: 'move'; pointerId: number; elementId: string; startClient: { x: number; y: number }; original: Frame; visualOriginal: Frame; rect: DOMRect; vb: { w: number; h: number }; live: Frame; liveVisual: Frame; snap: SnapState }
+  | { mode: 'resize'; pointerId: number; elementId: string; handle: ResizeHandle; startClient: { x: number; y: number }; original: Frame; visualOriginal: Frame; rect: DOMRect; vb: { w: number; h: number }; live: Frame; liveVisual: Frame; proportional: boolean };
 
 const handles: { id: ResizeHandle; x: number; y: number; cursor: string }[] = [
   { id: 'nw', x: 0, y: 0, cursor: 'nwse-resize' }, { id: 'n', x: .5, y: 0, cursor: 'ns-resize' }, { id: 'ne', x: 1, y: 0, cursor: 'nesw-resize' },
@@ -23,6 +24,21 @@ const handles: { id: ResizeHandle; x: number; y: number; cursor: string }[] = [
 ];
 const control = 'shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm transition hover:bg-slate-50 active:scale-[.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500';
 const wholeFrame = (frame: Frame): Frame => ({ x: Math.round(frame.x), y: Math.round(frame.y), width: Math.max(4, Math.round(frame.width)), height: Math.max(4, Math.round(frame.height)) });
+
+function visualFrame(element: LayoutElement, frame: Frame): Frame {
+  if (element.type !== 'curved-title') return frame;
+  const bounds = buildCurvedTitleModel({ w: frame.width, h: frame.height }, element.settings).visualBounds;
+  return { x: frame.x + bounds.x, y: frame.y + bounds.y, width: bounds.width, height: bounds.height };
+}
+
+function baseFrameFromVisualResize(base: Frame, visual: Frame, target: Frame): Frame {
+  const scaleX = target.width / Math.max(.001, visual.width), scaleY = target.height / Math.max(.001, visual.height);
+  return {
+    x: target.x - (visual.x - base.x) * scaleX,
+    y: target.y - (visual.y - base.y) * scaleY,
+    width: Math.max(4, base.width * scaleX), height: Math.max(4, base.height * scaleY),
+  };
+}
 
 function committedResizeFrame(interaction: Extract<Interaction, { mode: 'resize' }>): Frame {
   if (interaction.handle.length === 1) return wholeFrame(interaction.live);
@@ -42,8 +58,7 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
   const svgRef = useRef<SVGSVGElement>(null);
   const interactionRef = useRef<Interaction>({ mode: 'none' });
   const paintPending = useRef(false);
-  const liveFrameRef = useRef<{ id: string; frame: Frame } | null>(null);
-  const [livePaint, setLivePaint] = useState<{ id: string; frame: Frame } | null>(null);
+  const [livePaint, setLivePaint] = useState<{ id: string; frame: Frame; visual?: Frame } | null>(null);
   const [interactionActive, setInteractionActive] = useState(false);
   const [view, setView] = useState<ViewMode>('autofit');
   const [zoom, setZoom] = useState(1);
@@ -61,14 +76,14 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
     const baseH = page.height + margin * 2;
     return { x: -margin + pan.x + (baseW - baseW / zoom) / 2, y: -margin + pan.y + (baseH - baseH / zoom) / 2, w: baseW / zoom, h: baseH / zoom };
   })();
-  const requestPaint = () => { if (!paintPending.current) { paintPending.current = true; requestAnimationFrame(() => { paintPending.current = false; setLivePaint(liveFrameRef.current); }); } };
   const begin = (e: React.PointerEvent<SVGElement>, element: LayoutElement, handle?: ResizeHandle) => {
     if (e.button !== 0) return; e.preventDefault(); e.stopPropagation(); onSelect(element.id);
     if (element.locked || !svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
+    const visualOriginal = visualFrame(element, element.frame);
     interactionRef.current = handle
-      ? { mode: 'resize', pointerId: e.pointerId, elementId: element.id, handle, startClient: { x: e.clientX, y: e.clientY }, original: element.frame, live: element.frame, rect, vb: { w: vb.w, h: vb.h }, proportional: isProportional(element) }
-      : { mode: 'move', pointerId: e.pointerId, elementId: element.id, startClient: { x: e.clientX, y: e.clientY }, original: element.frame, live: element.frame, rect, vb: { w: vb.w, h: vb.h }, snap: { x: null, y: null } };
+      ? { mode: 'resize', pointerId: e.pointerId, elementId: element.id, handle, startClient: { x: e.clientX, y: e.clientY }, original: element.frame, visualOriginal, live: element.frame, liveVisual: visualOriginal, rect, vb: { w: vb.w, h: vb.h }, proportional: isProportional(element) }
+      : { mode: 'move', pointerId: e.pointerId, elementId: element.id, startClient: { x: e.clientX, y: e.clientY }, original: element.frame, visualOriginal, live: element.frame, liveVisual: visualOriginal, rect, vb: { w: vb.w, h: vb.h }, snap: { x: null, y: null } };
     svgRef.current.setPointerCapture(e.pointerId); setInteractionActive(true);
   };
   const onStageDown = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -83,20 +98,23 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
     const dy = (e.clientY - active.startClient.y) / active.rect.height * active.vb.h;
     if (active.mode === 'pan') { setView('custom'); setPan({ x: active.startPan.x - dx, y: active.startPan.y - dy }); return; }
     if (active.mode === 'move') {
-      const unsnapped = { ...active.original, x: active.original.x + dx, y: active.original.y + dy };
       const element=elements.find(item=>item.id===active.elementId);
       const internal=element?.type==='guidelines'?element.settings.margins:{top:0,right:0,bottom:0,left:0};
-      const snapped = snapMove(unsnapped, internal, pageRect, { x: 6 / active.rect.width * active.vb.w, y: 6 / active.rect.height * active.vb.h }, { x: 10 / active.rect.width * active.vb.w, y: 10 / active.rect.height * active.vb.h }, active.snap);
-      active.live = snapped.frame; active.snap = snapped.snap;
-    } else active.live = resizeFrame(active.original, active.handle, dx, dy, active.proportional);
-    liveFrameRef.current = { id: active.elementId, frame: active.live }; requestPaint();
+      const unsnappedVisual = { ...active.visualOriginal, x: active.visualOriginal.x + dx, y: active.visualOriginal.y + dy };
+      const snapped = snapMove(unsnappedVisual, internal, pageRect, { x: 6 / active.rect.width * active.vb.w, y: 6 / active.rect.height * active.vb.h }, { x: 10 / active.rect.width * active.vb.w, y: 10 / active.rect.height * active.vb.h }, active.snap);
+      active.liveVisual=snapped.frame; active.live={...active.original,x:active.original.x+snapped.frame.x-active.visualOriginal.x,y:active.original.y+snapped.frame.y-active.visualOriginal.y}; active.snap=snapped.snap;
+    } else {
+      active.liveVisual=resizeFrame(active.visualOriginal,active.handle,dx,dy,active.proportional);
+      active.live=baseFrameFromVisualResize(active.original,active.visualOriginal,active.liveVisual);
+    }
+if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()=>{paintPending.current=false;setLivePaint({id:active.elementId,frame:active.live,visual:active.liveVisual});}); }
   };
   const finish = (e: React.PointerEvent<SVGSVGElement>) => {
     const active = interactionRef.current; if (active.mode === 'none' || active.pointerId !== e.pointerId) return;
     if (active.mode === 'move') onCommit(active.elementId, wholeFrame(active.live));
-    if (active.mode === 'resize') onCommit(active.elementId, committedResizeFrame(active));
+    if (active.mode === 'resize') onCommit(active.elementId, elements.find(item=>item.id===active.elementId)?.type==='curved-title'?wholeFrame(active.live):committedResizeFrame(active));
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
-    interactionRef.current = { mode: 'none' }; liveFrameRef.current = null; setLivePaint(null); setInteractionActive(false);
+    interactionRef.current = { mode: 'none' }; setLivePaint(null); setInteractionActive(false);
   };
   const reset = (next: ViewMode = 'autofit') => { setView(next); setZoom(1); setPan({ x: 0, y: 0 }); };
   const exportClone = () => { if (!svgRef.current) return null; const clone = svgRef.current.cloneNode(true) as SVGSVGElement; clone.setAttribute('viewBox', `0 0 ${page.width} ${page.height}`); clone.setAttribute('width', `${page.width}mm`); clone.setAttribute('height', `${page.height}mm`); stripNoExport(clone); return clone; };
@@ -123,7 +141,7 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
           const frame = livePaint?.id === element.id ? livePaint.frame : element.frame;
           const occupied = occupiedRect(frame, element.paddingMM);
           return <g key={element.id} onPointerDown={e => begin(e, element)} style={{ cursor: element.locked ? 'pointer' : 'move' }}>
-            {element.type !== 'shape' && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
+            {element.type !== 'shape' && !(element.type==='curved-title'&&(element.settings.transparentWhitespace??true)) && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
             <ElementVisual element={element} frame={frame} simplify={previewSimplify} selected={element.id === selectedId} />
           </g>;
         })}
@@ -132,8 +150,8 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
           {pageElement.settings.centerLines.vertical&&<line x1={pageRect.x+pageRect.width/2} x2={pageRect.x+pageRect.width/2} y1={pageRect.y} y2={pageRect.y+pageRect.height} stroke="#818cf8" strokeWidth="1" strokeDasharray="5 4" strokeOpacity=".65" vectorEffect="non-scaling-stroke" />}
           {pageElement.settings.centerLines.horizontal&&<line x1={pageRect.x} x2={pageRect.x+pageRect.width} y1={pageRect.y+pageRect.height/2} y2={pageRect.y+pageRect.height/2} stroke="#818cf8" strokeWidth="1" strokeDasharray="5 4" strokeOpacity=".65" vectorEffect="non-scaling-stroke" />}
         </g>
-        {selected && selected.type !== 'page' && (() => { const frame = livePaint?.id === selected.id ? livePaint.frame : selected.frame; const occupied = occupiedRect(frame, selected.paddingMM); return <g data-no-export="true">
-          {selected.type !== 'shape' && selected.paddingMM > 0 && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill="none" stroke="#818cf8" strokeWidth="1" strokeDasharray="4 3" strokeOpacity=".55" vectorEffect="non-scaling-stroke" pointerEvents="none" />}
+        {selected && selected.type !== 'page' && (() => { const baseFrame = livePaint?.id === selected.id ? livePaint.frame : selected.frame; const frame = livePaint?.id===selected.id&&livePaint.visual?livePaint.visual:visualFrame(selected,baseFrame); const occupied = occupiedRect(baseFrame, selected.paddingMM); return <g data-no-export="true">
+          {selected.type !== 'shape' && selected.type !== 'curved-title' && selected.paddingMM > 0 && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill="none" stroke="#818cf8" strokeWidth="1" strokeDasharray="4 3" strokeOpacity=".55" vectorEffect="non-scaling-stroke" pointerEvents="none" />}
           <rect x={frame.x} y={frame.y} width={frame.width} height={frame.height} fill="none" stroke="#4f46e5" strokeWidth="1.25" strokeOpacity=".8" vectorEffect="non-scaling-stroke" pointerEvents="none" />
           {!selected.locked && handles.map(handle => { const x = frame.x + frame.width * handle.x; const y = frame.y + frame.height * handle.y; return <g key={handle.id} style={{ cursor: handle.cursor }} onPointerDown={e => begin(e, selected, handle.id)}><circle cx={x} cy={y} r="7" fill="transparent" vectorEffect="non-scaling-stroke" /><rect x={x - 1.8} y={y - 1.8} width="3.6" height="3.6" rx=".5" fill="white" stroke="#4f46e5" strokeWidth="1.2" vectorEffect="non-scaling-stroke" /></g>; })}
         </g>; })()}
@@ -148,6 +166,6 @@ function ElementVisual({ element, frame, simplify, selected }: { element: Layout
   if (simplify) return <rect {...common} rx="1" fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5" />;
   if (element.type === 'guidelines') return <g transform={`translate(${frame.x} ${frame.y})`}><GuidelinesRenderer box={{ width: frame.width, height: frame.height }} settings={element.settings} idPrefix={`layout-${element.id}`} /></g>;
   if (element.type === 'calligram') return <ellipse cx={frame.x + frame.width/2} cy={frame.y + frame.height/2} rx={frame.width/2} ry={frame.height/2} fill="none" stroke="#a855f7" strokeWidth="1.2" />;
-  if (element.type === 'curved-title') return <g transform={`translate(${frame.x} ${frame.y})`}><CurvedTitleRenderer box={{w:frame.width,h:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`} /></g>;
+  if (element.type === 'curved-title') return <g transform={`translate(${frame.x} ${frame.y})`}><CurvedTitleRenderer box={{w:frame.width,h:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`} pageBackground={(element.settings.transparentWhitespace??true)?PAGE_BACKGROUND:undefined} paddingMM={element.paddingMM} selected={selected} /></g>;
   return <rect {...common} rx="2" fill="#fef3c7" stroke="#d97706" strokeWidth=".8" />;
 }

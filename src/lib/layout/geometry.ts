@@ -1,5 +1,15 @@
 import type { Frame, Margins, ResizeHandle } from './types';
 
+export function boundsOfPoints(points: ReadonlyArray<{ x: number; y: number }>): Frame {
+  if (!points.length) return { x: 0, y: 0, width: 0, height: 0 };
+  let minX = points[0].x, maxX = points[0].x, minY = points[0].y, maxY = points[0].y;
+  for (const point of points) {
+    minX = Math.min(minX, point.x); maxX = Math.max(maxX, point.x);
+    minY = Math.min(minY, point.y); maxY = Math.max(maxY, point.y);
+  }
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
 const MIN_SIZE = 4;
 
 export function resizeFrame(frame: Frame, handle: ResizeHandle, dx: number, dy: number, proportional: boolean): Frame {

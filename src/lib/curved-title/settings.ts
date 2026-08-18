@@ -15,6 +15,7 @@ export type CurvedTitleSettings = {
   bottomBandEnabled: boolean; bottomText: string; bottomBandScript: ScriptId; bottomBandSizeText: string;
   useCalibration: boolean; calWordLowerMM: string; calWordDoubleMM: string; userScaleFactor: number; userSpaceFactor: number;
   rotation: number; scale: number; showBoxes: boolean; showSpanFill: boolean;
+  transparentWhitespace: boolean;
 };
 
 export function createDefaultCurvedTitleSettings(): CurvedTitleSettings {
@@ -26,6 +27,6 @@ export function createDefaultCurvedTitleSettings(): CurvedTitleSettings {
     topBandEnabled: false, topText: '', topBandScript: 'TexturaQuadrata', topBandSizeText: '2',
     bottomBandEnabled: false, bottomText: '', bottomBandScript: 'TexturaQuadrata', bottomBandSizeText: '2',
     useCalibration: false, calWordLowerMM: '', calWordDoubleMM: '', userScaleFactor: 1, userSpaceFactor: 1,
-    rotation: 0, scale: 100, showBoxes: false, showSpanFill: true,
+    rotation: 0, scale: 100, showBoxes: false, showSpanFill: true, transparentWhitespace: true,
   };
 }
