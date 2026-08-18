@@ -110,8 +110,8 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
           const frame = livePaint?.id === element.id ? livePaint.frame : element.frame;
           const occupied = occupiedRect(frame, element.paddingMM);
           return <g key={element.id} onPointerDown={e => begin(e, element)} style={{ cursor: element.locked ? 'pointer' : 'move' }}>
-            <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />
-            <ElementVisual element={element} frame={frame} simplify={previewSimplify} />
+            {element.type !== 'shape' && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
+            <ElementVisual element={element} frame={frame} simplify={previewSimplify} selected={element.id === selectedId} />
           </g>;
         })}
         <g data-no-export="true" pointerEvents="none">
@@ -120,7 +120,7 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
           {pageElement.settings.centerLines.horizontal&&<line x1={pageRect.x} x2={pageRect.x+pageRect.width} y1={pageRect.y+pageRect.height/2} y2={pageRect.y+pageRect.height/2} stroke="#818cf8" strokeWidth="1" strokeDasharray="5 4" strokeOpacity=".65" vectorEffect="non-scaling-stroke" />}
         </g>
         {selected && selected.type !== 'page' && (() => { const frame = livePaint?.id === selected.id ? livePaint.frame : selected.frame; const occupied = occupiedRect(frame, selected.paddingMM); return <g data-no-export="true">
-          {selected.paddingMM > 0 && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill="none" stroke="#818cf8" strokeWidth="1" strokeDasharray="4 3" strokeOpacity=".55" vectorEffect="non-scaling-stroke" pointerEvents="none" />}
+          {selected.type !== 'shape' && selected.paddingMM > 0 && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill="none" stroke="#818cf8" strokeWidth="1" strokeDasharray="4 3" strokeOpacity=".55" vectorEffect="non-scaling-stroke" pointerEvents="none" />}
           <rect x={frame.x} y={frame.y} width={frame.width} height={frame.height} fill="none" stroke="#4f46e5" strokeWidth="1.25" strokeOpacity=".8" vectorEffect="non-scaling-stroke" pointerEvents="none" />
           {!selected.locked && handles.map(handle => { const x = frame.x + frame.width * handle.x; const y = frame.y + frame.height * handle.y; return <g key={handle.id} style={{ cursor: handle.cursor }} onPointerDown={e => begin(e, selected, handle.id)}><circle cx={x} cy={y} r="7" fill="transparent" vectorEffect="non-scaling-stroke" /><rect x={x - 1.8} y={y - 1.8} width="3.6" height="3.6" rx=".5" fill="white" stroke="#4f46e5" strokeWidth="1.2" vectorEffect="non-scaling-stroke" /></g>; })}
         </g>; })()}
@@ -129,9 +129,9 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
   </section>;
 }
 
-function ElementVisual({ element, frame, simplify }: { element: LayoutElement; frame: Frame; simplify: boolean }) {
+function ElementVisual({ element, frame, simplify, selected }: { element: LayoutElement; frame: Frame; simplify: boolean; selected: boolean }) {
   const common = { x: frame.x, y: frame.y, width: frame.width, height: frame.height };
-  if (element.type === 'shape') return <ShapeElementRenderer element={element} frame={frame} />;
+  if (element.type === 'shape') return <ShapeElementRenderer element={element} frame={frame} selected={selected} />;
   if (simplify) return <rect {...common} rx="1" fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5" />;
   if (element.type === 'guidelines') return <g transform={`translate(${frame.x} ${frame.y})`}><GuidelinesRenderer box={{ width: frame.width, height: frame.height }} settings={element.settings} idPrefix={`layout-${element.id}`} /></g>;
   if (element.type === 'calligram') return <ellipse cx={frame.x + frame.width/2} cy={frame.y + frame.height/2} rx={frame.width/2} ry={frame.height/2} fill="none" stroke="#a855f7" strokeWidth="1.2" />;
