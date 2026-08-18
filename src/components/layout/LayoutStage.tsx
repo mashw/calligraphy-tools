@@ -7,6 +7,7 @@ import { isProportional, pageSize, type Frame, type LayoutElement, type ResizeHa
 import GuidelinesRenderer from '@/components/guidelines/GuidelinesRenderer';
 import ShapeElementRenderer from '@/components/layout/ShapeElementRenderer';
 import { PAGE_BACKGROUND } from '@/lib/layout/shape';
+import CurvedTitleRenderer from '@/components/curved-title/CurvedTitleRenderer';
 
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type Interaction =
@@ -147,6 +148,6 @@ function ElementVisual({ element, frame, simplify, selected }: { element: Layout
   if (simplify) return <rect {...common} rx="1" fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5" />;
   if (element.type === 'guidelines') return <g transform={`translate(${frame.x} ${frame.y})`}><GuidelinesRenderer box={{ width: frame.width, height: frame.height }} settings={element.settings} idPrefix={`layout-${element.id}`} /></g>;
   if (element.type === 'calligram') return <ellipse cx={frame.x + frame.width/2} cy={frame.y + frame.height/2} rx={frame.width/2} ry={frame.height/2} fill="none" stroke="#a855f7" strokeWidth="1.2" />;
-  if (element.type === 'curved-title') return <path d={`M ${frame.x} ${frame.y + frame.height*.75} Q ${frame.x + frame.width/2} ${frame.y} ${frame.x + frame.width} ${frame.y + frame.height*.75}`} fill="none" stroke="#0f766e" strokeWidth="1.2" />;
+  if (element.type === 'curved-title') return <g transform={`translate(${frame.x} ${frame.y})`}><CurvedTitleRenderer box={{w:frame.width,h:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`} /></g>;
   return <rect {...common} rx="2" fill="#fef3c7" stroke="#d97706" strokeWidth=".8" />;
 }
