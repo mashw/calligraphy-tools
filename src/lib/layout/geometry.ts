@@ -15,16 +15,28 @@ export function resizeFrame(frame: Frame, handle: ResizeHandle, dx: number, dy: 
   let height = usesN ? bottom - y : usesS ? Math.max(MIN_SIZE, frame.height + dy) : frame.height;
 
   if (proportional) {
-    const ratio = frame.width / frame.height;
     const corner = (usesW || usesE) && (usesN || usesS);
-    const scale = corner
-      ? Math.max(MIN_SIZE / frame.width, MIN_SIZE / frame.height, Math.abs(dx / frame.width) >= Math.abs(dy / frame.height) ? width / frame.width : height / frame.height)
-      : usesW || usesE ? width / frame.width : height / frame.height;
-    width = frame.width * scale;
-    height = frame.height * scale;
-    if (usesW) x = right - width;
-    if (usesN) y = bottom - height;
-    if (!corner && (usesN || usesS)) width = height * ratio;
+    if (corner) {
+      const horizontalSize = usesW ? frame.width - dx : frame.width + dx;
+      const verticalSize = usesN ? frame.height - dy : frame.height + dy;
+      const size = Math.max(MIN_SIZE, Math.abs(dx) >= Math.abs(dy) ? horizontalSize : verticalSize);
+      width = size;
+      height = size;
+      x = usesW ? right - size : frame.x;
+      y = usesN ? bottom - size : frame.y;
+    } else if (usesW || usesE) {
+      const size = Math.max(MIN_SIZE, usesW ? frame.width - dx : frame.width + dx);
+      width = size;
+      height = size;
+      x = usesW ? right - size : frame.x;
+      y = frame.y + (frame.height - size) / 2;
+    } else {
+      const size = Math.max(MIN_SIZE, usesN ? frame.height - dy : frame.height + dy);
+      width = size;
+      height = size;
+      x = frame.x + (frame.width - size) / 2;
+      y = usesN ? bottom - size : frame.y;
+    }
   }
   return { x, y, width, height };
 }

@@ -5,6 +5,8 @@ import { cloneSvgForRasterExport, computeRasterPxPerMM, jpegDataUrlToPdf, printJ
 import { pageContentRect, resizeFrame, snapMove, type SnapState } from '@/lib/layout/geometry';
 import { isProportional, pageSize, type Frame, type LayoutElement, type ResizeHandle } from '@/lib/layout/types';
 import GuidelinesRenderer from '@/components/guidelines/GuidelinesRenderer';
+import ShapeElementRenderer from '@/components/layout/ShapeElementRenderer';
+import { PAGE_BACKGROUND } from '@/lib/layout/shape';
 
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type Interaction =
@@ -103,7 +105,7 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-300">
       <svg ref={svgRef} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="block h-[52vh] min-h-[420px] w-full touch-none select-none" style={{ background: '#cbd5e1' }} onPointerDown={onStageDown} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}>
         <rect id="stage-bg" x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="#cbd5e1" pointerEvents="none" />
-        <rect x="0" y="0" width={page.width} height={page.height} fill="white" stroke="#94a3b8" strokeWidth=".3" onPointerDown={e => { e.stopPropagation(); onSelect('page'); }} style={{ cursor: 'default' }} />
+        <rect x="0" y="0" width={page.width} height={page.height} fill={PAGE_BACKGROUND} stroke="#94a3b8" strokeWidth=".3" onPointerDown={e => { e.stopPropagation(); onSelect('page'); }} style={{ cursor: 'default' }} />
         {[...elements].reverse().filter(element => element.type !== 'page').map(element => {
           const frame = livePaint?.id === element.id ? livePaint.frame : element.frame;
           return <g key={element.id} onPointerDown={e => begin(e, element)} style={{ cursor: element.locked ? 'pointer' : 'move' }}>
@@ -126,6 +128,7 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
 
 function ElementVisual({ element, frame, simplify }: { element: LayoutElement; frame: Frame; simplify: boolean }) {
   const common = { x: frame.x, y: frame.y, width: frame.width, height: frame.height };
+  if (element.type === 'shape') return <ShapeElementRenderer element={element} frame={frame} />;
   if (simplify) return <rect {...common} rx="1" fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5" />;
   if (element.type === 'guidelines') return <g transform={`translate(${frame.x} ${frame.y})`}><GuidelinesRenderer box={{ width: frame.width, height: frame.height }} settings={element.settings} idPrefix={`layout-${element.id}`} /></g>;
   if (element.type === 'calligram') return <ellipse cx={frame.x + frame.width/2} cy={frame.y + frame.height/2} rx={frame.width/2} ry={frame.height/2} fill="none" stroke="#a855f7" strokeWidth="1.2" />;
