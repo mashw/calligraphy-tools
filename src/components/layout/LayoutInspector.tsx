@@ -1,10 +1,12 @@
-import type { LayoutElement } from '@/lib/layout/types';
+'use client';
+import GuidelinesSettingsPanel from '@/components/guidelines/GuidelinesSettingsPanel';
+import { PAPERS_MM, type Orientation, type PaperId } from '@/lib/curve-helpers';
+import { pageSize, type LayoutElement } from '@/lib/layout/types';
 
-export default function LayoutInspector({ element }: { element: LayoutElement }) {
-  const typeName = element.type === 'curved-title' ? 'Curved title' : element.type[0].toUpperCase() + element.type.slice(1);
-  return <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-    <h2 className="font-semibold text-slate-800">Settings</h2>
-    <h3 className="mt-3 text-base font-semibold text-slate-900">{element.name}</h3>
-    <p className="mt-1 text-sm text-slate-600">{typeName} settings will be added in the next pass.</p>
+const input='w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm';
+export default function LayoutInspector({ element, onChange }: { element:LayoutElement;onChange:(element:LayoutElement)=>void }) {
+  const patchFrame=(key:'x'|'y'|'width'|'height',raw:string)=>{const value=Number(raw);if(Number.isFinite(value)&&(key==='x'||key==='y'||value>=4))onChange({...element,frame:{...element.frame,[key]:value}});};
+  return <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200"><h2 className="font-semibold text-slate-800">Settings</h2><h3 className="mt-3 text-base font-semibold">{element.name}</h3>
+    {element.type==='page'?<div className="mt-4 space-y-3"><label className="block space-y-1 text-xs font-medium text-slate-600">Paper size<select className={input} value={element.settings.paper} onChange={e=>{const paper=e.target.value as PaperId;const settings={paper,orientation:PAPERS_MM[paper].defaultOrientation};const size=pageSize({...element,settings});onChange({...element,settings,frame:{x:0,y:0,...size}});}}>{Object.entries(PAPERS_MM).map(([id,paper])=><option key={id} value={id}>{paper.label}</option>)}</select></label><label className="block space-y-1 text-xs font-medium text-slate-600">Orientation<select className={input} value={element.settings.orientation} onChange={e=>{const settings={...element.settings,orientation:e.target.value as Orientation};const size=pageSize({...element,settings});onChange({...element,settings,frame:{x:0,y:0,...size}});}}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label></div>:<><details open className="mt-4 rounded-lg border border-slate-200 p-3"><summary className="cursor-pointer font-semibold">Position &amp; Size</summary><div className="mt-3 grid grid-cols-2 gap-3">{(['x','y','width','height'] as const).map(key=><label key={key} className="space-y-1 text-xs font-medium capitalize text-slate-600">{key}<div className="relative"><input className={input} type="number" step=".5" value={element.frame[key]} onChange={e=>patchFrame(key,e.target.value)}/><span className="pointer-events-none absolute right-2 top-1.5 text-slate-400">mm</span></div></label>)}</div></details>{element.type==='guidelines'?<GuidelinesSettingsPanel value={element.settings} onChange={settings=>onChange({...element,settings})}/>:<p className="mt-3 text-sm text-slate-600">Settings will be added in a later pass.</p>}</>}
   </section>;
 }

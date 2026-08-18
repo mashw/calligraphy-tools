@@ -3,7 +3,8 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { cloneSvgForRasterExport, computeRasterPxPerMM, jpegDataUrlToPdf, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 import { resizeFrame, snapMove, type SnapState } from '@/lib/layout/geometry';
-import { isProportional, PAGE, type Frame, type LayoutElement, type ResizeHandle } from '@/lib/layout/types';
+import { isProportional, pageSize, type Frame, type LayoutElement, type ResizeHandle } from '@/lib/layout/types';
+import GuidelinesRenderer from '@/components/guidelines/GuidelinesRenderer';
 
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type Interaction =
@@ -36,16 +37,19 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
   const [simplify, setSimplify] = useState(false);
   const previewSimplify = simplify || interactionActive;
   const selected = elements.find(element => element.id === selectedId);
+  const pageElement = elements.find(element => element.type === 'page');
+  if (!pageElement) throw new Error('Layout requires a Page element.');
+  const page = pageSize(pageElement);
   const vb = useMemo(() => {
     const margin = view === 'fullpage' ? 5 : 18;
-    const baseW = PAGE.width + margin * 2;
-    const baseH = PAGE.height + margin * 2;
+    const baseW = page.width + margin * 2;
+    const baseH = page.height + margin * 2;
     return { x: -margin + pan.x + (baseW - baseW / zoom) / 2, y: -margin + pan.y + (baseH - baseH / zoom) / 2, w: baseW / zoom, h: baseH / zoom };
-  }, [pan, view, zoom]);
+  }, [page.height, page.width, pan, view, zoom]);
   const requestPaint = () => { if (!paintPending.current) { paintPending.current = true; requestAnimationFrame(() => { paintPending.current = false; setLivePaint(liveFrameRef.current); }); } };
   const begin = (e: React.PointerEvent<SVGElement>, element: LayoutElement, handle?: ResizeHandle) => {
     if (e.button !== 0) return; e.preventDefault(); e.stopPropagation(); onSelect(element.id);
-    if (element.locked || element.type === 'page' || !svgRef.current) return;
+    if (element.locked || !svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
     interactionRef.current = handle
       ? { mode: 'resize', pointerId: e.pointerId, elementId: element.id, handle, startClient: { x: e.clientX, y: e.clientY }, original: element.frame, live: element.frame, rect, vb: { w: vb.w, h: vb.h }, proportional: isProportional(element) }
@@ -65,7 +69,7 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
     if (active.mode === 'pan') { setView('custom'); setPan({ x: active.startPan.x - dx, y: active.startPan.y - dy }); return; }
     if (active.mode === 'move') {
       const unsnapped = { ...active.original, x: active.original.x + dx, y: active.original.y + dy };
-      const snapped = snapMove(unsnapped, PAGE, { x: 6 / active.rect.width * active.vb.w, y: 6 / active.rect.height * active.vb.h }, { x: 10 / active.rect.width * active.vb.w, y: 10 / active.rect.height * active.vb.h }, active.snap);
+      const snapped = snapMove(unsnapped, page, { x: 6 / active.rect.width * active.vb.w, y: 6 / active.rect.height * active.vb.h }, { x: 10 / active.rect.width * active.vb.w, y: 10 / active.rect.height * active.vb.h }, active.snap);
       active.live = snapped.frame; active.snap = snapped.snap;
     } else active.live = resizeFrame(active.original, active.handle, dx, dy, active.proportional);
     liveFrameRef.current = { id: active.elementId, frame: active.live }; requestPaint();
@@ -77,11 +81,11 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
     interactionRef.current = { mode: 'none' }; liveFrameRef.current = null; setLivePaint(null); setInteractionActive(false);
   };
   const reset = (next: ViewMode = 'autofit') => { setView(next); setZoom(1); setPan({ x: 0, y: 0 }); };
-  const exportClone = () => { if (!svgRef.current) return null; const clone = svgRef.current.cloneNode(true) as SVGSVGElement; clone.setAttribute('viewBox', `0 0 ${PAGE.width} ${PAGE.height}`); clone.setAttribute('width', `${PAGE.width}mm`); clone.setAttribute('height', `${PAGE.height}mm`); stripNoExport(clone); return clone; };
+  const exportClone = () => { if (!svgRef.current) return null; const clone = svgRef.current.cloneNode(true) as SVGSVGElement; clone.setAttribute('viewBox', `0 0 ${page.width} ${page.height}`); clone.setAttribute('width', `${page.width}mm`); clone.setAttribute('height', `${page.height}mm`); stripNoExport(clone); return clone; };
   const exportSvg = () => { const clone = exportClone(); if (!clone) return; download(new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' }), 'layout.svg'); };
-  const raster = async () => { if (!svgRef.current) return null; const { wPx, hPx } = computeRasterPxPerMM(PAGE.width, PAGE.height); const clone = cloneSvgForRasterExport(svgRef.current, PAGE.width, PAGE.height, wPx, hPx, bakeStrokes, stripNoExport); return { data: await renderSvgCloneToJpegDataUrl(clone, wPx, hPx), wPx, hPx }; };
-  const exportPdf = async () => { const result = await raster(); if (result) download(jpegDataUrlToPdf(result.data, PAGE.width, PAGE.height, result.wPx, result.hPx), 'layout.pdf'); };
-  const print = async () => { const result = await raster(); if (result) printJpegDataUrlToScale(result.data, PAGE.width, PAGE.height); };
+  const raster = async () => { if (!svgRef.current) return null; const { wPx, hPx } = computeRasterPxPerMM(page.width, page.height); const clone = cloneSvgForRasterExport(svgRef.current, page.width, page.height, wPx, hPx, bakeStrokes, stripNoExport); return { data: await renderSvgCloneToJpegDataUrl(clone, wPx, hPx), wPx, hPx }; };
+  const exportPdf = async () => { const result = await raster(); if (result) download(jpegDataUrlToPdf(result.data, page.width, page.height, result.wPx, result.hPx), 'layout.pdf'); };
+  const print = async () => { const result = await raster(); if (result) printJpegDataUrlToScale(result.data, page.width, page.height); };
 
   return <section className="min-w-0 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
     <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -96,7 +100,7 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-300">
       <svg ref={svgRef} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="block h-[52vh] min-h-[420px] w-full touch-none select-none" style={{ background: '#cbd5e1' }} onPointerDown={onStageDown} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}>
         <rect id="stage-bg" x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="#cbd5e1" pointerEvents="none" />
-        <rect x="0" y="0" width={PAGE.width} height={PAGE.height} fill="white" stroke="#94a3b8" strokeWidth=".3" onPointerDown={e => { e.stopPropagation(); onSelect('page'); }} style={{ cursor: 'default' }} />
+        <rect x="0" y="0" width={page.width} height={page.height} fill="white" stroke="#94a3b8" strokeWidth=".3" onPointerDown={e => { e.stopPropagation(); onSelect('page'); }} style={{ cursor: 'default' }} />
         {[...elements].reverse().filter(element => element.type !== 'page').map(element => {
           const frame = livePaint?.id === element.id ? livePaint.frame : element.frame;
           return <g key={element.id} onPointerDown={e => begin(e, element)} style={{ cursor: element.locked ? 'pointer' : 'move' }}>
@@ -115,7 +119,7 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
 function ElementVisual({ element, frame, simplify }: { element: LayoutElement; frame: Frame; simplify: boolean }) {
   const common = { x: frame.x, y: frame.y, width: frame.width, height: frame.height };
   if (simplify) return <rect {...common} rx="1" fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5" />;
-  if (element.type === 'guidelines') return <g><rect {...common} fill="#f8fafc" stroke="#94a3b8" strokeWidth=".4" />{[.2,.4,.6,.8].map(n => <line key={n} x1={frame.x} x2={frame.x + frame.width} y1={frame.y + frame.height*n} y2={frame.y + frame.height*n} stroke="#60a5fa" strokeWidth=".4" />)}</g>;
+  if (element.type === 'guidelines') return <g transform={`translate(${frame.x} ${frame.y})`}><GuidelinesRenderer box={{ width: frame.width, height: frame.height }} settings={element.settings} idPrefix={`layout-${element.id}`} /></g>;
   if (element.type === 'calligram') return <ellipse cx={frame.x + frame.width/2} cy={frame.y + frame.height/2} rx={frame.width/2} ry={frame.height/2} fill="none" stroke="#a855f7" strokeWidth="1.2" />;
   if (element.type === 'curved-title') return <path d={`M ${frame.x} ${frame.y + frame.height*.75} Q ${frame.x + frame.width/2} ${frame.y} ${frame.x + frame.width} ${frame.y + frame.height*.75}`} fill="none" stroke="#0f766e" strokeWidth="1.2" />;
   return <rect {...common} rx="2" fill="#fef3c7" stroke="#d97706" strokeWidth=".8" />;
