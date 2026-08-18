@@ -14,17 +14,24 @@ export function resizeFrame(frame: Frame, handle: ResizeHandle, dx: number, dy: 
   let width = usesW ? right - x : usesE ? Math.max(MIN_SIZE, frame.width + dx) : frame.width;
   let height = usesN ? bottom - y : usesS ? Math.max(MIN_SIZE, frame.height + dy) : frame.height;
 
-  if (proportional) {
-    const corner = (usesW || usesE) && (usesN || usesS);
-    if (corner) {
-      const horizontalSize = usesW ? frame.width - dx : frame.width + dx;
-      const verticalSize = usesN ? frame.height - dy : frame.height + dy;
-      const size = Math.max(MIN_SIZE, Math.abs(dx) >= Math.abs(dy) ? horizontalSize : verticalSize);
-      width = size;
-      height = size;
-      x = usesW ? right - size : frame.x;
-      y = usesN ? bottom - size : frame.y;
-    } else if (usesW || usesE) {
+  const corner = (usesW || usesE) && (usesN || usesS);
+  if (corner) {
+    const aspect = frame.width / frame.height;
+    const rawWidth = usesW ? frame.width - dx : frame.width + dx;
+    const rawHeight = usesN ? frame.height - dy : frame.height + dy;
+    const widthChange = Math.abs(rawWidth - frame.width) / frame.width;
+    const heightChange = Math.abs(rawHeight - frame.height) / frame.height;
+    if (widthChange >= heightChange) {
+      width = Math.max(MIN_SIZE, MIN_SIZE * aspect, rawWidth);
+      height = width / aspect;
+    } else {
+      height = Math.max(MIN_SIZE, MIN_SIZE / aspect, rawHeight);
+      width = height * aspect;
+    }
+    x = usesW ? right - width : frame.x;
+    y = usesN ? bottom - height : frame.y;
+  } else if (proportional) {
+    if (usesW || usesE) {
       const size = Math.max(MIN_SIZE, usesW ? frame.width - dx : frame.width + dx);
       width = size;
       height = size;
@@ -39,6 +46,11 @@ export function resizeFrame(frame: Frame, handle: ResizeHandle, dx: number, dy: 
     }
   }
   return { x, y, width, height };
+}
+
+export function occupiedRect(frame: Frame, paddingMM: number): Frame {
+  const padding = Math.max(0, paddingMM);
+  return { x: frame.x - padding, y: frame.y - padding, width: frame.width + padding * 2, height: frame.height + padding * 2 };
 }
 
 type SnapAxis = 'start' | 'center' | 'end' | null;
