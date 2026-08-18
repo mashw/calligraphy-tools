@@ -118,3 +118,31 @@ export function printJpegDataUrlToScale(dataUrl: string, pageWmm: number, pageHm
   win.document.write(html);
   win.document.close();
 }
+
+export function jpegDataUrlToPdf(dataUrl: string, pageWmm: number, pageHmm: number, imgW: number, imgH: number): Blob {
+  const bytes = Uint8Array.from(atob(dataUrl.split(',')[1]), character => character.charCodeAt(0));
+  const w = mmToPt(pageWmm);
+  const h = mmToPt(pageHmm);
+  const encoder = new TextEncoder();
+  const chunks: Uint8Array[] = [];
+  const offsets: number[] = [0];
+  let length = 0;
+  const push = (value: string | Uint8Array) => { const part = typeof value === 'string' ? encoder.encode(value) : value; chunks.push(part); length += part.length; };
+  push('%PDF-1.4\n');
+  const object = (id: number, body: string | Uint8Array, suffix = '') => {
+    offsets[id] = length; push(`${id} 0 obj\n`); push(body); push(`${suffix}\nendobj\n`);
+  };
+  object(1, '<< /Type /Catalog /Pages 2 0 R >>');
+  object(2, '<< /Type /Pages /Count 1 /Kids [3 0 R] >>');
+  object(3, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${w} ${h}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`);
+  object(4, `<< /Type /XObject /Subtype /Image /Width ${imgW} /Height ${imgH} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${bytes.length} >>\nstream\n`, '\nendstream');
+  // Insert the JPEG before the stream terminator while keeping the object offsets exact.
+  chunks.splice(chunks.length - 1, 0, bytes); length += bytes.length;
+  const stream = `q ${w} 0 0 ${h} 0 0 cm /Im0 Do Q`;
+  object(5, `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+  const xref = length;
+  push(`xref\n0 6\n0000000000 65535 f \n${offsets.slice(1).map(offset => `${String(offset).padStart(10, '0')} 00000 n `).join('\n')}\ntrailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+  const result = new Uint8Array(length); let cursor = 0;
+  chunks.forEach(chunk => { result.set(chunk, cursor); cursor += chunk.length; });
+  return new Blob([result], { type: 'application/pdf' });
+}
