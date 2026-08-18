@@ -9,6 +9,8 @@ import ShapeElementRenderer from '@/components/layout/ShapeElementRenderer';
 import { PAGE_BACKGROUND } from '@/lib/layout/shape';
 import CurvedTitleRenderer from '@/components/curved-title/CurvedTitleRenderer';
 import { buildCurvedTitleModel } from '@/lib/curved-title/model';
+import CalligramRenderer from '@/components/calligram/CalligramRenderer';
+import { buildCalligramModel } from '@/lib/calligram/model';
 
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type Interaction =
@@ -26,8 +28,10 @@ const control = 'shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-1 
 const wholeFrame = (frame: Frame): Frame => ({ x: Math.round(frame.x), y: Math.round(frame.y), width: Math.max(4, Math.round(frame.width)), height: Math.max(4, Math.round(frame.height)) });
 
 function visualFrame(element: LayoutElement, frame: Frame): Frame {
-  if (element.type !== 'curved-title') return frame;
-  const bounds = buildCurvedTitleModel({ w: frame.width, h: frame.height }, element.settings).visualBounds;
+  if (element.type !== 'curved-title' && element.type !== 'calligram') return frame;
+  const bounds = element.type === 'curved-title'
+    ? buildCurvedTitleModel({ w: frame.width, h: frame.height }, element.settings).visualBounds
+    : buildCalligramModel({ w: frame.width, h: frame.height }, element.settings).visualBounds;
   return { x: frame.x + bounds.x, y: frame.y + bounds.y, width: bounds.width, height: bounds.height };
 }
 
@@ -112,7 +116,7 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
   const finish = (e: React.PointerEvent<SVGSVGElement>) => {
     const active = interactionRef.current; if (active.mode === 'none' || active.pointerId !== e.pointerId) return;
     if (active.mode === 'move') onCommit(active.elementId, wholeFrame(active.live));
-    if (active.mode === 'resize') onCommit(active.elementId, elements.find(item=>item.id===active.elementId)?.type==='curved-title'?wholeFrame(active.live):committedResizeFrame(active));
+    if (active.mode === 'resize') onCommit(active.elementId, ['curved-title','calligram'].includes(elements.find(item=>item.id===active.elementId)?.type??'')?wholeFrame(active.live):committedResizeFrame(active));
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     interactionRef.current = { mode: 'none' }; setLivePaint(null); setInteractionActive(false);
   };
@@ -139,9 +143,9 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
         <rect x="0" y="0" width={page.width} height={page.height} fill={PAGE_BACKGROUND} stroke="#94a3b8" strokeWidth=".3" onPointerDown={e => { e.stopPropagation(); onSelect('page'); }} style={{ cursor: 'default' }} />
         {[...elements].reverse().filter(element => element.type !== 'page').map(element => {
           const frame = livePaint?.id === element.id ? livePaint.frame : element.frame;
-          const occupied = occupiedRect(frame, element.paddingMM);
+          const occupied = occupiedRect(element.type==='calligram'&&!(element.settings.transparentWhitespace??true)?visualFrame(element,frame):frame, element.paddingMM);
           return <g key={element.id} onPointerDown={e => begin(e, element)} style={{ cursor: element.locked ? 'pointer' : 'move' }}>
-            {element.type !== 'shape' && !(element.type==='curved-title'&&(element.settings.transparentWhitespace??true)) && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
+            {element.type !== 'shape' && !((element.type==='curved-title'||element.type==='calligram')&&(element.settings.transparentWhitespace??true)) && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
             <ElementVisual element={element} frame={frame} simplify={previewSimplify} selected={element.id === selectedId} />
           </g>;
         })}
@@ -151,7 +155,7 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
           {pageElement.settings.centerLines.horizontal&&<line x1={pageRect.x} x2={pageRect.x+pageRect.width} y1={pageRect.y+pageRect.height/2} y2={pageRect.y+pageRect.height/2} stroke="#818cf8" strokeWidth="1" strokeDasharray="5 4" strokeOpacity=".65" vectorEffect="non-scaling-stroke" />}
         </g>
         {selected && selected.type !== 'page' && (() => { const baseFrame = livePaint?.id === selected.id ? livePaint.frame : selected.frame; const frame = livePaint?.id===selected.id&&livePaint.visual?livePaint.visual:visualFrame(selected,baseFrame); const occupied = occupiedRect(baseFrame, selected.paddingMM); return <g data-no-export="true">
-          {selected.type !== 'shape' && selected.type !== 'curved-title' && selected.paddingMM > 0 && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill="none" stroke="#818cf8" strokeWidth="1" strokeDasharray="4 3" strokeOpacity=".55" vectorEffect="non-scaling-stroke" pointerEvents="none" />}
+          {selected.type !== 'shape' && selected.type !== 'curved-title' && selected.type !== 'calligram' && selected.paddingMM > 0 && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill="none" stroke="#818cf8" strokeWidth="1" strokeDasharray="4 3" strokeOpacity=".55" vectorEffect="non-scaling-stroke" pointerEvents="none" />}
           <rect x={frame.x} y={frame.y} width={frame.width} height={frame.height} fill="none" stroke="#4f46e5" strokeWidth="1.25" strokeOpacity=".8" vectorEffect="non-scaling-stroke" pointerEvents="none" />
           {!selected.locked && handles.map(handle => { const x = frame.x + frame.width * handle.x; const y = frame.y + frame.height * handle.y; return <g key={handle.id} style={{ cursor: handle.cursor }} onPointerDown={e => begin(e, selected, handle.id)}><circle cx={x} cy={y} r="7" fill="transparent" vectorEffect="non-scaling-stroke" /><rect x={x - 1.8} y={y - 1.8} width="3.6" height="3.6" rx=".5" fill="white" stroke="#4f46e5" strokeWidth="1.2" vectorEffect="non-scaling-stroke" /></g>; })}
         </g>; })()}
@@ -165,7 +169,7 @@ function ElementVisual({ element, frame, simplify, selected }: { element: Layout
   if (element.type === 'shape') return <ShapeElementRenderer element={element} frame={frame} selected={selected} />;
   if (simplify) return <rect {...common} rx="1" fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5" />;
   if (element.type === 'guidelines') return <g transform={`translate(${frame.x} ${frame.y})`}><GuidelinesRenderer box={{ width: frame.width, height: frame.height }} settings={element.settings} idPrefix={`layout-${element.id}`} /></g>;
-  if (element.type === 'calligram') return <ellipse cx={frame.x + frame.width/2} cy={frame.y + frame.height/2} rx={frame.width/2} ry={frame.height/2} fill="none" stroke="#a855f7" strokeWidth="1.2" />;
+  if (element.type === 'calligram') return <g transform={`translate(${frame.x} ${frame.y})`}><CalligramRenderer box={{w:frame.width,h:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`} pageBackground={(element.settings.transparentWhitespace??true)?PAGE_BACKGROUND:undefined} paddingMM={element.paddingMM} selected={selected}/></g>;
   if (element.type === 'curved-title') return <g transform={`translate(${frame.x} ${frame.y})`}><CurvedTitleRenderer box={{w:frame.width,h:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`} pageBackground={(element.settings.transparentWhitespace??true)?PAGE_BACKGROUND:undefined} paddingMM={element.paddingMM} selected={selected} /></g>;
   return <rect {...common} rx="2" fill="#fef3c7" stroke="#d97706" strokeWidth=".8" />;
 }

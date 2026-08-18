@@ -28,7 +28,9 @@ export default function LayoutPage() {
     setElements(current => { const index = current.findIndex(element => element.id === id); const next = [...current]; next.splice(index, 0, copy); return next; }); setSelectedId(copy.id);
   };
   const remove = (id: string) => { if (id === 'page') return; setElements(current => current.filter(element => element.id !== id)); if (selectedId === id) setSelectedId('page'); };
-  const commit = (id: string, frame: Frame) => update(id, element => ({ ...element, frame }));
+  const commit = (id: string, frame: Frame) => update(id, element => element.type === 'calligram'
+    ? ({ ...element, frame: { ...frame, height: frame.width }, settings: { ...element.settings, radiusMM: Math.max(5, element.settings.radiusMM + (frame.width - element.frame.width) / 2) } })
+    : ({ ...element, frame }));
 
   return <main className="min-h-screen bg-slate-100 px-4 py-8 text-sm text-slate-900 sm:px-6">
     <header className="mx-auto mb-5 max-w-[1480px]"><h1 className="text-3xl font-semibold tracking-tight">Calligraphy Tools <span className="text-indigo-600">— Layout</span></h1><p className="mt-1 text-slate-600">Arrange calligraphy elements on a physical page.</p></header>
