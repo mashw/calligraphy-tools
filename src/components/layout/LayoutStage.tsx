@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { cloneSvgForRasterExport, computeRasterPxPerMM, jpegDataUrlToPdf, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
-import { resizeFrame, snapMove, type SnapState } from '@/lib/layout/geometry';
+import { pageContentRect, resizeFrame, snapMove, type SnapState } from '@/lib/layout/geometry';
 import { isProportional, pageSize, type Frame, type LayoutElement, type ResizeHandle } from '@/lib/layout/types';
 import GuidelinesRenderer from '@/components/guidelines/GuidelinesRenderer';
 
@@ -40,12 +40,13 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
   const pageElement = elements.find(element => element.type === 'page');
   if (!pageElement) throw new Error('Layout requires a Page element.');
   const page = pageSize(pageElement);
-  const vb = useMemo(() => {
+  const pageRect = pageContentRect(page, pageElement.settings.margins);
+  const vb = (() => {
     const margin = view === 'fullpage' ? 5 : 18;
     const baseW = page.width + margin * 2;
     const baseH = page.height + margin * 2;
     return { x: -margin + pan.x + (baseW - baseW / zoom) / 2, y: -margin + pan.y + (baseH - baseH / zoom) / 2, w: baseW / zoom, h: baseH / zoom };
-  }, [page.height, page.width, pan, view, zoom]);
+  })();
   const requestPaint = () => { if (!paintPending.current) { paintPending.current = true; requestAnimationFrame(() => { paintPending.current = false; setLivePaint(liveFrameRef.current); }); } };
   const begin = (e: React.PointerEvent<SVGElement>, element: LayoutElement, handle?: ResizeHandle) => {
     if (e.button !== 0) return; e.preventDefault(); e.stopPropagation(); onSelect(element.id);
@@ -69,7 +70,9 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
     if (active.mode === 'pan') { setView('custom'); setPan({ x: active.startPan.x - dx, y: active.startPan.y - dy }); return; }
     if (active.mode === 'move') {
       const unsnapped = { ...active.original, x: active.original.x + dx, y: active.original.y + dy };
-      const snapped = snapMove(unsnapped, page, { x: 6 / active.rect.width * active.vb.w, y: 6 / active.rect.height * active.vb.h }, { x: 10 / active.rect.width * active.vb.w, y: 10 / active.rect.height * active.vb.h }, active.snap);
+      const element=elements.find(item=>item.id===active.elementId);
+      const internal=element?.type==='guidelines'?element.settings.margins:{top:0,right:0,bottom:0,left:0};
+      const snapped = snapMove(unsnapped, internal, pageRect, { x: 6 / active.rect.width * active.vb.w, y: 6 / active.rect.height * active.vb.h }, { x: 10 / active.rect.width * active.vb.w, y: 10 / active.rect.height * active.vb.h }, active.snap);
       active.live = snapped.frame; active.snap = snapped.snap;
     } else active.live = resizeFrame(active.original, active.handle, dx, dy, active.proportional);
     liveFrameRef.current = { id: active.elementId, frame: active.live }; requestPaint();
@@ -107,6 +110,11 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
             <ElementVisual element={element} frame={frame} simplify={previewSimplify} />
           </g>;
         })}
+        <g data-no-export="true" pointerEvents="none">
+          {selectedId==='page'&&<rect x={pageRect.x} y={pageRect.y} width={pageRect.width} height={pageRect.height} fill="none" stroke="#818cf8" strokeWidth="1" strokeDasharray="4 3" strokeOpacity=".7" vectorEffect="non-scaling-stroke" />}
+          {pageElement.settings.centerLines.vertical&&<line x1={pageRect.x+pageRect.width/2} x2={pageRect.x+pageRect.width/2} y1={pageRect.y} y2={pageRect.y+pageRect.height} stroke="#818cf8" strokeWidth="1" strokeDasharray="5 4" strokeOpacity=".65" vectorEffect="non-scaling-stroke" />}
+          {pageElement.settings.centerLines.horizontal&&<line x1={pageRect.x} x2={pageRect.x+pageRect.width} y1={pageRect.y+pageRect.height/2} y2={pageRect.y+pageRect.height/2} stroke="#818cf8" strokeWidth="1" strokeDasharray="5 4" strokeOpacity=".65" vectorEffect="non-scaling-stroke" />}
+        </g>
         {selected && selected.type !== 'page' && (() => { const frame = livePaint?.id === selected.id ? livePaint.frame : selected.frame; return <g data-no-export="true">
           <rect x={frame.x} y={frame.y} width={frame.width} height={frame.height} fill="none" stroke="#4f46e5" strokeWidth="1.25" strokeOpacity=".8" vectorEffect="non-scaling-stroke" pointerEvents="none" />
           {!selected.locked && handles.map(handle => { const x = frame.x + frame.width * handle.x; const y = frame.y + frame.height * handle.y; return <g key={handle.id} style={{ cursor: handle.cursor }} onPointerDown={e => begin(e, selected, handle.id)}><circle cx={x} cy={y} r="7" fill="transparent" vectorEffect="non-scaling-stroke" /><rect x={x - 1.8} y={y - 1.8} width="3.6" height="3.6" rx=".5" fill="white" stroke="#4f46e5" strokeWidth="1.2" vectorEffect="non-scaling-stroke" /></g>; })}
