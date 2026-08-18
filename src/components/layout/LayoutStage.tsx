@@ -11,6 +11,7 @@ import CurvedTitleRenderer from '@/components/curved-title/CurvedTitleRenderer';
 import { buildCurvedTitleModel } from '@/lib/curved-title/model';
 import CalligramRenderer from '@/components/calligram/CalligramRenderer';
 import { buildCalligramModel } from '@/lib/calligram/model';
+import { getNearestCompleteGuidelinesHeight } from '@/lib/guides/straight/model';
 
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type Interaction =
@@ -52,6 +53,22 @@ function committedResizeFrame(interaction: Extract<Interaction, { mode: 'resize'
   const right = interaction.original.x + interaction.original.width;
   const bottom = interaction.original.y + interaction.original.height;
   return { x: Math.round(interaction.handle.includes('w') ? right-width : interaction.original.x), y: Math.round(interaction.handle.includes('n') ? bottom-height : interaction.original.y), width, height };
+}
+
+function constrainGuidelinesResize(frame: Frame, original: Frame, handle: ResizeHandle, settings: Extract<LayoutElement, { type: 'guidelines' }>['settings'], threshold = Infinity): Frame {
+  if (!handle.includes('n') && !handle.includes('s')) return frame;
+  const height = getNearestCompleteGuidelinesHeight(settings, frame.height);
+  if (Math.abs(height - frame.height) > threshold) return frame;
+  const bottom = original.y + original.height;
+  const right = original.x + original.width;
+  if (handle.length === 1) return { ...frame, y: handle.includes('n') ? bottom - height : original.y, height };
+  const width = height * original.width / original.height;
+  return {
+    x: handle.includes('w') ? right - width : original.x,
+    y: handle.includes('n') ? bottom - height : original.y,
+    width,
+    height,
+  };
 }
 
 function stripNoExport(svg: SVGSVGElement) { svg.querySelectorAll('[data-no-export="true"], #stage-bg').forEach(node => node.remove()); }
@@ -109,13 +126,24 @@ export default function LayoutStage({ elements, selectedId, onSelect, onCommit }
     } else {
       active.liveVisual=resizeFrame(active.visualOriginal,active.handle,dx,dy,active.proportional);
       active.live=baseFrameFromVisualResize(active.original,active.visualOriginal,active.liveVisual);
+      const element = elements.find(item => item.id === active.elementId);
+      if (element?.type === 'guidelines' && !element.allowPartialGuidelines) {
+        active.live = constrainGuidelinesResize(active.live, active.original, active.handle, element.settings, 6 / active.rect.height * active.vb.h);
+        active.liveVisual = active.live;
+      }
     }
 if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()=>{paintPending.current=false;setLivePaint({id:active.elementId,frame:active.live,visual:active.liveVisual});}); }
   };
   const finish = (e: React.PointerEvent<SVGSVGElement>) => {
     const active = interactionRef.current; if (active.mode === 'none' || active.pointerId !== e.pointerId) return;
     if (active.mode === 'move') onCommit(active.elementId, wholeFrame(active.live));
-    if (active.mode === 'resize') onCommit(active.elementId, ['curved-title','calligram'].includes(elements.find(item=>item.id===active.elementId)?.type??'')?wholeFrame(active.live):committedResizeFrame(active));
+    if (active.mode === 'resize') {
+      const element = elements.find(item => item.id === active.elementId);
+      const frame = element?.type === 'guidelines' && !element.allowPartialGuidelines && (active.handle.includes('n') || active.handle.includes('s'))
+        ? constrainGuidelinesResize(active.live, active.original, active.handle, element.settings)
+        : ['curved-title','calligram'].includes(element?.type ?? '') ? wholeFrame(active.live) : committedResizeFrame(active);
+      onCommit(active.elementId, frame);
+    }
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     interactionRef.current = { mode: 'none' }; setLivePaint(null); setInteractionActive(false);
   };
