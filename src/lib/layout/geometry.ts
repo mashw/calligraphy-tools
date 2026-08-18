@@ -56,9 +56,13 @@ export function alignContent(frame: Frame, internal: Margins, pageRect: Frame, a
 }
 
 export function halfPageContent(frame: Frame, internal: Margins, pageRect: Frame, axis: 'width' | 'height'): Frame {
+  return sizeToPageContent(frame, internal, pageRect, axis, 0.5);
+}
+
+export function sizeToPageContent(frame: Frame, internal: Margins, pageRect: Frame, axis: 'width' | 'height', fraction: 0.5 | 1): Frame {
   return axis === 'width'
-    ? { ...frame, width: pageRect.width / 2 + internal.left + internal.right }
-    : { ...frame, height: pageRect.height / 2 + internal.top + internal.bottom };
+    ? { ...frame, width: pageRect.width * fraction + internal.left + internal.right }
+    : { ...frame, height: pageRect.height * fraction + internal.top + internal.bottom };
 }
 
 function snapAxis(start: number, size: number, pageSize: number, tolerance: number, release: number, active: SnapAxis) {
