@@ -7,13 +7,14 @@ const AccordionContext = createContext<AccordionContextValue | null>(null);
 
 export function useSettingsAccordion() { return useContext(AccordionContext); }
 
-export function SettingsAccordion({ sessionKey, children }: { sessionKey: string; children: ReactNode }) {
+export function SettingsAccordion({ sessionKey, defaultTitle = 'Position & Size', children }: { sessionKey: string; defaultTitle?: string; children: ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [wide, setWide] = useState(false);
   const [width, setWidth] = useState(0);
   const [sectionCount, setSectionCount] = useState(0);
   const [manual, setManual] = useState<Record<string, boolean>>({});
   const [autoCollapsed, setAutoCollapsed] = useState<Set<string>>(() => new Set());
+  const [narrowOpenBySession, setNarrowOpenBySession] = useState<Record<string, string | null>>({});
   const stateKey = useCallback((title: string) => `${sessionKey}:${title}`, [sessionKey]);
 
   useEffect(() => {
@@ -49,14 +50,23 @@ export function SettingsAccordion({ sessionKey, children }: { sessionKey: string
 
   const value = useMemo<AccordionContextValue>(() => ({
     wide,
-    isOpen: title => manual[stateKey(title)] !== false && (!wide || !autoCollapsed.has(title)),
+    isOpen: title => wide
+      ? manual[stateKey(title)] !== false && !autoCollapsed.has(title)
+      : (Object.hasOwn(narrowOpenBySession, sessionKey) ? narrowOpenBySession[sessionKey] : defaultTitle) === title,
     toggle: title => {
+      if (!wide) {
+        setNarrowOpenBySession(current => {
+          const active = Object.hasOwn(current, sessionKey) ? current[sessionKey] : defaultTitle;
+          return { ...current, [sessionKey]: active === title ? null : title };
+        });
+        return;
+      }
       const key = stateKey(title);
-      const currentlyOpen = manual[key] !== false && (!wide || !autoCollapsed.has(title));
+      const currentlyOpen = manual[key] !== false && !autoCollapsed.has(title);
       setManual(current => ({ ...current, [key]: !currentlyOpen }));
       setAutoCollapsed(current => { const next = new Set(current); next.delete(title); return next; });
     },
-  }), [autoCollapsed, manual, stateKey, wide]);
+  }), [autoCollapsed, defaultTitle, manual, narrowOpenBySession, sessionKey, stateKey, wide]);
 
   return <AccordionContext.Provider value={value}><div ref={containerRef} className="mt-4 flex flex-col gap-3 xl:flex-row xl:flex-nowrap xl:items-stretch xl:gap-4">{children}</div></AccordionContext.Provider>;
 }
