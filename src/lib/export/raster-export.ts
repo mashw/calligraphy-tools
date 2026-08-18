@@ -53,6 +53,57 @@ export function cloneSvgForRasterExport(
   return clone;
 }
 
+/**
+ * Bake non-scaling SVG strokes into page user units before export.
+ *
+ * Preview strokes are expressed in CSS pixels. Once vector-effect is removed,
+ * those values must be converted to the root page's millimetre coordinate
+ * system or they would instead be interpreted as millimetres by the export.
+ */
+export function bakeExportStrokes(source: SVGSVGElement, clone: SVGSVGElement, pageWmm: number): void {
+  const rect = source.getBoundingClientRect();
+  if (!rect.width) return;
+  const pxPerMM = rect.width / pageWmm;
+  const sourceElements = Array.from(source.querySelectorAll<SVGElement>('*'));
+  const cloneElements = Array.from(clone.querySelectorAll<SVGElement>('*'));
+
+  sourceElements.forEach((element, index) => {
+    const cloneElement = cloneElements[index];
+    if (!cloneElement) return;
+    const style = window.getComputedStyle(element);
+    if (element.getAttribute('vector-effect') !== 'non-scaling-stroke' && style.vectorEffect !== 'non-scaling-stroke') return;
+    const strokeWidthPx = Number.parseFloat(style.strokeWidth || '0');
+    const hasStroke = (style.stroke && style.stroke !== 'none') || strokeWidthPx > 0;
+    if (!hasStroke) {
+      cloneElement.removeAttribute('vector-effect');
+      return;
+    }
+
+    if (style.stroke && style.stroke !== 'none') cloneElement.setAttribute('stroke', style.stroke);
+    if (!Number.isNaN(strokeWidthPx)) cloneElement.setAttribute('stroke-width', String(strokeWidthPx / pxPerMM));
+
+    const dashArray = style.strokeDasharray;
+    if (dashArray && dashArray !== 'none') {
+      cloneElement.setAttribute('stroke-dasharray', dashArray
+        .split(/[\s,]+/)
+        .filter(Boolean)
+        .map(entry => {
+          const value = Number.parseFloat(entry);
+          return Number.isNaN(value) ? entry : String(value / pxPerMM);
+        })
+        .join(' '));
+    } else if (dashArray === 'none') {
+      cloneElement.removeAttribute('stroke-dasharray');
+    }
+
+    if (style.strokeLinecap) cloneElement.setAttribute('stroke-linecap', style.strokeLinecap);
+    if (style.strokeLinejoin) cloneElement.setAttribute('stroke-linejoin', style.strokeLinejoin);
+    if (style.strokeMiterlimit) cloneElement.setAttribute('stroke-miterlimit', style.strokeMiterlimit);
+    if (style.strokeOpacity) cloneElement.setAttribute('stroke-opacity', style.strokeOpacity);
+    cloneElement.removeAttribute('vector-effect');
+  });
+}
+
 async function waitForImageReady(img: HTMLImageElement): Promise<void> {
   const waitForLoad = () =>
     new Promise<void>((resolve, reject) => {
