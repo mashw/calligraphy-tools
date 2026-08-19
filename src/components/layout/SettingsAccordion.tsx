@@ -22,6 +22,7 @@ const SECTION_WIDTHS: Record<string, SectionWidth> = {
   'Guide appearance': { medium: 250, wide: 300 }, Shape: { medium: 240, wide: 285 },
   Circles: { medium: 255, wide: 310 }, 'Additional Bands': { medium: 255, wide: 310 },
   'Text & Fit': { medium: 245, wide: 295 }, Display: { medium: 220, wide: 260 },
+  'Text fit': { medium: 250, wide: 300 },
   'Curve & Guides': { medium: 255, wide: 310 }, Page: { medium: 235, wide: 280 },
   'Page margins': { medium: 235, wide: 280 }, 'Centre lines': { medium: 220, wide: 260 },
 };
