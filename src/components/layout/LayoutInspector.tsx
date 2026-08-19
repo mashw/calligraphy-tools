@@ -2,9 +2,9 @@
 
 import GuidelinesSettingsPanel from '@/components/guidelines/GuidelinesSettingsPanel';
 import DisclosureSection from '@/components/layout/DisclosureSection';
-import { PAPERS_MM, type Orientation, type PaperId } from '@/lib/curve-helpers';
+import { PAPERS_MM, type Orientation } from '@/lib/curve-helpers';
 import { alignContent, pageContentRect, sizeToPageContent, type Alignment } from '@/lib/layout/geometry';
-import { pageSize, type LayoutElement, type PageElement } from '@/lib/layout/types';
+import { pageSize, type LayoutElement, type LayoutPaperId, type PageElement } from '@/lib/layout/types';
 import { constrainFrameToSquare, createDefaultShapeSettings, isConstrainedShape, SHAPE_OPTIONS, type ShapeAppearance, type ShapeKind } from '@/lib/layout/shape';
 import CurvedTitleSettingsPanel from '@/components/curved-title/CurvedTitleSettingsPanel';
 import CalligramSettingsPanel from '@/components/calligram/CalligramSettingsPanel';
@@ -16,9 +16,9 @@ const input = 'w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm';
 const smallButton = 'rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500';
 const sectionClass = '';
 
-function MillimetreField({ label, value, onChange, min, whole = false }: { label: string; value: number; onChange: (value: number) => void; min?: number; whole?: boolean }) {
+function MillimetreField({ label, value, onChange, min, max, whole = false }: { label: string; value: number; onChange: (value: number) => void; min?: number; max?: number; whole?: boolean }) {
   const displayed = whole ? Math.round(value) : value;
-  return <label className="space-y-1 text-xs font-medium capitalize text-slate-600">{label}<div className="relative"><input className={input} type="number" step={whole ? 1 : .5} min={min} value={displayed} onChange={event => { const parsed = Number(event.target.value); const next = whole ? Math.round(parsed) : parsed; if (Number.isFinite(next) && (min === undefined || next >= min)) onChange(next); }} /><span className="pointer-events-none absolute right-2 top-1.5 text-slate-400">mm</span></div></label>;
+  return <label className="space-y-1 text-xs font-medium capitalize text-slate-600">{label}<div className="relative"><input className={input} type="number" step={whole ? 1 : .5} min={min} max={max} value={displayed} onChange={event => { const parsed = Number(event.target.value); const next = whole ? Math.round(parsed) : parsed; if (Number.isFinite(next) && (min === undefined || next >= min) && (max === undefined || next <= max)) onChange(next); }} /><span className="pointer-events-none absolute right-2 top-1.5 text-slate-400">mm</span></div></label>;
 }
 
 export default function LayoutInspector({ element, page, textFitEntry, onChange }: { element: LayoutElement; page: PageElement; textFitEntry: GuidelinesTextFitEntry | null; onChange: (element: LayoutElement) => void }) {
@@ -64,7 +64,24 @@ export default function LayoutInspector({ element, page, textFitEntry, onChange 
     <h2 className="font-semibold text-slate-800">Settings <span className="font-normal text-slate-400">—</span> {element.name}</h2>
     <SettingsAccordion sessionKey={element.id} defaultTitle={element.type === 'page' ? 'Page' : 'Position & Size'}>
       {element.type === 'page' ? <>
-        <DisclosureSection title="Page" defaultOpen className={sectionClass}><div className="space-y-3"><label className="block space-y-1 text-xs font-medium text-slate-600">Paper size<select className={input} value={element.settings.paper} onChange={event => { const paper = event.target.value as PaperId; const settings = { ...element.settings, paper, orientation: PAPERS_MM[paper].defaultOrientation }; const size = pageSize({ ...element, settings }); onChange({ ...element, settings, frame: { x: 0, y: 0, ...size } }); }}>{Object.entries(PAPERS_MM).map(([id, paper]) => <option key={id} value={id}>{paper.label}</option>)}</select></label><label className="block space-y-1 text-xs font-medium text-slate-600">Orientation<select className={input} value={element.settings.orientation} onChange={event => { const settings = { ...element.settings, orientation: event.target.value as Orientation }; const size = pageSize({ ...element, settings }); onChange({ ...element, settings, frame: { x: 0, y: 0, ...size } }); }}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label></div></DisclosureSection>
+        <DisclosureSection title="Page" defaultOpen className={sectionClass}><div className="space-y-3">
+          <label className="block space-y-1 text-xs font-medium text-slate-600">Paper size<select className={input} value={element.settings.paper} onChange={event => {
+            const paper = event.target.value as LayoutPaperId;
+            const current = pageSize(element);
+            const settings = paper === 'Custom'
+              ? { ...element.settings, paper, customWidthMM: current.width, customHeightMM: current.height }
+              : { ...element.settings, paper, orientation: PAPERS_MM[paper].defaultOrientation };
+            const size = pageSize({ ...element, settings });
+            onChange({ ...element, settings, frame: { x: 0, y: 0, ...size } });
+          }}>{Object.entries(PAPERS_MM).map(([id, paper]) => <option key={id} value={id}>{paper.label}</option>)}<option value="Custom">Custom</option></select></label>
+          {element.settings.paper === 'Custom' ? <>
+            <div className="grid grid-cols-2 gap-3">
+              <MillimetreField label="Width" min={20} max={2000} value={element.settings.customWidthMM} onChange={customWidthMM => { const settings={...element.settings,customWidthMM}; onChange({...element,settings,frame:{x:0,y:0,...pageSize({...element,settings})}}); }}/>
+              <MillimetreField label="Height" min={20} max={2000} value={element.settings.customHeightMM} onChange={customHeightMM => { const settings={...element.settings,customHeightMM}; onChange({...element,settings,frame:{x:0,y:0,...pageSize({...element,settings})}}); }}/>
+            </div>
+            <button type="button" className={smallButton} onClick={()=>{const settings={...element.settings,customWidthMM:element.settings.customHeightMM,customHeightMM:element.settings.customWidthMM};onChange({...element,settings,frame:{x:0,y:0,...pageSize({...element,settings})}});}}>Swap width / height</button>
+          </> : <label className="block space-y-1 text-xs font-medium text-slate-600">Orientation<select className={input} value={element.settings.orientation} onChange={event => { const settings = { ...element.settings, orientation: event.target.value as Orientation }; const size = pageSize({ ...element, settings }); onChange({ ...element, settings, frame: { x: 0, y: 0, ...size } }); }}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>}
+        </div></DisclosureSection>
         <DisclosureSection title="Page margins" defaultOpen className={sectionClass}><div className="grid grid-cols-2 gap-3">{(['top', 'right', 'bottom', 'left'] as const).map(key => <MillimetreField key={key} label={key} min={0} value={element.settings.margins[key]} onChange={value => onChange({ ...element, settings: { ...element.settings, margins: { ...element.settings.margins, [key]: value } } })} />)}</div></DisclosureSection>
         <DisclosureSection title="Centre lines" className={sectionClass}><div className="space-y-2">{(['vertical', 'horizontal'] as const).map(key => <label key={key} className="flex items-center justify-between text-sm text-slate-700"><span>Show {key} centre line</span><input type="checkbox" className="accent-indigo-600" checked={element.settings.centerLines[key]} onChange={event => onChange({ ...element, settings: { ...element.settings, centerLines: { ...element.settings.centerLines, [key]: event.target.checked } } })} /></label>)}</div></DisclosureSection>
       </> : <>

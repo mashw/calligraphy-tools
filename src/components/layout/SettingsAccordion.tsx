@@ -42,24 +42,23 @@ function resolveHorizontalWindow(titles: string[], mode: 'medium' | 'wide', avai
   const max = Math.max(min, Math.min(preference?.max ?? titles.length - 1, titles.length - 1));
   const anchor = Math.max(min, Math.min(preference?.anchor ?? min, max));
   const direction = preference?.direction ?? 'right';
-  let start = anchor, end = anchor;
-  let used = titles.length * rail + Math.max(0, titles.length - 1) * gap + minimumWidth(titles[anchor], mode) - rail;
+  const target = Math.min(mode === 'medium' ? 3 : 4, max - min + 1);
+  const fixed = (titles.length - 1) * gap;
+  let start = anchor, end = anchor, used = 0;
 
-  const addLeft = () => {
-    if (start <= min) return false;
-    const extra = minimumWidth(titles[start - 1], mode) - rail;
-    if (used + extra > available) return false;
-    start--; used += extra; return true;
-  };
-  const addRight = () => {
-    if (end >= max) return false;
-    const extra = minimumWidth(titles[end + 1], mode) - rail;
-    if (used + extra > available) return false;
-    end++; used += extra; return true;
-  };
-
-  if (direction === 'right') { while (addRight()) { /* expand toward the requested rail */ } while (addLeft()) { /* use remaining space */ } }
-  else { while (addLeft()) { /* expand toward the requested rail */ } while (addRight()) { /* use remaining space */ } }
+  // A clicked rail becomes the nearest edge of a fixed-size contiguous window.
+  // If that window cannot satisfy every panel minimum, reduce its count rather
+  // than allowing flexbox to crush any of the expanded controls.
+  for (let count = target; count >= 1; count--) {
+    const preferredStart = direction === 'right' ? anchor : anchor - count + 1;
+    const candidateStart = Math.max(min, Math.min(preferredStart, max - count + 1));
+    const candidateEnd = candidateStart + count - 1;
+    const openMinimums = titles.slice(candidateStart, candidateEnd + 1).reduce((sum, title) => sum + minimumWidth(title, mode), 0);
+    const required = fixed + openMinimums + (titles.length - count) * rail;
+    if (required <= available || count === 1) {
+      start = candidateStart; end = candidateEnd; used = required; break;
+    }
+  }
 
   const openCount = end - start + 1;
   const spare = Math.max(0, available - used) / openCount;

@@ -7,9 +7,10 @@ import { createDefaultCalligramSettings, type CalligramSettings } from '@/lib/ca
 export type ElementType = 'page' | 'guidelines' | 'calligram' | 'curved-title' | 'shape';
 export type Frame = { x: number; y: number; width: number; height: number };
 export type Margins = { top: number; right: number; bottom: number; left: number };
+export type LayoutPaperId = PaperId | 'Custom';
 type ElementBase = { id: string; name: string; frame: Frame; locked: boolean };
 type MovableElementBase = ElementBase & { paddingMM: number };
-export type PageElement = ElementBase & { id: 'page'; type: 'page'; locked: true; settings: { paper: PaperId; orientation: Orientation; margins: Margins; centerLines: { vertical: boolean; horizontal: boolean } } };
+export type PageElement = ElementBase & { id: 'page'; type: 'page'; locked: true; settings: { paper: LayoutPaperId; orientation: Orientation; customWidthMM: number; customHeightMM: number; margins: Margins; centerLines: { vertical: boolean; horizontal: boolean } } };
 export type GuidelinesElement = MovableElementBase & { type: 'guidelines'; allowPartialGuidelines: boolean; fitText: string; settings: GuidelinesSettings };
 export type ShapeElement = MovableElementBase & { type: 'shape'; settings: ShapeSettings };
 export type CurvedTitleElement = MovableElementBase & { type: 'curved-title'; settings: CurvedTitleSettings };
@@ -17,8 +18,11 @@ export type CalligramElement = MovableElementBase & { type: 'calligram'; setting
 export type LayoutElement = PageElement | GuidelinesElement | ShapeElement | CurvedTitleElement | CalligramElement;
 export type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
-export function pageSize(element: PageElement) { const raw=PAPERS_MM[element.settings.paper]; return element.settings.orientation==='landscape'&&raw.w<raw.h||element.settings.orientation==='portrait'&&raw.w>raw.h?{width:raw.h,height:raw.w}:{width:raw.w,height:raw.h}; }
-export const pageElement = (): PageElement => ({ id:'page',type:'page',name:'Page',locked:true,settings:{paper:'A4',orientation:PAPERS_MM.A4.defaultOrientation,margins:{top:15,right:10,bottom:15,left:10},centerLines:{vertical:false,horizontal:false}},frame:{x:0,y:0,width:210,height:297} });
+export function pageSize(element: PageElement) {
+  if (element.settings.paper === 'Custom') return { width: element.settings.customWidthMM, height: element.settings.customHeightMM };
+  const raw=PAPERS_MM[element.settings.paper]; return element.settings.orientation==='landscape'&&raw.w<raw.h||element.settings.orientation==='portrait'&&raw.w>raw.h?{width:raw.h,height:raw.w}:{width:raw.w,height:raw.h};
+}
+export const pageElement = (): PageElement => ({ id:'page',type:'page',name:'Page',locked:true,settings:{paper:'A4',orientation:PAPERS_MM.A4.defaultOrientation,customWidthMM:210,customHeightMM:297,margins:{top:15,right:10,bottom:15,left:10},centerLines:{vertical:false,horizontal:false}},frame:{x:0,y:0,width:210,height:297} });
 const labels = { guidelines:'Guidelines',calligram:'Calligram','curved-title':'Curved title',shape:'Shape' } as const;
 export function newElement(type: Exclude<ElementType,'page'>, count:number, page:{width:number;height:number}): LayoutElement {
   const proportional=type==='calligram';
