@@ -12,7 +12,7 @@ import { buildCurvedTitleModel } from '@/lib/curved-title/model';
 import CalligramRenderer from '@/components/calligram/CalligramRenderer';
 import { buildCalligramModel } from '@/lib/calligram/model';
 import { getNearestCompleteGuidelinesHeight } from '@/lib/guides/straight/model';
-import type { GuidelinesTextFitPlan } from '@/lib/layout/guidelines-text-fit';
+import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type Interaction =
@@ -75,7 +75,7 @@ function constrainGuidelinesResize(frame: Frame, original: Frame, handle: Resize
 function stripNoExport(svg: SVGSVGElement) { svg.querySelectorAll('[data-no-export="true"], #stage-bg').forEach(node => node.remove()); }
 function download(blob: Blob, name: string) { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url); }
 
-export default function LayoutStage({ elements, selectedId, textFitPlan, onSelect, onCommit }: { elements: LayoutElement[]; selectedId: string; textFitPlan: GuidelinesTextFitPlan | null; onSelect: (id: string) => void; onCommit: (id: string, frame: Frame) => void }) {
+export default function LayoutStage({ elements, selectedId, textFitPlans, onSelect, onCommit }: { elements: LayoutElement[]; selectedId: string; textFitPlans: Record<string,GuidelinesTextFitEntry>; onSelect: (id: string) => void; onCommit: (id: string, frame: Frame) => void }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const interactionRef = useRef<Interaction>({ mode: 'none' });
   const paintPending = useRef(false);
@@ -174,7 +174,7 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
           const occupied = occupiedRect(element.type==='calligram'&&!(element.settings.transparentWhitespace??true)?visualFrame(element,frame):frame, element.paddingMM);
           return <g key={element.id} onPointerDown={e => begin(e, element)} style={{ cursor: element.locked ? 'pointer' : 'move' }}>
             {element.type !== 'shape' && !((element.type==='curved-title'||element.type==='calligram')&&(element.settings.transparentWhitespace??true)) && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
-            <ElementVisual element={element} frame={frame} simplify={previewSimplify} selected={element.id === selectedId} textFitPlan={element.id===selectedId?textFitPlan:null} />
+            <ElementVisual element={element} frame={frame} simplify={previewSimplify} selected={element.id === selectedId} textFitEntry={textFitPlans[element.id]??null} />
           </g>;
         })}
         <g data-no-export="true" pointerEvents="none">
@@ -192,11 +192,11 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
   </section>;
 }
 
-function ElementVisual({ element, frame, simplify, selected, textFitPlan }: { element: LayoutElement; frame: Frame; simplify: boolean; selected: boolean; textFitPlan: GuidelinesTextFitPlan | null }) {
+function ElementVisual({ element, frame, simplify, selected, textFitEntry }: { element: LayoutElement; frame: Frame; simplify: boolean; selected: boolean; textFitEntry: GuidelinesTextFitEntry | null }) {
   const common = { x: frame.x, y: frame.y, width: frame.width, height: frame.height };
   if (element.type === 'shape') return <ShapeElementRenderer element={element} frame={frame} selected={selected} />;
   if (simplify) return <rect {...common} rx="1" fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5" />;
-  if (element.type === 'guidelines') return <g transform={`translate(${frame.x} ${frame.y})`}><GuidelinesRenderer box={{ width: frame.width, height: frame.height }} settings={element.settings} idPrefix={`layout-${element.id}`} />{textFitPlan&&<g data-no-export="true" pointerEvents="none">{textFitPlan.placements.map((placement,index)=>{const x=placement.x1-frame.x,y1=placement.waistY-frame.y,y2=placement.baseY-frame.y,shift=placement.slantShiftMM,x2=x+placement.consumedMM;return <path key={index} d={`M ${x+shift},${y1} L ${x2+shift},${y1} L ${x2},${y2} L ${x},${y2} Z`} fill="rgba(148,163,184,.18)" stroke="rgba(100,116,139,.55)" strokeWidth=".35" vectorEffect="non-scaling-stroke"/>})}</g>}</g>;
+  if (element.type === 'guidelines') return <g transform={`translate(${frame.x} ${frame.y})`}><GuidelinesRenderer box={{ width: frame.width, height: frame.height }} settings={element.settings} idPrefix={`layout-${element.id}`} />{textFitEntry&&<g data-no-export="true" pointerEvents="none">{textFitEntry.plan.placements.map((placement,index)=>{const x=placement.x1-frame.x,y1=placement.waistY-frame.y,y2=placement.baseY-frame.y,shift=placement.slantShiftMM,x2=x+placement.consumedMM;return <path key={index} d={`M ${x+shift},${y1} L ${x2+shift},${y1} L ${x2},${y2} L ${x},${y2} Z`} fill={textFitEntry.color.fill} stroke={textFitEntry.color.stroke} strokeWidth=".35" vectorEffect="non-scaling-stroke"/>})}</g>}</g>;
   if (element.type === 'calligram') return <g transform={`translate(${frame.x} ${frame.y})`}><CalligramRenderer box={{w:frame.width,h:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`} pageBackground={(element.settings.transparentWhitespace??true)?PAGE_BACKGROUND:undefined} paddingMM={element.paddingMM} selected={selected}/></g>;
   if (element.type === 'curved-title') return <g transform={`translate(${frame.x} ${frame.y})`}><CurvedTitleRenderer box={{w:frame.width,h:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`} pageBackground={(element.settings.transparentWhitespace??true)?PAGE_BACKGROUND:undefined} paddingMM={element.paddingMM} selected={selected} /></g>;
   return <rect {...common} rx="2" fill="#fef3c7" stroke="#d97706" strokeWidth=".8" />;

@@ -13,6 +13,20 @@ type Occluder = { bounds: { x: number; y: number; width: number; height: number 
 export type VisibleGuideSpan = { rowIndex: number; x1: number; x2: number; ascY: number; waistY: number; baseY: number; descY: number };
 export type EstimatedSpanPlacement = VisibleGuideSpan & { consumedMM: number; slantShiftMM: number };
 export type GuidelinesTextFitPlan = { visibleSpans: VisibleGuideSpan[]; placements: EstimatedSpanPlacement[]; requiredMM: number; availableMM: number; remainingMM: number; fits: boolean };
+export type TextFitColor = { fill: string; stroke: string };
+export type GuidelinesTextFitEntry = { plan: GuidelinesTextFitPlan; color: TextFitColor };
+export const TEXT_FIT_COLORS: readonly TextFitColor[] = [
+  {fill:'rgba(99, 102, 241, 0.20)',stroke:'rgba(79, 70, 229, 0.70)'},
+  {fill:'rgba(14, 165, 233, 0.18)',stroke:'rgba(2, 132, 199, 0.70)'},
+  {fill:'rgba(13, 148, 136, 0.18)',stroke:'rgba(15, 118, 110, 0.70)'},
+  {fill:'rgba(139, 92, 246, 0.18)',stroke:'rgba(124, 58, 237, 0.70)'},
+  {fill:'rgba(217, 119, 6, 0.16)',stroke:'rgba(180, 83, 9, 0.68)'},
+  {fill:'rgba(6, 182, 212, 0.17)',stroke:'rgba(8, 145, 178, 0.70)'},
+];
+
+const stableStringHash=(value:string)=>{let hash=2166136261;for(let i=0;i<value.length;i++){hash^=value.charCodeAt(i);hash=Math.imul(hash,16777619);}return hash>>>0;};
+export const preferredTextFitColorIndex=(id:string)=>stableStringHash(id)%TEXT_FIT_COLORS.length;
+export function resolveTextFitColors(ids:string[]){const used=new Set<number>(),out:Record<string,TextFitColor>={};ids.forEach(id=>{const preferred=preferredTextFitColorIndex(id);let index=preferred;for(let offset=0;offset<TEXT_FIT_COLORS.length;offset++){const candidate=(preferred+offset)%TEXT_FIT_COLORS.length;if(!used.has(candidate)){index=candidate;break;}}used.add(index);out[id]=TEXT_FIT_COLORS[index];});return out;}
 
 const inBounds = (point: Point, bounds: Occluder['bounds']) => point.x >= bounds.x && point.x <= bounds.x + bounds.width && point.y >= bounds.y && point.y <= bounds.y + bounds.height;
 const pointInPolygon = (point: Point, polygon: Point[]) => { let inside = false; for (let i=0,j=polygon.length-1;i<polygon.length;j=i++) { const a=polygon[i],b=polygon[j]; if ((a.y>point.y)!==(b.y>point.y)&&point.x<(b.x-a.x)*(point.y-a.y)/(b.y-a.y)+a.x) inside=!inside; } return inside; };
@@ -59,15 +73,18 @@ export function buildGuidelinesVisibleSpans(element: GuidelinesElement, page: Pa
   return spans;
 }
 
-let visibleSpanCache: { key: string; spans: VisibleGuideSpan[] } | null = null;
+const visibleSpanCache = new Map<string,VisibleGuideSpan[]>();
 export function getCachedGuidelinesVisibleSpans(key: string, element: GuidelinesElement, page: PageElement, elements: LayoutElement[]) {
-  if(visibleSpanCache?.key===key)return visibleSpanCache.spans;
-  const spans=buildGuidelinesVisibleSpans(element,page,elements);visibleSpanCache={key,spans};return spans;
+  const cached=visibleSpanCache.get(key);if(cached)return cached;
+  const spans=buildGuidelinesVisibleSpans(element,page,elements);if(visibleSpanCache.size>=50)visibleSpanCache.delete(visibleSpanCache.keys().next().value!);visibleSpanCache.set(key,spans);return spans;
 }
 
+export function buildGuidelinesVisibilityCacheKey(element:GuidelinesElement,page:PageElement,higherElements:LayoutElement[]){return JSON.stringify({frame:element.frame,settings:element.settings,page,higher:higherElements.map(item=>item.type==='guidelines'?{...item,fitText:''}:item)});}
+
 export function buildGuidelinesTextFitPlan(element: GuidelinesElement, visibleSpans: VisibleGuideSpan[]): GuidelinesTextFitPlan {
-  if(!element.fitText.trim())return{visibleSpans:[],placements:[],requiredMM:0,availableMM:0,remainingMM:0,fits:true};
-  const settings=element.settings,effectiveNib=settings.nibMM*Math.cos(settings.penAngleDeg*Math.PI/180),ctx=settings.script==='Copperplate'?buildCopperplateContext({xHeightMM:settings.xHeightMM,capStyle:'simple',calibration:{enabled:false}}).ctx:{xHeightMM:settings.xNib*effectiveNib,nibMM:effectiveNib,scale:1,spaceMult:1,capStyle:'simple' as const},run=measureRun(element.fitText,SCRIPT_PROFILES[settings.script],ctx),slant=settings.script==='Copperplate'?settings.xHeightMM/Math.tan(55*Math.PI/180):0;
+  const measurementText=element.fitText.replace(/\s*\n+\s*/g,' ').replace(/\s+/g,' ').trim();
+  if(!measurementText)return{visibleSpans:[],placements:[],requiredMM:0,availableMM:0,remainingMM:0,fits:true};
+  const settings=element.settings,effectiveNib=settings.nibMM*Math.cos(settings.penAngleDeg*Math.PI/180),ctx=settings.script==='Copperplate'?buildCopperplateContext({xHeightMM:settings.xHeightMM,capStyle:'simple',calibration:{enabled:false}}).ctx:{xHeightMM:settings.xNib*effectiveNib,nibMM:effectiveNib,scale:1,spaceMult:1,capStyle:'simple' as const},run=measureRun(measurementText,SCRIPT_PROFILES[settings.script],ctx),slant=settings.script==='Copperplate'?settings.xHeightMM/Math.tan(55*Math.PI/180):0;
   const capacities=visibleSpans.map(span=>Math.max(0,span.x2-span.x1-slant)),availableMM=capacities.reduce((sum,value)=>sum+value,0),placements:EstimatedSpanPlacement[]=[];let remaining=run.totalAdvanceMM;
   visibleSpans.forEach((span,index)=>{if(remaining<=0)return;const consumed=Math.min(remaining,capacities[index]);if(consumed>0)placements.push({...span,consumedMM:consumed,slantShiftMM:slant});remaining-=consumed;});
   return{visibleSpans,placements,requiredMM:run.totalAdvanceMM,availableMM,remainingMM:Math.max(0,remaining),fits:remaining<=.001};
