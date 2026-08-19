@@ -20,6 +20,8 @@ import { measureRun } from '@/lib/measure/measure-run';
 import { buildCopperplateContext } from '@/lib/copperplate/context';
 import { buildGuideSet } from '@/lib/guides/guide-template';
 import GuideOverlay from '@/components/preview/GuideOverlay';
+import { createDefaultCalligramSettings } from '@/lib/calligram/settings';
+import { avgRadiusFromCenter as sharedAvgRadius, bandPolygonD, buildCircleBaseline as sharedBuildCircleBaseline, computeCalligramLayout, normalSignForBaseline as sharedNormalSign, pointAtWrapped, snapRadiusToWholeSteps, type CalligramPlace } from '@/lib/calligram/model';
 import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 
 type PaperId = keyof typeof PAPERS_MM;
@@ -127,16 +129,7 @@ const MIDLINE_DASH_GAP = 12;
 const DEFAULT_RING_GAP_MM = 1;
 const UNDER_MAIN_BAND_CLIP_ID = 'underMainBandClip';
 
-function bandPolygonD(guideSet: { ascLine?: Pt[]; descLine?: Pt[] }): string {
-  const asc = guideSet.ascLine;
-  const desc = guideSet.descLine;
-  if (!asc?.length || !desc?.length) return '';
-  return `M ${asc.map(p => `${p.x},${p.y}`).join(' L ')} L ${desc
-    .slice()
-    .reverse()
-    .map(p => `${p.x},${p.y}`)
-    .join(' L ')} Z`;
-}
+
 
 function rectPathD(box: { w: number; h: number }): string {
   return `M 0,0 H ${box.w} V ${box.h} H 0 Z`;
@@ -453,14 +446,10 @@ function makeSimplePdfFromJpeg(
   return new Blob(chunks as unknown as BlobPart[], { type: 'application/pdf' });
 }
 
-function snapRadiusToWholeSteps(radiusMM: number, stepMM: number): number {
-  if (stepMM <= 0) return radiusMM;
-  const k = Math.max(1, Math.round((2 * Math.PI * radiusMM) / stepMM));
-  const snapped = (k * stepMM) / (2 * Math.PI);
-  return Number(snapped.toFixed(3));
-}
+
 
 export default function CalligramPage() {
+  const calligramDefaults = createDefaultCalligramSettings();
   // ---------- State ----------
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>('landscape');
@@ -477,9 +466,9 @@ export default function CalligramPage() {
     return next2 / 2;
   };
   const snap05 = (v: number) => Math.round(v / 0.5) * 0.5;
-  const [script, setScript] = useState<ScriptId>('TexturaQuadrata');
-  const [allowPartialNibWidths, setAllowPartialNibWidths] = useState(true);
-  const [radiusMM, setRadiusMM] = useState(MAIN_DEFAULTS.TexturaQuadrata.radiusMM);
+  const [script, setScript] = useState<ScriptId>(calligramDefaults.script);
+  const [allowPartialNibWidths, setAllowPartialNibWidths] = useState(calligramDefaults.allowPartialNibWidths);
+  const [radiusMM, setRadiusMM] = useState(calligramDefaults.radiusMM);
   const [innerOffsetMM, setInnerOffsetMM] = useState(
     MAIN_DEFAULTS.TexturaQuadrata.radiusMM - CIRCLE_DEFAULTS.TexturaQuadrata.innerRadiusMM + DEFAULT_RING_GAP_MM,
   );
@@ -863,44 +852,14 @@ export default function CalligramPage() {
   const dirSign = direction === 'cw' ? 1 : -1;
   const startAngleRad = (startAngleDeg * Math.PI) / 180;
 
-  const buildCircleBaseline = (r: number): Pt[] => {
-    const radius = Math.max(1, r);
-    const L = 2 * Math.PI * radius;
-    const N = Math.max(180, Math.min(1440, Math.round(L)));
-    const cx = box.w / 2;
-    const cy = box.h / 2;
-    const pts: Pt[] = [];
-    for (let i = 0; i <= N; i++) {
-      const s = (i / N) * L;
-      const theta = startAngleRad + dirSign * (s / radius);
-      pts.push({ x: cx + radius * Math.cos(theta), y: cy + radius * Math.sin(theta) });
-    }
-    
-    return pts;
-  };
-
-  const baseline = useMemo<Pt[]>(() => buildCircleBaseline(radiusMM), [box, radiusMM, startAngleRad, dirSign]);
-
-  const avgRadiusFromCenter = (pts: Pt[]) => {
-    if (!pts.length) return radiusMM;
-    const cx = box.w / 2;
-    const cy = box.h / 2;
-    return pts.reduce((sum, p) => sum + Math.hypot(p.x - cx, p.y - cy), 0) / pts.length;
-  };
-
-  const normalSignForBaseline = (pts: Pt[]) => {
-    // We want NEGATIVE offsets to move OUTWARD (bigger radius).
-    const test = offset(pts, -1);
-    const r0 = avgRadiusFromCenter(pts);
-    const r1 = avgRadiusFromCenter(test);
-    return (r1 > r0 ? 1 : -1) as 1 | -1;
-  };
+  const buildCircleBaseline = (r: number): Pt[] => sharedBuildCircleBaseline(r, box, startAngleDeg, direction);
+  const baseline = useMemo<Pt[]>(() => buildCircleBaseline(radiusMM), [box, radiusMM, startAngleDeg, direction]);
+  const avgRadiusFromCenter = (pts: Pt[]) => sharedAvgRadius(pts, box, radiusMM);
+  const normalSignForBaseline = (pts: Pt[]) => sharedNormalSign(pts, box);
 
   const mainNormalSign = useMemo(() => normalSignForBaseline(baseline), [baseline]);
 
   const arcLen = circumference;
-  const wrapLength = (s: number, L: number) => (L > 0 ? ((s % L) + L) % L : 0);
-  const pointAtWrapped = (pts: Pt[], s: number, L: number) => pointAt(pts, wrapLength(s, L));
   const guideTemplate = script === 'Copperplate' ? 'copperplate' : 'blackletter';
   const snapWholeNibs = anyBlackletter && !allowPartialNibWidths;
   const shouldSnapMainRadius = guideTemplate === 'blackletter' && snapWholeNibs;
@@ -926,108 +885,8 @@ export default function CalligramPage() {
 
 
 
-  // ---------- Layout along the curve ----------
-  type Place = { ch: string; w: number; h: number; sMid: number };
-
-  const computeLayout = (
-    runData: ReturnType<typeof measureRun>,
-    bandBaseline: Pt[],
-    bandArcLen: number,
-    bandXMM: number,
-    bandNibMM: number,
-    bandCapMM: number,
-    scriptId: ScriptId,
-  ) => {
-    const glyphs = runData.glyphs;
-
-    // Pass 1: place using measured advances
-    const placeWithAdvances = (advances: number[]) => {
-      const totalAdvance = advances.reduce((a, v) => a + v, 0);
-      let s0 = 0;
-      if (align === 'center') s0 = Math.max(0, (bandArcLen - totalAdvance) / 2);
-      if (align === 'end') s0 = Math.max(0, bandArcLen - totalAdvance);
-
-      const placements: Place[] = [];
-      let cursor = s0;
-      for (let i = 0; i < glyphs.length; i++) {
-        const g = glyphs[i];
-        const adv = advances[i] ?? g.advMM;
-        if (g.kind === 'space') {
-          cursor += adv;
-          continue;
-        }
-
-        const w = g.wMM;
-        const isCap = g.ch >= 'A' && g.ch <= 'Z';
-        const h = isCap ? bandCapMM : bandXMM;
-
-        const mid = cursor + w / 2;
-        placements.push({ ch: g.ch, w, h, sMid: mid });
-        cursor += adv;
-      }
-
-      return { placements, totalAdvance };
-    };
-
-    const adv1 = glyphs.map((g) => g.advMM);
-    const pass1 = placeWithAdvances(adv1);
-
-    if (pass1.placements.length === 0) {
-      const overBy0 = Math.max(0, pass1.totalAdvance - bandArcLen);
-      return { placements: pass1.placements, needed: pass1.totalAdvance, overBy: overBy0 };
-    }
-
-    if (scriptId === 'Copperplate') {
-      const overBy = Math.max(0, pass1.totalAdvance - bandArcLen);
-      return { placements: pass1.placements, needed: pass1.totalAdvance, overBy };
-    }
-
-    // Pass 2: add a small extra spacing bump on turns (blackletter readability)
-    const adv2 = adv1.slice();
-    for (let i = 0; i < pass1.placements.length; i++) {
-      const pl = pass1.placements[i];
-      const sMid = pl.sMid;
-      const sL = sMid - pl.w / 2;
-      const sR = sMid + pl.w / 2;
-
-      const nL = pointAtWrapped(bandBaseline, sL, bandArcLen).n;
-      const nR = pointAtWrapped(bandBaseline, sR, bandArcLen).n;
-
-      const dot = nL.x * nR.x + nL.y * nR.y;
-      const clampedDot = Math.max(-1, Math.min(1, dot));
-      const turnRad = Math.acos(clampedDot);
-      const turnDeg = (turnRad * 180) / Math.PI;
-
-      const THRESH = 6;
-      const MAX = 28;
-      const t = Math.max(0, Math.min(1, (turnDeg - THRESH) / (MAX - THRESH)));
-
-      const baseBump = bandNibMM * 0.25;
-      const heightFactor = 0.6 + 0.4 * Math.min(1, pl.h / bandXMM);
-      const extra = t * baseBump * heightFactor;
-
-      // Find the glyph index corresponding to this placement (skip spaces)
-      // Conservative: add the bump to the first non-space glyph after this one.
-      if (extra > 0) {
-        // Locate by counting non-space glyphs.
-        let k = 0
-        for (let gi = 0; gi < glyphs.length; gi++) {
-          if (glyphs[gi].kind === 'space') continue
-          if (k === i) {
-            if (gi < adv2.length - 1) adv2[gi] += extra
-            break
-          }
-          k += 1
-        }
-      }
-    }
-
-    const pass2 = placeWithAdvances(adv2);
-    const overBy = Math.max(0, pass2.totalAdvance - bandArcLen);
-    return { placements: pass2.placements, needed: pass2.totalAdvance, overBy };
-  };
-
-  const layout = useMemo(() => computeLayout(run, baseline, arcLen, xMM, effectiveNibMM, capMM, script), [run, baseline, arcLen, xMM, effectiveNibMM, capMM, script, align]);
+  // ---------- Layout along the curve (shared with Layout) ----------
+  const layout = useMemo(() => computeCalligramLayout(run, baseline, arcLen, xMM, effectiveNibMM, capMM, script, align), [run, baseline, arcLen, xMM, effectiveNibMM, capMM, script, align]);
 
   const span = useMemo(() => {
     if (!layout.placements.length) return null;
@@ -1135,7 +994,7 @@ const innerRadiusMaxMM = useMemo(
   );
   const shouldSnapTopRadius = topBandScript !== 'Copperplate' && snapWholeNibs;
   const topLayout = useMemo(
-    () => computeLayout(topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM, topCapMM, topBandScript),
+    () => computeCalligramLayout(topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM, topCapMM, topBandScript, align),
     [topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM, topCapMM, topBandScript, align],
   );
   const topSpan = useMemo(() => {
@@ -1187,7 +1046,7 @@ const innerRadiusMaxMM = useMemo(
   );
   const shouldSnapBottomRadius = bottomBandScript !== 'Copperplate' && snapWholeNibs;
   const bottomLayout = useMemo(
-    () => computeLayout(bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM, bottomCapMM, bottomBandScript),
+    () => computeCalligramLayout(bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM, bottomCapMM, bottomBandScript, align),
     [bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM, bottomCapMM, bottomBandScript, align],
   );
   const bottomSpan = useMemo(() => {
@@ -1360,7 +1219,7 @@ const innerRadiusMaxMM = useMemo(
   ].filter(Boolean) as { key: string; label: string }[];
 
   const renderLetterBoxes = (
-    placements: Place[],
+    placements: CalligramPlace[],
     baseGuideLine: Pt[],
     waistGuideLine: Pt[],
     bandArcLen: number,
@@ -1382,7 +1241,7 @@ const innerRadiusMaxMM = useMemo(
     const dx = bandHeightMM / Math.tan((SLANT_DEG * Math.PI) / 180);
     const pointAtByU = (pts: Pt[], u: number) => {
       const L = lengthPoly(pts);
-      return pointAt(pts, wrapLength(u * L, L));
+      return pointAtWrapped(pts, u * L, L);
     };
 
     const basePts: { x: number; y: number }[] = [];

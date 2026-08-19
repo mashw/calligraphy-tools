@@ -7,9 +7,10 @@ import {
   clamp,
 } from '@/lib/line-widths';
 import { type ScriptId } from '@/lib/scripts';
-import { buildGuideSet, BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/guide-template';
-import GuideOverlay from '@/components/preview/GuideOverlay';
+import { buildGuideSet } from '@/lib/guides/guide-template';
+import GuidelinesRenderer from '@/components/guidelines/GuidelinesRenderer';
 import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
+import { createDefaultGuidelinesSettings, type GuidelinesSettings } from '@/lib/guides/straight/settings';
 
 type PaperId = keyof typeof PAPERS_MM;
 type Orientation = 'portrait' | 'landscape';
@@ -19,6 +20,7 @@ type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 type Pt = { x: number; y: number };
 type Box = { w: number; h: number };
 type GuideSet = ReturnType<typeof buildGuideSet>;
+const SHARED_GUIDELINE_DEFAULTS = createDefaultGuidelinesSettings();
 
 
 function buildPageSlantLines(opts: {
@@ -424,6 +426,7 @@ function makeSimplePdfFromJpeg(
 }
 
 export default function GuidelinesPage() {
+  const sharedDefaults = SHARED_GUIDELINE_DEFAULTS;
   // ---------- State ----------
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
@@ -431,17 +434,17 @@ export default function GuidelinesPage() {
   const [customOrigin, setCustomOrigin] = useState<'autofit' | 'fullpage'>('autofit');
 
 
-  const [showBaselineIndicator, setShowBaselineIndicator] = useState(false);
-  const [baselineColor, setBaselineColor] = useState('#111827');
-  const [waistlineColor, setWaistlineColor] = useState('#111827');
-  const [xLineContrast, setXLineContrast] = useState(1);
-  const [xLineThickness, setXLineThickness] = useState(1); // multiplier
-  const [midlineDashGap, setMidlineDashGap] = useState(6); // mm gap between dashes
-  const [midlineDashContrast, setMidlineDashContrast] = useState(0.5); // alpha multiplier
-  const [slantSpacingMM, setSlantSpacingMM] = useState(10);
-  const [slantLineContrast, setSlantLineContrast] = useState(0.3);
-  const [slantAngleText, setSlantAngleText] = useState('55');
-  const [enableSlant2, setEnableSlant2] = useState(false);
+  const [showBaselineIndicator, setShowBaselineIndicator] = useState(sharedDefaults.appearance.baselineIndicator);
+  const [baselineColor, setBaselineColor] = useState(sharedDefaults.appearance.baselineColor);
+  const [waistlineColor, setWaistlineColor] = useState(sharedDefaults.appearance.waistlineColor);
+  const [xLineContrast, setXLineContrast] = useState(sharedDefaults.appearance.xLineContrast);
+  const [xLineThickness, setXLineThickness] = useState(sharedDefaults.appearance.xLineThickness); // multiplier
+  const [midlineDashGap, setMidlineDashGap] = useState(sharedDefaults.appearance.midpointDashGap); // mm gap between dashes
+  const [midlineDashContrast, setMidlineDashContrast] = useState(sharedDefaults.appearance.midpointDashContrast); // alpha multiplier
+  const [slantSpacingMM, setSlantSpacingMM] = useState(sharedDefaults.slant.spacingMM);
+  const [slantLineContrast, setSlantLineContrast] = useState(sharedDefaults.slant.contrast);
+  const [slantAngleText, setSlantAngleText] = useState(String(sharedDefaults.slant.angle));
+  const [enableSlant2, setEnableSlant2] = useState(sharedDefaults.slant.secondEnabled);
   const [slantAngle2, setSlantAngle2] = useState(() => {
     const v = parseInt(slantAngleText, 10);
     return Number.isFinite(v) ? v : 55;
@@ -534,23 +537,23 @@ const slantAngleDeg = useMemo(() => {
     return next2 / 2;
   };
 
-  const [script, setScript] = useState<ScriptId>('Copperplate');
+  const [script, setScript] = useState<ScriptId>(sharedDefaults.script);
   const showGridControls = script === 'Fraktur' || script === 'TexturaQuadrata';
   const gridContrastBeforeHigh = useRef<number | null>(null);
 
 
-  const [xHeightMMText, setXHeightMMText] = useState('6');
+  const [xHeightMMText, setXHeightMMText] = useState(String(sharedDefaults.xHeightMM));
 
   const xHeightMM = useMemo(() => {
     const v = parseFloat(xHeightMMText);
     return Number.isFinite(v) ? v : 6;
   }, [xHeightMMText]);
   const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
-  const [nibText, setNibText] = useState('2');
-  const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>('3:2:3');
-  const [copperplateDescUnitsText, setCopperplateDescUnitsText] = useState('2');
-  const [copperplateXUnitsText, setCopperplateXUnitsText] = useState('1');
-  const [copperplateAscUnitsText, setCopperplateAscUnitsText] = useState('2');
+  const [nibText, setNibText] = useState(String(sharedDefaults.nibMM));
+  const [copperplateRatioPreset, setCopperplateRatioPreset] = useState<CopperplateRatioPreset>(sharedDefaults.copperplateRatioPreset);
+  const [copperplateDescUnitsText, setCopperplateDescUnitsText] = useState(String(sharedDefaults.copperplateUnits.desc));
+  const [copperplateXUnitsText, setCopperplateXUnitsText] = useState(String(sharedDefaults.copperplateUnits.x));
+  const [copperplateAscUnitsText, setCopperplateAscUnitsText] = useState(String(sharedDefaults.copperplateUnits.asc));
   const [copperplateDescUnits, setCopperplateDescUnits] = useState(2);
   const [copperplateXUnits, setCopperplateXUnits] = useState(1);
   const [copperplateAscUnits, setCopperplateAscUnits] = useState(2);
@@ -559,11 +562,11 @@ const slantAngleDeg = useMemo(() => {
     const v = parseFloat(nibText);
     return Number.isFinite(v) ? v : 2;
   }, [nibText]);
-  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
-  const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
+  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(sharedDefaults.penAngleDeg);
+  const [xNib, setXNib] = useState(sharedDefaults.xNib);
 
-  const [ascNib, setAscNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.ascNib);
-  const [descNib, setDescNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.descNib);
+  const [ascNib, setAscNib] = useState(sharedDefaults.ascNib);
+  const [descNib, setDescNib] = useState(sharedDefaults.descNib);
 
   useEffect(() => {
     if (script === 'Fraktur' || script === 'TexturaQuadrata') {
@@ -573,7 +576,7 @@ const slantAngleDeg = useMemo(() => {
   }, [script]);
 
 
-  const [rowGapMM, setRowGapMM] = useState(6);
+  const [rowGapMM, setRowGapMM] = useState(sharedDefaults.rowGapMM);
 
   const [isNarrow, setIsNarrow] = useState(() => (typeof window !== 'undefined'
     ? window.matchMedia('(max-width: 640px)').matches
@@ -707,10 +710,10 @@ const slantAngleDeg = useMemo(() => {
 
   const guideTemplate = script === 'Copperplate' ? 'copperplate' : 'blackletter';
 
-  const [marginTopMM, setMarginTopMM] = useState(15);
-  const [marginBottomMM, setMarginBottomMM] = useState(15);
-  const [marginLeftMM, setMarginLeftMM] = useState(10);
-  const [marginRightMM, setMarginRightMM] = useState(10);
+  const [marginTopMM, setMarginTopMM] = useState(sharedDefaults.margins.top);
+  const [marginBottomMM, setMarginBottomMM] = useState(sharedDefaults.margins.bottom);
+  const [marginLeftMM, setMarginLeftMM] = useState(sharedDefaults.margins.left);
+  const [marginRightMM, setMarginRightMM] = useState(sharedDefaults.margins.right);
 
   const margins = useMemo(
     () => ({
@@ -1063,6 +1066,14 @@ const slantAngleDeg = useMemo(() => {
 
 
 
+  const rendererSettings: GuidelinesSettings = {
+    script, rowGapMM, margins, xHeightMM, nibMM, copperplateRatioPreset,
+    copperplateUnits: { desc: copperplateDescUnits, x: copperplateXUnits, asc: copperplateAscUnits },
+    penAngleDeg, xNib, ascNib, descNib,
+    slant: { angle: slantAngleDeg, secondEnabled: enableSlant2, secondAngle: slantAngle2, spacingMM: slantSpacingMM, contrast: slantLineContrast },
+    grid: { widthMode: gridWidthMode, contrast: gridContrast, thickness: gridThickness, horizontal: showGridHorizontal, vertical: showGridVertical, nibAngleGuide: showNibAngleGuide },
+    appearance: { baselineIndicator: showBaselineIndicator, baselineColor, waistlineColor, xLineContrast, xLineThickness, midpointDashGap: midlineDashGap, midpointDashContrast: midlineDashContrast, highContrast: highContrastMode, centerLine: showCenterLine },
+  };
   const centerX = margins.left + (box.w - margins.left - margins.right) / 2;
 
   return (
@@ -1177,139 +1188,7 @@ const slantAngleDeg = useMemo(() => {
               {/* Paper */}
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
 
-              <g clipPath="url(#guidesClipBottomOnly)">
-                {/* Guides */}
-                {script === 'Copperplate' && (
-                  <>
-                    <CopperplateSlantLines
-                      guideSets={guideSets}
-                      box={box}
-                      slantSpacingMM={slantSpacingMM}
-                      slantAngleDeg={slantAngleDeg}
-                      slantLineContrast={slantLineContrast}
-                      highContrastMode={highContrastMode}
-                      swThin={swThin}
-                    />
-                    {enableSlant2 && (
-                      <CopperplateSlantLines
-                        guideSets={guideSets}
-                        box={box}
-                        slantSpacingMM={slantSpacingMM}
-                        slantAngleDeg={slantAngle2}
-                        slantLineContrast={slantLineContrast}
-                        highContrastMode={highContrastMode}
-                        swThin={swThin}
-                      />
-                    )}
-                  </>
-                )}
-
-
-
-                {showCenterLine && (
-                  <line
-                    x1={centerX}
-                    x2={centerX}
-                    y1={margins.top}
-                    y2={box.h - margins.bottom}
-                    stroke="#000"
-                    strokeWidth={highContrastMode ? swBold : swThin}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                )}
-
-                {guideSets.map((guideSet, index) => {
-                  const x1 = guideSet.baseLine[0].x;
-                  const x2 = guideSet.baseLine[guideSet.baseLine.length - 1].x;
-
-                  const yMidAsc = midY(guideSet.ascLine, guideSet.waistLine);   // halfway between waist & asc
-                  const yMidDesc = midY(guideSet.descLine, guideSet.baseLine);  // halfway between desc & baseline
-
-                  const yTop = guideSet.ascLine[0].y;
-                  const yBottom = guideSet.descLine[0].y;
-
-                  const interpunctX = x1 + 3; // 3mm inset from left edge
-                  const waistY = guideSet.waistLine[0].y;
-                  const baseY = guideSet.baseLine[0].y;
-                  const interpunctY = (waistY + baseY) / 2;
-                  return (
-                    <g key={`guide-${index}`}>
-                      {showBaselineIndicator && (
-                        <circle
-                          cx={interpunctX}
-                          cy={interpunctY}
-                          r={0.9}
-                          fill={baseColor}
-                        />
-                      )}                    {script === 'Copperplate' && (
-                        <>
-                          {/* Extra reference lines */}
-                          <line
-                            x1={x1}
-                            x2={x2}
-                            y1={yMidAsc}
-                            y2={yMidAsc}
-                            stroke={hexToRgba('#111827', highContrastMode ? 1 : midlineDashContrast)}
-
-                            strokeWidth={1}
-                            vectorEffect="non-scaling-stroke"
-                            strokeDasharray={`6 ${midlineDashGap}`}
-
-                            strokeLinecap="butt"
-                            shapeRendering="crispEdges"
-                          />
-
-                          <line
-                            x1={x1}
-                            x2={x2}
-                            y1={yMidDesc}
-                            y2={yMidDesc}
-                            stroke={hexToRgba('#111827', highContrastMode ? 1 : midlineDashContrast)}
-
-                            strokeWidth={1}
-                            vectorEffect="non-scaling-stroke"
-                            strokeDasharray={`6 ${midlineDashGap}`}
-
-                            strokeLinecap="butt"
-                            shapeRendering="crispEdges"
-                          />
-
-                        </>
-                      )}
-
-                      <GuideOverlay
-                        guideSet={guideSet}
-                        style={{
-                          thin: swBold * xLineThicknessScale,
-                          bold: swBold * xLineThicknessScale,
-                          colors: {
-                            asc: ascColor,
-                            waist: waistColor,
-                            base: baseColor,
-                            desc: descColor,
-                            tick: script === 'Copperplate' ? 'transparent' : '#e2e8f0',
-                            frame: 'transparent',
-                          },
-                          grid: showGridControls
-                            ? {
-                              thin: swBold * gridThicknessScale,
-                              colors: {
-                                tick: gridColor,
-                              },
-                              showHorizontal: showGridHorizontal,
-                              showVertical: showGridVertical,
-                              showNibAngleGuide,
-                              nibAngleDeg: penAngleDeg,
-                            }
-                            : undefined,
-                        }}
-                      />
-
-                    </g>
-                  );
-                })}
-
-              </g>
+              <GuidelinesRenderer box={{ width: box.w, height: box.h }} settings={rendererSettings} idPrefix="standalone-guidelines" />
             </svg>
 
             <div className="pointer-events-none absolute right-3 bottom-2 text-[13px] text-slate-700 text-right space-y-0.5">
