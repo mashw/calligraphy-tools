@@ -26,6 +26,9 @@ import { measureRun } from '@/lib/measure/measure-run';
 import { buildCopperplateContext } from '@/lib/copperplate/context';
 import { buildGuideSet, BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/guide-template';
 import GuideOverlay from '@/components/preview/GuideOverlay';
+import { computeCurvedTitleLayout, type CurvedTitlePlace } from '@/lib/curved-title/model';
+import { createDefaultCurvedTitleSettings } from '@/lib/curved-title/settings';
+
 import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 
 type PaperId = keyof typeof PAPERS_MM;
@@ -405,6 +408,7 @@ function makeSimplePdfFromJpeg(
 }
 
 export default function CurvedTitlePage() {
+  const curvedTitleDefaults = createDefaultCurvedTitleSettings();
   // ---------- State ----------
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
@@ -422,17 +426,17 @@ export default function CurvedTitlePage() {
   };
   const snap05 = (v: number) => Math.round(v / 0.5) * 0.5;
 
-  const [script, setScript] = useState<ScriptId>('TexturaQuadrata');
-  const [curve, setCurve] = useState<CurvePresetId>('simpleArch');
-  const [flipCurve, setFlipCurve] = useState(false);
-  const [align, setAlign] = useState<AlignMode>('center');
-  const [text, setText] = useState('Merry Christmas');
+  const [script, setScript] = useState<ScriptId>(curvedTitleDefaults.script);
+  const [curve, setCurve] = useState<CurvePresetId>(curvedTitleDefaults.curve);
+  const [flipCurve, setFlipCurve] = useState(curvedTitleDefaults.flipCurve);
+  const [align, setAlign] = useState<AlignMode>(curvedTitleDefaults.align);
+  const [text, setText] = useState(curvedTitleDefaults.text);
   const [topText, setTopText] = useState('');
   const [bottomText, setBottomText] = useState('');
 
-  const [xHeightMM, setXHeightMM] = useState(6);
-  const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>('flourished');
-  const [nibText, setNibText] = useState('2');
+  const [xHeightMM, setXHeightMM] = useState(curvedTitleDefaults.xHeightMM);
+  const [capStyle, setCapStyle] = useState<'simple' | 'flourished'>(curvedTitleDefaults.capStyle);
+  const [nibText, setNibText] = useState(curvedTitleDefaults.nibText);
   const [topBandEnabled, setTopBandEnabled] = useState(false);
   const [bottomBandEnabled, setBottomBandEnabled] = useState(false);
   const [topBandScript, setTopBandScript] = useState<ScriptId>('TexturaQuadrata');
@@ -853,108 +857,8 @@ export default function CurvedTitlePage() {
 
 
 
-  // ---------- Layout along the curve ----------
-  type Place = { ch: string; w: number; h: number; sMid: number };
-
-  const computeLayout = (
-    runData: ReturnType<typeof measureRun>,
-    bandBaseline: Pt[],
-    bandArcLen: number,
-    bandXMM: number,
-    bandNibMM: number,
-    bandCapMM: number,
-    scriptId: ScriptId,
-  ) => {
-    const glyphs = runData.glyphs;
-
-    // Pass 1: place using measured advances
-    const placeWithAdvances = (advances: number[]) => {
-      const totalAdvance = advances.reduce((a, v) => a + v, 0);
-      let s0 = 0;
-      if (align === 'center') s0 = Math.max(0, (bandArcLen - totalAdvance) / 2);
-      if (align === 'end') s0 = Math.max(0, bandArcLen - totalAdvance);
-
-      const placements: Place[] = [];
-      let cursor = s0;
-      for (let i = 0; i < glyphs.length; i++) {
-        const g = glyphs[i];
-        const adv = advances[i] ?? g.advMM;
-        if (g.kind === 'space') {
-          cursor += adv;
-          continue;
-        }
-
-        const w = g.wMM;
-        const isCap = g.ch >= 'A' && g.ch <= 'Z';
-        const h = isCap ? bandCapMM : bandXMM;
-
-        const mid = cursor + w / 2;
-        placements.push({ ch: g.ch, w, h, sMid: mid });
-        cursor += adv;
-      }
-
-      return { placements, totalAdvance };
-    };
-
-    const adv1 = glyphs.map((g) => g.advMM);
-    const pass1 = placeWithAdvances(adv1);
-
-    if (pass1.placements.length === 0) {
-      const overBy0 = Math.max(0, pass1.totalAdvance - bandArcLen);
-      return { placements: pass1.placements, needed: pass1.totalAdvance, overBy: overBy0 };
-    }
-
-    if (scriptId === 'Copperplate') {
-      const overBy = Math.max(0, pass1.totalAdvance - bandArcLen);
-      return { placements: pass1.placements, needed: pass1.totalAdvance, overBy };
-    }
-
-    // Pass 2: add a small extra spacing bump on turns (blackletter readability)
-    const adv2 = adv1.slice();
-    for (let i = 0; i < pass1.placements.length; i++) {
-      const pl = pass1.placements[i];
-      const sMid = Math.min(bandArcLen, Math.max(0, pl.sMid));
-      const sL = Math.max(0, Math.min(bandArcLen, sMid - pl.w / 2));
-      const sR = Math.max(0, Math.min(bandArcLen, sMid + pl.w / 2));
-
-      const nL = pointAt(bandBaseline, sL).n;
-      const nR = pointAt(bandBaseline, sR).n;
-
-      const dot = nL.x * nR.x + nL.y * nR.y;
-      const clampedDot = Math.max(-1, Math.min(1, dot));
-      const turnRad = Math.acos(clampedDot);
-      const turnDeg = (turnRad * 180) / Math.PI;
-
-      const THRESH = 6;
-      const MAX = 28;
-      const t = Math.max(0, Math.min(1, (turnDeg - THRESH) / (MAX - THRESH)));
-
-      const baseBump = bandNibMM * 0.25;
-      const heightFactor = 0.6 + 0.4 * Math.min(1, pl.h / bandXMM);
-      const extra = t * baseBump * heightFactor;
-
-      // Find the glyph index corresponding to this placement (skip spaces)
-      // Conservative: add the bump to the first non-space glyph after this one.
-      if (extra > 0) {
-        // Locate by counting non-space glyphs.
-        let k = 0
-        for (let gi = 0; gi < glyphs.length; gi++) {
-          if (glyphs[gi].kind === 'space') continue
-          if (k === i) {
-            if (gi < adv2.length - 1) adv2[gi] += extra
-            break
-          }
-          k += 1
-        }
-      }
-    }
-
-    const pass2 = placeWithAdvances(adv2);
-    const overBy = Math.max(0, pass2.totalAdvance - bandArcLen);
-    return { placements: pass2.placements, needed: pass2.totalAdvance, overBy };
-  };
-
-  const layout = useMemo(() => computeLayout(run, baseline, arcLen, xMM, effectiveNibMM, capMM, script), [run, baseline, arcLen, xMM, effectiveNibMM, capMM, script, align]);
+  // ---------- Layout along the curve (shared with Layout) ----------
+  const layout = useMemo(() => computeCurvedTitleLayout(run, baseline, arcLen, xMM, effectiveNibMM, capMM, script, align), [run, baseline, arcLen, xMM, effectiveNibMM, capMM, script, align]);
 
   const span = useMemo(() => {
     if (!layout.placements.length) return null;
@@ -1000,7 +904,7 @@ export default function CurvedTitlePage() {
     [topBandScript, topXMM, effectiveTopNibMM],
   );
   const topLayout = useMemo(
-    () => computeLayout(topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM, topCapMM, topBandScript),
+    () => computeCurvedTitleLayout(topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM, topCapMM, topBandScript, align),
     [topRun, topBaseline, topArcLen, topXMM, effectiveTopNibMM, topCapMM, topBandScript, align],
   );
   const topSpan = useMemo(() => {
@@ -1045,7 +949,7 @@ export default function CurvedTitlePage() {
     [bottomBandScript, bottomXMM, effectiveBottomNibMM],
   );
   const bottomLayout = useMemo(
-    () => computeLayout(bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM, bottomCapMM, bottomBandScript),
+    () => computeCurvedTitleLayout(bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM, bottomCapMM, bottomBandScript, align),
     [bottomRun, bottomBaseline, bottomArcLen, bottomXMM, effectiveBottomNibMM, bottomCapMM, bottomBandScript, align],
   );
   const bottomSpan = useMemo(() => {
@@ -1150,7 +1054,7 @@ export default function CurvedTitlePage() {
   const overWarn = layout.overBy > 0;
 
   const renderLetterBoxes = (
-    placements: Place[],
+    placements: CurvedTitlePlace[],
     baseGuideLine: Pt[],
     bandArcLen: number,
     bandHeightMM: number,
