@@ -25,6 +25,7 @@ const SECTION_WIDTHS: Record<string, SectionWidth> = {
   'Text fit': { medium: 250, wide: 300 },
   'Curve & Guides': { medium: 255, wide: 310 }, Page: { medium: 235, wide: 280 },
   'Page margins': { medium: 235, wide: 280 }, 'Centre lines': { medium: 220, wide: 260 },
+  Artwork: { medium: 250, wide: 300 }, Appearance: { medium: 235, wide: 280 }, Occlusion: { medium: 250, wide: 300 },
 };
 const METRICS = { medium: { rail: 40, gap: 10 }, wide: { rail: 44, gap: 16 } } as const;
 

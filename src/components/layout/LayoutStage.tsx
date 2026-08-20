@@ -13,6 +13,7 @@ import CalligramRenderer from '@/components/calligram/CalligramRenderer';
 import { buildCalligramModel } from '@/lib/calligram/model';
 import { getNearestCompleteGuidelinesHeight } from '@/lib/guides/straight/model';
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
+import ArtworkRenderer from './ArtworkRenderer';
 
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type Interaction =
@@ -235,7 +236,7 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
           const frame = livePaint?.id === element.id ? livePaint.frame : element.frame;
           const occupied = occupiedRect(element.type==='calligram'&&!(element.settings.transparentWhitespace??true)?visualFrame(element,frame):frame, element.paddingMM);
           return <g key={element.id} onPointerDown={e => begin(e, element)} style={{ cursor: element.locked ? 'pointer' : 'move' }}>
-            {element.type !== 'shape' && !((element.type==='curved-title'||element.type==='calligram')&&(element.settings.transparentWhitespace??true)) && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
+            {element.type !== 'shape' && element.type !== 'artwork' && !((element.type==='curved-title'||element.type==='calligram')&&(element.settings.transparentWhitespace??true)) && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
             <ElementVisual element={element} frame={frame} simplify={previewSimplify} selected={element.id === selectedId} textFitEntry={textFitPlans[element.id]??null} />
           </g>;
         })}
@@ -258,6 +259,7 @@ function ElementVisual({ element, frame, simplify, selected, textFitEntry }: { e
   const common = { x: frame.x, y: frame.y, width: frame.width, height: frame.height };
   if (element.type === 'shape') return <ShapeElementRenderer element={element} frame={frame} selected={selected} />;
   if (simplify) return <rect {...common} rx="1" fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5" />;
+  if(element.type==='artwork')return <ArtworkRenderer element={element} frame={frame}/>;
   if (element.type === 'guidelines') {
     const placements = textFitEntry?.plan.placements ?? [];
     const placementGeometry = placements.map(placement => {

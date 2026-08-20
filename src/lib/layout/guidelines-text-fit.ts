@@ -7,9 +7,10 @@ import { buildCurvedTitleModel } from '@/lib/curved-title/model';
 import { occupiedRect } from './geometry';
 import { shapePolygonPoints } from './shape';
 import { pageSize, type GuidelinesElement, type LayoutElement, type PageElement } from './types';
+import { pathHasOnlyClosedSubpaths, type ArtworkNode } from './artwork';
 
 type Point = { x: number; y: number };
-type Occluder = { bounds: { x: number; y: number; width: number; height: number }; contains: (point: Point) => boolean };
+type Occluder = { bounds: { x: number; y: number; width: number; height: number }; contains: (point: Point) => boolean; dispose?:()=>void };
 export type VisibleGuideSpan = { rowIndex: number; x1: number; x2: number; ascY: number; waistY: number; baseY: number; descY: number };
 export type EstimatedSpanPlacement = VisibleGuideSpan & { consumedMM: number; slantShiftMM: number };
 export type GuidelinesTextFitPlan = { visibleSpans: VisibleGuideSpan[]; placements: EstimatedSpanPlacement[]; requiredMM: number; availableMM: number; remainingMM: number; fits: boolean };
@@ -46,10 +47,23 @@ function shapeOccluder(element: Extract<LayoutElement,{type:'shape'}>): Occluder
   return polygonOccluder(points,pad);
 }
 
+function artworkOccluder(element:Extract<LayoutElement,{type:'artwork'}>):Occluder|null{
+  if(!element.settings.occludeLowerLayers||element.settings.opacity<=0||typeof document==='undefined')return null;
+  const ns='http://www.w3.org/2000/svg',root=document.createElementNS(ns,'svg');
+  root.setAttribute('viewBox',`${element.document.viewBox.x} ${element.document.viewBox.y} ${element.document.viewBox.width} ${element.document.viewBox.height}`);root.setAttribute('preserveAspectRatio','none');root.style.cssText=`position:fixed;left:-10000px;top:-10000px;width:${element.frame.width}px;height:${element.frame.height}px;opacity:0;pointer-events:none`;
+  const geometries:SVGGeometryElement[]=[];
+  const append=(node:ArtworkNode,parent:Element)=>{const child=document.createElementNS(ns,node.tag);Object.entries(node.attrs).forEach(([name,value])=>child.setAttribute(name,value));parent.appendChild(child);if(node.tag!=='g')geometries.push(child as SVGGeometryElement);node.children.forEach(item=>append(item,child));};
+  element.document.nodes.forEach(node=>append(node,root));document.body.appendChild(root);
+  const closed=(geometry:SVGGeometryElement)=>['rect','circle','ellipse','polygon'].includes(geometry.localName)||geometry.localName==='path'&&pathHasOnlyClosedSubpaths(geometry.getAttribute('d')??'');
+  const visible=(geometry:SVGGeometryElement)=>{let node:Element|null=geometry;while(node&&node!==root){if(Number.parseFloat(getComputedStyle(node).opacity||'1')<=0)return false;node=node.parentElement;}return true;};
+  return{bounds:element.frame,dispose:()=>root.remove(),contains:point=>{const rootMatrix=root.getScreenCTM();if(!rootMatrix)return false;const viewBox=element.document.viewBox,sourceX=viewBox.x+(point.x-element.frame.x)/element.frame.width*viewBox.width,sourceY=viewBox.y+(point.y-element.frame.y)/element.frame.height*viewBox.height,screen=new DOMPoint(sourceX,sourceY).matrixTransform(rootMatrix);return geometries.some(geometry=>{if(!visible(geometry))return false;const matrix=geometry.getScreenCTM();if(!matrix)return false;const local=screen.matrixTransform(matrix.inverse()),style=getComputedStyle(geometry),fill=style.fill!=='none',stroke=style.stroke!=='none'&&Number.parseFloat(style.strokeWidth)>0;return (fill||element.settings.occludeClosedShapes&&closed(geometry))&&geometry.isPointInFill(local)||stroke&&geometry.isPointInStroke(local);});}};
+}
+
 function elementOccluders(element: LayoutElement): Occluder[] {
   if(element.type==='page') return [];
   if(element.type==='shape') return [shapeOccluder(element)];
   if(element.type==='guidelines') return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
+  if(element.type==='artwork'){const occluder=artworkOccluder(element);return occluder?[occluder]:[];}
   if(element.type==='curved-title') {
     if(!(element.settings.transparentWhitespace??true)) return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
     const model=buildCurvedTitleModel({w:element.frame.width,h:element.frame.height},element.settings),points=model.footprintPoints.map(p=>({x:p.x+element.frame.x,y:p.y+element.frame.y}));
@@ -70,6 +84,7 @@ export function buildGuidelinesVisibleSpans(element: GuidelinesElement, page: Pa
     for(let x=x1;x<x2-.0001;x+=step){const end=Math.min(x2,x+step),mid=(x+end)/2;let blocked=false;for(let y=pageAsc;y<=pageDesc+.001&&!blocked;y+=.5){const point={x:mid,y:Math.min(pageDesc,y)};blocked=occluders.some(o=>inBounds(point,o.bounds)&&o.contains(point));}if(!blocked){const point={x:mid,y:pageDesc};blocked=occluders.some(o=>inBounds(point,o.bounds)&&o.contains(point));}if(!blocked){if(start===null)start=x;}else if(start!==null){spans.push({rowIndex,x1:start,x2:x,ascY:pageAsc,waistY:element.frame.y+waist,baseY:element.frame.y+base,descY:pageDesc});start=null;}}
     if(start!==null)spans.push({rowIndex,x1:start,x2,ascY:pageAsc,waistY:element.frame.y+waist,baseY:element.frame.y+base,descY:pageDesc});
   });
+  occluders.forEach(occluder=>occluder.dispose?.());
   return spans;
 }
 
