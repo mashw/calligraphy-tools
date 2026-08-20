@@ -3,7 +3,7 @@
 import React, { useRef, useState } from 'react';
 import { bakeExportStrokes, cloneSvgForRasterExport, computeRasterPxPerMM, jpegDataUrlToPdf, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 import { occupiedRect, pageContentRect, resizeFrame, snapMove, type SnapState } from '@/lib/layout/geometry';
-import { isProportional, pageSize, type Frame, type LayoutElement, type ResizeHandle } from '@/lib/layout/types';
+import { pageSize, resizeAspectMode, type Frame, type LayoutElement, type ResizeAspectMode, type ResizeHandle } from '@/lib/layout/types';
 import GuidelinesRenderer from '@/components/guidelines/GuidelinesRenderer';
 import ShapeElementRenderer from '@/components/layout/ShapeElementRenderer';
 import { PAGE_BACKGROUND } from '@/lib/layout/shape';
@@ -19,7 +19,7 @@ type Interaction =
   | { mode: 'none' }
   | { mode: 'pan'; pointerId: number; startClient: { x: number; y: number }; startPan: { x: number; y: number }; rect: DOMRect; vb: { w: number; h: number } }
   | { mode: 'move'; pointerId: number; elementId: string; startClient: { x: number; y: number }; original: Frame; visualOriginal: Frame; rect: DOMRect; vb: { w: number; h: number }; live: Frame; liveVisual: Frame; snap: SnapState }
-  | { mode: 'resize'; pointerId: number; elementId: string; handle: ResizeHandle; startClient: { x: number; y: number }; original: Frame; visualOriginal: Frame; rect: DOMRect; vb: { w: number; h: number }; live: Frame; liveVisual: Frame; proportional: boolean };
+  | { mode: 'resize'; pointerId: number; elementId: string; handle: ResizeHandle; startClient: { x: number; y: number }; original: Frame; visualOriginal: Frame; rect: DOMRect; vb: { w: number; h: number }; live: Frame; liveVisual: Frame; aspectMode: ResizeAspectMode; aspectRatio: number };
 
 const handles: { id: ResizeHandle; x: number; y: number; cursor: string }[] = [
   { id: 'nw', x: 0, y: 0, cursor: 'nwse-resize' }, { id: 'n', x: .5, y: 0, cursor: 'ns-resize' }, { id: 'ne', x: 1, y: 0, cursor: 'nesw-resize' },
@@ -46,14 +46,69 @@ function baseFrameFromVisualResize(base: Frame, visual: Frame, target: Frame): F
   };
 }
 
-function committedResizeFrame(interaction: Extract<Interaction, { mode: 'resize' }>): Frame {
-  if (interaction.handle.length === 1) return wholeFrame(interaction.live);
-  const aspect = interaction.original.width / interaction.original.height;
-  const width = Math.max(4, Math.round(interaction.live.width));
-  const height = Math.max(4, Math.round(width / aspect));
+function committedResizeFrame(
+  interaction: Extract<Interaction, { mode: 'resize' }>,
+): Frame {
+  const corner = interaction.handle.length === 2;
+
+  const preserveAspect =
+    interaction.aspectMode === 'all'
+    || (interaction.aspectMode === 'corners' && corner);
+
+  if (!preserveAspect) {
+    return wholeFrame(interaction.live);
+  }
+
+  const aspect = Math.max(0.001, interaction.aspectRatio);
   const right = interaction.original.x + interaction.original.width;
   const bottom = interaction.original.y + interaction.original.height;
-  return { x: Math.round(interaction.handle.includes('w') ? right-width : interaction.original.x), y: Math.round(interaction.handle.includes('n') ? bottom-height : interaction.original.y), width, height };
+
+  const usesW = interaction.handle.includes('w');
+  const usesE = interaction.handle.includes('e');
+  const usesN = interaction.handle.includes('n');
+  const usesS = interaction.handle.includes('s');
+
+  let width: number;
+  let height: number;
+  let x: number;
+  let y: number;
+
+  if (!corner && (usesW || usesE)) {
+    width = Math.max(4, Math.round(interaction.live.width));
+    height = Math.max(4, Math.round(width / aspect));
+
+    x = Math.round(usesW ? right - width : interaction.original.x);
+    y = Math.round(
+      interaction.original.y
+      + (interaction.original.height - height) / 2,
+    );
+
+    return { x, y, width, height };
+  }
+
+  if (!corner && (usesN || usesS)) {
+    height = Math.max(4, Math.round(interaction.live.height));
+    width = Math.max(4, Math.round(height * aspect));
+
+    x = Math.round(
+      interaction.original.x
+      + (interaction.original.width - width) / 2,
+    );
+
+    y = Math.round(
+      usesN ? bottom - height : interaction.original.y,
+    );
+
+    return { x, y, width, height };
+  }
+
+  width = Math.max(4, Math.round(interaction.live.width));
+  height = Math.max(4, Math.round(width / aspect));
+
+  x = Math.round(usesW ? right - width : interaction.original.x);
+  y = Math.round(usesN ? bottom - height : interaction.original.y);
+
+  return { x, y, width, height };
 }
 
 function constrainGuidelinesResize(frame: Frame, original: Frame, handle: ResizeHandle, settings: Extract<LayoutElement, { type: 'guidelines' }>['settings'], threshold = Infinity): Frame {
@@ -103,7 +158,7 @@ export default function LayoutStage({ elements, selectedId, textFitPlans, onSele
     const rect = svgRef.current.getBoundingClientRect();
     const visualOriginal = visualFrame(element, element.frame);
     interactionRef.current = handle
-      ? { mode: 'resize', pointerId: e.pointerId, elementId: element.id, handle, startClient: { x: e.clientX, y: e.clientY }, original: element.frame, visualOriginal, live: element.frame, liveVisual: visualOriginal, rect, vb: { w: vb.w, h: vb.h }, proportional: isProportional(element) }
+      ? { mode: 'resize', pointerId: e.pointerId, elementId: element.id, handle, startClient: { x: e.clientX, y: e.clientY }, original: element.frame, visualOriginal, live: element.frame, liveVisual: visualOriginal, rect, vb: { w: vb.w, h: vb.h }, aspectMode: resizeAspectMode(element), aspectRatio: visualOriginal.width / Math.max(0.001, visualOriginal.height) }
       : { mode: 'move', pointerId: e.pointerId, elementId: element.id, startClient: { x: e.clientX, y: e.clientY }, original: element.frame, visualOriginal, live: element.frame, liveVisual: visualOriginal, rect, vb: { w: vb.w, h: vb.h }, snap: { x: null, y: null } };
     svgRef.current.setPointerCapture(e.pointerId); setInteractionActive(true);
   };
@@ -125,7 +180,14 @@ export default function LayoutStage({ elements, selectedId, textFitPlans, onSele
       const snapped = snapMove(unsnappedVisual, internal, pageRect, { x: 6 / active.rect.width * active.vb.w, y: 6 / active.rect.height * active.vb.h }, { x: 10 / active.rect.width * active.vb.w, y: 10 / active.rect.height * active.vb.h }, active.snap);
       active.liveVisual=snapped.frame; active.live={...active.original,x:active.original.x+snapped.frame.x-active.visualOriginal.x,y:active.original.y+snapped.frame.y-active.visualOriginal.y}; active.snap=snapped.snap;
     } else {
-      active.liveVisual=resizeFrame(active.visualOriginal,active.handle,dx,dy,active.proportional);
+      active.liveVisual=resizeFrame(
+        active.visualOriginal,
+        active.handle,
+        dx,
+        dy,
+        active.aspectMode,
+        active.aspectRatio,
+      );
       active.live=baseFrameFromVisualResize(active.original,active.visualOriginal,active.liveVisual);
       const element = elements.find(item => item.id === active.elementId);
       if (element?.type === 'guidelines' && !element.allowPartialGuidelines) {

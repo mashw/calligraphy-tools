@@ -1,4 +1,4 @@
-import type { Frame, Margins, ResizeHandle } from './types';
+import type { Frame, Margins, ResizeAspectMode, ResizeHandle } from './types';
 
 export function boundsOfPoints(points: ReadonlyArray<{ x: number; y: number }>): Frame {
   if (!points.length) return { x: 0, y: 0, width: 0, height: 0 };
@@ -12,49 +12,110 @@ export function boundsOfPoints(points: ReadonlyArray<{ x: number; y: number }>):
 
 const MIN_SIZE = 4;
 
-export function resizeFrame(frame: Frame, handle: ResizeHandle, dx: number, dy: number, proportional: boolean): Frame {
+export function resizeFrame(
+  frame: Frame,
+  handle: ResizeHandle,
+  dx: number,
+  dy: number,
+  aspectMode: ResizeAspectMode = 'corners',
+  capturedAspect = frame.width / frame.height,
+): Frame {
   const right = frame.x + frame.width;
   const bottom = frame.y + frame.height;
+
   const usesW = handle.includes('w');
   const usesE = handle.includes('e');
   const usesN = handle.includes('n');
   const usesS = handle.includes('s');
-  let x = usesW ? Math.min(frame.x + dx, right - MIN_SIZE) : frame.x;
-  let y = usesN ? Math.min(frame.y + dy, bottom - MIN_SIZE) : frame.y;
-  let width = usesW ? right - x : usesE ? Math.max(MIN_SIZE, frame.width + dx) : frame.width;
-  let height = usesN ? bottom - y : usesS ? Math.max(MIN_SIZE, frame.height + dy) : frame.height;
+
+  let x = usesW
+    ? Math.min(frame.x + dx, right - MIN_SIZE)
+    : frame.x;
+
+  let y = usesN
+    ? Math.min(frame.y + dy, bottom - MIN_SIZE)
+    : frame.y;
+
+  let width = usesW
+    ? right - x
+    : usesE
+      ? Math.max(MIN_SIZE, frame.width + dx)
+      : frame.width;
+
+  let height = usesN
+    ? bottom - y
+    : usesS
+      ? Math.max(MIN_SIZE, frame.height + dy)
+      : frame.height;
 
   const corner = (usesW || usesE) && (usesN || usesS);
+
+  const preserveAspect =
+    aspectMode === 'all'
+    || (aspectMode === 'corners' && corner);
+
+  if (!preserveAspect) {
+    return { x, y, width, height };
+  }
+
+  const fallbackAspect = frame.width / Math.max(MIN_SIZE, frame.height);
+  const aspect =
+    Number.isFinite(capturedAspect) && capturedAspect > 0
+      ? capturedAspect
+      : fallbackAspect;
+
+  const minWidthForAspect = Math.max(MIN_SIZE, MIN_SIZE * aspect);
+  const minHeightForAspect = Math.max(MIN_SIZE, MIN_SIZE / aspect);
+
+  const rawWidth = usesW
+    ? frame.width - dx
+    : usesE
+      ? frame.width + dx
+      : frame.width;
+
+  const rawHeight = usesN
+    ? frame.height - dy
+    : usesS
+      ? frame.height + dy
+      : frame.height;
+
   if (corner) {
-    const aspect = frame.width / frame.height;
-    const rawWidth = usesW ? frame.width - dx : frame.width + dx;
-    const rawHeight = usesN ? frame.height - dy : frame.height + dy;
-    const widthChange = Math.abs(rawWidth - frame.width) / frame.width;
-    const heightChange = Math.abs(rawHeight - frame.height) / frame.height;
+    const widthChange =
+      Math.abs(rawWidth - frame.width) / Math.max(MIN_SIZE, frame.width);
+
+    const heightChange =
+      Math.abs(rawHeight - frame.height) / Math.max(MIN_SIZE, frame.height);
+
     if (widthChange >= heightChange) {
-      width = Math.max(MIN_SIZE, MIN_SIZE * aspect, rawWidth);
+      width = Math.max(minWidthForAspect, rawWidth);
       height = width / aspect;
     } else {
-      height = Math.max(MIN_SIZE, MIN_SIZE / aspect, rawHeight);
+      height = Math.max(minHeightForAspect, rawHeight);
       width = height * aspect;
     }
+
     x = usesW ? right - width : frame.x;
     y = usesN ? bottom - height : frame.y;
-  } else if (proportional) {
-    if (usesW || usesE) {
-      const size = Math.max(MIN_SIZE, usesW ? frame.width - dx : frame.width + dx);
-      width = size;
-      height = size;
-      x = usesW ? right - size : frame.x;
-      y = frame.y + (frame.height - size) / 2;
-    } else {
-      const size = Math.max(MIN_SIZE, usesN ? frame.height - dy : frame.height + dy);
-      width = size;
-      height = size;
-      x = frame.x + (frame.width - size) / 2;
-      y = usesN ? bottom - size : frame.y;
-    }
+
+    return { x, y, width, height };
   }
+
+  if (usesW || usesE) {
+    width = Math.max(minWidthForAspect, rawWidth);
+    height = width / aspect;
+
+    x = usesW ? right - width : frame.x;
+    y = frame.y + (frame.height - height) / 2;
+
+    return { x, y, width, height };
+  }
+
+  height = Math.max(minHeightForAspect, rawHeight);
+  width = height * aspect;
+
+  x = frame.x + (frame.width - width) / 2;
+  y = usesN ? bottom - height : frame.y;
+
   return { x, y, width, height };
 }
 

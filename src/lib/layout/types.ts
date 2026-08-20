@@ -17,6 +17,7 @@ export type CurvedTitleElement = MovableElementBase & { type: 'curved-title'; se
 export type CalligramElement = MovableElementBase & { type: 'calligram'; settings: CalligramSettings };
 export type LayoutElement = PageElement | GuidelinesElement | ShapeElement | CurvedTitleElement | CalligramElement;
 export type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+export type ResizeAspectMode = 'free' | 'corners' | 'all';
 
 export function pageSize(element: PageElement) {
   if (element.settings.paper === 'Custom') return { width: element.settings.customWidthMM, height: element.settings.customHeightMM };
@@ -34,4 +35,17 @@ export function newElement(type: Exclude<ElementType,'page'>, count:number, page
   if(type==='calligram') return {...base,type,settings:createDefaultCalligramSettings()};
   throw new Error(`Unsupported element type: ${type satisfies never}`);
 }
-export function isProportional(element:LayoutElement){return element.type==='calligram'||element.type==='shape'&&isConstrainedShape(element.settings);}
+export function resizeAspectMode(element: LayoutElement): ResizeAspectMode {
+  if (
+    element.type === 'calligram'
+    || (element.type === 'shape' && isConstrainedShape(element.settings))
+  ) {
+    return 'all';
+  }
+
+  return 'corners';
+}
+
+export function isProportional(element: LayoutElement) {
+  return resizeAspectMode(element) === 'all';
+}
