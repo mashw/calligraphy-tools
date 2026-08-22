@@ -164,6 +164,8 @@ export const PUNCT_RATIOS: Record<string, number> = {
   '–': 0.80,
   '—': 1.00,
   '\'': 0.30,
+  '’': 0.30,
+  '‘': 0.30,
   '"': 0.60,
   '&': 1.10,
 };

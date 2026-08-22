@@ -17,20 +17,20 @@ export type WidthModel = {
   scale: number;
   spaceMult: number;
   capScale: number;
-/** How capitals should be treated.
- * - simple: uses structural BODY widths (reduced) for advance
- * - flourished: uses your original FULL widths (legacy behavior)
- */
-capStyle: 'simple' | 'flourished';
+  /** How capitals should be treated.
+   * - simple: uses structural BODY widths (reduced) for advance
+   * - flourished: uses your original FULL widths (legacy behavior)
+   */
+  capStyle: 'simple' | 'flourished';
 };
 
 export type BaseSeg = { startMM: number; endMM: number };
 export type LetterSeg = BaseSeg & {
-kind: 'letter';
-ch: string;
-/** Optional decorative overhangs (visual only; not included in start/end). */
-overhangLMM?: number;
-overhangRMM?: number;
+  kind: 'letter';
+  ch: string;
+  /** Optional decorative overhangs (visual only; not included in start/end). */
+  overhangLMM?: number;
+  overhangRMM?: number;
 };
 export type SpaceSeg = BaseSeg & { kind: 'space'; spaceType: 'o' | 'n' };
 export type Seg = LetterSeg | SpaceSeg;
@@ -68,6 +68,9 @@ export const clamp = (v: number, min: number, max: number) =>
 
 const isLower = (ch: string) => ch >= 'a' && ch <= 'z';
 const isUpper = (ch: string) => ch >= 'A' && ch <= 'Z';
+
+const isApostrophe = (ch: string) => ch === '\'' || ch === '’';
+const isWordGlyph = (ch: string) => /[a-zA-Z0-9]/.test(ch);
 
 /* ------------------------- Model construction --------------------------- */
 
@@ -123,13 +126,28 @@ export function segmentsForLine(text: string, model: WidthModel): Seg[] {
   const { glyphWidths, nBody, scale, capScale, capStyle } = model;
   const { oSpace, wordSpace } = getSpacing(model);
 
-  type NS = { index: number; ch: string; width: number };
+  type NS = {
+    index: number;
+    ch: string;
+    width: number;
+    inlineApostrophe: boolean;
+  };
 
   const nonSpaces: NS[] = [];
 
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (ch === ' ' || ch === '\n') continue;
+
+    const prev = i > 0 ? text[i - 1] : null;
+    const next = i < text.length - 1 ? text[i + 1] : null;
+
+    const inlineApostrophe =
+      isApostrophe(ch) &&
+      prev !== null &&
+      next !== null &&
+      isWordGlyph(prev) &&
+      isWordGlyph(next);
 
     // Lowercase/digits/punct remain as before.
     // Capitals are special:
@@ -152,7 +170,12 @@ export function segmentsForLine(text: string, model: WidthModel): Seg[] {
       width = baseWidth * capScale;
     }
 
-    nonSpaces.push({ index: i, ch, width });
+    nonSpaces.push({
+      index: i,
+      ch,
+      width: inlineApostrophe ? 0 : width,
+      inlineApostrophe,
+    });
   }
 
   if (!nonSpaces.length) return [];
@@ -173,6 +196,43 @@ export function segmentsForLine(text: string, model: WidthModel): Seg[] {
 
   for (let k = 0; k < nonSpaces.length; k++) {
     const cur = nonSpaces[k];
+
+    if (cur.inlineApostrophe) {
+      // An apostrophe inside a word occupies the existing inter-letter
+      // join visually, but contributes no additional horizontal advance.
+      //
+      // Split the normal join around the zero-width apostrophe so the
+      // apostrophe survives in MeasuredRun and previews at the centre
+      // of the existing space.
+      const halfJoin = oSpace / 2;
+
+      const leftStart = cursorMM;
+      const markX = leftStart + halfJoin;
+
+      out.push({
+        kind: 'space',
+        spaceType: 'o',
+        startMM: leftStart,
+        endMM: markX,
+      });
+
+      out.push({
+        kind: 'letter',
+        ch: cur.ch,
+        startMM: markX,
+        endMM: markX,
+      });
+
+      out.push({
+        kind: 'space',
+        spaceType: 'o',
+        startMM: markX,
+        endMM: markX + halfJoin,
+      });
+
+      cursorMM = markX + halfJoin;
+      continue;
+    }
 
     // Letter body (advance)
     const letterStart = cursorMM;
@@ -201,6 +261,10 @@ export function segmentsForLine(text: string, model: WidthModel): Seg[] {
     if (k === nonSpaces.length - 1) break;
 
     const next = nonSpaces[k + 1];
+
+    // The inline apostrophe itself will supply exactly one normal
+    // intra-word join, split around the visible mark.
+    if (next.inlineApostrophe) continue;
 
     if (next.index === cur.index + 1) {
       // Intra-word join: contiguous letters
