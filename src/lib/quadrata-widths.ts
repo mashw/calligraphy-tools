@@ -15,9 +15,9 @@ export const texturaLower: WidthTable = {
   // Fill in missing glyphs with your measured widths.
   a: 3.2,
   b: 3.4,
-  c: 3.0,
+  c: 3.5,
   d: 3.5,
-  e: 3.1,
+  e: 3.6,
   // f–p: TODO – insert your calibrated values here.
   q: 3.7,
   r: 2.4,
