@@ -5,7 +5,7 @@ import LayoutInspector from '@/components/layout/LayoutInspector';
 import LayoutStage from '@/components/layout/LayoutStage';
 import LayersPanel from '@/components/layout/LayersPanel';
 import { newElement, pageElement, pageSize, type ElementType, type Frame, type LayoutElement } from '@/lib/layout/types';
-import { buildGuidelinesTextFitPlan, buildGuidelinesVisibilityCacheKey, getCachedGuidelinesVisibleSpans, resolveTextFitColors, TEXT_FIT_COLORS, preferredTextFitColorIndex, type GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
+import { buildGuidelinesLineLayoutPlan, buildGuidelinesTextFitPlan, buildGuidelinesVisibilityCacheKey, getCachedGuidelinesVisibleSpans, resolveTextFitColors, TEXT_FIT_COLORS, preferredTextFitColorIndex, type GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 import { sanitizeArtworkSvg } from '@/lib/layout/artwork';
 import { pageContentRect } from '@/lib/layout/geometry';
 
@@ -15,9 +15,9 @@ export default function LayoutPage() {
   const [artworkMessage,setArtworkMessage]=useState<string|null>(null);
   const selected = elements.find(element => element.id === selectedId) ?? elements[elements.length - 1];
   const page = elements.find(element => element.type === 'page')!;
-  const allGuidelines=elements.filter((item):item is Extract<LayoutElement,{type:'guidelines'}>=>item.type==='guidelines'),activeGuidelines=allGuidelines.filter(item=>!!item.fitText.trim()),colors=resolveTextFitColors(allGuidelines.map(item=>item.id).sort());
-  const textFitPlans=activeGuidelines.reduce<Record<string,GuidelinesTextFitEntry>>((plans,item)=>{const index=elements.findIndex(element=>element.id===item.id),key=buildGuidelinesVisibilityCacheKey(item,page,elements.slice(0,index)),spans=getCachedGuidelinesVisibleSpans(key,item,page,elements);plans[item.id]={plan:buildGuidelinesTextFitPlan(item,spans),color:colors[item.id]};return plans;},{});
-  const selectedTextFitEntry=selected.type==='guidelines'?(textFitPlans[selected.id]??{plan:buildGuidelinesTextFitPlan(selected,[]),color:TEXT_FIT_COLORS[preferredTextFitColorIndex(selected.id)]}):null;
+  const allGuidelines=elements.filter((item):item is Extract<LayoutElement,{type:'guidelines'}>=>item.type==='guidelines'),activeGuidelines=allGuidelines.filter(item=>item.textMode==='estimate'?!!item.fitText.trim():item.plannedLines.some(line=>!!line.text.trim())),colors=resolveTextFitColors(allGuidelines.map(item=>item.id).sort());
+  const textFitPlans=activeGuidelines.reduce<Record<string,GuidelinesTextFitEntry>>((plans,item)=>{const index=elements.findIndex(element=>element.id===item.id),key=buildGuidelinesVisibilityCacheKey(item,page,elements.slice(0,index)),spans=getCachedGuidelinesVisibleSpans(key,item,page,elements);plans[item.id]=item.textMode==='estimate'?{mode:'estimate',plan:buildGuidelinesTextFitPlan(item,spans),color:colors[item.id]}:{mode:'line-layout',plan:buildGuidelinesLineLayoutPlan(item,spans,page),color:colors[item.id]};return plans;},{});
+  const selectedTextFitEntry=selected.type==='guidelines'?(textFitPlans[selected.id]??(selected.textMode==='estimate'?{mode:'estimate',plan:buildGuidelinesTextFitPlan(selected,[]),color:TEXT_FIT_COLORS[preferredTextFitColorIndex(selected.id)]}:{mode:'line-layout',plan:buildGuidelinesLineLayoutPlan(selected,[],page),color:TEXT_FIT_COLORS[preferredTextFitColorIndex(selected.id)]})):null;
   const update = (id: string, fn: (element: LayoutElement) => LayoutElement) => setElements(current => current.map(element => element.id === id ? fn(element) : element));
   const add = (type: Exclude<ElementType, 'page'|'artwork'>) => {
     const count = elements.filter(element => element.type === type).length + 1;
@@ -43,7 +43,7 @@ export default function LayoutPage() {
   return <main className="min-h-screen bg-slate-100 px-4 py-8 text-sm text-slate-900 sm:px-6">
     <header className="mx-auto mb-5 max-w-[1480px]"><h1 className="text-3xl font-semibold tracking-tight">Calligraphy Tools <span className="text-indigo-600">— Layout</span></h1><p className="mt-1 text-slate-600">Arrange calligraphy elements on a physical page.</p></header>
     <div className="mx-auto grid max-w-[1480px] grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-stretch">
-      <LayoutStage elements={elements} selectedId={selectedId} textFitPlans={textFitPlans} onSelect={setSelectedId} onCommit={commit} />
+      <LayoutStage elements={elements} selectedId={selectedId} textFitPlans={textFitPlans} onSelect={setSelectedId} onCommit={commit} onPlannedLinePlacementChange={(guidelinesId,lineId,customStartMM)=>update(guidelinesId,element=>element.type==='guidelines'?{...element,plannedLines:element.plannedLines.map(line=>line.id===lineId?{...line,alignment:'custom',customStartMM}:line)}:element)} />
       <div className="min-h-0 xl:relative"><LayersPanel className="xl:absolute xl:inset-0 xl:h-full xl:overflow-hidden" elements={elements} selectedId={selectedId} onSelect={setSelectedId} onAdd={add} onAddArtwork={addArtwork} artworkMessage={artworkMessage} onToggleLock={id => update(id, element => element.type === 'page' ? element : ({ ...element, locked: !element.locked }))} onMove={move} onDuplicate={duplicate} onDelete={remove} /></div>
       <div className="xl:col-span-2"><LayoutInspector element={selected} page={page} textFitEntry={selectedTextFitEntry} onChange={next => update(selected.id, () => next)} /></div>
     </div>

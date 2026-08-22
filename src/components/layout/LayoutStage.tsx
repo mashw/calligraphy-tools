@@ -131,7 +131,7 @@ function constrainGuidelinesResize(frame: Frame, original: Frame, handle: Resize
 function stripNoExport(svg: SVGSVGElement) { svg.querySelectorAll('[data-no-export="true"], #stage-bg').forEach(node => node.remove()); }
 function download(blob: Blob, name: string) { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url); }
 
-export default function LayoutStage({ elements, selectedId, textFitPlans, onSelect, onCommit }: { elements: LayoutElement[]; selectedId: string; textFitPlans: Record<string,GuidelinesTextFitEntry>; onSelect: (id: string) => void; onCommit: (id: string, frame: Frame) => void }) {
+export default function LayoutStage({ elements, selectedId, textFitPlans, onSelect, onCommit,onPlannedLinePlacementChange }: { elements: LayoutElement[]; selectedId: string; textFitPlans: Record<string,GuidelinesTextFitEntry>; onSelect: (id: string) => void; onCommit: (id: string, frame: Frame) => void;onPlannedLinePlacementChange:(guidelinesId:string,lineId:string,customStartMM:number)=>void }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const interactionRef = useRef<Interaction>({ mode: 'none' });
   const paintPending = useRef(false);
@@ -237,7 +237,7 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
           const occupied = occupiedRect(element.type==='calligram'&&!(element.settings.transparentWhitespace??true)?visualFrame(element,frame):frame, element.paddingMM);
           return <g key={element.id} onPointerDown={e => begin(e, element)} style={{ cursor: element.locked ? 'pointer' : 'move' }}>
             {element.type !== 'shape' && element.type !== 'artwork' && !((element.type==='curved-title'||element.type==='calligram')&&(element.settings.transparentWhitespace??true)) && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
-            <ElementVisual element={element} frame={frame} simplify={previewSimplify} selected={element.id === selectedId} textFitEntry={textFitPlans[element.id]??null} />
+            <ElementVisual element={element} frame={frame} simplify={previewSimplify} selected={element.id === selectedId} textFitEntry={textFitPlans[element.id]??null} onPlannedLinePlacementChange={onPlannedLinePlacementChange} />
           </g>;
         })}
         <g data-no-export="true" pointerEvents="none">
@@ -255,18 +255,24 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
   </section>;
 }
 
-function ElementVisual({ element, frame, simplify, selected, textFitEntry }: { element: LayoutElement; frame: Frame; simplify: boolean; selected: boolean; textFitEntry: GuidelinesTextFitEntry | null }) {
+function LineLayoutOverlay({guidelinesId,entry,frame,onCommit}:{guidelinesId:string;entry:Extract<GuidelinesTextFitEntry,{mode:'line-layout'}>;frame:Frame;onCommit:(guidelinesId:string,lineId:string,start:number)=>void}){
+  const [drag,setDrag]=useState<{lineId:string;pointerId:number;clientX:number;start:number;max:number;live:number}|null>(null);
+  return <g data-no-export="true">{entry.plan.lines.filter(line=>line.rowIndex!==null&&line.text).map(line=>{const live=drag?.lineId===line.lineId?drag.live:line.startFromLeftMM,dx=live-line.startFromLeftMM,y1=line.waistY-frame.y,y2=line.baseY-frame.y,start=line.baselineStartX-frame.x+dx,end=line.baselineEndX-frame.x+dx,shift=line.slantShiftMM;return <g key={line.lineId} onPointerMove={event=>{if(!drag||drag.pointerId!==event.pointerId)return;const svg=event.currentTarget.ownerSVGElement!,rect=svg.getBoundingClientRect(),mm=(event.clientX-drag.clientX)/rect.width*svg.viewBox.baseVal.width,next=Math.max(0,Math.min(drag.max,drag.start+mm));setDrag({...drag,live:next});}} onPointerUp={event=>{if(!drag||drag.pointerId!==event.pointerId)return;event.currentTarget.releasePointerCapture(event.pointerId);onCommit(guidelinesId,line.lineId,drag.live);setDrag(null);}}>{line.glyphs.map((glyph,index)=>{const x1=glyph.startX-frame.x+dx,x2=glyph.endX-frame.x+dx,d=`M ${x1+shift},${y1} L ${x2+shift},${y1} L ${x2},${y2} L ${x1},${y2} Z`;return <g key={index}><path d={d} fill={glyph.collision?'rgba(239,68,68,.22)':entry.color.fill} stroke={glyph.collision?'#dc2626':entry.color.stroke} strokeWidth=".3" vectorEffect="non-scaling-stroke"/><text x={(x1+x2)/2+shift/2} y={(y1+y2)/2} textAnchor="middle" dominantBaseline="central" fontSize={Math.max(1.8,(y2-y1)*.65)} fill="#334155">{glyph.kind==='space'?'':glyph.ch}</text></g>})}{[start,end].map((x,index)=><g key={index} style={{cursor:'ew-resize'}} onPointerDown={event=>{event.preventDefault();event.stopPropagation();event.currentTarget.parentElement?.setPointerCapture(event.pointerId);setDrag({lineId:line.lineId,pointerId:event.pointerId,clientX:event.clientX,start:line.startFromLeftMM,max:line.maxCustomStartMM,live:line.startFromLeftMM});}}><line x1={x+shift} x2={x} y1={y1} y2={y2} stroke={entry.color.stroke} strokeWidth="2" vectorEffect="non-scaling-stroke"/><line x1={x-4} x2={x+4} y1={y1} y2={y2} stroke="transparent" strokeWidth="14" vectorEffect="non-scaling-stroke"/></g>)}</g>;})}</g>;
+}
+
+function ElementVisual({ element, frame, simplify, selected, textFitEntry,onPlannedLinePlacementChange }: { element: LayoutElement; frame: Frame; simplify: boolean; selected: boolean; textFitEntry: GuidelinesTextFitEntry | null;onPlannedLinePlacementChange:(guidelinesId:string,lineId:string,customStartMM:number)=>void }) {
   const common = { x: frame.x, y: frame.y, width: frame.width, height: frame.height };
   if (element.type === 'shape') return <ShapeElementRenderer element={element} frame={frame} selected={selected} />;
   if (simplify) return <rect {...common} rx="1" fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5" />;
   if(element.type==='artwork')return <ArtworkRenderer element={element} frame={frame}/>;
   if (element.type === 'guidelines') {
-    const placements = textFitEntry?.plan.placements ?? [];
+    if(textFitEntry?.mode==='line-layout')return <g transform={`translate(${frame.x} ${frame.y})`}><GuidelinesRenderer box={{width:frame.width,height:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`}/><LineLayoutOverlay guidelinesId={element.id} entry={textFitEntry} frame={frame} onCommit={onPlannedLinePlacementChange}/></g>;
+    const placements = textFitEntry?.mode==='estimate'?textFitEntry.plan.placements:[];
     const placementGeometry = placements.map(placement => {
       const x=placement.x1-frame.x,y1=placement.waistY-frame.y,y2=placement.baseY-frame.y,shift=placement.slantShiftMM,x2=x+placement.consumedMM;
       return { span:`M ${x+shift},${y1} L ${x2+shift},${y1} L ${x2},${y2} L ${x},${y2} Z`, end:`M ${x2+shift},${y1} L ${x2},${y2}` };
     });
-    const overflowEnd = textFitEntry && !textFitEntry.plan.fits ? placementGeometry.at(-1)?.end : undefined;
+    const overflowEnd = textFitEntry?.mode==='estimate' && !textFitEntry.plan.fits ? placementGeometry.at(-1)?.end : undefined;
     return <g transform={`translate(${frame.x} ${frame.y})`}>
       <GuidelinesRenderer box={{ width: frame.width, height: frame.height }} settings={element.settings} idPrefix={`layout-${element.id}`} />
       {textFitEntry&&<g data-no-export="true" pointerEvents="none">

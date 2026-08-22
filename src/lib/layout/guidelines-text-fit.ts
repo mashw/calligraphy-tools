@@ -8,6 +8,8 @@ import { occupiedRect } from './geometry';
 import { shapePolygonPoints } from './shape';
 import { pageSize, type GuidelinesElement, type LayoutElement, type PageElement } from './types';
 import { pathHasOnlyClosedSubpaths, type ArtworkNode } from './artwork';
+import { lineMetricFromMeasuredRun } from '@/lib/measure/measure-lines-generic';
+import type { PlannedLineAlignment } from './types';
 
 type Point = { x: number; y: number };
 type Occluder = { bounds: { x: number; y: number; width: number; height: number }; contains: (point: Point) => boolean; dispose?:()=>void };
@@ -15,7 +17,10 @@ export type VisibleGuideSpan = { rowIndex: number; x1: number; x2: number; ascY:
 export type EstimatedSpanPlacement = VisibleGuideSpan & { consumedMM: number; slantShiftMM: number };
 export type GuidelinesTextFitPlan = { visibleSpans: VisibleGuideSpan[]; placements: EstimatedSpanPlacement[]; requiredMM: number; availableMM: number; remainingMM: number; fits: boolean };
 export type TextFitColor = { fill: string; stroke: string };
-export type GuidelinesTextFitEntry = { plan: GuidelinesTextFitPlan; color: TextFitColor };
+export type PlannedGlyphPlacement={ch:string;kind:'letter'|'space';startX:number;endX:number;collision:boolean};
+export type PlannedLineResult={lineId:string;rowIndex:number|null;text:string;alignment:PlannedLineAlignment;measuredAdvanceMM:number;slantShiftMM:number;baselineStartX:number;baselineEndX:number;startFromLeftMM:number;startFromRightMM:number;maxCustomStartMM:number;glyphs:PlannedGlyphPlacement[];tooLongByMM:number;collision:boolean;waistY:number;baseY:number};
+export type GuidelinesLineLayoutPlan={rows:VisibleGuideSpan[];lines:PlannedLineResult[];fits:boolean};
+export type GuidelinesTextFitEntry = {mode:'estimate';plan:GuidelinesTextFitPlan;color:TextFitColor}|{mode:'line-layout';plan:GuidelinesLineLayoutPlan;color:TextFitColor};
 export const TEXT_FIT_COLORS: readonly TextFitColor[] = [
   {fill:'rgba(99, 102, 241, 0.20)',stroke:'rgba(79, 70, 229, 0.70)'},
   {fill:'rgba(14, 165, 233, 0.18)',stroke:'rgba(2, 132, 199, 0.70)'},
@@ -94,7 +99,7 @@ export function getCachedGuidelinesVisibleSpans(key: string, element: Guidelines
   const spans=buildGuidelinesVisibleSpans(element,page,elements);if(visibleSpanCache.size>=50)visibleSpanCache.delete(visibleSpanCache.keys().next().value!);visibleSpanCache.set(key,spans);return spans;
 }
 
-export function buildGuidelinesVisibilityCacheKey(element:GuidelinesElement,page:PageElement,higherElements:LayoutElement[]){return JSON.stringify({frame:element.frame,settings:element.settings,page,higher:higherElements.map(item=>item.type==='guidelines'?{...item,fitText:''}:item)});}
+export function buildGuidelinesVisibilityCacheKey(element:GuidelinesElement,page:PageElement,higherElements:LayoutElement[]){return JSON.stringify({frame:element.frame,settings:element.settings,page,higher:higherElements.map(item=>item.type==='guidelines'?{...item,fitText:'',plannedLines:[],textMode:'estimate',rightAlignMode:'waist'}:item)});}
 
 export function buildGuidelinesTextFitPlan(element: GuidelinesElement, visibleSpans: VisibleGuideSpan[]): GuidelinesTextFitPlan {
   const measurementText=element.fitText.replace(/\s*\n+\s*/g,' ').replace(/\s+/g,' ').trim();
@@ -103,4 +108,11 @@ export function buildGuidelinesTextFitPlan(element: GuidelinesElement, visibleSp
   const capacities=visibleSpans.map(span=>Math.max(0,span.x2-span.x1-slant)),availableMM=capacities.reduce((sum,value)=>sum+value,0),placements:EstimatedSpanPlacement[]=[];let remaining=run.totalAdvanceMM;
   visibleSpans.forEach((span,index)=>{if(remaining<=0)return;const consumed=Math.min(remaining,capacities[index]);if(consumed>0)placements.push({...span,consumedMM:consumed,slantShiftMM:slant});remaining-=consumed;});
   return{visibleSpans,placements,requiredMM:run.totalAdvanceMM,availableMM,remainingMM:Math.max(0,remaining),fits:remaining<=.001};
+}
+
+function measureGuidelinesRun(element:GuidelinesElement,text:string){const s=element.settings,effective=s.nibMM*Math.cos(s.penAngleDeg*Math.PI/180),ctx=s.script==='Copperplate'?buildCopperplateContext({xHeightMM:s.xHeightMM,capStyle:'simple',calibration:{enabled:false}}).ctx:{xHeightMM:s.xNib*effective,nibMM:effective,scale:1,spaceMult:1,capStyle:'simple' as const};return measureRun(text,SCRIPT_PROFILES[s.script],ctx);}
+export function buildGuidelinesLineLayoutPlan(element:GuidelinesElement,visibleSpans:VisibleGuideSpan[],page?:PageElement):GuidelinesLineLayoutPlan{
+  const model=calculateStraightGuidelines({width:element.frame.width,height:element.frame.height},element.settings),rows:VisibleGuideSpan[]=[];
+  model.guideSets.forEach((g,rowIndex)=>{const ascY=element.frame.y+g.ascLine[0].y,descY=element.frame.y+g.descLine[0].y,pageHeight=page?pageSize(page).height:Infinity;if(g.ascLine[0].y<0||g.descLine[0].y>element.frame.height||ascY<0||descY>pageHeight)return;rows.push({rowIndex,x1:element.frame.x+g.baseLine[0].x,x2:element.frame.x+g.baseLine.at(-1)!.x,ascY,waistY:element.frame.y+g.waistLine[0].y,baseY:element.frame.y+g.baseLine[0].y,descY});});
+  const lines=element.plannedLines.map((line,index):PlannedLineResult=>{const row=rows[index],run=measureGuidelinesRun(element,line.text),metric=lineMetricFromMeasuredRun(line.text,run,line.alignment==='center'?'center':'right'),advance=metric.lengthMM,slant=element.settings.script==='Copperplate'?element.settings.xHeightMM/Math.tan(55*Math.PI/180):0;if(!row)return{lineId:line.id,rowIndex:null,text:line.text,alignment:line.alignment,measuredAdvanceMM:advance,slantShiftMM:slant,baselineStartX:0,baselineEndX:0,startFromLeftMM:0,startFromRightMM:0,maxCustomStartMM:0,glyphs:[],tooLongByMM:0,collision:false,waistY:0,baseY:0};const width=row.x2-row.x1,footprint=advance+slant,max=Math.max(0,width-footprint);const start=line.alignment==='left'?row.x1:line.alignment==='center'?(row.x1+row.x2)/2-advance/2:line.alignment==='right'?row.x2-advance-(element.settings.script==='Copperplate'&&element.rightAlignMode==='waist'?slant:0):row.x1+Math.max(0,Math.min(max,line.customStartMM));const spans=visibleSpans.filter(span=>span.rowIndex===row.rowIndex),glyphs:PlannedGlyphPlacement[]=[];let cursor=start;run.glyphs.forEach(g=>{const a=cursor,b=cursor+g.advMM,space=g.kind==='space',end=b+(space?0:slant),collision=!space&&!spans.some(span=>a>=span.x1-.001&&end<=span.x2+.001);glyphs.push({ch:g.ch,kind:space?'space':'letter',startX:a,endX:b,collision});cursor=b;});return{lineId:line.id,rowIndex:row.rowIndex,text:line.text,alignment:line.alignment,measuredAdvanceMM:advance,slantShiftMM:slant,baselineStartX:start,baselineEndX:start+advance,startFromLeftMM:start-row.x1,startFromRightMM:row.x2-start,maxCustomStartMM:max,glyphs,tooLongByMM:Math.max(0,footprint-width),collision:glyphs.some(g=>g.collision),waistY:row.waistY,baseY:row.baseY};});return{rows,lines,fits:lines.every(line=>line.rowIndex!==null&&!line.tooLongByMM&&!line.collision)};
 }

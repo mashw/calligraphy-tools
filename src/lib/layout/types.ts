@@ -12,7 +12,7 @@ export type LayoutPaperId = PaperId | 'Custom';
 type ElementBase = { id: string; name: string; frame: Frame; locked: boolean };
 type MovableElementBase = ElementBase & { paddingMM: number };
 export type PageElement = ElementBase & { id: 'page'; type: 'page'; locked: true; settings: { paper: LayoutPaperId; orientation: Orientation; customWidthMM: number; customHeightMM: number; margins: Margins; centerLines: { vertical: boolean; horizontal: boolean } } };
-export type GuidelinesElement = MovableElementBase & { type: 'guidelines'; allowPartialGuidelines: boolean; fitText: string; settings: GuidelinesSettings };
+export type GuidelinesElement = MovableElementBase & { type: 'guidelines'; allowPartialGuidelines: boolean; fitText: string; textMode:GuidelinesTextMode;plannedLines:PlannedTextLine[];rightAlignMode:'waist'|'baseline'; settings: GuidelinesSettings };
 export type ShapeElement = MovableElementBase & { type: 'shape'; settings: ShapeSettings };
 export type CurvedTitleElement = MovableElementBase & { type: 'curved-title'; settings: CurvedTitleSettings };
 export type CalligramElement = MovableElementBase & { type: 'calligram'; settings: CalligramSettings };
@@ -20,6 +20,9 @@ export type ArtworkElement = MovableElementBase & { type:'artwork'; sourceFilena
 export type LayoutElement = PageElement | GuidelinesElement | ShapeElement | CurvedTitleElement | CalligramElement | ArtworkElement;
 export type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 export type ResizeAspectMode = 'free' | 'corners' | 'all';
+export type GuidelinesTextMode = 'estimate'|'line-layout';
+export type PlannedLineAlignment = 'left'|'center'|'right'|'custom';
+export type PlannedTextLine = { id:string;text:string;alignment:PlannedLineAlignment;customStartMM:number };
 
 export function pageSize(element: PageElement) {
   if (element.settings.paper === 'Custom') return { width: element.settings.customWidthMM, height: element.settings.customHeightMM };
@@ -31,7 +34,7 @@ export function newElement(type: Exclude<ElementType,'page'|'artwork'>, count:nu
   const proportional=type==='calligram';
   const width=Math.min(type==='guidelines'?150:type==='shape'?40:type==='curved-title'?page.width*.8:type==='calligram'?140:72,Math.max(20,page.width-30)); const height=type==='calligram'?width:Math.min(type==='guidelines'?180:type==='shape'?35:type==='curved-title'?60:proportional?65:50,Math.max(20,page.height-30));
   const base={id:`${type}-${crypto.randomUUID()}`,type,name:`${labels[type]} ${count}`,locked:false,paddingMM:0,frame:{x:Math.max(5,(page.width-width)/2),y:type==='curved-title'?Math.max(5,(page.height-height)*.2):Math.max(5,(page.height-height)/2),width,height}};
-  if(type==='guidelines') { const settings=createDefaultGuidelinesSettings(); settings.margins={top:0,right:0,bottom:0,left:0}; return {...base,type,allowPartialGuidelines:true,fitText:'',settings}; }
+  if(type==='guidelines') { const settings=createDefaultGuidelinesSettings(); settings.margins={top:0,right:0,bottom:0,left:0}; return {...base,type,allowPartialGuidelines:true,fitText:'',textMode:'estimate',plannedLines:[],rightAlignMode:'waist',settings}; }
   if(type==='shape') return {...base,type,settings:createDefaultShapeSettings()};
   if(type==='curved-title') return {...base,type,settings:createDefaultCurvedTitleSettings()};
   if(type==='calligram') return {...base,type,settings:createDefaultCalligramSettings()};
