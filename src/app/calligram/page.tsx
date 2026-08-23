@@ -20,6 +20,7 @@ import { measureRun } from '@/lib/measure/measure-run';
 import { buildCopperplateContext } from '@/lib/copperplate/context';
 import { buildGuideSet } from '@/lib/guides/guide-template';
 import GuideOverlay from '@/components/preview/GuideOverlay';
+import ConstructionGuideControls from '@/components/guidelines/ConstructionGuideControls';
 import { createDefaultCalligramSettings } from '@/lib/calligram/settings';
 import { avgRadiusFromCenter as sharedAvgRadius, bandPolygonD, buildCircleBaseline as sharedBuildCircleBaseline, computeCalligramLayout, normalSignForBaseline as sharedNormalSign, pointAtWrapped, snapRadiusToWholeSteps, type CalligramPlace } from '@/lib/calligram/model';
 import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
@@ -518,6 +519,7 @@ export default function CalligramPage() {
     return Number.isFinite(v) ? v : nibMM;
   }, [bottomBandSizeText, nibMM]);
   const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(MAIN_DEFAULTS.TexturaQuadrata.nibAngleDeg);
+  const [constructionGuides, setConstructionGuides] = useState(() => ({ upper: false, lower: false, color: '#dc2626', ...calligramDefaults.constructionGuides }));
   const [xNib, setXNib] = useState(MAIN_DEFAULTS.TexturaQuadrata.xNib);
 
   const [ascNib, setAscNib] = useState(MAIN_DEFAULTS.TexturaQuadrata.ascNib);
@@ -908,8 +910,9 @@ export default function CalligramPage() {
         tickStepMM,
         tickAnchorS: span ? span.sStart : undefined,
         actualNibMM: nibMM,
+        penAngleDeg, blackletterScript: script === 'Copperplate' ? undefined : script, constructionGuides,
       }),
-    [baseline, guideTemplate, xMM, ascMM, descMM, mainNormalSign, tickStepMM, nibMM, span],
+    [baseline, guideTemplate, xMM, ascMM, descMM, mainNormalSign, tickStepMM, nibMM, span, penAngleDeg, script, constructionGuides],
   );
   const mainBandD = useMemo(() => bandPolygonD(guideSet), [guideSet]);
 
@@ -986,7 +989,7 @@ const innerRadiusMaxMM = useMemo(
     () => (topBandScript === 'Copperplate'
       ? topXMM * 1.05
       : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * topBandSizeMM),
-    [topBandScript, topXMM, topBandSizeMM],
+    [topBandScript, topXMM, topBandSizeMM, penAngleDeg, constructionGuides],
   );
   const topTickStepMM = useMemo(
     () => (topBandScript === 'Copperplate' ? Math.max(topXMM * 0.9, 3) : effectiveTopNibMM),
@@ -1015,8 +1018,9 @@ const innerRadiusMaxMM = useMemo(
       tickStepMM: topTickStepMM,
       tickAnchorS: topSpan ? topSpan.sStart : undefined,
       actualNibMM: topBandSizeMM,
+      penAngleDeg, blackletterScript: topBandScript === 'Copperplate' ? undefined : topBandScript, constructionGuides,
     }),
-    [topBandScript, topBaseline, topXMM, topAscMM, topDescMM, innerNormalSign, topTickStepMM, topSpan, topBandSizeMM],
+    [topBandScript, topBaseline, topXMM, topAscMM, topDescMM, innerNormalSign, topTickStepMM, topSpan, topBandSizeMM, penAngleDeg, constructionGuides],
   );
 
   const bottomXMM = useMemo(
@@ -1035,7 +1039,7 @@ const innerRadiusMaxMM = useMemo(
     () => (bottomBandScript === 'Copperplate'
       ? bottomXMM * 1.05
       : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * bottomBandSizeMM),
-    [bottomBandScript, bottomXMM, bottomBandSizeMM],
+    [bottomBandScript, bottomXMM, bottomBandSizeMM, penAngleDeg, constructionGuides],
   );
   const bottomBaseline = useMemo<Pt[]>(() => buildCircleBaseline(outerRadiusMM), [box, outerRadiusMM, startAngleRad, dirSign]);
   const outerNormalSign = useMemo(() => normalSignForBaseline(bottomBaseline), [bottomBaseline]);
@@ -1067,8 +1071,9 @@ const innerRadiusMaxMM = useMemo(
       tickStepMM: bottomTickStepMM,
       tickAnchorS: bottomSpan ? bottomSpan.sStart : undefined,
       actualNibMM: bottomBandSizeMM,
+      penAngleDeg, blackletterScript: bottomBandScript === 'Copperplate' ? undefined : bottomBandScript, constructionGuides,
     }),
-    [bottomBandScript, bottomBaseline, bottomXMM, bottomAscMM, bottomDescMM, outerNormalSign, bottomTickStepMM, bottomSpan, bottomBandSizeMM],
+    [bottomBandScript, bottomBaseline, bottomXMM, bottomAscMM, bottomDescMM, outerNormalSign, bottomTickStepMM, bottomSpan, bottomBandSizeMM, penAngleDeg, constructionGuides],
   );
 
   useEffect(() => {
@@ -1831,6 +1836,7 @@ const innerRadiusMaxMM = useMemo(
                       thin: guideStrokeColor,
                       bold: guideStrokeColor,
                       frame: '#cbd5e1',
+                      construction: highContrastMode ? '#111827' : constructionGuides.color,
                     },
                     grid: {
                       thin: gridStrokeWidth,
@@ -1850,6 +1856,7 @@ const innerRadiusMaxMM = useMemo(
                           thin: guideStrokeColor,
                           bold: guideStrokeColor,
                           frame: '#cbd5e1',
+                      construction: highContrastMode ? '#111827' : constructionGuides.color,
                         },
                         grid: {
                           thin: gridStrokeWidth,
@@ -1871,6 +1878,7 @@ const innerRadiusMaxMM = useMemo(
                           thin: guideStrokeColor,
                           bold: guideStrokeColor,
                           frame: '#cbd5e1',
+                      construction: highContrastMode ? '#111827' : constructionGuides.color,
                         },
                         grid: {
                           thin: gridStrokeWidth,
@@ -2126,6 +2134,8 @@ const innerRadiusMaxMM = useMemo(
                 : 'Heights are nibs × nib size (mm).'}
             </InfoTip>
           </div>
+
+          {script !== 'Copperplate' && <div className="mt-3 rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} compact /></div>}
 
           {script === 'Copperplate' ? (
             <div className="mt-3 space-y-4">

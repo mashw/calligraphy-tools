@@ -3,6 +3,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import GuideOverlay from '@/components/preview/GuideOverlay';
+import ConstructionGuideControls from '@/components/guidelines/ConstructionGuideControls';
+import type { ConstructionGuideSettings } from '@/lib/guides/guide-template';
 import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
 import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 import { buildGuideSet } from '@/lib/guides/guide-template';
@@ -48,6 +50,7 @@ type Strap = {
   script: ScriptId;
   nibMMText: string;
   nibAngleDeg: 35 | 40 | 45;
+  constructionGuides?: ConstructionGuideSettings;
   xHeightMMText?: string;
   copperplateRatioPreset?: CopperplateRatioPreset;
   copperplateDescUnitsText?: string;
@@ -745,6 +748,8 @@ const buildCompatibleJoinedGuideData = ({
       if (!item) return false;
       if (item.strap.script !== first.strap.script) return false;
       if (item.strap.invertGuides !== first.strap.invertGuides) return false;
+      const constructionKey = (strap: Strap) => JSON.stringify({ upper: strap.constructionGuides?.upper ?? false, lower: strap.constructionGuides?.lower ?? false, color: strap.constructionGuides?.color ?? '#dc2626' });
+      if (constructionKey(item.strap) !== constructionKey(first.strap)) return false;
       const a = item.metrics;
       const b = first.metrics;
       return Math.abs(a.xMM - b.xMM) < 1e-6
@@ -770,6 +775,9 @@ const buildCompatibleJoinedGuideData = ({
             ? Math.max(2, first.metrics.nibMM)
             : first.metrics.effectiveNibMM,
         actualNibMM: first.metrics.nibMM,
+        penAngleDeg: first.strap.nibAngleDeg,
+        blackletterScript: first.strap.script === 'Copperplate' ? undefined : first.strap.script,
+        constructionGuides: first.strap.constructionGuides,
         invertGuides: first.strap.invertGuides,
       },
     );
@@ -1242,6 +1250,9 @@ export default function PathGuidesPage() {
           descMM: metrics.descMM,
           tickStepMM: strap.script === 'Copperplate' ? Math.max(2, metrics.nibMM) : metrics.effectiveNibMM,
           actualNibMM: metrics.nibMM,
+          penAngleDeg: strap.nibAngleDeg,
+          blackletterScript: strap.script === 'Copperplate' ? undefined : strap.script,
+          constructionGuides: strap.constructionGuides,
           invertGuides: strap.invertGuides,
         })
       : null;
@@ -2502,7 +2513,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                         style={{
                           thin: guideStroke.thin,
                           bold: guideStroke.bold,
-                          colors: guideOverlayColors(strap.id, strap.color),
+                          colors: { ...guideOverlayColors(strap.id, strap.color), construction: strap.constructionGuides?.color ?? '#dc2626' },
                         }}
                         interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
                       />
@@ -2534,7 +2545,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
           style={{
             thin: guideStroke.thin,
             bold: guideStroke.bold,
-            colors: guideOverlayColors(member.strapId, strapEntry.strap.color),
+            colors: { ...guideOverlayColors(member.strapId, strapEntry.strap.color), construction: strapEntry.strap.constructionGuides?.color ?? '#dc2626' },
           }}
           interactive={{ onGuidePointerDown: beginStrapDrag(member.strapId), hitStrokeWidthMM: 6 }}
         />
@@ -2805,6 +2816,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       <option value={35}>35°</option><option value={40}>40°</option><option value={45}>45°</option>
                     </select>
                   </InsetLabeledField>
+                  <div className="rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={activeStrap.script} value={activeStrap.constructionGuides} onChange={constructionGuides => updateStrap(activeStrap.id, { constructionGuides })} compact /></div>
                 </>
               )}
 

@@ -1,4 +1,5 @@
 import { lengthPoly, offset, pointAt, pointAtExtended } from '@/lib/curve-helpers';
+import { blackletterConstructionDistances } from '@/lib/guides/construction-guide-offsets';
 
 
 // mm-space points (same convention as curve tool)
@@ -201,13 +202,13 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
   const constructionGuides: ConstructionGuide[] = [];
   const construction = { ...DEFAULT_CONSTRUCTION_GUIDES, ...params.constructionGuides };
   if (actualNibMM && params.blackletterScript) {
-    const effectiveNibMM = actualNibMM * Math.cos((params.penAngleDeg ?? 45) * Math.PI / 180);
-    const offAsc = invertGuides ? ascMM * normalSign : -(xMM + ascMM) * normalSign;
+    const distances = blackletterConstructionDistances(actualNibMM, params.penAngleDeg ?? 45, params.blackletterScript);
     const offBase = invertGuides ? -xMM * normalSign : 0;
     const add = (kind: ConstructionGuideKind, d: number) => constructionGuides.push({ kind, offsetMM: d, line: offset(baseline, d) });
     const offWaist = invertGuides ? 0 : -xMM * normalSign;
-    if (construction.upper) add(params.blackletterScript === 'Fraktur' ? 'downstrokeStart' : 'upperQuadrantStart', offAsc + Math.sign(offWaist - offAsc) * effectiveNibMM);
-    if (construction.lower) add(params.blackletterScript === 'Fraktur' ? 'spurHeight' : 'lowerQuadrantStart', offBase + Math.sign(offWaist - offBase) * (params.blackletterScript === 'Fraktur' ? actualNibMM : effectiveNibMM));
+    const directionTowardAscender = Math.sign((invertGuides ? ascMM * normalSign : -(xMM + ascMM) * normalSign) - offWaist);
+    if (construction.upper && ascMM + 1e-2 >= actualNibMM) add(params.blackletterScript === 'Fraktur' ? 'downstrokeStart' : 'upperQuadrantStart', offWaist + directionTowardAscender * distances.upperFromWaistMM);
+    if (construction.lower) add(params.blackletterScript === 'Fraktur' ? 'spurHeight' : 'lowerQuadrantStart', offBase + Math.sign(offWaist - offBase) * distances.lowerFromBaselineMM);
   }
   const EPS = 1e-2;
   const specialOffsets = constructionGuides.map(guide => guide.offsetMM);
