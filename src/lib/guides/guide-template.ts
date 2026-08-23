@@ -22,6 +22,7 @@ export type GuideTemplateParams = {
   xMM: number;
   ascMM: number;
   descMM: number;
+  phaseOffsetMM?: number;
   invertGuides?: boolean;
   normalSign?: 1 | -1;
   tickStepMM?: number;     // used for vertical ticks
@@ -47,7 +48,7 @@ export function blackletterGuideHeightsMM(nibMM: number) {
 }
 
 function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
-  const { baseline, xMM, ascMM, descMM, invertGuides = false, normalSign = 1, tickStepMM, tickAnchorS, actualNibMM } = params;
+  const { baseline, xMM, ascMM, descMM, phaseOffsetMM = 0, invertGuides = false, normalSign = 1, tickStepMM, tickAnchorS, actualNibMM } = params;
   const waistOff = -xMM * normalSign;
   const ascOffNormal = -(xMM + ascMM) * normalSign;
   const descOffNormal = descMM * normalSign;
@@ -72,7 +73,8 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
 
   // Phase anchor: we will generate ticks at s = anchor + k * step
   // so there is always a tick exactly at the anchor value.
-  const anchor = Number.isFinite(tickAnchorS as number) ? (tickAnchorS as number) : 0;
+  const anchorBase = Number.isFinite(tickAnchorS as number) ? (tickAnchorS as number) : 0;
+  const anchor = anchorBase - phaseOffsetMM;
 
   const kMin = Math.floor((0 - anchor) / step);
   const kMax = Math.ceil((arcLen - anchor) / step);
@@ -191,7 +193,7 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
 
 
 function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
-  const { baseline, xMM, ascMM, descMM, invertGuides = false, normalSign = 1, tickStepMM, tickAnchorS } = params;
+  const { baseline, xMM, ascMM, descMM, phaseOffsetMM = 0, invertGuides = false, normalSign = 1, tickStepMM, tickAnchorS } = params;
 
   const baseLine = invertGuides ? offset(baseline, -xMM * normalSign) : baseline;
   const waistLine = invertGuides ? baseline : offset(baseline, -xMM * normalSign);
@@ -220,7 +222,8 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
   };
 
   // Phase anchor: ticks at s = anchor + k * step, guaranteeing a tick at anchor.
-  const anchor = Number.isFinite(tickAnchorS as number) ? (tickAnchorS as number) : 0;
+  const anchorBase = Number.isFinite(tickAnchorS as number) ? (tickAnchorS as number) : 0;
+  const anchor = anchorBase - phaseOffsetMM;
 
   if (isClosed) {
     const count = Math.max(1, Math.round(arcLen / step));

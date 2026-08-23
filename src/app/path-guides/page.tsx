@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import GuideOverlay from '@/components/preview/GuideOverlay';
-import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
+import { PAPERS_MM, lengthPoly, pathD } from '@/lib/curve-helpers';
 import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 import { buildGuideSet } from '@/lib/guides/guide-template';
 import { findCrossingsForStraps, type Crossing, type Pt } from '@/lib/paths/intersections';
@@ -101,7 +101,6 @@ const RELEASE_MM = 10;
 const CROSS_EPS_MM = 1.2;
 const CROSSING_MAX_SEGMENTS = 2800;
 const GUIDE_JOIN_MAX_DIST_MM = 10;
-const GUIDE_JOIN_MAX_SEAM_GAP_MM = 1.5;
 const GUIDE_JOIN_OPPOSED_DOT_MAX = -0.3;
 const FIT_MARGIN_MM = 12;
 const PALETTE = ['#5778A4', '#E49444', '#D1615D', '#85B6B2', '#6A9F58', '#E7CA60', '#A87C9F', '#F1A2A9', '#967662', '#B8B0AC'];
@@ -676,50 +675,6 @@ const buildGuideJoinChains = (straps: Strap[]): GuideJoinChain[] => {
   return chains;
 };
 
-const buildVirtualGuideBaselineForChain = ({
-  chain,
-  transformedById,
-}: {
-  chain: GuideJoinChain;
-  transformedById: Map<string, Pt[]>;
-}) => {
-  const points: Pt[] = [];
-
-  const stitchPoint = (a: Pt, b: Pt) => {
-    const seamGap = Math.hypot(a.x - b.x, a.y - b.y);
-    if (seamGap > GUIDE_JOIN_MAX_SEAM_GAP_MM) return null;
-    if (seamGap < 1e-9) return a;
-    return {
-      x: (a.x + b.x) / 2,
-      y: (a.y + b.y) / 2,
-    };
-  };
-
-  for (let i = 0; i < chain.members.length; i += 1) {
-    const member = chain.members[i];
-    const raw = transformedById.get(member.strapId) ?? [];
-    if (!isOpenPolyline(raw) || raw.length < 2) return null;
-
-    const pts = member.reversed ? [...raw].reverse() : raw;
-
-    if (!points.length) {
-      points.push(...pts);
-      continue;
-    }
-
-    const seam = stitchPoint(points[points.length - 1], pts[0]);
-    if (!seam) return null;
-
-    points[points.length - 1] = seam;
-    points.push(...pts.slice(1));
-  }
-
-  if (chain.closed) return null;
-
-  return points.length >= 2 ? { baseline: points } : null;
-};
-
-
 const buildCompatibleJoinedGuideData = ({
   chains,
   strapById,
@@ -732,7 +687,7 @@ const buildCompatibleJoinedGuideData = ({
   const result: Array<{
     chainId: string;
     members: GuideJoinChainMember[];
-    guideSet: ReturnType<typeof buildGuideSet>;
+    memberPhaseOffsetByStrapId: Map<string, number>;
   }> = [];
 
   chains.forEach((chain) => {
@@ -755,29 +710,23 @@ const buildCompatibleJoinedGuideData = ({
     });
     if (!allCompatible) return;
 
-    const virtual = buildVirtualGuideBaselineForChain({ chain, transformedById });
-    if (!virtual) return;
+    const memberPhaseOffsetByStrapId = new Map<string, number>();
+    let runningOffsetMM = 0;
 
-    const guideSet = buildGuideSet(
-      first.strap.script === 'Copperplate' ? 'copperplate' : 'blackletter',
-      {
-        baseline: virtual.baseline,
-        xMM: first.metrics.xMM,
-        ascMM: first.metrics.ascMM,
-        descMM: first.metrics.descMM,
-        tickStepMM:
-          first.strap.script === 'Copperplate'
-            ? Math.max(2, first.metrics.nibMM)
-            : first.metrics.effectiveNibMM,
-        actualNibMM: first.metrics.nibMM,
-        invertGuides: first.strap.invertGuides,
-      },
-    );
+    for (const member of chain.members) {
+      const raw = transformedById.get(member.strapId) ?? [];
+      if (!isOpenPolyline(raw) || raw.length < 2) return;
+
+      memberPhaseOffsetByStrapId.set(member.strapId, runningOffsetMM);
+
+      const localForChain = member.reversed ? [...raw].reverse() : raw;
+      runningOffsetMM += lengthPoly(localForChain);
+    }
 
     result.push({
       chainId: chain.id,
       members: chain.members,
-      guideSet,
+      memberPhaseOffsetByStrapId,
     });
   });
 
@@ -1373,15 +1322,42 @@ export default function PathGuidesPage() {
     [guideJoinChains, strapById, transformedById],
   );
 
-  const joinedGuideMemberIds = useMemo(() => {
-    const set = new Set<string>();
+  const joinedGuidePhaseOffsetByStrapId = useMemo(() => {
+    const phaseOffsets = new Map<string, number>();
     compatibleJoinedGuideData.forEach((chain) => {
-      chain.members.forEach((member) => {
-        set.add(member.strapId);
+      chain.memberPhaseOffsetByStrapId.forEach((offsetMM, strapId) => {
+        phaseOffsets.set(strapId, offsetMM);
       });
     });
-    return set;
+    return phaseOffsets;
   }, [compatibleJoinedGuideData]);
+
+  const joinedGuideSetByStrapId = useMemo(() => {
+    const sets = new Map<string, ReturnType<typeof buildGuideSet>>();
+
+    joinedGuidePhaseOffsetByStrapId.forEach((phaseOffsetMM, strapId) => {
+      const entry = strapById.get(strapId);
+      if (!entry || entry.transformed.length <= 1) return;
+
+      sets.set(
+        strapId,
+        buildGuideSet(entry.strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
+          baseline: entry.transformed,
+          xMM: entry.metrics.xMM,
+          ascMM: entry.metrics.ascMM,
+          descMM: entry.metrics.descMM,
+          tickStepMM: entry.strap.script === 'Copperplate'
+            ? Math.max(2, entry.metrics.nibMM)
+            : entry.metrics.effectiveNibMM,
+          actualNibMM: entry.metrics.nibMM,
+          invertGuides: entry.strap.invertGuides,
+          phaseOffsetMM,
+        }),
+      );
+    });
+
+    return sets;
+  }, [joinedGuidePhaseOffsetByStrapId, strapById]);
 
   function bandWindowDFromGuideSet(
     guideSet: NonNullable<(typeof renderData)[number]["guideSet"]>,
@@ -2373,6 +2349,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               <line data-no-export="true" x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
 
               {renderData.map(({ strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter }) => {
+                const effectiveGuideSet = joinedGuideSetByStrapId.get(strap.id) ?? guideSet;
                 const isSimplifiedForThisStrap = simplify || interactionActive;
                 // Use paint tick so ref-driven translation repaints without heavy recompute.
                 // eslint-disable-next-line @typescript-eslint/no-unused-expressions
@@ -2413,7 +2390,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     {/* Selected indicator: subtle halo that works in both simplify and full guideline view */}
                     {isSelected && (
                       isSimplifiedForThisStrap ? (
-                        guideSet ? (
+                        effectiveGuideSet ? (
                           <path
                             data-no-export="true"
                             d={(interactionActive ? proxyBandD : bandD) || ''}
@@ -2454,7 +2431,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       ) : null
                     )}
 {isSimplifiedForThisStrap ? (
-  guideSet ? (
+  effectiveGuideSet ? (
     <path
       d={interactionActive ? proxyBandD : bandD}
       fill={strap.color}
@@ -2496,9 +2473,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     />
   ) : null
 )}
-                    {!interactionActive && !isSimplifiedForThisStrap && guideSet && !joinedGuideMemberIds.has(strap.id) && (
+                    {!interactionActive && !isSimplifiedForThisStrap && effectiveGuideSet && (
                       <GuideOverlay
-                        guideSet={guideSet}
+                        guideSet={effectiveGuideSet}
                         style={{
                           thin: guideStroke.thin,
                           bold: guideStroke.bold,
@@ -2517,31 +2494,6 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                   </g>
                 );
               })}
-
-{!interactionActive && !simplify && compatibleJoinedGuideData.map((chain) =>
-  chain.members.map((member) => {
-    const strapEntry = strapById.get(member.strapId);
-    if (!strapEntry) return null;
-
-    return (
-      <g
-        key={`joined-guide-${chain.chainId}-${member.strapId}`}
-        clipPath={`url(#guide-clip-${member.strapId})`}
-        mask={underCrossings.get(member.strapId)?.length ? `url(#mask-${member.strapId})` : undefined}
-      >
-        <GuideOverlay
-          guideSet={chain.guideSet}
-          style={{
-            thin: guideStroke.thin,
-            bold: guideStroke.bold,
-            colors: guideOverlayColors(member.strapId, strapEntry.strap.color),
-          }}
-          interactive={{ onGuidePointerDown: beginStrapDrag(member.strapId), hitStrokeWidthMM: 6 }}
-        />
-      </g>
-    );
-  }),
-)}
 
 {simplify && !interactionActive && crossingsWithOverrides.map((crossing) => {
   const over = strapById.get(crossing.overId);
