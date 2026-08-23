@@ -13,6 +13,7 @@ import CalligramRenderer from '@/components/calligram/CalligramRenderer';
 import { buildCalligramModel } from '@/lib/calligram/model';
 import { getNearestCompleteGuidelinesHeight } from '@/lib/guides/straight/model';
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
+import { buildPlotterExport, CRICUT_MATS, getCricutSafeRect, type CricutMatId } from '@/lib/layout/plotter-export';
 import ArtworkRenderer from './ArtworkRenderer';
 
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
@@ -141,11 +142,15 @@ export default function LayoutStage({ elements, selectedId, textFitPlans, onSele
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [simplify, setSimplify] = useState(false);
+  const [cricutMat, setCricutMat] = useState<CricutMatId>('12x12');
+  const [showCricutSafeArea, setShowCricutSafeArea] = useState(false);
+  const [cricutMessage, setCricutMessage] = useState<string | null>(null);
   const previewSimplify = simplify || interactionActive;
   const selected = elements.find(element => element.id === selectedId);
   const pageElement = elements.find(element => element.type === 'page');
   if (!pageElement) throw new Error('Layout requires a Page element.');
   const page = pageSize(pageElement);
+  const cricutSafeRect = getCricutSafeRect(page, cricutMat);
   const pageRect = pageContentRect(page, pageElement.settings.margins);
   const vb = (() => {
     const margin = view === 'fullpage' ? 5 : 18;
@@ -217,6 +222,15 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
   const raster = async () => { if (!svgRef.current) return null; const { wPx, hPx } = computeRasterPxPerMM(page.width, page.height); const clone = cloneSvgForRasterExport(svgRef.current, page.width, page.height, wPx, hPx, bakeExportStrokes, stripNoExport); return { data: await renderSvgCloneToJpegDataUrl(clone, wPx, hPx), wPx, hPx }; };
   const exportPdf = async () => { const result = await raster(); if (result) download(jpegDataUrlToPdf(result.data, page.width, page.height, result.wPx, result.hPx), 'layout.pdf'); };
   const print = async () => { const result = await raster(); if (result) printJpegDataUrlToScale(result.data, page.width, page.height); };
+  const exportCricut = () => {
+    const result = buildPlotterExport(elements, textFitPlans, cricutMat);
+    if (result.safety.reasons.length > 0) {
+      setCricutMessage(result.safety.reasons.join(' '));
+      return;
+    }
+    download(new Blob([result.svg], { type: 'image/svg+xml' }), 'layout-cricut-draw.svg');
+    setCricutMessage(result.warnings.length > 0 ? result.warnings.join(' ') : null);
+  };
 
   return <section className="min-w-0 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
     <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -225,8 +239,18 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
       <button aria-pressed={simplify} onClick={() => setSimplify(value => !value)} className={`${control} ${simplify ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : ''}`}>Simplify</button>
       <div className="ml-auto flex flex-wrap items-center gap-2">
         <button aria-label="Zoom out" onClick={() => { setView('custom'); setZoom(value => Math.max(.35, value * .9)); }} className={control}>−</button><button aria-label="Zoom in" onClick={() => { setView('custom'); setZoom(value => Math.min(6, value * 1.1)); }} className={control}>+</button><button onClick={() => reset()} className={control}>Reset view</button>
-        <button onClick={exportSvg} className={`${control} ml-1`}>SVG</button><button onClick={exportPdf} className={control}>PDF</button><button onClick={print} className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500">Print</button>
+        <button onClick={exportSvg} className={`${control} ml-1`}>SVG</button><button onClick={exportPdf} className={control}>PDF</button><button onClick={exportCricut} className={control}>Cricut Draw</button><button onClick={print} className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500">Print</button>
       </div>
+    </div>
+    <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-700">
+      <label className="flex items-center gap-2">Mat:
+        <select value={cricutMat} onChange={event => { setCricutMat(event.target.value as CricutMatId); setCricutMessage(null); }} className="rounded-lg border border-slate-300 bg-white px-2 py-1">
+          {Object.entries(CRICUT_MATS).map(([id, mat]) => <option key={id} value={id}>{mat.label}</option>)}
+        </select>
+      </label>
+      <label className="flex items-center gap-2"><input type="checkbox" checked={showCricutSafeArea} onChange={event => setShowCricutSafeArea(event.target.checked)} />Show Cricut safe area</label>
+      <span className="basis-full text-xs text-slate-600">Place the paper flush with the top-left corner of the Cricut mat grid. Upload without resizing and set the layer to Draw/Pen.</span>
+      {cricutMessage && <p role="status" className="basis-full rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">{cricutMessage}</p>}
     </div>
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-300">
       <svg ref={svgRef} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="block h-[52vh] min-h-[420px] w-full touch-none select-none" style={{ background: '#cbd5e1' }} onPointerDown={onStageDown} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}>
@@ -240,6 +264,13 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
             <ElementVisual element={element} frame={frame} simplify={previewSimplify} selected={element.id === selectedId} textFitEntry={textFitPlans[element.id]??null} onPlannedLinePlacementChange={onPlannedLinePlacementChange} />
           </g>;
         })}
+        {showCricutSafeArea && <g data-no-export="true" pointerEvents="none">
+          <rect x="0" y="0" width={page.width} height={Math.min(cricutSafeRect.y, page.height)} fill="#f59e0b" fillOpacity=".12" />
+          <rect x="0" y={cricutSafeRect.y} width={Math.min(cricutSafeRect.x, page.width)} height={Math.max(0, page.height - cricutSafeRect.y)} fill="#f59e0b" fillOpacity=".12" />
+          <rect x={cricutSafeRect.x + cricutSafeRect.width} y={cricutSafeRect.y} width={Math.max(0, page.width - cricutSafeRect.x - cricutSafeRect.width)} height={Math.max(0, page.height - cricutSafeRect.y)} fill="#ef4444" fillOpacity=".1" />
+          <rect x={cricutSafeRect.x} y={cricutSafeRect.y + cricutSafeRect.height} width={cricutSafeRect.width} height={Math.max(0, page.height - cricutSafeRect.y - cricutSafeRect.height)} fill="#ef4444" fillOpacity=".1" />
+          <rect x={cricutSafeRect.x} y={cricutSafeRect.y} width={cricutSafeRect.width} height={cricutSafeRect.height} fill="none" stroke="#d97706" strokeWidth="1" strokeDasharray="5 4" strokeOpacity=".8" vectorEffect="non-scaling-stroke" />
+        </g>}
         <g data-no-export="true" pointerEvents="none">
           {selectedId==='page'&&<rect x={pageRect.x} y={pageRect.y} width={pageRect.width} height={pageRect.height} fill="none" stroke="#818cf8" strokeWidth="1" strokeDasharray="4 3" strokeOpacity=".7" vectorEffect="non-scaling-stroke" />}
           {pageElement.settings.centerLines.vertical&&<line x1={pageRect.x+pageRect.width/2} x2={pageRect.x+pageRect.width/2} y1={pageRect.y} y2={pageRect.y+pageRect.height} stroke="#818cf8" strokeWidth="1" strokeDasharray="5 4" strokeOpacity=".65" vectorEffect="non-scaling-stroke" />}
