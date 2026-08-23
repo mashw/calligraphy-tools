@@ -9,6 +9,7 @@ import {
 import { type ScriptId } from '@/lib/scripts';
 import { buildGuideSet } from '@/lib/guides/guide-template';
 import GuidelinesRenderer from '@/components/guidelines/GuidelinesRenderer';
+import ConstructionGuideControls from '@/components/guidelines/ConstructionGuideControls';
 import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 import { createDefaultGuidelinesSettings, type GuidelinesSettings } from '@/lib/guides/straight/settings';
 
@@ -463,6 +464,7 @@ const slantAngleDeg = useMemo(() => {
   const [showGridVertical, setShowGridVertical] = useState(true);
   const [gridWidthMode, setGridWidthMode] = useState<'effective' | 'actual'>('effective');
   const [showNibAngleGuide, setShowNibAngleGuide] = useState(true);
+  const [constructionGuides, setConstructionGuides] = useState(() => ({ ...sharedDefaults.constructionGuides! }));
   const [highContrastMode, setHighContrastMode] = useState(false);
   const [showCenterLine, setShowCenterLine] = useState(false);
 
@@ -1072,6 +1074,7 @@ const slantAngleDeg = useMemo(() => {
     penAngleDeg, xNib, ascNib, descNib,
     slant: { angle: slantAngleDeg, secondEnabled: enableSlant2, secondAngle: slantAngle2, spacingMM: slantSpacingMM, contrast: slantLineContrast },
     grid: { widthMode: gridWidthMode, contrast: gridContrast, thickness: gridThickness, horizontal: showGridHorizontal, vertical: showGridVertical, nibAngleGuide: showNibAngleGuide },
+    constructionGuides,
     appearance: { baselineIndicator: showBaselineIndicator, baselineColor, waistlineColor, xLineContrast, xLineThickness, midpointDashGap: midlineDashGap, midpointDashContrast: midlineDashContrast, highContrast: highContrastMode, centerLine: showCenterLine },
   };
   const centerX = margins.left + (box.w - margins.left - margins.right) / 2;
@@ -1834,6 +1837,7 @@ const slantAngleDeg = useMemo(() => {
                       />
                     </div>
                   </div>
+                  <div className="rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} compact /></div>
                 </div>
               </>
             )}

@@ -1,4 +1,5 @@
 import { lengthPoly, offset, pointAt, pointAtExtended } from '@/lib/curve-helpers';
+import { blackletterConstructionDistances } from '@/lib/guides/construction-guide-offsets';
 
 
 // mm-space points (same convention as curve tool)
@@ -13,7 +14,14 @@ export type GuideSet = {
   // optional perpendicular ticks/markers (each tick is a line segment)
   ticks?: { a: Pt; b: Pt }[];
   hGuides?: Pt[][]; // NEW: curve-parallel intermediate rails
+  constructionGuides?: ConstructionGuide[];
 };
+
+export type BlackletterScript = 'Fraktur' | 'TexturaQuadrata';
+export type ConstructionGuideKind = 'downstrokeStart' | 'spurHeight' | 'upperQuadrantStart' | 'lowerQuadrantStart';
+export type ConstructionGuide = { kind: ConstructionGuideKind; line: Pt[]; offsetMM: number };
+export type ConstructionGuideSettings = { upper: boolean; lower: boolean; color: string };
+export const DEFAULT_CONSTRUCTION_GUIDES: ConstructionGuideSettings = { upper: false, lower: false, color: '#dc2626' };
 
 export type GuideTemplateId = 'copperplate' | 'blackletter';
 
@@ -27,6 +35,9 @@ export type GuideTemplateParams = {
   tickStepMM?: number;     // used for vertical ticks
   tickAnchorS?: number;    // phase anchor along baseline arc-length (mm)
   actualNibMM?: number;    // used for horizontal tick spacing
+  penAngleDeg?: number;
+  blackletterScript?: BlackletterScript;
+  constructionGuides?: Partial<ConstructionGuideSettings>;
 };
 
 
@@ -102,6 +113,7 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
   // - x-height:  half (if any) lives at the TOP
   // - ascender:  half (if any) lives at the TOP
   const hGuides: Pt[][] = [];
+  const hGuideOffsets: number[] = [];
 
   if (actualNibMM != null && actualNibMM > 0) {
     const offAsc = invertGuides ? ascMM * normalSign : -(xMM + ascMM) * normalSign;
@@ -172,6 +184,7 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
         if (isNearNamedOff(d)) continue;
 
         hGuides.push(offset(baseline, d));
+        hGuideOffsets.push(d);
       }
     };
 
@@ -186,7 +199,32 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
   }
 
 
-  return { ascLine, waistLine, baseLine, descLine, ticks, hGuides };
+  const constructionGuides: ConstructionGuide[] = [];
+  const construction = { ...DEFAULT_CONSTRUCTION_GUIDES, ...params.constructionGuides };
+  if (actualNibMM && params.blackletterScript) {
+    const distances = blackletterConstructionDistances(actualNibMM, params.penAngleDeg ?? 45, params.blackletterScript);
+    const offBase = invertGuides ? -xMM * normalSign : 0;
+    const add = (kind: ConstructionGuideKind, d: number) => constructionGuides.push({ kind, offsetMM: d, line: offset(baseline, d) });
+    const offWaist = invertGuides ? 0 : -xMM * normalSign;
+const directionTowardBaseline = Math.sign(offBase - offWaist);
+
+if (
+  construction.upper &&
+  xMM + 1e-2 >= distances.upperFromWaistMM
+) {
+  add(
+    params.blackletterScript === 'Fraktur'
+      ? 'downstrokeStart'
+      : 'upperQuadrantStart',
+    offWaist +
+      directionTowardBaseline * distances.upperFromWaistMM,
+  );
+}    if (construction.lower) add(params.blackletterScript === 'Fraktur' ? 'spurHeight' : 'lowerQuadrantStart', offBase + Math.sign(offWaist - offBase) * distances.lowerFromBaselineMM);
+  }
+  const EPS = 1e-2;
+  const specialOffsets = constructionGuides.map(guide => guide.offsetMM);
+  const filteredHGuides = hGuides.filter((_, index) => !specialOffsets.some(d => Math.abs(d - hGuideOffsets[index]) < EPS));
+  return { ascLine, waistLine, baseLine, descLine, ticks, hGuides: filteredHGuides, constructionGuides };
 }
 
 

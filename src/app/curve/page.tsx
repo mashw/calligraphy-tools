@@ -26,6 +26,7 @@ import { measureRun } from '@/lib/measure/measure-run';
 import { buildCopperplateContext } from '@/lib/copperplate/context';
 import { buildGuideSet, BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/guide-template';
 import GuideOverlay from '@/components/preview/GuideOverlay';
+import ConstructionGuideControls from '@/components/guidelines/ConstructionGuideControls';
 import { computeCurvedTitleLayout, type CurvedTitlePlace } from '@/lib/curved-title/model';
 import { createDefaultCurvedTitleSettings } from '@/lib/curved-title/settings';
 
@@ -464,6 +465,7 @@ export default function CurvedTitlePage() {
     return Number.isFinite(v) ? v : nibMM;
   }, [bottomBandSizeText, nibMM]);
   const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
+  const [constructionGuides, setConstructionGuides] = useState(() => ({ upper: false, lower: false, color: '#dc2626', ...curvedTitleDefaults.constructionGuides }));
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
 
   const [ascNib, setAscNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.ascNib);
@@ -879,8 +881,9 @@ export default function CurvedTitlePage() {
         tickStepMM,
         tickAnchorS: span ? span.sStart : undefined,
         actualNibMM: nibMM,
+        penAngleDeg, blackletterScript: script === 'Copperplate' ? undefined : script, constructionGuides,
       }),
-    [baseline, guideTemplate, xMM, ascMM, descMM, tickStepMM, nibMM, span],
+    [baseline, guideTemplate, xMM, ascMM, descMM, tickStepMM, nibMM, span, penAngleDeg, script, constructionGuides],
   );
 
   const topBaseline = useMemo(() => guideSet.ascLine, [guideSet.ascLine]);
@@ -897,7 +900,7 @@ export default function CurvedTitlePage() {
     () => (topBandScript === 'Copperplate'
       ? topXMM * 1.05
       : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * topBandSizeMM),
-    [topBandScript, topXMM, topBandSizeMM],
+    [topBandScript, topXMM, topBandSizeMM, penAngleDeg, constructionGuides],
   );
   const topTickStepMM = useMemo(
     () => (topBandScript === 'Copperplate' ? Math.max(topXMM * 0.9, 3) : effectiveTopNibMM),
@@ -924,8 +927,9 @@ export default function CurvedTitlePage() {
       tickStepMM: topTickStepMM,
       tickAnchorS: topSpan ? topSpan.sStart : undefined,
       actualNibMM: topBandSizeMM,
+      penAngleDeg, blackletterScript: topBandScript === 'Copperplate' ? undefined : topBandScript, constructionGuides,
     }),
-    [topBandScript, topBaseline, topXMM, topAscMM, topTickStepMM, topSpan, topBandSizeMM],
+    [topBandScript, topBaseline, topXMM, topAscMM, topTickStepMM, topSpan, topBandSizeMM, penAngleDeg, constructionGuides],
   );
 
   const bottomXMM = useMemo(
@@ -940,7 +944,7 @@ export default function CurvedTitlePage() {
     () => (bottomBandScript === 'Copperplate'
       ? bottomXMM * 1.05
       : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * bottomBandSizeMM),
-    [bottomBandScript, bottomXMM, bottomBandSizeMM],
+    [bottomBandScript, bottomXMM, bottomBandSizeMM, penAngleDeg, constructionGuides],
   );
   const bottomBaseline = useMemo(() => offset(guideSet.descLine, bottomXMM), [guideSet.descLine, bottomXMM]);
   const bottomArcLen = useMemo(() => lengthPoly(bottomBaseline), [bottomBaseline]);
@@ -969,8 +973,9 @@ export default function CurvedTitlePage() {
       tickStepMM: bottomTickStepMM,
       tickAnchorS: bottomSpan ? bottomSpan.sStart : undefined,
       actualNibMM: bottomBandSizeMM,
+      penAngleDeg, blackletterScript: bottomBandScript === 'Copperplate' ? undefined : bottomBandScript, constructionGuides,
     }),
-    [bottomBandScript, bottomBaseline, bottomXMM, bottomDescMM, bottomTickStepMM, bottomSpan, bottomBandSizeMM],
+    [bottomBandScript, bottomBaseline, bottomXMM, bottomDescMM, bottomTickStepMM, bottomSpan, bottomBandSizeMM, penAngleDeg, constructionGuides],
   );
 
   const midAscPts = useMemo(() => {
@@ -1736,6 +1741,7 @@ export default function CurvedTitlePage() {
                       bold: isCurveDragging ? '#7c3aed' : '#111827',
                       tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
                       frame: '#cbd5e1',
+                      construction: constructionGuides.color,
                     },
                   }}
                   interactive={{
@@ -1756,6 +1762,7 @@ export default function CurvedTitlePage() {
                           bold: isCurveDragging ? '#7c3aed' : '#111827',
                           tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
                           frame: 'transparent',
+                          construction: constructionGuides.color,
                           base: 'transparent',
                           desc: 'transparent',
                         },
@@ -1776,6 +1783,7 @@ export default function CurvedTitlePage() {
                           bold: isCurveDragging ? '#7c3aed' : '#111827',
                           tick: isCurveDragging ? '#a78bfa' : '#e2e8f0',
                           frame: 'transparent',
+                          construction: constructionGuides.color,
                           asc: 'transparent',
                           waist: 'transparent',
                         },
@@ -2011,6 +2019,8 @@ export default function CurvedTitlePage() {
                 : 'Heights are nibs × nib size (mm).'}
             </InfoTip>
           </div>
+
+          {script !== 'Copperplate' && <div className="mt-3 rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} compact /></div>}
 
           {script === 'Copperplate' ? (
             <div className="mt-3 space-y-4">

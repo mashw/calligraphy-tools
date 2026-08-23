@@ -20,6 +20,8 @@ import { buildCopperplateContext } from '@/lib/copperplate/context';
 import { buildGuideSet, type GuideTemplateId, BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/guide-template';
 import { buildStageFrame } from '@/lib/preview/stage';
 import GuideOverlay from '@/components/preview/GuideOverlay';
+import ConstructionGuideControls from '@/components/guidelines/ConstructionGuideControls';
+import type { ConstructionGuideSettings } from '@/lib/guides/guide-template';
 
 /** ============================================================
  * Calligraphy Tools — Line Planner (Copperplate + Textura Quadrata)
@@ -188,6 +190,10 @@ type LinePreviewProps = {
   baselineTopY: number;
   showLetterBoxes: boolean;
   guideTemplate: GuideTemplateId;
+  script: ScriptId;
+  nibMM: number;
+  penAngleDeg: number;
+  constructionGuides: ConstructionGuideSettings;
 };
 
 function LinePreview(props: LinePreviewProps) {
@@ -205,6 +211,7 @@ function LinePreview(props: LinePreviewProps) {
     baselineTopY,
     showLetterBoxes,
     guideTemplate,
+    script, nibMM, penAngleDeg, constructionGuides,
   } = props;
 
   const { lengthMM, segments } = metric;
@@ -269,12 +276,13 @@ function LinePreview(props: LinePreviewProps) {
     const baseGuideSet = buildGuideSet('blackletter', {
       baseline,
       xMM: previewXHeightMM,
-      ascMM: 0,
-      descMM: 0,
+      ascMM: nibMM,
+      descMM: nibMM,
       tickStepMM: Math.max(previewXHeightMM * 0.2, 1),
+      actualNibMM: nibMM, penAngleDeg, blackletterScript: script === 'Copperplate' ? undefined : script, constructionGuides,
     });
     return baseGuideSet;
-  }, [guideTemplate, previewXHeightMM, Lmm]);
+  }, [guideTemplate, previewXHeightMM, Lmm, nibMM, penAngleDeg, script, constructionGuides]);
 
 
   let endWallX: number | null = null;
@@ -296,6 +304,7 @@ function LinePreview(props: LinePreviewProps) {
                 thin: '#e2e8f0',
                 bold: '#e2e8f0', // <-- important: prevents black line showing through box fill
                 tick: '#e2e8f0',
+                construction: constructionGuides.color,
               },
             }}
           />
@@ -591,6 +600,7 @@ export default function Home() {
 
   const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
+  const [constructionGuides, setConstructionGuides] = useState<ConstructionGuideSettings>({ upper: false, lower: false, color: '#dc2626' });
 
   const [showLetterBoxes, setShowLetterBoxes] = useState(true);
   const [vw, setVw] = useState<number | null>(null);
@@ -955,6 +965,10 @@ export default function Home() {
                   baselineTopY={stageFrame.baselineTopY}
                   showLetterBoxes={showLetterBoxes}
                   guideTemplate={guideTemplate}
+                  script={script}
+                  nibMM={nibMM}
+                  penAngleDeg={penAngleDeg}
+                  constructionGuides={constructionGuides}
                 />
               ))}
             </svg>
@@ -1122,6 +1136,7 @@ export default function Home() {
                     </div>
                   </>
                 )}
+                {script !== 'Copperplate' && <div className="sm:col-span-3 rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} compact /></div>}
 
                 <label className="inline-flex items-center gap-2 text-sm text-slate-800 sm:col-span-3">
                   <input

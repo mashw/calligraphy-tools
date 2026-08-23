@@ -19,6 +19,7 @@ type GuideOverlayProps = {
       accent?: string;
       tick?: string;
       frame?: string;
+      construction?: string;
     };
     grid?: {
       thin: number;
@@ -125,6 +126,7 @@ export default function GuideOverlay({
       )}
 
       <g clipPath={bandClipD ? `url(#${bandClipId})` : undefined}>
+        {guideSet.constructionGuides?.map(guide => <polyline key={guide.kind} points={guide.line.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={colors.construction ?? '#dc2626'} strokeWidth={gridThin ?? style.thin} strokeDasharray="2 1.5" vectorEffect="non-scaling-stroke" />)}
         {showGridVertical && guideSet.ticks?.map((tick, idx) => (
           <g key={`tick-${idx}`}>
             <line
