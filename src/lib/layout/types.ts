@@ -28,7 +28,7 @@ export function pageSize(element: PageElement) {
   if (element.settings.paper === 'Custom') return { width: element.settings.customWidthMM, height: element.settings.customHeightMM };
   const raw=PAPERS_MM[element.settings.paper]; return element.settings.orientation==='landscape'&&raw.w<raw.h||element.settings.orientation==='portrait'&&raw.w>raw.h?{width:raw.h,height:raw.w}:{width:raw.w,height:raw.h};
 }
-export const pageElement = (): PageElement => ({ id:'page',type:'page',name:'Page',locked:true,settings:{paper:'A4',orientation:PAPERS_MM.A4.defaultOrientation,customWidthMM:210,customHeightMM:297,margins:{top:15,right:10,bottom:15,left:10},centerLines:{vertical:false,horizontal:false}},frame:{x:0,y:0,width:210,height:297} });
+export const pageElement = (): PageElement => ({ id:'page',type:'page',name:'Page',locked:true,settings:{paper:'A4',orientation:PAPERS_MM.A4.defaultOrientation,customWidthMM:210,customHeightMM:297,margins:{top:0,right:0,bottom:0,left:0},centerLines:{vertical:false,horizontal:false}},frame:{x:0,y:0,width:210,height:297} });
 const labels = { guidelines:'Guidelines',calligram:'Calligram','curved-title':'Curved title',shape:'Shape' } as const;
 export function newElement(type: Exclude<ElementType,'page'|'artwork'>, count:number, page:{width:number;height:number}): LayoutElement {
   const proportional=type==='calligram';
