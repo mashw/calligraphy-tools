@@ -206,9 +206,20 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
     const offBase = invertGuides ? -xMM * normalSign : 0;
     const add = (kind: ConstructionGuideKind, d: number) => constructionGuides.push({ kind, offsetMM: d, line: offset(baseline, d) });
     const offWaist = invertGuides ? 0 : -xMM * normalSign;
-    const directionTowardAscender = Math.sign((invertGuides ? ascMM * normalSign : -(xMM + ascMM) * normalSign) - offWaist);
-    if (construction.upper && ascMM + 1e-2 >= actualNibMM) add(params.blackletterScript === 'Fraktur' ? 'downstrokeStart' : 'upperQuadrantStart', offWaist + directionTowardAscender * distances.upperFromWaistMM);
-    if (construction.lower) add(params.blackletterScript === 'Fraktur' ? 'spurHeight' : 'lowerQuadrantStart', offBase + Math.sign(offWaist - offBase) * distances.lowerFromBaselineMM);
+const directionTowardBaseline = Math.sign(offBase - offWaist);
+
+if (
+  construction.upper &&
+  xMM + 1e-2 >= distances.upperFromWaistMM
+) {
+  add(
+    params.blackletterScript === 'Fraktur'
+      ? 'downstrokeStart'
+      : 'upperQuadrantStart',
+    offWaist +
+      directionTowardBaseline * distances.upperFromWaistMM,
+  );
+}    if (construction.lower) add(params.blackletterScript === 'Fraktur' ? 'spurHeight' : 'lowerQuadrantStart', offBase + Math.sign(offWaist - offBase) * distances.lowerFromBaselineMM);
   }
   const EPS = 1e-2;
   const specialOffsets = constructionGuides.map(guide => guide.offsetMM);

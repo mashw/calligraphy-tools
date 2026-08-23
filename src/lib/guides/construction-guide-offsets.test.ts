@@ -9,13 +9,13 @@ const close = (actual: number, expected: number) => assert.ok(Math.abs(actual - 
 test('Fraktur uses the first ascender reference and an actual-nib spur', () => {
   const result = blackletterConstructionDistances(2, 45, 'Fraktur');
   close(result.effectiveNibMM, 1.4142135623730951);
-  close(result.upperFromWaistMM, 0.5857864376269049);
+  close(result.upperFromWaistMM, 1.4142135623730951);
   close(result.lowerFromBaselineMM, 2);
 });
 
 test('Textura Quadrata uses effective nib distances for both semantic rails', () => {
   const result = blackletterConstructionDistances(2, 45, 'TexturaQuadrata');
-  close(result.upperFromWaistMM, 0.5857864376269049);
+  close(result.upperFromWaistMM, 1.4142135623730951);
   close(result.lowerFromBaselineMM, 1.4142135623730951);
 });
 

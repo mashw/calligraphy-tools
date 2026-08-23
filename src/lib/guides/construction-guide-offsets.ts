@@ -2,7 +2,7 @@ export function blackletterConstructionDistances(actualNibMM: number, penAngleDe
   const effectiveNibMM = actualNibMM * Math.cos(penAngleDeg * Math.PI / 180);
   return {
     effectiveNibMM,
-    upperFromWaistMM: actualNibMM - effectiveNibMM,
+    upperFromWaistMM: effectiveNibMM,
     lowerFromBaselineMM: script === 'Fraktur' ? actualNibMM : effectiveNibMM,
   };
 }
