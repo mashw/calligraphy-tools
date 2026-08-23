@@ -1,6 +1,6 @@
 import type { CurvePresetId } from '@/lib/curve-helpers';
 import type { ScriptId } from '@/lib/scripts';
-import { BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/guide-template';
+import { BLACKLETTER_GUIDE_DEFAULTS, DEFAULT_CONSTRUCTION_GUIDES, type ConstructionGuideSettings } from '@/lib/guides/guide-template';
 
 export type CurvedTitleAlign = 'start' | 'center' | 'end';
 export type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
@@ -16,6 +16,7 @@ export type CurvedTitleSettings = {
   useCalibration: boolean; calWordLowerMM: string; calWordDoubleMM: string; userScaleFactor: number; userSpaceFactor: number;
   rotation: number; scale: number; showBoxes: boolean; showSpanFill: boolean;
   transparentWhitespace: boolean;
+  constructionGuides?: ConstructionGuideSettings;
 };
 
 export function createDefaultCurvedTitleSettings(): CurvedTitleSettings {
@@ -27,6 +28,6 @@ export function createDefaultCurvedTitleSettings(): CurvedTitleSettings {
     topBandEnabled: false, topText: '', topBandScript: 'TexturaQuadrata', topBandSizeText: '2',
     bottomBandEnabled: false, bottomText: '', bottomBandScript: 'TexturaQuadrata', bottomBandSizeText: '2',
     useCalibration: false, calWordLowerMM: '', calWordDoubleMM: '', userScaleFactor: 1, userSpaceFactor: 1,
-    rotation: 0, scale: 100, showBoxes: false, showSpanFill: true, transparentWhitespace: true,
+    rotation: 0, scale: 100, showBoxes: false, showSpanFill: true, transparentWhitespace: true, constructionGuides: { ...DEFAULT_CONSTRUCTION_GUIDES },
   };
 }

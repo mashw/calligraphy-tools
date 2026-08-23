@@ -43,6 +43,8 @@ export function calculateStraightGuidelines(box: { width: number; height: number
     const gridUnitMM = settings.grid.widthMode === 'actual' ? nibMM : effectiveNibMM;
     return buildGuideSet(script === 'Copperplate' ? 'copperplate' : 'blackletter', {
       baseline, ...heights, tickStepMM: script === 'Copperplate' ? Math.max(heights.xMM * .9, 3) : gridUnitMM, actualNibMM: nibMM,
+      penAngleDeg: settings.penAngleDeg, blackletterScript: script === 'Copperplate' ? undefined : script,
+      constructionGuides: settings.constructionGuides,
     });
   });
   return { ...heights, effectiveNibMM, lineHeight, rowStepMM, baselinePositions, guideSets };
