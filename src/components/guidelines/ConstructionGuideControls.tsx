@@ -10,7 +10,7 @@ export default function ConstructionGuideControls({ script, value, onChange, com
   const settings = { ...FALLBACK, ...value };
   const fraktur = script === 'Fraktur';
   const rows = fraktur ? [
-    ['upper', 'Downstroke start guide', 'Marks the start of the main downstroke, one effective nib width below the first ascender reference.'],
+    ['upper', 'Downstroke start guide', 'Align the right edge of the nib with this guide to establish the start of the main downstroke.'],
     ['lower', 'Spur guide', 'Marks the height where the main downstroke branches left to form the spur.'],
   ] as const : [
     ['upper', 'Upper quadrant start guide', 'Align the left edge of the nib with this guide to establish the start of the upper quadrant.'],
