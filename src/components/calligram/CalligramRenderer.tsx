@@ -12,7 +12,7 @@ export default function CalligramRenderer({box,settings,idPrefix,pageBackground,
   <GuideOverlay guideSet={model.main.guideSet} style={style}/>
   <g clipPath={`url(#${underMain})`}>{model.inner.enabled&&<GuideOverlay guideSet={model.inner.guideSet} style={style}/>} {model.outer.enabled&&<GuideOverlay guideSet={model.outer.guideSet} style={style}/>}</g>
   <BandDecorations band={model.main} box={box} showSpan={settings.showSpanFill} showBoxes={settings.showBoxes} prefix={`${idPrefix}-main`}/>{model.inner.enabled&&<BandDecorations band={model.inner} box={box} showSpan={settings.showSpanFill} showBoxes={settings.showBoxes} prefix={`${idPrefix}-inner`}/>} {model.outer.enabled&&<BandDecorations band={model.outer} box={box} showSpan={settings.showSpanFill} showBoxes={settings.showBoxes} prefix={`${idPrefix}-outer`}/>}
-  <circle cx={box.w/2} cy={box.h/2} r={1.6} fill="#000000"/>
+  {settings.showCenterDot&&<circle cx={box.w/2} cy={box.h/2} r={1.6} fill="#000000"/>}
   {model.bands.map((band,i)=><path key={`hit-${i}`} data-no-export="true" d={band.bandD} fill="transparent" pointerEvents="fill"/>)}
  </g>;
 }
