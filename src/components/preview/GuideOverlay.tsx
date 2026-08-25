@@ -1,7 +1,7 @@
 import React, { useId } from 'react';
 
 import { pathD } from '@/lib/curve-helpers';
-import type { GuideSet } from '@/lib/guides/guide-template';
+import { constructionGuideDotPoints, type GuideSet } from '@/lib/guides/guide-template';
 
 type GuideOverlayProps = {
   box?: { w: number; h: number };
@@ -126,7 +126,9 @@ export default function GuideOverlay({
       )}
 
       <g clipPath={bandClipD ? `url(#${bandClipId})` : undefined}>
-        {guideSet.constructionGuides?.map(guide => <polyline key={guide.kind} points={guide.line.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={colors.construction ?? '#dc2626'} strokeWidth={gridThin ?? style.thin} strokeDasharray="2 1.5" vectorEffect="non-scaling-stroke" />)}
+        {guideSet.constructionGuides?.map(guide => guide.appearance === 'dots'
+          ? <g key={guide.kind}>{constructionGuideDotPoints(guide).map((point, index) => <circle key={index} cx={point.x} cy={point.y} r={0.6} fill={colors.construction ?? guide.color ?? '#dc2626'} />)}</g>
+          : <polyline key={guide.kind} points={guide.line.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={colors.construction ?? guide.color ?? '#dc2626'} strokeWidth={gridThin ?? style.thin} strokeDasharray="2 1.5" vectorEffect="non-scaling-stroke" />)}
         {showGridVertical && guideSet.ticks?.map((tick, idx) => (
           <g key={`tick-${idx}`}>
             <line

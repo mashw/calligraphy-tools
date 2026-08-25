@@ -19,9 +19,25 @@ export type GuideSet = {
 
 export type BlackletterScript = 'Fraktur' | 'TexturaQuadrata';
 export type ConstructionGuideKind = 'downstrokeStart' | 'spurHeight' | 'upperQuadrantStart' | 'lowerQuadrantStart';
-export type ConstructionGuide = { kind: ConstructionGuideKind; line: Pt[]; offsetMM: number };
-export type ConstructionGuideSettings = { upper: boolean; lower: boolean; color: string };
+export type ConstructionGuideAppearance = 'dashed' | 'dots';
+export type ConstructionGuide = { kind: ConstructionGuideKind; line: Pt[]; markerPoints: Pt[]; offsetMM: number; appearance: ConstructionGuideAppearance; dotEvery: number; color: string };
+export type ConstructionGuideSettings = { upper: boolean; lower: boolean; color: string; appearance?: ConstructionGuideAppearance; dotEvery?: number };
 export const DEFAULT_CONSTRUCTION_GUIDES: ConstructionGuideSettings = { upper: false, lower: false, color: '#dc2626' };
+
+export function resolveConstructionGuideSettings(script: BlackletterScript, value?: Partial<ConstructionGuideSettings>) {
+  const dotEvery = Number.isFinite(value?.dotEvery) ? Math.max(1, Math.min(12, Math.round(value!.dotEvery!))) : 3;
+  return {
+    upper: value?.upper ?? DEFAULT_CONSTRUCTION_GUIDES.upper,
+    lower: value?.lower ?? DEFAULT_CONSTRUCTION_GUIDES.lower,
+    color: value?.color ?? DEFAULT_CONSTRUCTION_GUIDES.color,
+    appearance: value?.appearance ?? (script === 'Fraktur' ? 'dots' : 'dashed'),
+    dotEvery,
+  } satisfies Required<ConstructionGuideSettings>;
+}
+
+export function constructionGuideDotPoints(guide: Pick<ConstructionGuide, 'markerPoints' | 'dotEvery'>) {
+  return guide.markerPoints.filter((_, index) => index % guide.dotEvery === 0);
+}
 
 export type GuideTemplateId = 'copperplate' | 'blackletter';
 
@@ -69,6 +85,7 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
 
   const step = Math.max(0.0001, tickStepMM ?? 1);
   const ticks: { a: Pt; b: Pt }[] = [];
+  const uprightSamples: { p: Pt; n: Pt }[] = [];
   const arcLen = lengthPoly(baseline);
 
   const isClosed = (() => {
@@ -98,6 +115,7 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
         if (isClosed && sClamped >= arcLen - 1e-9) continue;
 
     const { p, n } = pointAt(baseline, sClamped);
+    uprightSamples.push({ p, n });
 
     ticks.push({
       a: { x: p.x + n.x * topScalar * normalSign, y: p.y + n.y * topScalar * normalSign },
@@ -200,16 +218,16 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
 
 
   const constructionGuides: ConstructionGuide[] = [];
-  const construction = { ...DEFAULT_CONSTRUCTION_GUIDES, ...params.constructionGuides };
+  const construction = params.blackletterScript ? resolveConstructionGuideSettings(params.blackletterScript, params.constructionGuides) : null;
   if (actualNibMM && params.blackletterScript) {
     const distances = blackletterConstructionDistances(actualNibMM, params.penAngleDeg ?? 45, params.blackletterScript);
     const offBase = invertGuides ? -xMM * normalSign : 0;
-    const add = (kind: ConstructionGuideKind, d: number) => constructionGuides.push({ kind, offsetMM: d, line: offset(baseline, d) });
+    const add = (kind: ConstructionGuideKind, d: number) => constructionGuides.push({ kind, offsetMM: d, line: offset(baseline, d), markerPoints: uprightSamples.map(({ p, n }) => ({ x: p.x + n.x * d * normalSign, y: p.y + n.y * d * normalSign })), appearance: construction!.appearance, dotEvery: construction!.dotEvery, color: construction!.color });
     const offWaist = invertGuides ? 0 : -xMM * normalSign;
 const directionTowardBaseline = Math.sign(offBase - offWaist);
 
 if (
-  construction.upper &&
+  construction?.upper &&
   xMM + 1e-2 >= distances.upperFromWaistMM
 ) {
   add(
@@ -219,7 +237,7 @@ if (
     offWaist +
       directionTowardBaseline * distances.upperFromWaistMM,
   );
-}    if (construction.lower) add(params.blackletterScript === 'Fraktur' ? 'spurHeight' : 'lowerQuadrantStart', offBase + Math.sign(offWaist - offBase) * distances.lowerFromBaselineMM);
+}    if (construction?.lower) add(params.blackletterScript === 'Fraktur' ? 'spurHeight' : 'lowerQuadrantStart', offBase + Math.sign(offWaist - offBase) * distances.lowerFromBaselineMM);
   }
   const EPS = 1e-2;
   const specialOffsets = constructionGuides.map(guide => guide.offsetMM);

@@ -1,6 +1,7 @@
 import { buildCalligramModel } from '@/lib/calligram/model';
 import { buildCurvedTitleModel } from '@/lib/curved-title/model';
 import { buildStraightSlantLines, calculateStraightGuidelines } from '@/lib/guides/straight/model';
+import { constructionGuideDotPoints, type ConstructionGuideAppearance } from '@/lib/guides/guide-template';
 import { occupiedRect } from '@/lib/layout/geometry';
 import { pathHasOnlyClosedSubpaths, type ArtworkNode } from '@/lib/layout/artwork';
 import { shapePolygonPoints } from '@/lib/layout/shape';
@@ -25,6 +26,7 @@ export type PlotterExportOptions = {
   constructionGrid: boolean;
   constructionGuides: boolean;
   nibAngleMarker: boolean;
+  calligramCenterMarkers: boolean;
   shapeOutlines: boolean;
 };
 
@@ -37,6 +39,7 @@ export const DEFAULT_PLOTTER_EXPORT_OPTIONS: PlotterExportOptions = {
   constructionGrid: true,
   constructionGuides: true,
   nibAngleMarker: false,
+  calligramCenterMarkers: false,
   shapeOutlines: true,
 };
 
@@ -75,7 +78,7 @@ type GuideLike = {
   descLine: Pt[];
   ticks?: { a: Pt; b: Pt }[];
   hGuides?: Pt[][];
-  constructionGuides?: { kind: string; line: Pt[] }[];
+  constructionGuides?: { kind: string; line: Pt[]; markerPoints: Pt[]; appearance: ConstructionGuideAppearance; dotEvery: number }[];
 };
 
 type Occluder = {
@@ -559,6 +562,13 @@ function guideSetPolylines(
   }
   if (options?.constructionGuides !== false) {
     (guide.constructionGuides ?? []).forEach(item => {
+      if (item.appearance === 'dots') {
+        constructionGuideDotPoints(item).forEach((point, index) => {
+          const marker = circleOutline(point.x, point.y, 0.6, `${source}:construction-${item.kind}-dot-${index}`);
+          if (marker) result.push(...(bandRect ? clipPolylineToRect(marker, bandRect) : [marker]));
+        });
+        return;
+      }
       const next = polyline(item.line, `${source}:construction-${item.kind}`);
       if (!next) return;
       dashPolyline(next, 2, 1.5).forEach(dash => result.push(...(bandRect ? clipPolylineToRect(dash, bandRect) : [dash])));
@@ -719,7 +729,12 @@ function calligramPolylines(element: Extract<LayoutElement, { type: 'calligram' 
     const raw = guideSetPolylines(band.guideSet as GuideLike, `calligram:${element.id}:${band === model.inner ? 'inner' : 'outer'}`, guideOptions);
     return clipPolylinesByOccluders(raw, [mainBand]);
   });
-  return translatePolylines([...main, ...otherBands], element.frame.x, element.frame.y);
+  const result = [...main, ...otherBands];
+  if (options.calligramCenterMarkers) {
+    const centerMarker = circleOutline(element.frame.width / 2, element.frame.height / 2, 1.6, `calligram:${element.id}:center-marker`);
+    if (centerMarker) result.push(centerMarker);
+  }
+  return translatePolylines(result, element.frame.x, element.frame.y);
 }
 
 function shapeBoundaryPolylines(element: Extract<LayoutElement, { type: 'shape' }>) {

@@ -300,6 +300,7 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
               ['constructionGrid', 'Construction grid / ticks'],
               ['constructionGuides', 'Semantic construction guides'],
               ['nibAngleMarker', 'Nib-angle marker'],
+              ['calligramCenterMarkers', 'Calligram centre markers'],
               ['shapeOutlines', 'Shape outlines'],
             ] as const).map(([key, label]) => <label key={key} className="flex items-center gap-2"><input type="checkbox" checked={cricutOptions[key]} onChange={event => setCricutOptions(current => ({ ...current, [key]: event.target.checked }))} />{label}</label>)}
           </div>
