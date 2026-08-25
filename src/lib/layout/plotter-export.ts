@@ -564,7 +564,7 @@ function guideSetPolylines(
     (guide.constructionGuides ?? []).forEach(item => {
       if (item.appearance === 'dots') {
         constructionGuideDotPoints(item).forEach((point, index) => {
-          const marker = circleOutline(point.x, point.y, 0.6, `${source}:construction-${item.kind}-dot-${index}`);
+          const marker = circleOutline(point.x, point.y, 0.35, `${source}:construction-${item.kind}-dot-${index}`);
           if (marker) result.push(...(bandRect ? clipPolylineToRect(marker, bandRect) : [marker]));
         });
         return;

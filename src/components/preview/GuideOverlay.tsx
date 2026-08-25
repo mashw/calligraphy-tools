@@ -126,9 +126,9 @@ export default function GuideOverlay({
       )}
 
       <g clipPath={bandClipD ? `url(#${bandClipId})` : undefined}>
-        {guideSet.constructionGuides?.map(guide => guide.appearance === 'dots'
-          ? <g key={guide.kind}>{constructionGuideDotPoints(guide).map((point, index) => <circle key={index} cx={point.x} cy={point.y} r={0.6} fill={colors.construction ?? guide.color ?? '#dc2626'} />)}</g>
-          : <polyline key={guide.kind} points={guide.line.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={colors.construction ?? guide.color ?? '#dc2626'} strokeWidth={gridThin ?? style.thin} strokeDasharray="2 1.5" vectorEffect="non-scaling-stroke" />)}
+        {guideSet.constructionGuides?.map(guide => guide.appearance === 'dashed'
+          ? <polyline key={guide.kind} points={guide.line.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={colors.construction ?? guide.color ?? '#dc2626'} strokeWidth={gridThin ?? style.thin} strokeDasharray="2 1.5" vectorEffect="non-scaling-stroke" />
+          : null)}
         {showGridVertical && guideSet.ticks?.map((tick, idx) => (
           <g key={`tick-${idx}`}>
             <line
@@ -183,6 +183,10 @@ export default function GuideOverlay({
             </g>
           );
         })}
+
+        {guideSet.constructionGuides?.map(guide => guide.appearance === 'dots'
+          ? <g key={guide.kind}>{constructionGuideDotPoints(guide).map((point, index) => <circle key={index} cx={point.x} cy={point.y} r={0.35} fill={colors.construction ?? guide.color ?? '#dc2626'} />)}</g>
+          : null)}
 
         {markerData && (() => {
           const { x, y, size } = markerData;
