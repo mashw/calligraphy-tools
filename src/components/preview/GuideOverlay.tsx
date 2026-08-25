@@ -127,7 +127,7 @@ export default function GuideOverlay({
 
       <g clipPath={bandClipD ? `url(#${bandClipId})` : undefined}>
         {guideSet.constructionGuides?.map(guide => guide.appearance === 'dashed'
-          ? <polyline key={guide.kind} points={guide.line.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={colors.construction ?? guide.color ?? '#dc2626'} strokeWidth={gridThin ?? style.thin} strokeDasharray="2 1.5" vectorEffect="non-scaling-stroke" />
+          ? <polyline key={guide.kind} points={guide.line.map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke={colors.construction ?? guide.color ?? '#dc2626'} strokeWidth={gridThin ?? style.thin} strokeDasharray="2 2" vectorEffect="non-scaling-stroke" />
           : null)}
         {showGridVertical && guideSet.ticks?.map((tick, idx) => (
           <g key={`tick-${idx}`}>

@@ -571,7 +571,7 @@ function guideSetPolylines(
       }
       const next = polyline(item.line, `${source}:construction-${item.kind}`);
       if (!next) return;
-      dashPolyline(next, 2, 1.5).forEach(dash => result.push(...(bandRect ? clipPolylineToRect(dash, bandRect) : [dash])));
+      dashPolyline(next, 2, 2).forEach(dash => result.push(...(bandRect ? clipPolylineToRect(dash, bandRect) : [dash])));
     });
   }
 

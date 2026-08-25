@@ -21,18 +21,20 @@ export type BlackletterScript = 'Fraktur' | 'TexturaQuadrata';
 export type ConstructionGuideKind = 'downstrokeStart' | 'spurHeight' | 'upperQuadrantStart' | 'lowerQuadrantStart';
 export type ConstructionGuideAppearance = 'dashed' | 'dots';
 export type ConstructionGuide = { kind: ConstructionGuideKind; line: Pt[]; markerPoints: Pt[]; offsetMM: number; appearance: ConstructionGuideAppearance; dotEvery: number; color: string };
-export type ConstructionGuideSettings = { upper: boolean; lower: boolean; color: string; appearance?: ConstructionGuideAppearance; dotEvery?: number };
+export type ConstructionGuideSettings = { upper: boolean; lower: boolean; color: string; appearance?: ConstructionGuideAppearance; upperAppearance?: ConstructionGuideAppearance; lowerAppearance?: ConstructionGuideAppearance; dotEvery?: number };
 export const DEFAULT_CONSTRUCTION_GUIDES: ConstructionGuideSettings = { upper: false, lower: false, color: '#dc2626' };
 
 export function resolveConstructionGuideSettings(script: BlackletterScript, value?: Partial<ConstructionGuideSettings>) {
   const dotEvery = Number.isFinite(value?.dotEvery) ? Math.max(1, Math.min(12, Math.round(value!.dotEvery!))) : 3;
+  const defaultAppearance = script === 'Fraktur' ? 'dots' : 'dashed';
   return {
     upper: value?.upper ?? DEFAULT_CONSTRUCTION_GUIDES.upper,
     lower: value?.lower ?? DEFAULT_CONSTRUCTION_GUIDES.lower,
     color: value?.color ?? DEFAULT_CONSTRUCTION_GUIDES.color,
-    appearance: value?.appearance ?? (script === 'Fraktur' ? 'dots' : 'dashed'),
+    upperAppearance: value?.upperAppearance ?? value?.appearance ?? defaultAppearance,
+    lowerAppearance: value?.lowerAppearance ?? value?.appearance ?? defaultAppearance,
     dotEvery,
-  } satisfies Required<ConstructionGuideSettings>;
+  };
 }
 
 export function constructionGuideDotPoints(guide: Pick<ConstructionGuide, 'markerPoints' | 'dotEvery'>) {
@@ -222,7 +224,7 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
   if (actualNibMM && params.blackletterScript) {
     const distances = blackletterConstructionDistances(actualNibMM, params.penAngleDeg ?? 45, params.blackletterScript);
     const offBase = invertGuides ? -xMM * normalSign : 0;
-    const add = (kind: ConstructionGuideKind, d: number) => constructionGuides.push({ kind, offsetMM: d, line: offset(baseline, d), markerPoints: uprightSamples.map(({ p, n }) => ({ x: p.x + n.x * d * normalSign, y: p.y + n.y * d * normalSign })), appearance: construction!.appearance, dotEvery: construction!.dotEvery, color: construction!.color });
+    const add = (kind: ConstructionGuideKind, d: number) => constructionGuides.push({ kind, offsetMM: d, line: offset(baseline, d), markerPoints: uprightSamples.map(({ p, n }) => ({ x: p.x + n.x * d * normalSign, y: p.y + n.y * d * normalSign })), appearance: kind === 'downstrokeStart' || kind === 'upperQuadrantStart' ? construction!.upperAppearance : construction!.lowerAppearance, dotEvery: construction!.dotEvery, color: construction!.color });
     const offWaist = invertGuides ? 0 : -xMM * normalSign;
 const directionTowardBaseline = Math.sign(offBase - offWaist);
 
