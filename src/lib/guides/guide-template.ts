@@ -19,8 +19,20 @@ export type GuideSet = {
 
 export type BlackletterScript = 'Fraktur' | 'TexturaQuadrata';
 export type ConstructionGuideKind = 'downstrokeStart' | 'spurHeight' | 'upperQuadrantStart' | 'lowerQuadrantStart';
-export type ConstructionGuide = { kind: ConstructionGuideKind; line: Pt[]; offsetMM: number };
-export type ConstructionGuideSettings = { upper: boolean; lower: boolean; color: string };
+export type ConstructionGuide = {
+  kind: ConstructionGuideKind;
+  line: Pt[];
+  offsetMM: number;
+
+  /**
+   * Exact intersections of this construction guide with the generated
+   * blackletter uprights, in the same order as GuideSet.ticks.
+   *
+   * Rendering may choose every Nth marker, but must not recalculate
+   * these positions.
+   */
+  markerPoints?: Pt[];
+};export type ConstructionGuideSettings = { upper: boolean; lower: boolean; color: string };
 export const DEFAULT_CONSTRUCTION_GUIDES: ConstructionGuideSettings = { upper: false, lower: false, color: '#dc2626' };
 
 export type GuideTemplateId = 'copperplate' | 'blackletter';
@@ -69,6 +81,7 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
 
   const step = Math.max(0.0001, tickStepMM ?? 1);
   const ticks: { a: Pt; b: Pt }[] = [];
+  const uprightSamples: { p: Pt; n: Pt }[] = [];
   const arcLen = lengthPoly(baseline);
 
   const isClosed = (() => {
@@ -98,6 +111,10 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
         if (isClosed && sClamped >= arcLen - 1e-9) continue;
 
     const { p, n } = pointAt(baseline, sClamped);
+    uprightSamples.push({
+  p: { x: p.x, y: p.y },
+  n: { x: n.x, y: n.y },
+});
 
     ticks.push({
       a: { x: p.x + n.x * topScalar * normalSign, y: p.y + n.y * topScalar * normalSign },
@@ -204,8 +221,19 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
   if (actualNibMM && params.blackletterScript) {
     const distances = blackletterConstructionDistances(actualNibMM, params.penAngleDeg ?? 45, params.blackletterScript);
     const offBase = invertGuides ? -xMM * normalSign : 0;
-    const add = (kind: ConstructionGuideKind, d: number) => constructionGuides.push({ kind, offsetMM: d, line: offset(baseline, d) });
-    const offWaist = invertGuides ? 0 : -xMM * normalSign;
+const add = (kind: ConstructionGuideKind, d: number) => {
+  const markerPoints = uprightSamples.map(({ p, n }) => ({
+    x: p.x + n.x * d,
+    y: p.y + n.y * d,
+  }));
+
+  constructionGuides.push({
+    kind,
+    offsetMM: d,
+    line: offset(baseline, d),
+    markerPoints,
+  });
+};    const offWaist = invertGuides ? 0 : -xMM * normalSign;
 const directionTowardBaseline = Math.sign(offBase - offWaist);
 
 if (

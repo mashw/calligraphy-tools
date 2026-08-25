@@ -25,6 +25,7 @@ export type PlotterExportOptions = {
   constructionGrid: boolean;
   constructionGuides: boolean;
   nibAngleMarker: boolean;
+  calligramCenterMarkers: boolean;
   shapeOutlines: boolean;
 };
 
@@ -37,6 +38,7 @@ export const DEFAULT_PLOTTER_EXPORT_OPTIONS: PlotterExportOptions = {
   constructionGrid: true,
   constructionGuides: true,
   nibAngleMarker: false,
+  calligramCenterMarkers: false,
   shapeOutlines: true,
 };
 
@@ -719,7 +721,12 @@ function calligramPolylines(element: Extract<LayoutElement, { type: 'calligram' 
     const raw = guideSetPolylines(band.guideSet as GuideLike, `calligram:${element.id}:${band === model.inner ? 'inner' : 'outer'}`, guideOptions);
     return clipPolylinesByOccluders(raw, [mainBand]);
   });
-  return translatePolylines([...main, ...otherBands], element.frame.x, element.frame.y);
+  const result = [...main, ...otherBands];
+  if (options.calligramCenterMarkers) {
+    const centerMarker = circleOutline(element.frame.width / 2, element.frame.height / 2, 1.6, `calligram:${element.id}:center-marker`);
+    if (centerMarker) result.push(centerMarker);
+  }
+  return translatePolylines(result, element.frame.x, element.frame.y);
 }
 
 function shapeBoundaryPolylines(element: Extract<LayoutElement, { type: 'shape' }>) {
