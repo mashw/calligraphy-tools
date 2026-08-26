@@ -404,6 +404,23 @@ type GuideJoinChain = {
   id: string;
   members: GuideJoinChainMember[];
   closed: boolean;
+  startKey: string | null;
+  canonicalMemberOrderKey: string;
+};
+
+type JoinedGuideRouteMember = {
+  strapId: string;
+  reversed: boolean;
+  startIndex: number;
+  endIndex: number;
+};
+
+type JoinedGuideRoute = {
+  id: string;
+  closed: boolean;
+  baseline: Pt[];
+  members: JoinedGuideRouteMember[];
+  canonicalMemberOrderKey: string;
 };
 
 
@@ -602,6 +619,55 @@ const buildGuideJoinChains = (straps: Strap[]): GuideJoinChain[] => {
   const otherSide = (side: EndpointSide): EndpointSide =>
     (side === 'start' ? 'end' : 'start');
 
+  const serializeMembers = (members: GuideJoinChainMember[]) => (
+    members.map((m) => `${m.strapId}:${m.reversed ? 'rev' : 'fwd'}`)
+  );
+
+  const parseMemberKey = (key: string): GuideJoinChainMember[] => (
+    key.split('|').filter(Boolean).map((entry) => {
+      const [strapId, dir] = entry.split(':');
+      return { strapId, reversed: dir === 'rev' };
+    })
+  );
+
+  const lexicographicallySmallestCycleRotation = (entries: string[]) => {
+    if (!entries.length) return '';
+    const doubled = [...entries, ...entries];
+    let best = entries.join('|');
+    for (let i = 1; i < entries.length; i += 1) {
+      const candidate = doubled.slice(i, i + entries.length).join('|');
+      if (candidate < best) best = candidate;
+    }
+    return best;
+  };
+
+  const walkCycle = (seedId: string, seedEnterSide: EndpointSide): GuideJoinChainMember[] | null => {
+    const seen = new Set<string>();
+    const members: GuideJoinChainMember[] = [];
+    let currentId = seedId;
+    let currentEnterSide = seedEnterSide;
+
+    while (true) {
+      if (seen.has(currentId)) {
+        if (currentId === seedId && currentEnterSide === seedEnterSide && members.length > 1) {
+          return members;
+        }
+        return null;
+      }
+
+      seen.add(currentId);
+      members.push({
+        strapId: currentId,
+        reversed: currentEnterSide === 'end',
+      });
+
+      const next = reciprocalLink(currentId, otherSide(currentEnterSide));
+      if (!next) return null;
+      currentId = next.strapId;
+      currentEnterSide = next.side;
+    }
+  };
+
   const degreeByStrap = new Map<string, number>();
   straps.forEach((strap) => {
     let deg = 0;
@@ -667,26 +733,59 @@ const buildGuideJoinChains = (straps: Strap[]): GuideJoinChain[] => {
     }
 
     if (members.length > 1 && !closed) {
-      const id = members
-        .map((m) => `${m.strapId}:${m.reversed ? 'rev' : 'fwd'}`)
-        .join('|');
-      chains.push({ id, members, closed: false });
+      const canonicalMemberOrderKey = serializeMembers(members).join('|');
+      chains.push({
+        id: `open:${canonicalMemberOrderKey}`,
+        members,
+        closed: false,
+        startKey: endpointKey(startId, enterSide),
+        canonicalMemberOrderKey,
+      });
     }
   }
 
-  // Closed loops are deliberately not emitted yet.
-  // They need a stable phase anchor before joined guide continuity is safe.
+  const closedSeedIds = straps
+    .filter((strap) => (degreeByStrap.get(strap.id) ?? 0) === 2 && !usedStrapIds.has(strap.id))
+    .map((strap) => strap.id)
+    .sort();
+
+  for (const seedId of closedSeedIds) {
+    if (usedStrapIds.has(seedId)) continue;
+
+    const cw = walkCycle(seedId, 'start');
+    const ccw = walkCycle(seedId, 'end');
+    if (!cw || !ccw) continue;
+
+    const cwKey = lexicographicallySmallestCycleRotation(serializeMembers(cw));
+    const ccwKey = lexicographicallySmallestCycleRotation(serializeMembers(ccw));
+    const canonicalMemberOrderKey = cwKey < ccwKey ? cwKey : ccwKey;
+    const members = parseMemberKey(canonicalMemberOrderKey);
+
+    members.forEach((member) => {
+      usedStrapIds.add(member.strapId);
+    });
+
+    chains.push({
+      id: `closed:${canonicalMemberOrderKey}`,
+      members,
+      closed: true,
+      startKey: null,
+      canonicalMemberOrderKey,
+    });
+  }
+
   return chains;
 };
 
-const buildVirtualGuideBaselineForChain = ({
+const buildJoinedGuideRouteForChain = ({
   chain,
   transformedById,
 }: {
   chain: GuideJoinChain;
   transformedById: Map<string, Pt[]>;
-}) => {
-  const points: Pt[] = [];
+}): JoinedGuideRoute | null => {
+  const baseline: Pt[] = [];
+  const members: JoinedGuideRouteMember[] = [];
 
   const stitchPoint = (a: Pt, b: Pt) => {
     const seamGap = Math.hypot(a.x - b.x, a.y - b.y);
@@ -705,45 +804,72 @@ const buildVirtualGuideBaselineForChain = ({
 
     const pts = member.reversed ? [...raw].reverse() : raw;
 
-    if (!points.length) {
-      points.push(...pts);
+    if (!baseline.length) {
+      const startIndex = 0;
+      baseline.push(...pts);
+      const endIndex = baseline.length - 1;
+      members.push({
+        strapId: member.strapId,
+        reversed: member.reversed,
+        startIndex,
+        endIndex,
+      });
       continue;
     }
 
-    const seam = stitchPoint(points[points.length - 1], pts[0]);
+    const seam = stitchPoint(baseline[baseline.length - 1], pts[0]);
     if (!seam) return null;
 
-    points[points.length - 1] = seam;
-    points.push(...pts.slice(1));
+    baseline[baseline.length - 1] = seam;
+    const startIndex = baseline.length - 1;
+    baseline.push(...pts.slice(1));
+    const endIndex = baseline.length - 1;
+    members.push({
+      strapId: member.strapId,
+      reversed: member.reversed,
+      startIndex,
+      endIndex,
+    });
   }
 
-  if (chain.closed) return null;
+  if (chain.closed) {
+    if (baseline.length < 3) return null;
+    const seam = stitchPoint(baseline[baseline.length - 1], baseline[0]);
+    if (!seam) return null;
+    baseline[0] = seam;
+    baseline[baseline.length - 1] = seam;
+  }
 
-  return points.length >= 2 ? { baseline: points } : null;
+  if (baseline.length < 2) return null;
+
+  return {
+    id: chain.id,
+    closed: chain.closed,
+    baseline,
+    members,
+    canonicalMemberOrderKey: chain.canonicalMemberOrderKey,
+  };
 };
 
 
 const buildCompatibleJoinedGuideData = ({
-  chains,
+  routes,
   strapById,
-  transformedById,
 }: {
-  chains: GuideJoinChain[];
+  routes: JoinedGuideRoute[];
   strapById: Map<string, { strap: Strap; metrics: ReturnType<typeof guideMetrics> }>;
-  transformedById: Map<string, Pt[]>;
 }) => {
   const result: Array<{
-    chainId: string;
+    routeId: string;
     members: GuideJoinChainMember[];
     guideSet: ReturnType<typeof buildGuideSet>;
   }> = [];
 
-  chains.forEach((chain) => {
-    if (chain.closed) return;
-    const first = strapById.get(chain.members[0].strapId);
+  routes.forEach((route) => {
+    const first = strapById.get(route.members[0].strapId);
     if (!first) return;
 
-    const allCompatible = chain.members.every((m) => {
+    const allCompatible = route.members.every((m) => {
       const item = strapById.get(m.strapId);
       if (!item) return false;
       if (item.strap.script !== first.strap.script) return false;
@@ -760,13 +886,11 @@ const buildCompatibleJoinedGuideData = ({
     });
     if (!allCompatible) return;
 
-    const virtual = buildVirtualGuideBaselineForChain({ chain, transformedById });
-    if (!virtual) return;
 
     const guideSet = buildGuideSet(
       first.strap.script === 'Copperplate' ? 'copperplate' : 'blackletter',
       {
-        baseline: virtual.baseline,
+        baseline: route.baseline,
         xMM: first.metrics.xMM,
         ascMM: first.metrics.ascMM,
         descMM: first.metrics.descMM,
@@ -783,8 +907,8 @@ const buildCompatibleJoinedGuideData = ({
     );
 
     result.push({
-      chainId: chain.id,
-      members: chain.members,
+      routeId: route.id,
+      members: route.members.map((m) => ({ strapId: m.strapId, reversed: m.reversed })),
       guideSet,
     });
   });
@@ -1378,16 +1502,69 @@ export default function PathGuidesPage() {
     () => buildGuideJoinChains(straps),
     [straps],
   );
+
+  const guideJoinChainSummary = useMemo(() => {
+    const open = guideJoinChains.filter((chain) => !chain.closed);
+    const closed = guideJoinChains.filter((chain) => chain.closed);
+    return {
+      openChainCount: open.length,
+      closedChainCount: closed.length,
+      memberIdsPerChain: guideJoinChains.map((chain) => ({
+        chainId: chain.id,
+        memberIds: chain.members.map((member) => member.strapId),
+      })),
+    };
+  }, [guideJoinChains]);
+
+  const joinedGuideRoutes = useMemo(
+    () => guideJoinChains
+      .map((chain) => buildJoinedGuideRouteForChain({ chain, transformedById }))
+      .filter((route): route is JoinedGuideRoute => route !== null),
+    [guideJoinChains, transformedById],
+  );
+
+  const joinedGuideRouteSummary = useMemo(() => (
+    joinedGuideRoutes.map((route) => ({
+      routeId: route.id,
+      closed: route.closed,
+      baselinePointCount: route.baseline.length,
+      memberStrapIds: route.members.map((member) => member.strapId),
+      memberIndexSpans: route.members.map((member) => ({
+        strapId: member.strapId,
+        startIndex: member.startIndex,
+        endIndex: member.endIndex,
+      })),
+    }))
+  ), [joinedGuideRoutes]);
+
+  const openJoinedGuideRoutes = useMemo(
+    () => joinedGuideRoutes.filter((route) => !route.closed),
+    [joinedGuideRoutes],
+  );
+
+  const joinedGuideRouteByStrapId = useMemo(() => {
+    const byStrapId = new Map<string, { routeId: string; memberIndex: number; route: JoinedGuideRoute }>();
+    joinedGuideRoutes.forEach((route) => {
+      route.members.forEach((member, memberIndex) => {
+        byStrapId.set(member.strapId, { routeId: route.id, memberIndex, route });
+      });
+    });
+    return byStrapId;
+  }, [joinedGuideRoutes]);
   
   const compatibleJoinedGuideData = useMemo(
-    () => buildCompatibleJoinedGuideData({ chains: guideJoinChains, strapById, transformedById }),
-    [guideJoinChains, strapById, transformedById],
+    () => buildCompatibleJoinedGuideData({ routes: openJoinedGuideRoutes, strapById }),
+    [openJoinedGuideRoutes, strapById],
   );
+
+  void guideJoinChainSummary;
+  void joinedGuideRouteSummary;
+  void joinedGuideRouteByStrapId;
 
   const joinedGuideMemberIds = useMemo(() => {
     const set = new Set<string>();
-    compatibleJoinedGuideData.forEach((chain) => {
-      chain.members.forEach((member) => {
+    compatibleJoinedGuideData.forEach((route) => {
+      route.members.forEach((member) => {
         set.add(member.strapId);
       });
     });
@@ -2529,19 +2706,20 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 );
               })}
 
-{!interactionActive && !simplify && compatibleJoinedGuideData.map((chain) =>
-  chain.members.map((member) => {
+{/* TODO: Closed-route guide rendering should clip canonical route overlays by member span, not full-route overlay only. */}
+{!interactionActive && !simplify && compatibleJoinedGuideData.map((route) =>
+  route.members.map((member) => {
     const strapEntry = strapById.get(member.strapId);
     if (!strapEntry) return null;
 
     return (
       <g
-        key={`joined-guide-${chain.chainId}-${member.strapId}`}
+        key={`joined-guide-${route.routeId}-${member.strapId}`}
         clipPath={`url(#guide-clip-${member.strapId})`}
         mask={underCrossings.get(member.strapId)?.length ? `url(#mask-${member.strapId})` : undefined}
       >
         <GuideOverlay
-          guideSet={chain.guideSet}
+          guideSet={route.guideSet}
           style={{
             thin: guideStroke.thin,
             bold: guideStroke.bold,
