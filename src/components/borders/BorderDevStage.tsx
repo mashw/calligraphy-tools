@@ -25,7 +25,7 @@ export default function BorderDevStage({ d, closed, reverse, options, showConstr
         {guide?.corners.map(s => { const f = frameAt(guide, s); return <circle key={s} cx={f.point.x} cy={f.point.y} r="5" stroke="#f97316" strokeWidth="1.3" />; })}
         {geometry?.construction.map((m, i) => m.kind === 'root' ? <circle key={i} cx={m.a.x} cy={m.a.y} r="2.2" fill="#7c3aed" /> : m.kind === 'tight' ? <circle key={i} cx={m.a.x} cy={m.a.y} r="5" fill="#ef444455" stroke="#ef4444" /> : <path key={i} d={`M ${m.a.x} ${m.a.y} L ${m.b?.x} ${m.b?.y}`} stroke={m.kind === 'lobe' ? '#0d9488' : '#8b5cf6'} strokeWidth=".5" strokeDasharray="2 2" />)}
         {guide && !componentStudy && <path d={`M ${guide.frames[0].point.x} ${guide.frames[0].point.y} l ${guide.frames[0].tangent.x * 12} ${guide.frames[0].tangent.y * 12}`} stroke="#e11d48" strokeWidth="2" markerEnd="url(#arrow)" />}
-        {componentStudy && <g fill="#475569" stroke="none" fontSize="11"><text x="75" y="72">Half leaf / raffle cluster</text><text x="315" y="72">Sweep leaf</text><text x="75" y="385">Turnover / hook</text><text x="350" y="385">Eye + pipe / assembled stem</text></g>}
+        {componentStudy && <g fill="#475569" stroke="none" fontSize="11"><text x="65" y="72">A. Single raffle</text><text x="300" y="72">B. Half leaf from raffles</text><text x="65" y="390">C. Sweep leaf comparison</text><text x="340" y="390">D. Components on generated stem</text></g>}
         <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#e11d48" /></marker></defs>
       </g>}
     </svg>

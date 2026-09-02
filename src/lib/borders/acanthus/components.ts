@@ -1,10 +1,11 @@
 import { add, cubic, fmt, scale, unit } from '../geometry';
 import type { BorderStroke, ConstructionMark, PathFrame, Point } from '../types';
 import { shadeLeaf } from './shading';
+import { buildRaffle } from './raffle';
 import type { DetailLevel, ShadingDensity } from './types';
 
 export type ComponentKind = 'half' | 'sweep' | 'turnover' | 'junction';
-export type ComponentParameters = { length:number; width:number; side:-1|1; detail:DetailLevel; motif:number; bend?:number; layer?:number; shading?:false|ShadingDensity };
+export type ComponentParameters = { length:number; width:number; side:-1|1; detail:DetailLevel; motif:number; bend?:number; layer?:number; shading?:false|ShadingDensity; organic?:number };
 export type AcanthusComponent = { strokes:BorderStroke[]; construction:ConstructionMark[]; tip:Point };
 
 type Basis={root:Point;forward:Point;out:Point;length:number;width:number};
@@ -18,13 +19,15 @@ const appendShading=(strokes:BorderStroke[],b:Basis,p:ComponentParameters,kind:C
 
 /** Independent one-sided mass: a root, deep eye, broad raffle and nested lobules. */
 export function buildHalfLeaf(frame:PathFrame,p:ComponentParameters):AcanthusComponent {
-  const b=basis(frame,p,.58,.82), root=at(b,0,0), eye=at(b,.3,.09), mainTip=at(b,.42,1.06), tip=at(b,.9,.55);
-  const outer=`M ${fmt(root)} C ${fmt(at(b,.05,.18))} ${fmt(at(b,.13,.78))} ${fmt(at(b,.27,.96))} C ${fmt(at(b,.32,1.12))} ${fmt(at(b,.38,1.12))} ${fmt(mainTip)} C ${fmt(at(b,.49,.9))} ${fmt(at(b,.45,.73))} ${fmt(at(b,.5,.7))} C ${fmt(at(b,.57,.86))} ${fmt(at(b,.64,.9))} ${fmt(at(b,.68,.76))} C ${fmt(at(b,.73,.61))} ${fmt(at(b,.79,.72))} ${fmt(tip)} C ${fmt(at(b,.91,.34))} ${fmt(at(b,.78,.18))} ${fmt(at(b,.63,.14))} C ${fmt(at(b,.48,.1))} ${fmt(at(b,.39,.035))} ${fmt(eye)} C ${fmt(at(b,.2,.02))} ${fmt(at(b,.08,.04))} ${fmt(root)} Z`;
-  const strokes:BorderStroke[]=[{d:outer,role:'outline',...meta(p,'half')},{d:cubic(root,at(b,.15,.02),at(b,.25,.09),mainTip),role:'pipe',...meta(p,'half')},{d:cubic(at(b,.26,.03),at(b,.27,-.02),at(b,.32,.01),at(b,.38,.12)),role:'eye',...meta(p,'half','recess')}];
-  if(p.detail!=='low') strokes.push({d:cubic(at(b,.12,.04),at(b,.34,.34),at(b,.51,.48),at(b,.66,.7)),role:'vein',...meta(p,'half')},{d:cubic(at(b,.18,.04),at(b,.4,.18),at(b,.57,.22),at(b,.78,.35)),role:'vein',...meta(p,'half','fold')});
-  if(p.detail==='high') strokes.push({d:`M ${fmt(at(b,.46,.74))} Q ${fmt(at(b,.5,.82))} ${fmt(at(b,.53,.7))}`,role:'outline',...meta(p,'half')});
-  appendShading(strokes,b,p,'half');
-  return {strokes,tip,construction:[{kind:'root',a:root},{kind:'axis',a:root,b:tip},{kind:'lobe',a:root,b:mainTip}]};
+  const b=basis(frame,p,.78,.5),root=at(b,0,0),tip=at(b,.98,.2),strokes:BorderStroke[]=[{d:cubic(root,at(b,.25,.015),at(b,.67,.1),tip),role:'midrib',...meta(p,'half')}],construction:ConstructionMark[]=[{kind:'root',a:root},{kind:'axis',a:root,b:tip}];
+  const roots=[.07,.27,.49,.69],sizes=[.48,.42,.33,.23];
+  for(let i=0;i<roots.length;i++){
+    const spring=at(b,roots[i],.025+i*.018),direction=unit(add(scale(b.forward,.62),scale(b.out,.78-i*.09)));
+    const raffle=buildRaffle({spring,direction,outward:b.out,length:p.length*sizes[i],width:p.width*(1-i*.11),detail:p.detail,organic:(p.organic??0)*(i%2?.7:-.45),motif:p.motif*10+i,layer:(p.layer??p.motif)+i,shading:p.shading});
+    strokes.push(...raffle.strokes);construction.push(...raffle.construction);
+  }
+  strokes.push({d:cubic(at(b,.72,.04),at(b,.86,.18),at(b,1.02,.28),tip),role:'outline',...meta(p,'half','fold')});
+  return {strokes,tip,construction};
 }
 
 /** Directional scroll leaf: long with the stem, opening gradually into a hooked end. */
