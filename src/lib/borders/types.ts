@@ -26,7 +26,7 @@ export type BorderStroke = {
   role: StrokeRole;
   surface?: SurfaceRole;
   motif: number;
-  motifKind?: 'stem' | 'main' | 'half' | 'secondary' | 'swept' | 'terminal';
+  motifKind?: 'stem' | 'main' | 'half' | 'secondary' | 'sweep' | 'swept' | 'turnover' | 'junction' | 'terminal';
   layer?: number;
 };
 

@@ -1,59 +1,75 @@
-import { add, scale, seeded } from '../geometry';
+import { add, scale, seeded, smoothPath } from '../geometry';
 import { frameAt } from '../guide-path';
 import type { BorderGeometry, BorderStroke, GuidePath, PathFrame } from '../types';
+import { buildHalfLeaf, buildJunction, buildSweepLeaf, buildTurnover, type AcanthusComponent, type ComponentKind } from './components';
 import { buildLeaf } from './leaf';
-import type { AcanthusOptions, LeafParameters } from './types';
+import type { AcanthusOptions } from './types';
 
-type Kind = NonNullable<LeafParameters['kind']>;
-const GRAMMAR: { kind: Kind; scale: number; advance: number; sweep: number }[] = [
-  { kind: 'half', scale: .62, advance: -.08, sweep: -.1 },
-  { kind: 'main', scale: 1.08, advance: -.12, sweep: .08 },
-  { kind: 'secondary', scale: .72, advance: .08, sweep: -.04 },
-  { kind: 'swept', scale: .94, advance: -.16, sweep: .24 },
-  { kind: 'secondary', scale: .68, advance: .12, sweep: .02 },
-];
-
-function resolvedSides(path: GuidePath, side: AcanthusOptions['side']): (-1 | 1)[] {
-  if (side === 'both') return [-1, 1];
-  if (side === 'left') return [1];
-  if (side === 'right') return [-1];
-  if (!path.closed || path.winding === 0) return side === 'inward' ? [1] : [-1];
-  const inward: -1 | 1 = path.winding > 0 ? 1 : -1;
-  return [side === 'inward' ? inward : (inward === 1 ? -1 : 1)];
+function resolvedSides(path:GuidePath,side:AcanthusOptions['side']):(-1|1)[]{
+  if(side==='both')return[-1,1]; if(side==='left')return[1]; if(side==='right')return[-1];
+  if(!path.closed||path.winding===0)return side==='inward'?[1]:[-1];
+  const inward:-1|1=path.winding>0?1:-1; return[side==='inward'?inward:inward===1?-1:1];
 }
 
-function stemStrokes(path: GuidePath): BorderStroke[] {
-  return [{ d: path.d, role: 'midrib', surface: 'face', motif: -1, motifKind: 'stem', layer: -2 }];
+/** The supplied guide is resampled into a deliberate two-pipe ornamental stem. */
+function stemStrokes(path:GuidePath):BorderStroke[]{
+  const step=Math.max(1,Math.floor(path.frames.length/180)),frames=path.frames.filter((_,i)=>i%step===0||i===path.frames.length-1);
+  const centre=frames.map(f=>f.point),companion=frames.map(f=>add(f.point,scale(f.normal,1.7)));
+  return [
+    {d:smoothPath(centre,path.closed),role:'midrib',surface:'face',motif:-1,motifKind:'stem',layer:-20},
+    {d:smoothPath(companion,path.closed),role:'pipe',surface:'fold',motif:-2,motifKind:'stem',layer:-19},
+  ];
 }
 
-export function generateAcanthus(path: GuidePath, options: AcanthusOptions): BorderGeometry {
-  const strokes = stemStrokes(path), construction: BorderGeometry['construction'] = [];
-  const basePitch = Math.max(options.leafSize * .72, options.pitch), count = path.closed ? Math.max(4, Math.round(path.length/basePitch)) : Math.max(3, Math.floor(path.length/basePitch));
-  const pitch = path.closed ? path.length/count : path.length/(count+.8), available = resolvedSides(path, options.side);
-  for (let i=0; i<count; i++) {
-    const grammar = GRAMMAR[i % GRAMMAR.length], end = !path.closed && (i===0 || i===count-1);
-    const kind: Kind = end ? 'terminal' : grammar.kind;
-    // Both-sided runs alternate primary growth; occasional small counter-leaves bind the rhythm.
-    const primarySide = available.length === 2 ? available[i % 2] : available[0];
-    const motifs: { side: -1|1; scale: number; kind: Kind; offset: number }[] = [{ side: primarySide, scale: grammar.scale, kind, offset: grammar.advance }];
-    if (available.length===2 && !end && (i%3===1)) motifs.push({ side: primarySide===1?-1:1, scale: .54, kind: 'secondary', offset: .16 });
-    for (const [j,motif] of motifs.entries()) {
-      const s = path.closed ? i*pitch+motif.offset*pitch : pitch*(.65+i+motif.offset), frame=frameAt(path,s);
-      const bend=frame.curvature*motif.side, tight=Math.abs(frame.curvature)*options.leafSize>.9;
-      const variation=(seeded(options.seed,i*11+j)-.5)*options.organic;
-      const length=options.leafSize*motif.scale*(1+variation*.12), compression=Math.max(.55,Math.min(1.18,1+bend*options.leafSize*.45));
-      const built=buildLeaf(frame,{ length, width:length*(.39+options.fullness*.17), lobes:6, side:motif.side, sweep:grammar.sweep+variation*.16, compression:tight?compression*.84:compression, detail:options.detail, shading:options.lineShading?options.shadingDensity:false, motif:i*3+j, kind:motif.kind, asymmetry:variation*.55+(i%2?.07:-.05), turnover:motif.kind==='swept'||(motif.kind==='main'&&i%4===1) });
-      const collarEnd=add(add(frame.point,scale(frame.tangent,length*.13)),scale(frame.normal,motif.side*length*.08));
-      strokes.push({d:`M ${frame.point.x.toFixed(2)} ${frame.point.y.toFixed(2)} Q ${(frame.point.x+frame.tangent.x*length*.06).toFixed(2)} ${(frame.point.y+frame.tangent.y*length*.06).toFixed(2)} ${collarEnd.x.toFixed(2)} ${collarEnd.y.toFixed(2)}`,role:'pipe',surface:'fold',motif:i*3+j,motifKind:motif.kind,layer:i*3+j-1},...built.strokes);
-      construction.push({kind:'root',a:frame.point},{kind:'axis',a:frame.point,b:built.tip},...built.construction);
-      if(tight) construction.push({kind:'tight',a:add(frame.point,scale(frame.normal,motif.side*4))});
-    }
+const make=(kind:ComponentKind,frame:PathFrame,length:number,width:number,side:-1|1,detail:AcanthusOptions['detail'],motif:number,bend:number,layer:number,shading:AcanthusOptions['shadingDensity']|false=false):AcanthusComponent=>{
+  const p={length,width,side,detail,motif,bend,layer,shading};
+  if(kind==='sweep')return buildSweepLeaf(frame,p);
+  if(kind==='turnover')return buildTurnover(frame,p);
+  if(kind==='junction')return buildJunction(frame,p);
+  return buildHalfLeaf(frame,p);
+};
+
+function chooseKind(curvature:number,side:-1|1,index:number):ComponentKind{
+  const force=Math.abs(curvature);
+  if(force>.045)return curvature*side<0?'half':'turnover';
+  if(force<.012)return index%4===1?'sweep':index%4===3?'turnover':'half';
+  return curvature*side>0?'sweep':'half';
+}
+
+export function generateAcanthus(path:GuidePath,options:AcanthusOptions):BorderGeometry{
+  const strokes=stemStrokes(path),construction:BorderGeometry['construction']=[];
+  const pitch=Math.max(options.pitch,options.leafSize*.82),count=path.closed?Math.max(4,Math.round(path.length/pitch)):Math.max(2,Math.floor(path.length/pitch));
+  const actual=path.closed?path.length/count:path.length/(count+.55),sides=resolvedSides(path,options.side);
+  for(let i=0;i<count;i++){
+    const s=path.closed?i*actual:actual*(.38+i),frame=frameAt(path,s);
+    // Both-sided growth has a 3:2 rhythm rather than mechanical alternation.
+    const side=sides.length===1?sides[0]:sides[[0,1,0,0,1][i%5]];
+    const kind=chooseKind(frame.curvature,side,i),variation=(seeded(options.seed,i)-.5)*options.organic;
+    const scale=kind==='sweep'?1.3:kind==='turnover'?.68:.9;
+    const outside=frame.curvature*side>0, length=options.leafSize*scale*(1+variation*.1)*(outside?1.08:.94);
+    const component=make(kind,frame,length,length*(.48+options.fullness*.15),side,options.detail,i,frame.curvature*options.leafSize,i*3,options.lineShading?options.shadingDensity:false);
+    strokes.push(...component.strokes);construction.push(...component.construction);
+    // Junctions visibly collect principal pipes into the shared stem but remain sparse.
+    if(i%3===0){const junction=make('junction',frame,length*.45,length*.2,side,options.detail,1000+i,0,i*3-1);strokes.push(...junction.strokes);construction.push(...junction.construction);}
   }
-  return {strokes,construction};
+  return{strokes,construction};
 }
 
-export function generateSingleLeaf(options: AcanthusOptions): BorderGeometry {
-  const frame: PathFrame={s:0,point:{x:300,y:350},tangent:{x:0,y:-1},normal:{x:1,y:0},curvature:0};
+export function generateSingleLeaf(options:AcanthusOptions):BorderGeometry{
+  const frame:PathFrame={s:0,point:{x:300,y:350},tangent:{x:0,y:-1},normal:{x:1,y:0},curvature:0};
   const built=buildLeaf(frame,{length:150,width:68,lobes:6,side:1,sweep:-.82,compression:1,detail:options.detail,shading:options.lineShading?options.shadingDensity:false,motif:0,kind:'main',asymmetry:.1*options.organic,turnover:true});
-  return {strokes:built.strokes,construction:[{kind:'root',a:frame.point},{kind:'axis',a:frame.point,b:built.tip},...built.construction]};
+  return{strokes:built.strokes,construction:[{kind:'root',a:frame.point},{kind:'axis',a:frame.point,b:built.tip},...built.construction]};
+}
+
+export function generateComponentStudy(options:AcanthusOptions):BorderGeometry{
+  const geometry:BorderGeometry={strokes:[],construction:[]};
+  const samples:{kind:ComponentKind;frame:PathFrame;length:number;width:number;side:-1|1}[]=[
+    {kind:'half',frame:{s:0,point:{x:85,y:155},tangent:{x:1,y:0},normal:{x:0,y:1},curvature:0},length:115,width:53,side:1},
+    {kind:'sweep',frame:{s:0,point:{x:300,y:115},tangent:{x:1,y:0},normal:{x:0,y:1},curvature:.01},length:170,width:58,side:1},
+    {kind:'turnover',frame:{s:0,point:{x:105,y:330},tangent:{x:1,y:0},normal:{x:0,y:1},curvature:0},length:105,width:54,side:-1},
+    {kind:'junction',frame:{s:0,point:{x:350,y:300},tangent:{x:1,y:0},normal:{x:0,y:1},curvature:0},length:120,width:45,side:1},
+  ];
+  for(const [i,sample] of samples.entries()){const built=make(sample.kind,sample.frame,sample.length,sample.width,sample.side,options.detail,i,0,i*3);geometry.strokes.push(...built.strokes);geometry.construction.push(...built.construction);}
+  geometry.strokes.push({d:'M 315 340 C 380 330 445 345 520 315',role:'midrib',surface:'face',motif:-10,motifKind:'stem',layer:-10},{d:'M 315 343 C 380 333 445 348 520 318',role:'pipe',surface:'fold',motif:-11,motifKind:'stem',layer:-9});
+  return geometry;
 }
