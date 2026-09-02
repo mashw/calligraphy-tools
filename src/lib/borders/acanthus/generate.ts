@@ -73,7 +73,7 @@ export function generateComponentStudy(options:AcanthusOptions):BorderGeometry{
   const sweep=make('sweep',sweepFrame,155*size,52*size*full,-1,options.detail,2,0,6,shading,organic);geometry.strokes.push(...sweep.strokes);geometry.construction.push(...sweep.construction);
   // The assembled sample is a real stem with three components sharing its frames.
   geometry.strokes.push({d:'M 315 330 C 375 308 450 344 530 305',role:'midrib',surface:'face',motif:-10,motifKind:'stem',layer:-10},{d:'M 315 334 C 375 312 450 348 530 309',role:'pipe',surface:'fold',motif:-11,motifKind:'stem',layer:-9});
-  const attached:[ComponentKind,PathFrame,-1|1,number][]=[['half',{s:0,point:{x:350,y:321},tangent:{x:.95,y:-.3},normal:{x:.3,y:.95},curvature:0},1,.56],['turnover',{s:0,point:{x:425,y:326},tangent:{x:1,y:.1},normal:{x:-.1,y:1},curvature:0},-1,.42],['half',{s:0,point:{x:485,y:323},tangent:{x:.9,y:-.42},normal:{x:.42,y:.9},curvature:0},1,.48]];
-  for(const [i,[kind,frame,side,componentScale]] of attached.entries()){const built=make(kind,frame,options.leafSize*componentScale,options.leafSize*.28*full,side,options.detail,20+i,0,10+i,shading,organic);geometry.strokes.push(...built.strokes);geometry.construction.push(...built.construction);}
+  const attached:[ComponentKind,PathFrame,-1|1,number][]=[['half',{s:0,point:{x:350,y:321},tangent:{x:.95,y:-.3},normal:{x:.3,y:.95},curvature:0},1,1.8],['turnover',{s:0,point:{x:425,y:326},tangent:{x:1,y:.1},normal:{x:-.1,y:1},curvature:0},-1,1.35],['half',{s:0,point:{x:485,y:323},tangent:{x:.9,y:-.42},normal:{x:.42,y:.9},curvature:0},1,1.6]];
+  for(const [i,[kind,frame,side,componentScale]] of attached.entries()){const built=make(kind,frame,options.leafSize*componentScale,options.leafSize*.62*full,side,options.detail,20+i,0,10+i,shading,organic);geometry.strokes.push(...built.strokes);geometry.construction.push(...built.construction);}
   return geometry;
 }

@@ -1,7 +1,7 @@
 import { add, cubic, fmt, scale, unit } from '../geometry';
 import type { BorderStroke, ConstructionMark, PathFrame, Point } from '../types';
 import { shadeLeaf } from './shading';
-import { buildRaffle } from './raffle';
+import { constructRaffle } from './raffle';
 import type { DetailLevel, ShadingDensity } from './types';
 
 export type ComponentKind = 'half' | 'sweep' | 'turnover' | 'junction';
@@ -19,14 +19,17 @@ const appendShading=(strokes:BorderStroke[],b:Basis,p:ComponentParameters,kind:C
 
 /** Independent one-sided mass: a root, deep eye, broad raffle and nested lobules. */
 export function buildHalfLeaf(frame:PathFrame,p:ComponentParameters):AcanthusComponent {
-  const b=basis(frame,p,.78,.5),root=at(b,0,0),tip=at(b,.98,.2),strokes:BorderStroke[]=[{d:cubic(root,at(b,.25,.015),at(b,.67,.1),tip),role:'midrib',...meta(p,'half')}],construction:ConstructionMark[]=[{kind:'root',a:root},{kind:'axis',a:root,b:tip}];
-  const roots=[.07,.27,.49,.69],sizes=[.48,.42,.33,.23];
-  for(let i=0;i<roots.length;i++){
-    const spring=at(b,roots[i],.025+i*.018),direction=unit(add(scale(b.forward,.62),scale(b.out,.78-i*.09)));
-    const raffle=buildRaffle({spring,direction,outward:b.out,length:p.length*sizes[i],width:p.width*(1-i*.11),detail:p.detail,organic:(p.organic??0)*(i%2?.7:-.45),motif:p.motif*10+i,layer:(p.layer??p.motif)+i,shading:p.shading});
-    strokes.push(...raffle.strokes);construction.push(...raffle.construction);
+  const b=basis(frame,p,.86,.4),root=at(b,0,0),tip=at(b,1,.13),strokes:BorderStroke[]=[{d:cubic(root,at(b,.25,.015),at(b,.7,.07),tip),role:'midrib',...meta(p,'half')}],construction:ConstructionMark[]=[{kind:'root',a:root},{kind:'axis',a:root,b:tip}];
+  const sizes=[.62,.55,.46,.37,.28];let spring=at(b,.025,.04),outline=`M ${fmt(at(b,-.015,.16))} Q ${fmt(at(b,0,.08))} ${fmt(spring)}`;
+  for(let i=0;i<sizes.length;i++){
+    const direction=unit(add(scale(b.forward,.86),scale(b.out,.52-i*.055)));
+    const raffle=constructRaffle({spring,direction,outward:b.out,length:p.length*sizes[i],width:p.width*(1-i*.105),detail:p.detail,organic:(p.organic??0)*(i%2?.65:-.4),motif:p.motif*10+i,layer:(p.layer??p.motif)+i,shading:p.shading});
+    outline+=` ${raffle.outwardContour} ${raffle.returnContour}`;spring=raffle.landmarks.eye;
+    strokes.push(...raffle.structuralStrokes);construction.push(...raffle.construction);
   }
-  strokes.push({d:cubic(at(b,.72,.04),at(b,.86,.18),at(b,1.02,.28),tip),role:'outline',...meta(p,'half','fold')});
+  // A single hooked terminal completes the shared surface before its inner edge returns to the root.
+  outline+=` C ${fmt(at(b,.84,.2))} ${fmt(at(b,.94,.34))} ${fmt(tip)} C ${fmt(at(b,1.015,.04))} ${fmt(at(b,.86,-.015))} ${fmt(at(b,.68,.025))} C ${fmt(at(b,.42,.01))} ${fmt(at(b,.12,-.02))} ${fmt(at(b,-.015,.16))} Z`;
+  strokes.unshift({d:outline,role:'outline',...meta(p,'half')});
   return {strokes,tip,construction};
 }
 
