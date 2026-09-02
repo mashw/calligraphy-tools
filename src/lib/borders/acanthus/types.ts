@@ -24,5 +24,7 @@ export type LeafParameters = {
   detail: DetailLevel;
   shading: false | ShadingDensity;
   motif: number;
+  kind?: 'main' | 'half' | 'secondary' | 'swept' | 'terminal';
+  asymmetry?: number;
+  turnover?: boolean;
 };
-

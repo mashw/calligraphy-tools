@@ -26,13 +26,14 @@ export type BorderStroke = {
   role: StrokeRole;
   surface?: SurfaceRole;
   motif: number;
+  motifKind?: 'stem' | 'main' | 'half' | 'secondary' | 'swept' | 'terminal';
+  layer?: number;
 };
 
 export type ConstructionMark = {
-  kind: 'root' | 'axis' | 'tight';
+  kind: 'root' | 'axis' | 'lobe' | 'tight';
   a: Point;
   b?: Point;
 };
 
 export type BorderGeometry = { strokes: BorderStroke[]; construction: ConstructionMark[] };
-
