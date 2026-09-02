@@ -17,7 +17,7 @@ export type GuidePath = {
   corners: number[];
 };
 
-export type StrokeRole = 'outline' | 'midrib' | 'pipe' | 'vein' | 'eye' | 'shading';
+export type StrokeRole = 'outline' | 'midrib' | 'pipe' | 'vein' | 'fold' | 'eye' | 'shading';
 export type SurfaceRole = 'face' | 'recess' | 'fold' | 'underside';
 
 /** Vector-first output: these paths contain no presentation or DOM state. */
