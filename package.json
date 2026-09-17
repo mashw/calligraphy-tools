@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "generate:renaissance": "node scripts/generate-renaissance-primitives.ts",
+    "prebuild": "npm run generate:renaissance",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
