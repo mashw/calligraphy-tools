@@ -4,7 +4,7 @@ import { buildStraightSlantLines, calculateStraightGuidelines } from '@/lib/guid
 import { constructionGuideDotPoints, type ConstructionGuideAppearance } from '@/lib/guides/guide-template';
 import { occupiedRect } from '@/lib/layout/geometry';
 import { pathHasOnlyClosedSubpaths, type ArtworkNode } from '@/lib/layout/artwork';
-import { shapePolygonPoints } from '@/lib/layout/shape';
+import { shapeBoundaryPoints, shapeContainsPoint } from '@/lib/layout/shape';
 import { pageSize, type Frame, type LayoutElement, type PageElement } from '@/lib/layout/types';
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 
@@ -147,57 +147,10 @@ function translatePolylines(lines: PlotPolyline[], dx: number, dy: number) {
   return lines.map(line => ({ ...line, points: translatePoints(line.points, dx, dy) }));
 }
 
-function parsePolygonPoints(text: string) {
-  return text.trim().split(/\s+/).map(pair => {
-    const [x, y] = pair.split(',').map(Number);
-    return { x, y };
-  }).filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
-}
-
 function closedPolyline(points: Pt[], source: string) {
   if (!points.length) return null;
   const closed = samePoint(points[0], points[points.length - 1]) ? points : [...points, points[0]];
   return polyline(closed, source);
-}
-
-function ellipseBoundary(frame: Frame, source: string) {
-  const rx = frame.width / 2;
-  const ry = frame.height / 2;
-  const circumference = Math.PI * (3 * (rx + ry) - Math.sqrt(Math.max(0, (3 * rx + ry) * (rx + 3 * ry))));
-  const steps = clamp(Math.ceil(circumference / 0.6), 64, 720);
-  const cx = frame.x + rx;
-  const cy = frame.y + ry;
-  const points = Array.from({ length: steps + 1 }, (_, index) => {
-    const angle = index / steps * Math.PI * 2;
-    return { x: cx + rx * Math.cos(angle), y: cy + ry * Math.sin(angle) };
-  });
-  return polyline(points, source);
-}
-
-function roundedRectBoundary(frame: Frame, radiusMM: number, source: string) {
-  const r = Math.min(Math.max(0, radiusMM), frame.width / 2, frame.height / 2);
-  if (r <= EPS) return closedPolyline([
-    { x: frame.x, y: frame.y },
-    { x: frame.x + frame.width, y: frame.y },
-    { x: frame.x + frame.width, y: frame.y + frame.height },
-    { x: frame.x, y: frame.y + frame.height },
-  ], source);
-
-  const cornerSteps = clamp(Math.ceil(Math.PI * r / 2 / 0.35), 6, 80);
-  const points: Pt[] = [];
-  const corners = [
-    { cx: frame.x + frame.width - r, cy: frame.y + r, start: -Math.PI / 2 },
-    { cx: frame.x + frame.width - r, cy: frame.y + frame.height - r, start: 0 },
-    { cx: frame.x + r, cy: frame.y + frame.height - r, start: Math.PI / 2 },
-    { cx: frame.x + r, cy: frame.y + r, start: Math.PI },
-  ];
-  corners.forEach(corner => {
-    for (let index = 0; index <= cornerSteps; index++) {
-      const angle = corner.start + index / cornerSteps * Math.PI / 2;
-      points.push({ x: corner.cx + r * Math.cos(angle), y: corner.cy + r * Math.sin(angle) });
-    }
-  });
-  return closedPolyline(points, source);
 }
 
 function circleOutline(cx: number, cy: number, radius: number, source: string) {
@@ -358,36 +311,7 @@ function shapeOccluder(element: Extract<LayoutElement, { type: 'shape' }>): Occl
   const border = settings.appearance === 'border' || settings.appearance === 'fillAndBorder' ? settings.borderWidthMM / 2 : 0;
   const padding = Math.max(0, element.paddingMM + border);
   const bounds = { x: frame.x - padding, y: frame.y - padding, width: frame.width + padding * 2, height: frame.height + padding * 2 };
-  const local = (point: Pt) => ({ x: point.x - frame.x, y: point.y - frame.y });
-
-  if (settings.kind === 'ellipse' || settings.kind === 'circle') {
-    return {
-      bounds,
-      contains: point => {
-        const q = local(point);
-        const rx = frame.width / 2 + padding;
-        const ry = frame.height / 2 + padding;
-        return ((q.x - frame.width / 2) / rx) ** 2 + ((q.y - frame.height / 2) / ry) ** 2 <= 1;
-      },
-    };
-  }
-  if (settings.kind === 'rectangle' || settings.kind === 'square') return rectOccluder(bounds);
-  if (settings.kind === 'roundedRectangle' || settings.kind === 'roundedSquare') {
-    return {
-      bounds,
-      contains: point => {
-        const q = local(point);
-        const radius = Math.min(settings.cornerRadiusMM, frame.width / 2, frame.height / 2) + padding;
-        const cx = frame.width / 2;
-        const cy = frame.height / 2;
-        const dx = Math.max(Math.abs(q.x - cx) - (frame.width / 2 - radius), 0);
-        const dy = Math.max(Math.abs(q.y - cy) - (frame.height / 2 - radius), 0);
-        return dx * dx + dy * dy <= radius * radius;
-      },
-    };
-  }
-  const points = parsePolygonPoints(shapePolygonPoints(settings.kind, frame.width, frame.height)).map(point => ({ x: point.x + frame.x, y: point.y + frame.y }));
-  return polygonOccluder(points, padding);
+  return { bounds, contains: point => shapeContainsPoint(settings.kind,bounds.width,bounds.height,{x:point.x-bounds.x,y:point.y-bounds.y},settings.cornerRadiusMM+padding) };
 }
 
 function appendArtworkNode(node: ArtworkNode, parent: Element, geometries?: SVGGeometryElement[]) {
@@ -512,6 +436,23 @@ function clipPolylineByOccluders(input: PlotPolyline, occluders: Occluder[]) {
 
 function clipPolylinesByOccluders(lines: PlotPolyline[], occluders: Occluder[]) {
   return lines.flatMap(line => clipPolylineByOccluders(line, occluders));
+}
+
+function clipPolylineInsideShape(input:PlotPolyline,kind:Extract<LayoutElement,{type:'guidelines'}>['mask']['kind'],width:number,height:number,cornerRadiusMM:number){
+  const contains=(p:Pt)=>shapeContainsPoint(kind,width,height,p,cornerRadiusMM),result:PlotPolyline[]=[];let current:Pt[]=[];
+  const flush=()=>{const next=polyline(current,input.source);if(next)result.push(next);current=[];};
+  const boundary=(a:Pt,b:Pt,aInside:boolean)=>{let lo=a,hi=b;for(let i=0;i<18;i++){const mid=lerp(lo,hi,.5);if(contains(mid)===aInside)lo=mid;else hi=mid;}return aInside?lo:hi;};
+  for(let index=1;index<input.points.length;index++){
+    const a=input.points[index-1],b=input.points[index],steps=Math.max(1,Math.ceil(dist(a,b)/OCCLUSION_SAMPLE_MM));
+    for(let step=0;step<steps;step++){
+      const p0=lerp(a,b,step/steps),p1=lerp(a,b,(step+1)/steps),in0=contains(p0),in1=contains(p1);
+      if(in0&&in1){if(!current.length)current.push(p0);current.push(p1);}
+      else if(in0){if(!current.length)current.push(p0);current.push(boundary(p0,p1,true));flush();}
+      else if(in1){const start=boundary(p0,p1,false);current.push(start,p1);}
+      else flush();
+    }
+  }
+  flush();return result;
 }
 
 function guideSetPolylines(
@@ -693,7 +634,12 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
     });
   }
 
-  return translatePolylines(result, element.frame.x, element.frame.y);
+  let masked=result;
+  if(element.mask?.enabled){
+    masked=result.flatMap(line=>clipPolylineInsideShape(line,element.mask.kind,box.width,box.height,element.mask.cornerRadiusMM));
+    if(element.mask.showOutline){const boundary=closedPolyline(shapeBoundaryPoints(element.mask.kind,box.width,box.height,element.mask.cornerRadiusMM),`guidelines:${element.id}:mask-outline`);if(boundary)masked.push(boundary);}
+  }
+  return translatePolylines(masked, element.frame.x, element.frame.y);
 }
 
 function curvedTitlePolylines(element: Extract<LayoutElement, { type: 'curved-title' }>, options: PlotterExportOptions) {
@@ -742,19 +688,7 @@ function shapeBoundaryPolylines(element: Extract<LayoutElement, { type: 'shape' 
   const frame = element.frame;
   const source = `shape:${element.id}`;
   const { kind } = element.settings;
-  let boundary: PlotPolyline | null = null;
-  if (kind === 'ellipse' || kind === 'circle') boundary = ellipseBoundary(frame, source);
-  else if (kind === 'roundedRectangle' || kind === 'roundedSquare') boundary = roundedRectBoundary(frame, element.settings.cornerRadiusMM, source);
-  else if (kind === 'rectangle' || kind === 'square') boundary = closedPolyline([
-    { x: frame.x, y: frame.y },
-    { x: frame.x + frame.width, y: frame.y },
-    { x: frame.x + frame.width, y: frame.y + frame.height },
-    { x: frame.x, y: frame.y + frame.height },
-  ], source);
-  else {
-    const points = parsePolygonPoints(shapePolygonPoints(kind, frame.width, frame.height)).map(point => ({ x: point.x + frame.x, y: point.y + frame.y }));
-    boundary = closedPolyline(points, source);
-  }
+  const boundary=closedPolyline(shapeBoundaryPoints(kind,frame.width,frame.height,element.settings.cornerRadiusMM).map(point=>({x:point.x+frame.x,y:point.y+frame.y})),source);
   return boundary ? [boundary] : [];
 }
 

@@ -5,7 +5,7 @@ import { bakeExportStrokes, cloneSvgForRasterExport, computeRasterPxPerMM, jpegD
 import { occupiedRect, pageContentRect, resizeFrame, snapMove, type SnapState } from '@/lib/layout/geometry';
 import { pageSize, resizeAspectMode, type Frame, type LayoutElement, type ResizeAspectMode, type ResizeHandle } from '@/lib/layout/types';
 import GuidelinesRenderer from '@/components/guidelines/GuidelinesRenderer';
-import ShapeElementRenderer from '@/components/layout/ShapeElementRenderer';
+import ShapeElementRenderer, { ShapeGeometry } from '@/components/layout/ShapeElementRenderer';
 import { PAGE_BACKGROUND } from '@/lib/layout/shape';
 import CurvedTitleRenderer from '@/components/curved-title/CurvedTitleRenderer';
 import { buildCurvedTitleModel } from '@/lib/curved-title/model';
@@ -325,20 +325,27 @@ function ElementVisual({ element, frame, simplify, selected, textFitEntry,onPlan
   if (simplify) return <rect {...common} rx="1" fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5" />;
   if(element.type==='artwork')return <ArtworkRenderer element={element} frame={frame}/>;
   if (element.type === 'guidelines') {
-    if(textFitEntry?.mode==='line-layout')return <g transform={`translate(${frame.x} ${frame.y})`}><GuidelinesRenderer box={{width:frame.width,height:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`}/><LineLayoutOverlay guidelinesId={element.id} entry={textFitEntry} frame={frame} onCommit={onPlannedLinePlacementChange}/></g>;
+    const mask=element.mask;
+    const clipId=`layout-${element.id}-shape-mask`;
+    const wrap=(content:React.ReactNode)=><g transform={`translate(${frame.x} ${frame.y})`}>
+      {mask?.enabled&&<defs><clipPath id={clipId}><ShapeGeometry kind={mask.kind} width={frame.width} height={frame.height} cornerRadiusMM={mask.cornerRadiusMM}/></clipPath></defs>}
+      <g clipPath={mask?.enabled?`url(#${clipId})`:undefined}>{content}</g>
+      {mask?.enabled&&mask.showOutline&&<ShapeGeometry kind={mask.kind} width={frame.width} height={frame.height} cornerRadiusMM={mask.cornerRadiusMM} fill="none" stroke={mask.outlineColor} strokeWidth={mask.outlineWidthMM}/>}
+    </g>;
+    if(textFitEntry?.mode==='line-layout')return wrap(<><GuidelinesRenderer box={{width:frame.width,height:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`}/><LineLayoutOverlay guidelinesId={element.id} entry={textFitEntry} frame={frame} onCommit={onPlannedLinePlacementChange}/></>);
     const placements = textFitEntry?.mode==='estimate'?textFitEntry.plan.placements:[];
     const placementGeometry = placements.map(placement => {
       const x=placement.x1-frame.x,y1=placement.waistY-frame.y,y2=placement.baseY-frame.y,shift=placement.slantShiftMM,x2=x+placement.consumedMM;
       return { span:`M ${x+shift},${y1} L ${x2+shift},${y1} L ${x2},${y2} L ${x},${y2} Z`, end:`M ${x2+shift},${y1} L ${x2},${y2}` };
     });
     const overflowEnd = textFitEntry?.mode==='estimate' && !textFitEntry.plan.fits ? placementGeometry.at(-1)?.end : undefined;
-    return <g transform={`translate(${frame.x} ${frame.y})`}>
+    return wrap(<>
       <GuidelinesRenderer box={{ width: frame.width, height: frame.height }} settings={element.settings} idPrefix={`layout-${element.id}`} />
       {textFitEntry&&<g data-no-export="true" pointerEvents="none">
         {placementGeometry.map((geometry,index)=><path key={index} d={geometry.span} fill={textFitEntry.color.fill} stroke={textFitEntry.color.stroke} strokeWidth=".35" vectorEffect="non-scaling-stroke"/>)}
         {overflowEnd&&<path d={overflowEnd} fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>}
       </g>}
-    </g>;
+    </>);
   }
   if (element.type === 'calligram') return <g transform={`translate(${frame.x} ${frame.y})`}><CalligramRenderer box={{w:frame.width,h:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`} pageBackground={(element.settings.transparentWhitespace??true)?PAGE_BACKGROUND:undefined} paddingMM={element.paddingMM} selected={selected}/></g>;
   if (element.type === 'curved-title') return <g transform={`translate(${frame.x} ${frame.y})`}><CurvedTitleRenderer box={{w:frame.width,h:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`} pageBackground={(element.settings.transparentWhitespace??true)?PAGE_BACKGROUND:undefined} paddingMM={element.paddingMM} selected={selected} /></g>;
