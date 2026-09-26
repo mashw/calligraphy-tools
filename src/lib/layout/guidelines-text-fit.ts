@@ -10,6 +10,7 @@ import { pageSize, type GuidelinesElement, type LayoutElement, type PageElement 
 import { pathHasOnlyClosedSubpaths, type ArtworkNode } from './artwork';
 import { lineMetricFromMeasuredRun } from '@/lib/measure/measure-lines-generic';
 import type { PlannedLineAlignment } from './types';
+import { isGuidelinesPlanningPointBlocked } from './guidelines-planning';
 
 type Point = { x: number; y: number };
 type Occluder = { bounds: { x: number; y: number; width: number; height: number }; contains: (point: Point) => boolean; dispose?:()=>void };
@@ -80,13 +81,13 @@ function elementOccluders(element: LayoutElement): Occluder[] {
 }
 
 export function buildGuidelinesVisibleSpans(element: GuidelinesElement, page: PageElement, elements: LayoutElement[]): VisibleGuideSpan[] {
-  const pageBox=pageSize(page),model=calculateStraightGuidelines({width:element.frame.width,height:element.frame.height},element.settings),index=elements.findIndex(item=>item.id===element.id),occluders=elements.slice(0,Math.max(0,index)).flatMap(elementOccluders),spans:VisibleGuideSpan[]=[];
+  const pageBox=pageSize(page),model=calculateStraightGuidelines({width:element.frame.width,height:element.frame.height},element.settings),index=elements.findIndex(item=>item.id===element.id),occluders=element.avoidOccludingElements!==false?elements.slice(0,Math.max(0,index)).flatMap(elementOccluders):[],spans:VisibleGuideSpan[]=[];
   model.guideSets.forEach((guide,rowIndex)=>{
     const asc=guide.ascLine[0].y,waist=guide.waistLine[0].y,base=guide.baseLine[0].y,desc=guide.descLine[0].y,pageAsc=element.frame.y+asc,pageDesc=element.frame.y+desc;
     if(asc<0||desc>element.frame.height||pageAsc<0||pageDesc>pageBox.height)return;
     const rawX1=element.frame.x+guide.baseLine[0].x,rawX2=element.frame.x+guide.baseLine.at(-1)!.x,x1=Math.max(0,rawX1),x2=Math.min(pageBox.width,rawX2);if(x2<=x1)return;
     let start:number|null=null;const step=.5;
-    for(let x=x1;x<x2-.0001;x+=step){const end=Math.min(x2,x+step),mid=(x+end)/2;let blocked=false;for(let y=pageAsc;y<=pageDesc+.001&&!blocked;y+=.5){const point={x:mid,y:Math.min(pageDesc,y)};blocked=occluders.some(o=>inBounds(point,o.bounds)&&o.contains(point))||(element.mask?.enabled&&element.mask.textLayoutRespectsMask&&!shapeContainsPoint(element.mask.kind,element.frame.width,element.frame.height,{x:point.x-element.frame.x,y:point.y-element.frame.y},element.mask.cornerRadiusMM));}if(!blocked){const point={x:mid,y:pageDesc};blocked=occluders.some(o=>inBounds(point,o.bounds)&&o.contains(point))||(element.mask?.enabled&&element.mask.textLayoutRespectsMask&&!shapeContainsPoint(element.mask.kind,element.frame.width,element.frame.height,{x:point.x-element.frame.x,y:point.y-element.frame.y},element.mask.cornerRadiusMM));}if(!blocked){if(start===null)start=x;}else if(start!==null){spans.push({rowIndex,x1:start,x2:x,ascY:pageAsc,waistY:element.frame.y+waist,baseY:element.frame.y+base,descY:pageDesc});start=null;}}
+    for(let x=x1;x<x2-.0001;x+=step){const end=Math.min(x2,x+step),mid=(x+end)/2;let blocked=false;for(let y=pageAsc;y<=pageDesc+.001&&!blocked;y+=.5){const point={x:mid,y:Math.min(pageDesc,y)},externallyOccluded=occluders.some(o=>inBounds(point,o.bounds)&&o.contains(point)),insideMask=!element.mask?.enabled||shapeContainsPoint(element.mask.kind,element.frame.width,element.frame.height,{x:point.x-element.frame.x,y:point.y-element.frame.y},element.mask.cornerRadiusMM);blocked=isGuidelinesPlanningPointBlocked({avoidOccludingElements:element.avoidOccludingElements!==false,externallyOccluded,maskEnabled:element.mask?.enabled??false,textLayoutRespectsMask:element.mask?.textLayoutRespectsMask??true,insideMask});}if(!blocked){const point={x:mid,y:pageDesc},externallyOccluded=occluders.some(o=>inBounds(point,o.bounds)&&o.contains(point)),insideMask=!element.mask?.enabled||shapeContainsPoint(element.mask.kind,element.frame.width,element.frame.height,{x:point.x-element.frame.x,y:point.y-element.frame.y},element.mask.cornerRadiusMM);blocked=isGuidelinesPlanningPointBlocked({avoidOccludingElements:element.avoidOccludingElements!==false,externallyOccluded,maskEnabled:element.mask?.enabled??false,textLayoutRespectsMask:element.mask?.textLayoutRespectsMask??true,insideMask});}if(!blocked){if(start===null)start=x;}else if(start!==null){spans.push({rowIndex,x1:start,x2:x,ascY:pageAsc,waistY:element.frame.y+waist,baseY:element.frame.y+base,descY:pageDesc});start=null;}}
     if(start!==null)spans.push({rowIndex,x1:start,x2,ascY:pageAsc,waistY:element.frame.y+waist,baseY:element.frame.y+base,descY:pageDesc});
   });
   occluders.forEach(occluder=>occluder.dispose?.());
@@ -99,7 +100,7 @@ export function getCachedGuidelinesVisibleSpans(key: string, element: Guidelines
   const spans=buildGuidelinesVisibleSpans(element,page,elements);if(visibleSpanCache.size>=50)visibleSpanCache.delete(visibleSpanCache.keys().next().value!);visibleSpanCache.set(key,spans);return spans;
 }
 
-export function buildGuidelinesVisibilityCacheKey(element:GuidelinesElement,page:PageElement,higherElements:LayoutElement[]){return JSON.stringify({frame:element.frame,settings:element.settings,page,higher:higherElements.map(item=>item.type==='guidelines'?{...item,fitText:'',plannedLines:[],textMode:'estimate',rightAlignMode:'waist'}:item)});}
+export function buildGuidelinesVisibilityCacheKey(element:GuidelinesElement,page:PageElement,higherElements:LayoutElement[]){return JSON.stringify({frame:element.frame,settings:element.settings,mask:element.mask,avoidOccludingElements:element.avoidOccludingElements!==false,page,higher:element.avoidOccludingElements!==false?higherElements.map(item=>item.type==='guidelines'?{...item,fitText:'',plannedLines:[],textMode:'estimate',rightAlignMode:'waist'}:item):[]});}
 
 export function buildGuidelinesTextFitPlan(element: GuidelinesElement, visibleSpans: VisibleGuideSpan[]): GuidelinesTextFitPlan {
   const measurementText=element.fitText.replace(/\s*\n+\s*/g,' ').replace(/\s+/g,' ').trim();

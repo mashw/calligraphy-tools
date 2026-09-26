@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { SHAPE_OPTIONS, shapeBoundaryPoints, shapeContainsPoint, shapeFootprintContains, shapeGeometryFrame, shapePathData } from '../src/lib/layout/shape.ts';
 import { safeLayerId, serializePlotterSvg } from '../src/lib/layout/plotter-svg.ts';
+import { isGuidelinesPlanningPointBlocked } from '../src/lib/layout/guidelines-planning.ts';
 
 test('circle containment uses an inscribed constrained frame',()=>{
   assert.deepEqual(shapeGeometryFrame('circle',120,80),{x:20,y:0,width:80,height:80});
@@ -78,4 +79,18 @@ test('plotter builder keeps safety and baked element grouping ahead of serializa
   assert.match(source,/raw = clipPolylinesByOccluders\(raw, higherOccluders\);[\s\S]*?drawingLayers\.push/);
   assert.match(source,/const safety = analyzeSafety\(drawing, page, matId\)/);
   assert.match(source,/anchorPath:polylinesToPathD\(anchors\)/);
+});
+
+test('external occlusion and intrinsic mask are independent planning constraints',()=>{
+  const blocked=(avoidOccludingElements:boolean,textLayoutRespectsMask:boolean)=>isGuidelinesPlanningPointBlocked({avoidOccludingElements,externallyOccluded:true,maskEnabled:true,textLayoutRespectsMask,insideMask:false});
+  assert.equal(blocked(true,true),true,'both constraints on');
+  assert.equal(blocked(true,false),true,'external only');
+  assert.equal(blocked(false,true),true,'mask only');
+  assert.equal(blocked(false,false),false,'both constraints off');
+});
+
+test('visibility cache includes both planning toggles',()=>{
+  const source=readFileSync(new URL('../src/lib/layout/guidelines-text-fit.ts',import.meta.url),'utf8');
+  assert.match(source,/mask:element\.mask,avoidOccludingElements:element\.avoidOccludingElements/);
+  assert.match(source,/occluders=element\.avoidOccludingElements!==false\?/);
 });
