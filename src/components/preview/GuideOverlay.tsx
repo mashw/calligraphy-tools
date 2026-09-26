@@ -27,6 +27,7 @@ type GuideOverlayProps = {
       showVertical?: boolean;
       showNibAngleGuide?: boolean;
       nibAngleDeg?: number;
+      horizontalDash?: { dashMM: number; gapMM: number };
       colors?: {
         tick?: string;
       };
@@ -61,6 +62,7 @@ export default function GuideOverlay({
   const showGridVertical = style.grid?.showVertical ?? true;
   const showNibAngleGuide = style.grid?.showNibAngleGuide ?? false;
   const nibAngleDeg = style.grid?.nibAngleDeg ?? 0;
+  const horizontalDash=style.grid?.horizontalDash;
   const hitStrokeWidth =
     interactive?.hitStrokeWidthMM ?? Math.max(8, style.bold * 8);
 
@@ -166,6 +168,7 @@ export default function GuideOverlay({
                 fill="none"
                 stroke={gridColors.tick ?? colors.tick}
                 strokeWidth={gridThin ?? style.thin}
+                strokeDasharray={horizontalDash?`${horizontalDash.dashMM} ${horizontalDash.gapMM}`:undefined}
                 vectorEffect="non-scaling-stroke"
               />
               {interactive?.onGuidePointerDown && (

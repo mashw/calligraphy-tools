@@ -5,6 +5,7 @@ import { SHAPE_OPTIONS, shapeBoundaryPoints, shapeContainsPoint, shapeFootprintC
 import { safeLayerId, serializePlotterSvg } from '../src/lib/layout/plotter-svg.ts';
 import { isGuidelinesPlanningPointBlocked, selectLineLayoutSpan } from '../src/lib/layout/guidelines-planning.ts';
 import { artworkBoundsContains, usesArtworkBoundsOcclusion } from '../src/lib/layout/artwork-occlusion.ts';
+import { resolveHorizontalGridAppearance } from '../src/lib/guides/horizontal-grid.ts';
 
 test('circle containment uses an inscribed constrained frame',()=>{
   assert.deepEqual(shapeGeometryFrame('circle',120,80),{x:20,y:0,width:80,height:80});
@@ -142,4 +143,22 @@ test('Artwork bounds uses a preview knockout and baked plotter clipping only',()
   assert.match(plotter,/usesArtworkBoundsOcclusion\(element\.settings\)\)return \[\{bounds:element\.frame,contains:point=>artworkBoundsContains/);
   assert.match(plotter,/raw = clipPolylinesByOccluders\(raw, higherOccluders\)/);
   assert.doesNotMatch(plotter,/fill=["']white|PAGE_BACKGROUND/);
+});
+
+test('blackletter horizontal grid appearance defaults and validates physical dash lengths',()=>{
+  assert.deepEqual(resolveHorizontalGridAppearance(),{style:'solid',dashMM:2,gapMM:2});
+  assert.deepEqual(resolveHorizontalGridAppearance({style:'dashed',dashMM:3,gapMM:1.5}),{style:'dashed',dashMM:3,gapMM:1.5});
+  assert.deepEqual(resolveHorizontalGridAppearance({style:'dashed',dashMM:0,gapMM:-1}),{style:'dashed',dashMM:.1,gapMM:.1});
+});
+
+test('only hGuides receive configurable dashes in preview and plotter output',()=>{
+  const overlay=readFileSync(new URL('../src/components/preview/GuideOverlay.tsx',import.meta.url),'utf8');
+  const plotter=readFileSync(new URL('../src/lib/layout/plotter-export.ts',import.meta.url),'utf8');
+  const horizontalBlock=overlay.slice(overlay.indexOf('showGridHorizontal'),overlay.indexOf('markerData &&'));
+  assert.match(horizontalBlock,/guideSet\.hGuides[\s\S]*?strokeDasharray=\{horizontalDash/);
+  const verticalBlock=overlay.slice(overlay.indexOf('showGridVertical'),overlay.indexOf('showGridHorizontal'));
+  assert.doesNotMatch(verticalBlock,/strokeDasharray/);
+  assert.match(plotter,/guide\.hGuides[\s\S]*?horizontal\?\.style==='dashed'\?dashPolyline/);
+  assert.match(plotter,/element\.settings\.topBandScript==='Copperplate'\?undefined:horizontalGridAppearance/);
+  assert.match(plotter,/guideOptions\(band === model\.inner \? element\.settings\.innerScript : element\.settings\.outerScript\)/);
 });

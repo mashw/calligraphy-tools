@@ -1,7 +1,7 @@
 import { buildCalligramModel } from '@/lib/calligram/model';
 import { buildCurvedTitleModel } from '@/lib/curved-title/model';
 import { buildStraightSlantLines, calculateStraightGuidelines } from '@/lib/guides/straight/model';
-import { constructionGuideDotPoints, type ConstructionGuideAppearance } from '@/lib/guides/guide-template';
+import { constructionGuideDotPoints, resolveHorizontalGridAppearance, type ConstructionGuideAppearance, type HorizontalGridAppearance } from '@/lib/guides/guide-template';
 import { occupiedRect } from '@/lib/layout/geometry';
 import { pathHasOnlyClosedSubpaths, type ArtworkNode } from '@/lib/layout/artwork';
 import { expandedShapeFrame, shapeBoundaryPoints, shapeContainsPoint, shapeFootprintContains } from '@/lib/layout/shape';
@@ -471,6 +471,7 @@ function guideSetPolylines(
     pathKeys?: Array<'asc' | 'waist' | 'base' | 'desc'>;
     ticks?: boolean;
     hGuides?: boolean;
+    horizontalGridAppearance?:HorizontalGridAppearance;
     nibAngleMarker?: boolean;
     nibAngleDeg?: number;
     constructionGuides?: boolean;
@@ -507,7 +508,8 @@ function guideSetPolylines(
     (guide.hGuides ?? []).forEach((points, index) => {
       const next = polyline(points, `${source}:h-${index}`);
       if (!next) return;
-      result.push(...(bandRect ? clipPolylineToRect(next, bandRect) : [next]));
+      const horizontal=options?.horizontalGridAppearance,parts=horizontal?.style==='dashed'?dashPolyline(next,horizontal.dashMM,horizontal.gapMM):[next];
+      parts.forEach(part=>result.push(...(bandRect ? clipPolylineToRect(part, bandRect) : [part])));
     });
   }
   if (options?.constructionGuides !== false) {
@@ -551,6 +553,7 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
   const box = { width: element.frame.width, height: element.frame.height };
   const settings = element.settings;
   const model = calculateStraightGuidelines(box, settings);
+  const horizontalGridAppearance=resolveHorizontalGridAppearance(settings.horizontalGridAppearance);
   const clipRect = {
     x: settings.margins.left,
     y: 0,
@@ -566,6 +569,7 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
       const paths = guideSetPolylines(guide as GuideLike, `guidelines:${element.id}:row-${rowIndex}`, {
         ticks: settings.script !== 'Copperplate' && options.constructionGrid,
         hGuides: settings.script !== 'Copperplate' && options.constructionGrid,
+        horizontalGridAppearance,
         nibAngleMarker: settings.script !== 'Copperplate' && options.nibAngleMarker,
         nibAngleDeg: settings.penAngleDeg,
         constructionGuides: options.constructionGuides,
@@ -576,6 +580,7 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
         pathKeys: [],
         ticks: options.constructionGrid,
         hGuides: options.constructionGrid,
+        horizontalGridAppearance,
         nibAngleMarker: options.nibAngleMarker,
         nibAngleDeg: settings.penAngleDeg,
         constructionGuides: options.constructionGuides,
@@ -654,7 +659,8 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
 function curvedTitlePolylines(element: Extract<LayoutElement, { type: 'curved-title' }>, options: PlotterExportOptions) {
   const model = buildCurvedTitleModel({ w: element.frame.width, h: element.frame.height }, element.settings);
   const result: PlotPolyline[] = [];
-  result.push(...guideSetPolylines(model.guideSet as GuideLike, `curved:${element.id}:main`, { ticks: options.constructionGrid, hGuides: options.constructionGrid, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
+  const horizontalGridAppearance=resolveHorizontalGridAppearance(element.settings.horizontalGridAppearance);
+  result.push(...guideSetPolylines(model.guideSet as GuideLike, `curved:${element.id}:main`, { ticks: options.constructionGrid, hGuides: options.constructionGrid, horizontalGridAppearance:element.settings.script==='Copperplate'?undefined:horizontalGridAppearance, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
   if (options.midpointReferences && model.midAscPts) {
     const base = polyline(model.midAscPts, `curved:${element.id}:mid-asc`);
     if (base) result.push(...dashPolyline(base, 10, 12));
@@ -664,24 +670,25 @@ function curvedTitlePolylines(element: Extract<LayoutElement, { type: 'curved-ti
     if (base) result.push(...dashPolyline(base, 10, 12));
   }
   if (model.top.enabled) {
-    result.push(...guideSetPolylines(model.top.guideSet as GuideLike, `curved:${element.id}:top`, { pathKeys: ['asc', 'waist'], ticks: options.constructionGrid, hGuides: options.constructionGrid, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
+    result.push(...guideSetPolylines(model.top.guideSet as GuideLike, `curved:${element.id}:top`, { pathKeys: ['asc', 'waist'], ticks: options.constructionGrid, hGuides: options.constructionGrid, horizontalGridAppearance:element.settings.topBandScript==='Copperplate'?undefined:horizontalGridAppearance, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
   }
   if (model.bottom.enabled) {
-    result.push(...guideSetPolylines(model.bottom.guideSet as GuideLike, `curved:${element.id}:bottom`, { pathKeys: ['base', 'desc'], ticks: options.constructionGrid, hGuides: options.constructionGrid, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
+    result.push(...guideSetPolylines(model.bottom.guideSet as GuideLike, `curved:${element.id}:bottom`, { pathKeys: ['base', 'desc'], ticks: options.constructionGrid, hGuides: options.constructionGrid, horizontalGridAppearance:element.settings.bottomBandScript==='Copperplate'?undefined:horizontalGridAppearance, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
   }
   return translatePolylines(result, element.frame.x, element.frame.y);
 }
 
 function calligramPolylines(element: Extract<LayoutElement, { type: 'calligram' }>, options: PlotterExportOptions) {
   const model = buildCalligramModel({ w: element.frame.width, h: element.frame.height }, element.settings);
-  const guideOptions = { ticks: options.constructionGrid, hGuides: options.constructionGrid, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg };
-  const main = guideSetPolylines(model.main.guideSet as GuideLike, `calligram:${element.id}:main`, guideOptions);
+  const horizontalGridAppearance=resolveHorizontalGridAppearance(element.settings.horizontalGridAppearance);
+  const guideOptions=(script:typeof element.settings.script)=>({ ticks: options.constructionGrid, hGuides: options.constructionGrid, horizontalGridAppearance:script==='Copperplate'?undefined:horizontalGridAppearance, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg });
+  const main = guideSetPolylines(model.main.guideSet as GuideLike, `calligram:${element.id}:main`, guideOptions(element.settings.script));
   const mainBand = polygonOccluder([
     ...model.main.guideSet.ascLine,
     ...[...model.main.guideSet.descLine].reverse(),
   ], 0);
   const otherBands = [model.inner, model.outer].filter(band => band.enabled).flatMap(band => {
-    const raw = guideSetPolylines(band.guideSet as GuideLike, `calligram:${element.id}:${band === model.inner ? 'inner' : 'outer'}`, guideOptions);
+    const raw = guideSetPolylines(band.guideSet as GuideLike, `calligram:${element.id}:${band === model.inner ? 'inner' : 'outer'}`, guideOptions(band === model.inner ? element.settings.innerScript : element.settings.outerScript));
     return clipPolylinesByOccluders(raw, [mainBand]);
   });
   const result = [...main, ...otherBands];
