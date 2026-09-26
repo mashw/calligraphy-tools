@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { SHAPE_OPTIONS, shapeBoundaryPoints, shapeContainsPoint, shapeFootprintContains, shapeGeometryFrame, shapePathData } from '../src/lib/layout/shape.ts';
 import { safeLayerId, serializePlotterSvg } from '../src/lib/layout/plotter-svg.ts';
-import { isGuidelinesPlanningPointBlocked } from '../src/lib/layout/guidelines-planning.ts';
+import { isGuidelinesPlanningPointBlocked, selectLineLayoutSpan } from '../src/lib/layout/guidelines-planning.ts';
 
 test('circle containment uses an inscribed constrained frame',()=>{
   assert.deepEqual(shapeGeometryFrame('circle',120,80),{x:20,y:0,width:80,height:80});
@@ -93,4 +93,31 @@ test('visibility cache includes both planning toggles',()=>{
   const source=readFileSync(new URL('../src/lib/layout/guidelines-text-fit.ts',import.meta.url),'utf8');
   assert.match(source,/mask:element\.mask,avoidOccludingElements:element\.avoidOccludingElements/);
   assert.match(source,/occluders=element\.avoidOccludingElements!==false\?/);
+});
+
+test('Line Layout selects one fitting contiguous span for every alignment',()=>{
+  const spans=[{x1:0,x2:25},{x1:40,x2:100}],footprint=30,center=50;
+  assert.deepEqual(selectLineLayoutSpan(spans,'left',footprint,center,0)?.span,spans[1]);
+  assert.deepEqual(selectLineLayoutSpan(spans,'right',footprint,center,0)?.span,spans[1]);
+  assert.equal(selectLineLayoutSpan(spans,'center',footprint,center,0)?.start,55);
+  assert.equal(selectLineLayoutSpan(spans,'custom',footprint,center,10)?.start,40);
+  assert.equal(selectLineLayoutSpan(spans,'custom',footprint,center,90)?.start,70);
+});
+
+test('Line Layout reports the largest span when none fits and skips blocked rows',()=>{
+  const fallback=selectLineLayoutSpan([{x1:0,x2:10},{x1:20,x2:40}],'left',30,25,0);
+  assert.deepEqual(fallback?.span,{x1:20,x2:40});
+  assert.equal(fallback?.fits,false);
+  assert.equal(selectLineLayoutSpan([],'left',10,50,0),null);
+});
+
+test('Artwork bounds is the default planning-only exclusion mode',()=>{
+  const types=readFileSync(new URL('../src/lib/layout/types.ts',import.meta.url),'utf8');
+  const page=readFileSync(new URL('../src/app/layout/page.tsx',import.meta.url),'utf8');
+  const planning=readFileSync(new URL('../src/lib/layout/guidelines-text-fit.ts',import.meta.url),'utf8');
+  const plotter=readFileSync(new URL('../src/lib/layout/plotter-export.ts',import.meta.url),'utf8');
+  assert.match(types,/textFitExclusion\?:'bounds'\|'geometry'/);
+  assert.match(page,/textFitExclusion:'bounds'/);
+  assert.match(planning,/textFitExclusion\?\?'bounds'\)===\'bounds\'\)return \[rectOccluder\(occupiedRect/);
+  assert.doesNotMatch(plotter,/textFitExclusion/);
 });
