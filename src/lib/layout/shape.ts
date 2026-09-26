@@ -11,6 +11,7 @@ export const SHAPE_OPTIONS = [
 export type ShapeKind = typeof SHAPE_OPTIONS[number]['kind'];
 export type ShapeAppearance = 'reserve' | 'fill' | 'border' | 'fillAndBorder';
 export type ShapePoint = { x: number; y: number };
+export type ShapeFrame = { x:number; y:number; width:number; height:number };
 
 export type ShapeSettings = { kind: ShapeKind; appearance: ShapeAppearance; fillColor: string; borderColor: string; borderWidthMM: number; cornerRadiusMM: number };
 export const PAGE_BACKGROUND = '#ffffff';
@@ -49,4 +50,6 @@ export function shapeBoundaryPoints(kind:ShapeKind,width:number,height:number,co
 export function shapePolygonPoints(kind:ShapeKind,width:number,height:number,cornerRadiusMM=0){return shapeBoundaryPoints(kind,width,height,cornerRadiusMM).map(p=>`${p.x},${p.y}`).join(' ');}
 export function shapePathData(kind:ShapeKind,width:number,height:number,cornerRadiusMM=0){const p=shapeBoundaryPoints(kind,width,height,cornerRadiusMM);return p.length?`M ${p.map(q=>`${q.x} ${q.y}`).join(' L ')} Z`:'';}
 export function shapeContainsPoint(kind:ShapeKind,width:number,height:number,point:ShapePoint,cornerRadiusMM=0){const polygon=shapeBoundaryPoints(kind,width,height,cornerRadiusMM);let inside=false;for(let i=0,j=polygon.length-1;i<polygon.length;j=i++){const a=polygon[i],b=polygon[j];if((a.y>point.y)!==(b.y>point.y)&&point.x<(b.x-a.x)*(point.y-a.y)/(b.y-a.y)+a.x)inside=!inside;}return inside;}
+export function expandedShapeFrame(frame:ShapeFrame,paddingMM=0):ShapeFrame{const padding=Math.max(0,paddingMM);return{x:frame.x-padding,y:frame.y-padding,width:frame.width+padding*2,height:frame.height+padding*2};}
+export function shapeFootprintContains(kind:ShapeKind,frame:ShapeFrame,point:ShapePoint,cornerRadiusMM=0,paddingMM=0){const bounds=expandedShapeFrame(frame,paddingMM);return shapeContainsPoint(kind,bounds.width,bounds.height,{x:point.x-bounds.x,y:point.y-bounds.y},cornerRadiusMM+Math.max(0,paddingMM));}
 export function constrainFrameToSquare(frame:{x:number;y:number;width:number;height:number}){const size=Math.min(frame.width,frame.height);return{x:frame.x+(frame.width-size)/2,y:frame.y+(frame.height-size)/2,width:size,height:size};}

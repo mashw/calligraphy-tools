@@ -5,7 +5,7 @@ import { SCRIPT_PROFILES } from '@/lib/scripts';
 import { buildCalligramModel } from '@/lib/calligram/model';
 import { buildCurvedTitleModel } from '@/lib/curved-title/model';
 import { occupiedRect } from './geometry';
-import { shapeContainsPoint } from './shape';
+import { expandedShapeFrame, shapeContainsPoint, shapeFootprintContains } from './shape';
 import { pageSize, type GuidelinesElement, type LayoutElement, type PageElement } from './types';
 import { pathHasOnlyClosedSubpaths, type ArtworkNode } from './artwork';
 import { lineMetricFromMeasuredRun } from '@/lib/measure/measure-lines-generic';
@@ -63,7 +63,11 @@ function artworkOccluder(element:Extract<LayoutElement,{type:'artwork'}>):Occlud
 function elementOccluders(element: LayoutElement): Occluder[] {
   if(element.type==='page') return [];
   if(element.type==='shape') return [shapeOccluder(element)];
-  if(element.type==='guidelines') return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
+  if(element.type==='guidelines') {
+    if(!element.mask?.enabled)return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
+    const bounds=expandedShapeFrame(element.frame,element.paddingMM);
+    return [{bounds,contains:point=>shapeFootprintContains(element.mask.kind,element.frame,point,element.mask.cornerRadiusMM,element.paddingMM)}];
+  }
   if(element.type==='artwork'){const occluder=artworkOccluder(element);return occluder?[occluder]:[];}
   if(element.type==='curved-title') {
     if(!(element.settings.transparentWhitespace??true)) return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];

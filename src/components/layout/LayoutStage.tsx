@@ -258,7 +258,9 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
           const frame = livePaint?.id === element.id ? livePaint.frame : element.frame;
           const occupied = occupiedRect(element.type==='calligram'&&!(element.settings.transparentWhitespace??true)?visualFrame(element,frame):frame, element.paddingMM);
           return <g key={element.id} onPointerDown={e => begin(e, element)} style={{ cursor: element.locked ? 'pointer' : 'move' }}>
-            {element.type !== 'shape' && element.type !== 'artwork' && !((element.type==='curved-title'||element.type==='calligram')&&(element.settings.transparentWhitespace??true)) && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
+            {element.type==='guidelines'&&element.mask?.enabled
+              ? <path transform={`translate(${occupied.x} ${occupied.y})`} d={shapePathData(element.mask.kind,occupied.width,occupied.height,element.mask.cornerRadiusMM+Math.max(0,element.paddingMM))} fill={PAGE_BACKGROUND}/>
+              : element.type !== 'shape' && element.type !== 'artwork' && !((element.type==='curved-title'||element.type==='calligram')&&(element.settings.transparentWhitespace??true)) && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
             <ElementVisual element={element} frame={frame} simplify={previewSimplify} selected={element.id === selectedId} textFitEntry={textFitPlans[element.id]??null} onPlannedLinePlacementChange={onPlannedLinePlacementChange} />
           </g>;
         })}
@@ -322,7 +324,9 @@ function LineLayoutOverlay({guidelinesId,entry,frame,onCommit}:{guidelinesId:str
 function ElementVisual({ element, frame, simplify, selected, textFitEntry,onPlannedLinePlacementChange }: { element: LayoutElement; frame: Frame; simplify: boolean; selected: boolean; textFitEntry: GuidelinesTextFitEntry | null;onPlannedLinePlacementChange:(guidelinesId:string,lineId:string,customStartMM:number)=>void }) {
   const common = { x: frame.x, y: frame.y, width: frame.width, height: frame.height };
   if (element.type === 'shape') return <ShapeElementRenderer element={element} frame={frame} selected={selected} />;
-  if (simplify) return <rect {...common} rx="1" fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5" />;
+  if (simplify) return element.type==='guidelines'&&element.mask?.enabled
+    ? <g transform={`translate(${frame.x} ${frame.y})`}><ShapeGeometry kind={element.mask.kind} width={frame.width} height={frame.height} cornerRadiusMM={element.mask.cornerRadiusMM} fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5"/></g>
+    : <rect {...common} rx="1" fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5" />;
   if(element.type==='artwork')return <ArtworkRenderer element={element} frame={frame}/>;
   if (element.type === 'guidelines') {
     const mask=element.mask;

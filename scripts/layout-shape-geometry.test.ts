@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { SHAPE_OPTIONS, shapeBoundaryPoints, shapeContainsPoint, shapeGeometryFrame, shapePathData } from '../src/lib/layout/shape.ts';
+import { SHAPE_OPTIONS, shapeBoundaryPoints, shapeContainsPoint, shapeFootprintContains, shapeGeometryFrame, shapePathData } from '../src/lib/layout/shape.ts';
 
 test('circle containment uses an inscribed constrained frame',()=>{
   assert.deepEqual(shapeGeometryFrame('circle',120,80),{x:20,y:0,width:80,height:80});
@@ -31,4 +31,25 @@ test('Layout guideline clipPath contains a path rather than ShapeGeometry wrappe
   const source=readFileSync(new URL('../src/components/layout/LayoutStage.tsx',import.meta.url),'utf8');
   assert.match(source,/<clipPath id=\{clipId\}><path d=\{shapePathData\(/);
   assert.doesNotMatch(source,/<clipPath id=\{clipId\}><ShapeGeometry/);
+});
+
+test('masked guideline footprints contain only their shape, including padding',()=>{
+  const frame={x:10,y:20,width:100,height:100};
+  assert(shapeFootprintContains('circle',frame,{x:60,y:70}));
+  assert(!shapeFootprintContains('circle',frame,{x:11,y:21}));
+  assert(shapeFootprintContains('circle',frame,{x:8,y:70},0,3));
+  assert(shapeFootprintContains('heart',frame,{x:60,y:70}));
+  assert(!shapeFootprintContains('heart',frame,{x:11,y:21}));
+  assert(shapeFootprintContains('gothicArch',frame,{x:60,y:70}));
+  assert(!shapeFootprintContains('gothicArch',frame,{x:11,y:21}));
+});
+
+test('preview and both occlusion pipelines retain rectangles only for unmasked guidelines',()=>{
+  const stage=readFileSync(new URL('../src/components/layout/LayoutStage.tsx',import.meta.url),'utf8');
+  assert.match(stage,/element\.type==='guidelines'&&element\.mask\?\.enabled[\s\S]*?<path transform=/);
+  for(const file of ['guidelines-text-fit.ts','plotter-export.ts']){
+    const source=readFileSync(new URL(`../src/lib/layout/${file}`,import.meta.url),'utf8');
+    assert.match(source,/if\(!element\.mask\?\.enabled\)return \[rectOccluder\(occupiedRect\(/,file);
+    assert.match(source,/shapeFootprintContains\(element\.mask\.kind/,file);
+  }
 });

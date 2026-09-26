@@ -4,7 +4,7 @@ import { buildStraightSlantLines, calculateStraightGuidelines } from '@/lib/guid
 import { constructionGuideDotPoints, type ConstructionGuideAppearance } from '@/lib/guides/guide-template';
 import { occupiedRect } from '@/lib/layout/geometry';
 import { pathHasOnlyClosedSubpaths, type ArtworkNode } from '@/lib/layout/artwork';
-import { shapeBoundaryPoints, shapeContainsPoint } from '@/lib/layout/shape';
+import { expandedShapeFrame, shapeBoundaryPoints, shapeContainsPoint, shapeFootprintContains } from '@/lib/layout/shape';
 import { pageSize, type Frame, type LayoutElement, type PageElement } from '@/lib/layout/types';
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 
@@ -377,7 +377,11 @@ function visualCalligramBounds(element: Extract<LayoutElement, { type: 'calligra
 function elementOccluders(element: LayoutElement): Occluder[] {
   if (element.type === 'page') return [];
   if (element.type === 'shape') return [shapeOccluder(element)];
-  if (element.type === 'guidelines') return [rectOccluder(occupiedRect(element.frame, element.paddingMM))];
+  if (element.type === 'guidelines') {
+    if(!element.mask?.enabled)return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
+    const bounds=expandedShapeFrame(element.frame,element.paddingMM);
+    return [{bounds,contains:point=>shapeFootprintContains(element.mask.kind,element.frame,point,element.mask.cornerRadiusMM,element.paddingMM)}];
+  }
   if (element.type === 'artwork') {
     const occluder = artworkOccluder(element);
     return occluder ? [occluder] : [];
