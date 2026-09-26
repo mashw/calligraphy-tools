@@ -6,7 +6,7 @@ import { occupiedRect, pageContentRect, resizeFrame, snapMove, type SnapState } 
 import { pageSize, resizeAspectMode, type Frame, type LayoutElement, type ResizeAspectMode, type ResizeHandle } from '@/lib/layout/types';
 import GuidelinesRenderer from '@/components/guidelines/GuidelinesRenderer';
 import ShapeElementRenderer, { ShapeGeometry } from '@/components/layout/ShapeElementRenderer';
-import { PAGE_BACKGROUND } from '@/lib/layout/shape';
+import { PAGE_BACKGROUND, shapePathData } from '@/lib/layout/shape';
 import CurvedTitleRenderer from '@/components/curved-title/CurvedTitleRenderer';
 import { buildCurvedTitleModel } from '@/lib/curved-title/model';
 import CalligramRenderer from '@/components/calligram/CalligramRenderer';
@@ -328,7 +328,7 @@ function ElementVisual({ element, frame, simplify, selected, textFitEntry,onPlan
     const mask=element.mask;
     const clipId=`layout-${element.id}-shape-mask`;
     const wrap=(content:React.ReactNode)=><g transform={`translate(${frame.x} ${frame.y})`}>
-      {mask?.enabled&&<defs><clipPath id={clipId}><ShapeGeometry kind={mask.kind} width={frame.width} height={frame.height} cornerRadiusMM={mask.cornerRadiusMM}/></clipPath></defs>}
+      {mask?.enabled&&<defs><clipPath id={clipId}><path d={shapePathData(mask.kind,frame.width,frame.height,mask.cornerRadiusMM)}/></clipPath></defs>}
       <g clipPath={mask?.enabled?`url(#${clipId})`:undefined}>{content}</g>
       {mask?.enabled&&mask.showOutline&&<ShapeGeometry kind={mask.kind} width={frame.width} height={frame.height} cornerRadiusMM={mask.cornerRadiusMM} fill="none" stroke={mask.outlineColor} strokeWidth={mask.outlineWidthMM}/>}
     </g>;
