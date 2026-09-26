@@ -8,6 +8,7 @@ import { expandedShapeFrame, shapeBoundaryPoints, shapeContainsPoint, shapeFootp
 import { pageSize, type Frame, type LayoutElement, type PageElement } from '@/lib/layout/types';
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 import { serializePlotterSvg, type ExportLayering, type PlotterSvgLayer } from './plotter-svg';
+import { artworkBoundsContains, usesArtworkBoundsOcclusion } from './artwork-occlusion';
 
 /**
  * Cricut/plotter export invariant:
@@ -386,6 +387,7 @@ function elementOccluders(element: LayoutElement): Occluder[] {
     return [{bounds,contains:point=>shapeFootprintContains(element.mask.kind,element.frame,point,element.mask.cornerRadiusMM,element.paddingMM)}];
   }
   if (element.type === 'artwork') {
+    if(usesArtworkBoundsOcclusion(element.settings))return [{bounds:element.frame,contains:point=>artworkBoundsContains(element.frame,point)}];
     const occluder = artworkOccluder(element);
     return occluder ? [occluder] : [];
   }

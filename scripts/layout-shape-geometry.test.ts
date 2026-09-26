@@ -4,6 +4,7 @@ import test from 'node:test';
 import { SHAPE_OPTIONS, shapeBoundaryPoints, shapeContainsPoint, shapeFootprintContains, shapeGeometryFrame, shapePathData } from '../src/lib/layout/shape.ts';
 import { safeLayerId, serializePlotterSvg } from '../src/lib/layout/plotter-svg.ts';
 import { isGuidelinesPlanningPointBlocked, selectLineLayoutSpan } from '../src/lib/layout/guidelines-planning.ts';
+import { artworkBoundsContains, usesArtworkBoundsOcclusion } from '../src/lib/layout/artwork-occlusion.ts';
 
 test('circle containment uses an inscribed constrained frame',()=>{
   assert.deepEqual(shapeGeometryFrame('circle',120,80),{x:20,y:0,width:80,height:80});
@@ -120,4 +121,25 @@ test('Artwork bounds is the default planning-only exclusion mode',()=>{
   assert.match(page,/textFitExclusion:'bounds'/);
   assert.match(planning,/textFitExclusion\?\?'bounds'\)===\'bounds\'\)return \[rectOccluder\(occupiedRect/);
   assert.doesNotMatch(plotter,/textFitExclusion/);
+});
+
+test('Artwork visual bounds occlusion is explicit, exact, and disableable',()=>{
+  const bounds={x:10,y:20,width:30,height:40};
+  assert.equal(usesArtworkBoundsOcclusion({occludeLowerLayers:true,opacity:100,occlusionArea:'visible-artwork'}),false);
+  assert.equal(usesArtworkBoundsOcclusion({occludeLowerLayers:true,opacity:100,occlusionArea:'bounds'}),true);
+  assert.equal(usesArtworkBoundsOcclusion({occludeLowerLayers:false,opacity:100,occlusionArea:'bounds'}),false);
+  assert.equal(usesArtworkBoundsOcclusion({occludeLowerLayers:true,opacity:0,occlusionArea:'bounds'}),false);
+  assert.equal(usesArtworkBoundsOcclusion({occludeLowerLayers:true,opacity:100}),false,'older Artwork keeps visible-artwork behavior');
+  assert(artworkBoundsContains(bounds,{x:20,y:30}));
+  assert(!artworkBoundsContains(bounds,{x:9.99,y:30}));
+  assert(!artworkBoundsContains(bounds,{x:20,y:60.01}));
+});
+
+test('Artwork bounds uses a preview knockout and baked plotter clipping only',()=>{
+  const renderer=readFileSync(new URL('../src/components/layout/ArtworkRenderer.tsx',import.meta.url),'utf8');
+  const plotter=readFileSync(new URL('../src/lib/layout/plotter-export.ts',import.meta.url),'utf8');
+  assert.match(renderer,/usesArtworkBoundsOcclusion\(element\.settings\)[\s\S]*?<rect[\s\S]*?fill=\{PAGE_BACKGROUND\}/);
+  assert.match(plotter,/usesArtworkBoundsOcclusion\(element\.settings\)\)return \[\{bounds:element\.frame,contains:point=>artworkBoundsContains/);
+  assert.match(plotter,/raw = clipPolylinesByOccluders\(raw, higherOccluders\)/);
+  assert.doesNotMatch(plotter,/fill=["']white|PAGE_BACKGROUND/);
 });
