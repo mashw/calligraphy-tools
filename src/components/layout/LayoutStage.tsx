@@ -5,8 +5,8 @@ import { bakeExportStrokes, cloneSvgForRasterExport, computeRasterPxPerMM, jpegD
 import { occupiedRect, pageContentRect, resizeFrame, snapMove, type SnapState } from '@/lib/layout/geometry';
 import { pageSize, resizeAspectMode, type Frame, type LayoutElement, type ResizeAspectMode, type ResizeHandle } from '@/lib/layout/types';
 import GuidelinesRenderer from '@/components/guidelines/GuidelinesRenderer';
-import ShapeElementRenderer from '@/components/layout/ShapeElementRenderer';
-import { PAGE_BACKGROUND } from '@/lib/layout/shape';
+import ShapeElementRenderer, { ShapeGeometry } from '@/components/layout/ShapeElementRenderer';
+import { PAGE_BACKGROUND, shapePathData } from '@/lib/layout/shape';
 import CurvedTitleRenderer from '@/components/curved-title/CurvedTitleRenderer';
 import { buildCurvedTitleModel } from '@/lib/curved-title/model';
 import CalligramRenderer from '@/components/calligram/CalligramRenderer';
@@ -14,6 +14,7 @@ import { buildCalligramModel } from '@/lib/calligram/model';
 import { getNearestCompleteGuidelinesHeight } from '@/lib/guides/straight/model';
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 import { buildPlotterExport, CRICUT_MATS, DEFAULT_PLOTTER_EXPORT_OPTIONS, getCricutSafeRect, type CricutMatId, type PlotterExportOptions } from '@/lib/layout/plotter-export';
+import { safeLayerId, type ExportLayering } from '@/lib/layout/plotter-svg';
 import ArtworkRenderer from './ArtworkRenderer';
 
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
@@ -145,14 +146,15 @@ export default function LayoutStage({ elements, selectedId, textFitPlans, onSele
   const [cricutMat, setCricutMat] = useState<CricutMatId>('12x12');
   const [showCricutSafeArea, setShowCricutSafeArea] = useState(false);
   const [cricutMessage, setCricutMessage] = useState<string | null>(null);
-  const [cricutModalOpen, setCricutModalOpen] = useState(false);
+  const [exportModal, setExportModal] = useState<'svg'|'cricut'|null>(null);
+  const [exportLayering,setExportLayering]=useState<ExportLayering>('combined');
   const [cricutOptions, setCricutOptions] = useState<PlotterExportOptions>({ ...DEFAULT_PLOTTER_EXPORT_OPTIONS });
   useEffect(() => {
-    if (!cricutModalOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setCricutModalOpen(false); };
+    if (!exportModal) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setExportModal(null); };
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [cricutModalOpen]);
+  }, [exportModal]);
   const previewSimplify = simplify || interactionActive;
   const selected = elements.find(element => element.id === selectedId);
   const pageElement = elements.find(element => element.type === 'page');
@@ -225,13 +227,13 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
     interactionRef.current = { mode: 'none' }; setLivePaint(null); setInteractionActive(false);
   };
   const reset = (next: ViewMode = 'autofit') => { setView(next); setZoom(1); setPan({ x: 0, y: 0 }); };
-  const exportClone = () => { if (!svgRef.current) return null; const clone = svgRef.current.cloneNode(true) as SVGSVGElement; clone.setAttribute('viewBox', `0 0 ${page.width} ${page.height}`); clone.setAttribute('width', `${page.width}mm`); clone.setAttribute('height', `${page.height}mm`); bakeExportStrokes(svgRef.current, clone, page.width); stripNoExport(clone); return clone; };
-  const exportSvg = () => { const clone = exportClone(); if (!clone) return; download(new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' }), 'layout.svg'); };
+  const exportClone = (layering:ExportLayering) => { if (!svgRef.current) return null; const clone = svgRef.current.cloneNode(true) as SVGSVGElement; clone.setAttribute('viewBox', `0 0 ${page.width} ${page.height}`); clone.setAttribute('width', `${page.width}mm`); clone.setAttribute('height', `${page.height}mm`); bakeExportStrokes(svgRef.current, clone, page.width); stripNoExport(clone); clone.querySelectorAll('[data-export-layer-id]').forEach(node=>{if(layering==='elements'){const draws=Array.from(node.querySelectorAll('path,line,polyline,polygon,rect,circle,ellipse,text')).some(item=>!item.closest('defs'));if(!draws){node.remove();return;}node.setAttribute('id',node.getAttribute('data-export-layer-id')!);node.setAttribute('data-name',node.getAttribute('data-export-layer-name')!);}node.removeAttribute('data-export-layer-id');node.removeAttribute('data-export-layer-name');}); return clone; };
+  const exportSvg = () => { const clone = exportClone(exportLayering); if (!clone) return; download(new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' }), 'layout.svg'); };
   const raster = async () => { if (!svgRef.current) return null; const { wPx, hPx } = computeRasterPxPerMM(page.width, page.height); const clone = cloneSvgForRasterExport(svgRef.current, page.width, page.height, wPx, hPx, bakeExportStrokes, stripNoExport); return { data: await renderSvgCloneToJpegDataUrl(clone, wPx, hPx), wPx, hPx }; };
   const exportPdf = async () => { const result = await raster(); if (result) download(jpegDataUrlToPdf(result.data, page.width, page.height, result.wPx, result.hPx), 'layout.pdf'); };
   const print = async () => { const result = await raster(); if (result) printJpegDataUrlToScale(result.data, page.width, page.height); };
   const exportCricut = () => {
-    const result = buildPlotterExport(elements, textFitPlans, cricutMat, cricutOptions);
+    const result = buildPlotterExport(elements, textFitPlans, cricutMat, {...cricutOptions,layering:exportLayering});
     if (result.safety.reasons.length > 0) {
       setCricutMessage(result.safety.reasons.join(' '));
       return;
@@ -247,7 +249,7 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
       <button aria-pressed={simplify} onClick={() => setSimplify(value => !value)} className={`${control} ${simplify ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : ''}`}>Simplify</button>
       <div className="ml-auto flex flex-wrap items-center gap-2">
         <button aria-label="Zoom out" onClick={() => { setView('custom'); setZoom(value => Math.max(.35, value * .9)); }} className={control}>−</button><button aria-label="Zoom in" onClick={() => { setView('custom'); setZoom(value => Math.min(6, value * 1.1)); }} className={control}>+</button><button onClick={() => reset()} className={control}>Reset view</button>
-        <button onClick={exportSvg} className={`${control} ml-1`}>SVG</button><button onClick={exportPdf} className={control}>PDF</button><button onClick={() => { setCricutMessage(null); setCricutModalOpen(true); }} className={control}>Cricut Draw</button><label className="flex shrink-0 items-center gap-1 text-xs text-slate-700"><input type="checkbox" checked={showCricutSafeArea} onChange={event => setShowCricutSafeArea(event.target.checked)} />Show Cricut safe area</label><button onClick={print} className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500">Print</button>
+        <button onClick={()=>setExportModal('svg')} className={`${control} ml-1`}>SVG</button><button onClick={exportPdf} className={control}>PDF</button><button onClick={() => { setCricutMessage(null); setExportModal('cricut'); }} className={control}>Cricut Draw</button><label className="flex shrink-0 items-center gap-1 text-xs text-slate-700"><input type="checkbox" checked={showCricutSafeArea} onChange={event => setShowCricutSafeArea(event.target.checked)} />Show Cricut safe area</label><button onClick={print} className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500">Print</button>
       </div>
     </div>
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-300">
@@ -257,8 +259,10 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
         {[...elements].reverse().filter(element => element.type !== 'page').map(element => {
           const frame = livePaint?.id === element.id ? livePaint.frame : element.frame;
           const occupied = occupiedRect(element.type==='calligram'&&!(element.settings.transparentWhitespace??true)?visualFrame(element,frame):frame, element.paddingMM);
-          return <g key={element.id} onPointerDown={e => begin(e, element)} style={{ cursor: element.locked ? 'pointer' : 'move' }}>
-            {element.type !== 'shape' && element.type !== 'artwork' && !((element.type==='curved-title'||element.type==='calligram')&&(element.settings.transparentWhitespace??true)) && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
+          return <g key={element.id} data-export-layer-id={safeLayerId(element.name,element.id)} data-export-layer-name={element.name} onPointerDown={e => begin(e, element)} style={{ cursor: element.locked ? 'pointer' : 'move' }}>
+            {element.type==='guidelines'&&element.mask?.enabled
+              ? <path transform={`translate(${occupied.x} ${occupied.y})`} d={shapePathData(element.mask.kind,occupied.width,occupied.height,element.mask.cornerRadiusMM+Math.max(0,element.paddingMM))} fill={PAGE_BACKGROUND}/>
+              : element.type !== 'shape' && element.type !== 'artwork' && !((element.type==='curved-title'||element.type==='calligram')&&(element.settings.transparentWhitespace??true)) && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
             <ElementVisual element={element} frame={frame} simplify={previewSimplify} selected={element.id === selectedId} textFitEntry={textFitPlans[element.id]??null} onPlannedLinePlacementChange={onPlannedLinePlacementChange} />
           </g>;
         })}
@@ -281,15 +285,16 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
         </g>; })()}
       </svg>
     </div>
-    {cricutModalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setCricutModalOpen(false); }}>
+    {exportModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setExportModal(null); }}>
       <div role="dialog" aria-modal="true" aria-labelledby="cricut-modal-title" className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
-        <div className="flex items-start justify-between gap-4"><h3 id="cricut-modal-title" className="text-lg font-semibold text-slate-900">Cricut Draw</h3><button type="button" aria-label="Close Cricut Draw dialog" onClick={() => setCricutModalOpen(false)} className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 hover:bg-slate-100">×</button></div>
-        <label className="mt-4 flex items-center gap-3 text-sm font-medium text-slate-700">Mat
+        <div className="flex items-start justify-between gap-4"><h3 id="cricut-modal-title" className="text-lg font-semibold text-slate-900">{exportModal==='cricut'?'Cricut Draw SVG':'SVG export'}</h3><button type="button" aria-label="Close Cricut Draw dialog" onClick={() => setExportModal(null)} className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 hover:bg-slate-100">×</button></div>
+        {exportModal==='cricut'&&<label className="mt-4 flex items-center gap-3 text-sm font-medium text-slate-700">Mat
           <select value={cricutMat} onChange={event => { setCricutMat(event.target.value as CricutMatId); setCricutMessage(null); }} className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 font-normal">
             {Object.entries(CRICUT_MATS).map(([id, mat]) => <option key={id} value={id}>{mat.label}</option>)}
           </select>
-        </label>
-        <fieldset className="mt-5"><legend className="font-semibold text-slate-800">Drawing guides</legend>
+        </label>}
+        <fieldset className="mt-5"><legend>Layering</legend><div className="mt-2 space-y-2 text-sm text-slate-700">{([['combined','Combined — single drawing layer'],['elements','Separate by Layout element']] as const).map(([value,label])=><label key={value} className="flex items-center gap-2"><input type="radio" name="export-layering" value={value} checked={exportLayering===value} onChange={()=>setExportLayering(value)}/>{label}</label>)}</div></fieldset>
+        {exportModal==='cricut'&&<fieldset className="mt-5"><legend className="font-semibold text-slate-800">Drawing guides</legend>
           <div className="mt-2 grid gap-x-5 gap-y-2 text-sm text-slate-700 sm:grid-cols-2">
             {([
               ['baselineIndicators', 'Baseline indicators'],
@@ -304,11 +309,11 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
               ['shapeOutlines', 'Shape outlines'],
             ] as const).map(([key, label]) => <label key={key} className="flex items-center gap-2"><input type="checkbox" checked={cricutOptions[key]} onChange={event => setCricutOptions(current => ({ ...current, [key]: event.target.checked }))} />{label}</label>)}
           </div>
-        </fieldset>
-        <p className="mt-5 text-xs text-slate-600">These options affect Cricut Draw only. SVG, PDF, Print and the Layout preview are unchanged.</p>
+        </fieldset>}
+        {exportModal==='cricut'&&<><p className="mt-5 text-xs text-slate-600">These options affect Cricut Draw only. SVG, PDF, Print and the Layout preview are unchanged.</p>
         <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">Place paper flush with the top-left corner of the Cricut mat grid.<br />Upload without resizing and set the imported layer to Draw / Pen.</p>
-        {cricutMessage && <p role="status" className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{cricutMessage}</p>}
-        <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setCricutModalOpen(false)} className={control}>Cancel</button><button type="button" onClick={exportCricut} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500">Export Cricut SVG</button></div>
+        {cricutMessage && <p role="status" className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{cricutMessage}</p>}</>}
+        <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setExportModal(null)} className={control}>Cancel</button><button type="button" onClick={()=>{if(exportModal==='cricut')exportCricut();else{exportSvg();setExportModal(null);}}} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500">{exportModal==='cricut'?'Export Cricut SVG':'Export SVG'}</button></div>
       </div>
     </div>}
   </section>;
@@ -322,23 +327,32 @@ function LineLayoutOverlay({guidelinesId,entry,frame,onCommit}:{guidelinesId:str
 function ElementVisual({ element, frame, simplify, selected, textFitEntry,onPlannedLinePlacementChange }: { element: LayoutElement; frame: Frame; simplify: boolean; selected: boolean; textFitEntry: GuidelinesTextFitEntry | null;onPlannedLinePlacementChange:(guidelinesId:string,lineId:string,customStartMM:number)=>void }) {
   const common = { x: frame.x, y: frame.y, width: frame.width, height: frame.height };
   if (element.type === 'shape') return <ShapeElementRenderer element={element} frame={frame} selected={selected} />;
-  if (simplify) return <rect {...common} rx="1" fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5" />;
+  if (simplify) return element.type==='guidelines'&&element.mask?.enabled
+    ? <g transform={`translate(${frame.x} ${frame.y})`}><ShapeGeometry kind={element.mask.kind} width={frame.width} height={frame.height} cornerRadiusMM={element.mask.cornerRadiusMM} fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5"/></g>
+    : <rect {...common} rx="1" fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5" />;
   if(element.type==='artwork')return <ArtworkRenderer element={element} frame={frame}/>;
   if (element.type === 'guidelines') {
-    if(textFitEntry?.mode==='line-layout')return <g transform={`translate(${frame.x} ${frame.y})`}><GuidelinesRenderer box={{width:frame.width,height:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`}/><LineLayoutOverlay guidelinesId={element.id} entry={textFitEntry} frame={frame} onCommit={onPlannedLinePlacementChange}/></g>;
+    const mask=element.mask;
+    const clipId=`layout-${element.id}-shape-mask`;
+    const wrap=(content:React.ReactNode)=><g transform={`translate(${frame.x} ${frame.y})`}>
+      {mask?.enabled&&<defs><clipPath id={clipId}><path d={shapePathData(mask.kind,frame.width,frame.height,mask.cornerRadiusMM)}/></clipPath></defs>}
+      <g clipPath={mask?.enabled?`url(#${clipId})`:undefined}>{content}</g>
+      {mask?.enabled&&mask.showOutline&&<ShapeGeometry kind={mask.kind} width={frame.width} height={frame.height} cornerRadiusMM={mask.cornerRadiusMM} fill="none" stroke={mask.outlineColor} strokeWidth={mask.outlineWidthMM}/>}
+    </g>;
+    if(textFitEntry?.mode==='line-layout')return wrap(<><GuidelinesRenderer box={{width:frame.width,height:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`}/><LineLayoutOverlay guidelinesId={element.id} entry={textFitEntry} frame={frame} onCommit={onPlannedLinePlacementChange}/></>);
     const placements = textFitEntry?.mode==='estimate'?textFitEntry.plan.placements:[];
     const placementGeometry = placements.map(placement => {
       const x=placement.x1-frame.x,y1=placement.waistY-frame.y,y2=placement.baseY-frame.y,shift=placement.slantShiftMM,x2=x+placement.consumedMM;
       return { span:`M ${x+shift},${y1} L ${x2+shift},${y1} L ${x2},${y2} L ${x},${y2} Z`, end:`M ${x2+shift},${y1} L ${x2},${y2}` };
     });
     const overflowEnd = textFitEntry?.mode==='estimate' && !textFitEntry.plan.fits ? placementGeometry.at(-1)?.end : undefined;
-    return <g transform={`translate(${frame.x} ${frame.y})`}>
+    return wrap(<>
       <GuidelinesRenderer box={{ width: frame.width, height: frame.height }} settings={element.settings} idPrefix={`layout-${element.id}`} />
       {textFitEntry&&<g data-no-export="true" pointerEvents="none">
         {placementGeometry.map((geometry,index)=><path key={index} d={geometry.span} fill={textFitEntry.color.fill} stroke={textFitEntry.color.stroke} strokeWidth=".35" vectorEffect="non-scaling-stroke"/>)}
         {overflowEnd&&<path d={overflowEnd} fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" vectorEffect="non-scaling-stroke"/>}
       </g>}
-    </g>;
+    </>);
   }
   if (element.type === 'calligram') return <g transform={`translate(${frame.x} ${frame.y})`}><CalligramRenderer box={{w:frame.width,h:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`} pageBackground={(element.settings.transparentWhitespace??true)?PAGE_BACKGROUND:undefined} paddingMM={element.paddingMM} selected={selected}/></g>;
   if (element.type === 'curved-title') return <g transform={`translate(${frame.x} ${frame.y})`}><CurvedTitleRenderer box={{w:frame.width,h:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`} pageBackground={(element.settings.transparentWhitespace??true)?PAGE_BACKGROUND:undefined} paddingMM={element.paddingMM} selected={selected} /></g>;

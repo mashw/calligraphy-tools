@@ -2,6 +2,7 @@ import { createElement, type ReactNode } from 'react';
 import type { ArtworkElement } from '@/lib/layout/types';
 import { pathHasOnlyClosedSubpaths, type ArtworkNode } from '@/lib/layout/artwork';
 import { PAGE_BACKGROUND } from '@/lib/layout/shape';
+import { usesArtworkBoundsOcclusion } from '@/lib/layout/artwork-occlusion';
 
 const names:Record<string,string>={'stroke-width':'strokeWidth','fill-rule':'fillRule','clip-rule':'clipRule','fill-opacity':'fillOpacity','stroke-opacity':'strokeOpacity','stroke-linecap':'strokeLinecap','stroke-linejoin':'strokeLinejoin','stroke-miterlimit':'strokeMiterlimit'};
 type Paint={fill:string;stroke:string;strokeWidth:string};
@@ -21,6 +22,9 @@ export default function ArtworkRenderer({element,frame}:{element:ArtworkElement;
   const {viewBox,nodes}=element.document,base:Paint={fill:'black',stroke:'none',strokeWidth:'1'};
   const content=(occlusion:boolean)=>nodes.map((node,index)=>renderNode(node,String(index),occlusion,element.settings.occludeClosedShapes,base));
   return <svg x={frame.x} y={frame.y} width={frame.width} height={frame.height} viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`} preserveAspectRatio="none" overflow="visible">
-    {element.settings.occludeLowerLayers&&element.settings.opacity>0&&<g>{content(true)}</g>}<g opacity={element.settings.opacity/100}>{content(false)}</g>
+    {usesArtworkBoundsOcclusion(element.settings)
+      ? <rect x={viewBox.x} y={viewBox.y} width={viewBox.width} height={viewBox.height} fill={PAGE_BACKGROUND}/>
+      : element.settings.occludeLowerLayers&&element.settings.opacity>0&&<g>{content(true)}</g>}
+    <g opacity={element.settings.opacity/100}>{content(false)}</g>
   </svg>;
 }

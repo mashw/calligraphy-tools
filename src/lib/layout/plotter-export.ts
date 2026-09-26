@@ -1,12 +1,14 @@
 import { buildCalligramModel } from '@/lib/calligram/model';
 import { buildCurvedTitleModel } from '@/lib/curved-title/model';
 import { buildStraightSlantLines, calculateStraightGuidelines } from '@/lib/guides/straight/model';
-import { constructionGuideDotPoints, type ConstructionGuideAppearance } from '@/lib/guides/guide-template';
+import { constructionGuideDotPoints, resolveHorizontalGridAppearance, type ConstructionGuideAppearance, type HorizontalGridAppearance } from '@/lib/guides/guide-template';
 import { occupiedRect } from '@/lib/layout/geometry';
 import { pathHasOnlyClosedSubpaths, type ArtworkNode } from '@/lib/layout/artwork';
-import { shapePolygonPoints } from '@/lib/layout/shape';
+import { expandedShapeFrame, shapeBoundaryPoints, shapeContainsPoint, shapeFootprintContains } from '@/lib/layout/shape';
 import { pageSize, type Frame, type LayoutElement, type PageElement } from '@/lib/layout/types';
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
+import { serializePlotterSvg, type ExportLayering, type PlotterSvgLayer } from './plotter-svg';
+import { artworkBoundsContains, usesArtworkBoundsOcclusion } from './artwork-occlusion';
 
 /**
  * Cricut/plotter export invariant:
@@ -18,6 +20,7 @@ import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 export type CricutMatId = '12x12' | '12x24';
 
 export type PlotterExportOptions = {
+  layering: ExportLayering;
   baselineIndicators: boolean;
   textStartEndMarkers: boolean;
   slantGuides: boolean;
@@ -31,6 +34,7 @@ export type PlotterExportOptions = {
 };
 
 export const DEFAULT_PLOTTER_EXPORT_OPTIONS: PlotterExportOptions = {
+  layering: 'combined',
   baselineIndicators: true,
   textStartEndMarkers: true,
   slantGuides: true,
@@ -147,57 +151,10 @@ function translatePolylines(lines: PlotPolyline[], dx: number, dy: number) {
   return lines.map(line => ({ ...line, points: translatePoints(line.points, dx, dy) }));
 }
 
-function parsePolygonPoints(text: string) {
-  return text.trim().split(/\s+/).map(pair => {
-    const [x, y] = pair.split(',').map(Number);
-    return { x, y };
-  }).filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
-}
-
 function closedPolyline(points: Pt[], source: string) {
   if (!points.length) return null;
   const closed = samePoint(points[0], points[points.length - 1]) ? points : [...points, points[0]];
   return polyline(closed, source);
-}
-
-function ellipseBoundary(frame: Frame, source: string) {
-  const rx = frame.width / 2;
-  const ry = frame.height / 2;
-  const circumference = Math.PI * (3 * (rx + ry) - Math.sqrt(Math.max(0, (3 * rx + ry) * (rx + 3 * ry))));
-  const steps = clamp(Math.ceil(circumference / 0.6), 64, 720);
-  const cx = frame.x + rx;
-  const cy = frame.y + ry;
-  const points = Array.from({ length: steps + 1 }, (_, index) => {
-    const angle = index / steps * Math.PI * 2;
-    return { x: cx + rx * Math.cos(angle), y: cy + ry * Math.sin(angle) };
-  });
-  return polyline(points, source);
-}
-
-function roundedRectBoundary(frame: Frame, radiusMM: number, source: string) {
-  const r = Math.min(Math.max(0, radiusMM), frame.width / 2, frame.height / 2);
-  if (r <= EPS) return closedPolyline([
-    { x: frame.x, y: frame.y },
-    { x: frame.x + frame.width, y: frame.y },
-    { x: frame.x + frame.width, y: frame.y + frame.height },
-    { x: frame.x, y: frame.y + frame.height },
-  ], source);
-
-  const cornerSteps = clamp(Math.ceil(Math.PI * r / 2 / 0.35), 6, 80);
-  const points: Pt[] = [];
-  const corners = [
-    { cx: frame.x + frame.width - r, cy: frame.y + r, start: -Math.PI / 2 },
-    { cx: frame.x + frame.width - r, cy: frame.y + frame.height - r, start: 0 },
-    { cx: frame.x + r, cy: frame.y + frame.height - r, start: Math.PI / 2 },
-    { cx: frame.x + r, cy: frame.y + r, start: Math.PI },
-  ];
-  corners.forEach(corner => {
-    for (let index = 0; index <= cornerSteps; index++) {
-      const angle = corner.start + index / cornerSteps * Math.PI / 2;
-      points.push({ x: corner.cx + r * Math.cos(angle), y: corner.cy + r * Math.sin(angle) });
-    }
-  });
-  return closedPolyline(points, source);
 }
 
 function circleOutline(cx: number, cy: number, radius: number, source: string) {
@@ -358,36 +315,7 @@ function shapeOccluder(element: Extract<LayoutElement, { type: 'shape' }>): Occl
   const border = settings.appearance === 'border' || settings.appearance === 'fillAndBorder' ? settings.borderWidthMM / 2 : 0;
   const padding = Math.max(0, element.paddingMM + border);
   const bounds = { x: frame.x - padding, y: frame.y - padding, width: frame.width + padding * 2, height: frame.height + padding * 2 };
-  const local = (point: Pt) => ({ x: point.x - frame.x, y: point.y - frame.y });
-
-  if (settings.kind === 'ellipse' || settings.kind === 'circle') {
-    return {
-      bounds,
-      contains: point => {
-        const q = local(point);
-        const rx = frame.width / 2 + padding;
-        const ry = frame.height / 2 + padding;
-        return ((q.x - frame.width / 2) / rx) ** 2 + ((q.y - frame.height / 2) / ry) ** 2 <= 1;
-      },
-    };
-  }
-  if (settings.kind === 'rectangle' || settings.kind === 'square') return rectOccluder(bounds);
-  if (settings.kind === 'roundedRectangle' || settings.kind === 'roundedSquare') {
-    return {
-      bounds,
-      contains: point => {
-        const q = local(point);
-        const radius = Math.min(settings.cornerRadiusMM, frame.width / 2, frame.height / 2) + padding;
-        const cx = frame.width / 2;
-        const cy = frame.height / 2;
-        const dx = Math.max(Math.abs(q.x - cx) - (frame.width / 2 - radius), 0);
-        const dy = Math.max(Math.abs(q.y - cy) - (frame.height / 2 - radius), 0);
-        return dx * dx + dy * dy <= radius * radius;
-      },
-    };
-  }
-  const points = parsePolygonPoints(shapePolygonPoints(settings.kind, frame.width, frame.height)).map(point => ({ x: point.x + frame.x, y: point.y + frame.y }));
-  return polygonOccluder(points, padding);
+  return { bounds, contains: point => shapeContainsPoint(settings.kind,bounds.width,bounds.height,{x:point.x-bounds.x,y:point.y-bounds.y},settings.cornerRadiusMM+padding) };
 }
 
 function appendArtworkNode(node: ArtworkNode, parent: Element, geometries?: SVGGeometryElement[]) {
@@ -453,8 +381,13 @@ function visualCalligramBounds(element: Extract<LayoutElement, { type: 'calligra
 function elementOccluders(element: LayoutElement): Occluder[] {
   if (element.type === 'page') return [];
   if (element.type === 'shape') return [shapeOccluder(element)];
-  if (element.type === 'guidelines') return [rectOccluder(occupiedRect(element.frame, element.paddingMM))];
+  if (element.type === 'guidelines') {
+    if(!element.mask?.enabled)return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
+    const bounds=expandedShapeFrame(element.frame,element.paddingMM);
+    return [{bounds,contains:point=>shapeFootprintContains(element.mask.kind,element.frame,point,element.mask.cornerRadiusMM,element.paddingMM)}];
+  }
   if (element.type === 'artwork') {
+    if(usesArtworkBoundsOcclusion(element.settings))return [{bounds:element.frame,contains:point=>artworkBoundsContains(element.frame,point)}];
     const occluder = artworkOccluder(element);
     return occluder ? [occluder] : [];
   }
@@ -514,6 +447,23 @@ function clipPolylinesByOccluders(lines: PlotPolyline[], occluders: Occluder[]) 
   return lines.flatMap(line => clipPolylineByOccluders(line, occluders));
 }
 
+function clipPolylineInsideShape(input:PlotPolyline,kind:Extract<LayoutElement,{type:'guidelines'}>['mask']['kind'],width:number,height:number,cornerRadiusMM:number){
+  const contains=(p:Pt)=>shapeContainsPoint(kind,width,height,p,cornerRadiusMM),result:PlotPolyline[]=[];let current:Pt[]=[];
+  const flush=()=>{const next=polyline(current,input.source);if(next)result.push(next);current=[];};
+  const boundary=(a:Pt,b:Pt,aInside:boolean)=>{let lo=a,hi=b;for(let i=0;i<18;i++){const mid=lerp(lo,hi,.5);if(contains(mid)===aInside)lo=mid;else hi=mid;}return aInside?lo:hi;};
+  for(let index=1;index<input.points.length;index++){
+    const a=input.points[index-1],b=input.points[index],steps=Math.max(1,Math.ceil(dist(a,b)/OCCLUSION_SAMPLE_MM));
+    for(let step=0;step<steps;step++){
+      const p0=lerp(a,b,step/steps),p1=lerp(a,b,(step+1)/steps),in0=contains(p0),in1=contains(p1);
+      if(in0&&in1){if(!current.length)current.push(p0);current.push(p1);}
+      else if(in0){if(!current.length)current.push(p0);current.push(boundary(p0,p1,true));flush();}
+      else if(in1){const start=boundary(p0,p1,false);current.push(start,p1);}
+      else flush();
+    }
+  }
+  flush();return result;
+}
+
 function guideSetPolylines(
   guide: GuideLike,
   source: string,
@@ -521,6 +471,7 @@ function guideSetPolylines(
     pathKeys?: Array<'asc' | 'waist' | 'base' | 'desc'>;
     ticks?: boolean;
     hGuides?: boolean;
+    horizontalGridAppearance?:HorizontalGridAppearance;
     nibAngleMarker?: boolean;
     nibAngleDeg?: number;
     constructionGuides?: boolean;
@@ -557,7 +508,8 @@ function guideSetPolylines(
     (guide.hGuides ?? []).forEach((points, index) => {
       const next = polyline(points, `${source}:h-${index}`);
       if (!next) return;
-      result.push(...(bandRect ? clipPolylineToRect(next, bandRect) : [next]));
+      const horizontal=options?.horizontalGridAppearance,parts=horizontal?.style==='dashed'?dashPolyline(next,horizontal.dashMM,horizontal.gapMM):[next];
+      parts.forEach(part=>result.push(...(bandRect ? clipPolylineToRect(part, bandRect) : [part])));
     });
   }
   if (options?.constructionGuides !== false) {
@@ -601,6 +553,7 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
   const box = { width: element.frame.width, height: element.frame.height };
   const settings = element.settings;
   const model = calculateStraightGuidelines(box, settings);
+  const horizontalGridAppearance=resolveHorizontalGridAppearance(settings.horizontalGridAppearance);
   const clipRect = {
     x: settings.margins.left,
     y: 0,
@@ -616,6 +569,7 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
       const paths = guideSetPolylines(guide as GuideLike, `guidelines:${element.id}:row-${rowIndex}`, {
         ticks: settings.script !== 'Copperplate' && options.constructionGrid,
         hGuides: settings.script !== 'Copperplate' && options.constructionGrid,
+        horizontalGridAppearance,
         nibAngleMarker: settings.script !== 'Copperplate' && options.nibAngleMarker,
         nibAngleDeg: settings.penAngleDeg,
         constructionGuides: options.constructionGuides,
@@ -626,6 +580,7 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
         pathKeys: [],
         ticks: options.constructionGrid,
         hGuides: options.constructionGrid,
+        horizontalGridAppearance,
         nibAngleMarker: options.nibAngleMarker,
         nibAngleDeg: settings.penAngleDeg,
         constructionGuides: options.constructionGuides,
@@ -693,13 +648,19 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
     });
   }
 
-  return translatePolylines(result, element.frame.x, element.frame.y);
+  let masked=result;
+  if(element.mask?.enabled){
+    masked=result.flatMap(line=>clipPolylineInsideShape(line,element.mask.kind,box.width,box.height,element.mask.cornerRadiusMM));
+    if(element.mask.showOutline){const boundary=closedPolyline(shapeBoundaryPoints(element.mask.kind,box.width,box.height,element.mask.cornerRadiusMM),`guidelines:${element.id}:mask-outline`);if(boundary)masked.push(boundary);}
+  }
+  return translatePolylines(masked, element.frame.x, element.frame.y);
 }
 
 function curvedTitlePolylines(element: Extract<LayoutElement, { type: 'curved-title' }>, options: PlotterExportOptions) {
   const model = buildCurvedTitleModel({ w: element.frame.width, h: element.frame.height }, element.settings);
   const result: PlotPolyline[] = [];
-  result.push(...guideSetPolylines(model.guideSet as GuideLike, `curved:${element.id}:main`, { ticks: options.constructionGrid, hGuides: options.constructionGrid, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
+  const horizontalGridAppearance=resolveHorizontalGridAppearance(element.settings.horizontalGridAppearance);
+  result.push(...guideSetPolylines(model.guideSet as GuideLike, `curved:${element.id}:main`, { ticks: options.constructionGrid, hGuides: options.constructionGrid, horizontalGridAppearance:element.settings.script==='Copperplate'?undefined:horizontalGridAppearance, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
   if (options.midpointReferences && model.midAscPts) {
     const base = polyline(model.midAscPts, `curved:${element.id}:mid-asc`);
     if (base) result.push(...dashPolyline(base, 10, 12));
@@ -709,24 +670,25 @@ function curvedTitlePolylines(element: Extract<LayoutElement, { type: 'curved-ti
     if (base) result.push(...dashPolyline(base, 10, 12));
   }
   if (model.top.enabled) {
-    result.push(...guideSetPolylines(model.top.guideSet as GuideLike, `curved:${element.id}:top`, { pathKeys: ['asc', 'waist'], ticks: options.constructionGrid, hGuides: options.constructionGrid, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
+    result.push(...guideSetPolylines(model.top.guideSet as GuideLike, `curved:${element.id}:top`, { pathKeys: ['asc', 'waist'], ticks: options.constructionGrid, hGuides: options.constructionGrid, horizontalGridAppearance:element.settings.topBandScript==='Copperplate'?undefined:horizontalGridAppearance, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
   }
   if (model.bottom.enabled) {
-    result.push(...guideSetPolylines(model.bottom.guideSet as GuideLike, `curved:${element.id}:bottom`, { pathKeys: ['base', 'desc'], ticks: options.constructionGrid, hGuides: options.constructionGrid, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
+    result.push(...guideSetPolylines(model.bottom.guideSet as GuideLike, `curved:${element.id}:bottom`, { pathKeys: ['base', 'desc'], ticks: options.constructionGrid, hGuides: options.constructionGrid, horizontalGridAppearance:element.settings.bottomBandScript==='Copperplate'?undefined:horizontalGridAppearance, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
   }
   return translatePolylines(result, element.frame.x, element.frame.y);
 }
 
 function calligramPolylines(element: Extract<LayoutElement, { type: 'calligram' }>, options: PlotterExportOptions) {
   const model = buildCalligramModel({ w: element.frame.width, h: element.frame.height }, element.settings);
-  const guideOptions = { ticks: options.constructionGrid, hGuides: options.constructionGrid, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg };
-  const main = guideSetPolylines(model.main.guideSet as GuideLike, `calligram:${element.id}:main`, guideOptions);
+  const horizontalGridAppearance=resolveHorizontalGridAppearance(element.settings.horizontalGridAppearance);
+  const guideOptions=(script:typeof element.settings.script)=>({ ticks: options.constructionGrid, hGuides: options.constructionGrid, horizontalGridAppearance:script==='Copperplate'?undefined:horizontalGridAppearance, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg });
+  const main = guideSetPolylines(model.main.guideSet as GuideLike, `calligram:${element.id}:main`, guideOptions(element.settings.script));
   const mainBand = polygonOccluder([
     ...model.main.guideSet.ascLine,
     ...[...model.main.guideSet.descLine].reverse(),
   ], 0);
   const otherBands = [model.inner, model.outer].filter(band => band.enabled).flatMap(band => {
-    const raw = guideSetPolylines(band.guideSet as GuideLike, `calligram:${element.id}:${band === model.inner ? 'inner' : 'outer'}`, guideOptions);
+    const raw = guideSetPolylines(band.guideSet as GuideLike, `calligram:${element.id}:${band === model.inner ? 'inner' : 'outer'}`, guideOptions(band === model.inner ? element.settings.innerScript : element.settings.outerScript));
     return clipPolylinesByOccluders(raw, [mainBand]);
   });
   const result = [...main, ...otherBands];
@@ -742,19 +704,7 @@ function shapeBoundaryPolylines(element: Extract<LayoutElement, { type: 'shape' 
   const frame = element.frame;
   const source = `shape:${element.id}`;
   const { kind } = element.settings;
-  let boundary: PlotPolyline | null = null;
-  if (kind === 'ellipse' || kind === 'circle') boundary = ellipseBoundary(frame, source);
-  else if (kind === 'roundedRectangle' || kind === 'roundedSquare') boundary = roundedRectBoundary(frame, element.settings.cornerRadiusMM, source);
-  else if (kind === 'rectangle' || kind === 'square') boundary = closedPolyline([
-    { x: frame.x, y: frame.y },
-    { x: frame.x + frame.width, y: frame.y },
-    { x: frame.x + frame.width, y: frame.y + frame.height },
-    { x: frame.x, y: frame.y + frame.height },
-  ], source);
-  else {
-    const points = parsePolygonPoints(shapePolygonPoints(kind, frame.width, frame.height)).map(point => ({ x: point.x + frame.x, y: point.y + frame.y }));
-    boundary = closedPolyline(points, source);
-  }
+  const boundary=closedPolyline(shapeBoundaryPoints(kind,frame.width,frame.height,element.settings.cornerRadiusMM).map(point=>({x:point.x+frame.x,y:point.y+frame.y})),source);
   return boundary ? [boundary] : [];
 }
 
@@ -949,7 +899,7 @@ export function buildPlotterExport(
   const occludersById = new Map<string, Occluder[]>();
   elements.forEach(element => occludersById.set(element.id, elementOccluders(element)));
 
-  let drawing: PlotPolyline[] = [];
+  const drawingLayers:{elementId:string;name:string;lines:PlotPolyline[]}[]=[];
   try {
     elements.forEach((element, index) => {
       if (element.type === 'page') return;
@@ -957,7 +907,8 @@ export function buildPlotterExport(
       let raw = elementPolylines(element, textFitPlans[element.id] ?? null, warnings, options);
       raw = clipPolylinesToRect(raw, pageRect);
       raw = clipPolylinesByOccluders(raw, higherOccluders);
-      drawing.push(...raw);
+      raw=raw.filter(line=>line.points.length>=2);
+      if(raw.length)drawingLayers.push({elementId:element.id,name:element.name,lines:raw});
     });
 
     const pageIndex = elements.findIndex(element => element.type === 'page');
@@ -965,16 +916,19 @@ export function buildPlotterExport(
     let centers = pageCenterLinePolylines(pageElement, page);
     centers = clipPolylinesToRect(centers, pageRect);
     centers = clipPolylinesByOccluders(centers, allHigherThanPage);
-    drawing.push(...centers);
+    centers=centers.filter(line=>line.points.length>=2);
+    if(centers.length)drawingLayers.push({elementId:pageElement.id,name:pageElement.name,lines:centers});
   } finally {
     occludersById.forEach(items => items.forEach(item => item.dispose?.()));
   }
 
-  drawing = drawing.filter(line => line.points.length >= 2);
+  // Occlusion is computed in Layout-panel order (topmost first). SVG groups are then
+  // serialized bottom-to-top, matching SVG paint order and the on-canvas stack.
+  const drawing=drawingLayers.flatMap(layer=>layer.lines);
   const safety = analyzeSafety(drawing, page, matId);
-  const allLines = [...anchorPolylines(page), ...drawing];
-  const d = polylinesToPathD(allLines);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(page.width)}mm" height="${fmt(page.height)}mm" viewBox="0 0 ${fmt(page.width)} ${fmt(page.height)}"><path d="${d}" fill="none" stroke="#000000" stroke-width="${fmt(CRICUT_PEN_STROKE_MM)}" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const anchors=anchorPolylines(page),allLines=[...anchors,...drawing];
+  const layers:PlotterSvgLayer[]=[...drawingLayers].reverse().map(layer=>({elementId:layer.elementId,name:layer.name,pathData:polylinesToPathD(layer.lines)}));
+  const svg=serializePlotterSvg({width:page.width,height:page.height,strokeWidth:CRICUT_PEN_STROKE_MM,anchorPath:polylinesToPathD(anchors),layers,layering:options.layering,format:fmt});
 
   return { svg, warnings, safety, polylineCount: allLines.length };
 }
