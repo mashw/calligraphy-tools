@@ -7,6 +7,7 @@ import { pathHasOnlyClosedSubpaths, type ArtworkNode } from '@/lib/layout/artwor
 import { expandedShapeFrame, shapeBoundaryPoints, shapeContainsPoint, shapeFootprintContains } from '@/lib/layout/shape';
 import { pageSize, type Frame, type LayoutElement, type PageElement } from '@/lib/layout/types';
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
+import { serializePlotterSvg, type ExportLayering, type PlotterSvgLayer } from './plotter-svg';
 
 /**
  * Cricut/plotter export invariant:
@@ -18,6 +19,7 @@ import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 export type CricutMatId = '12x12' | '12x24';
 
 export type PlotterExportOptions = {
+  layering: ExportLayering;
   baselineIndicators: boolean;
   textStartEndMarkers: boolean;
   slantGuides: boolean;
@@ -31,6 +33,7 @@ export type PlotterExportOptions = {
 };
 
 export const DEFAULT_PLOTTER_EXPORT_OPTIONS: PlotterExportOptions = {
+  layering: 'combined',
   baselineIndicators: true,
   textStartEndMarkers: true,
   slantGuides: true,
@@ -887,7 +890,7 @@ export function buildPlotterExport(
   const occludersById = new Map<string, Occluder[]>();
   elements.forEach(element => occludersById.set(element.id, elementOccluders(element)));
 
-  let drawing: PlotPolyline[] = [];
+  const drawingLayers:{elementId:string;name:string;lines:PlotPolyline[]}[]=[];
   try {
     elements.forEach((element, index) => {
       if (element.type === 'page') return;
@@ -895,7 +898,8 @@ export function buildPlotterExport(
       let raw = elementPolylines(element, textFitPlans[element.id] ?? null, warnings, options);
       raw = clipPolylinesToRect(raw, pageRect);
       raw = clipPolylinesByOccluders(raw, higherOccluders);
-      drawing.push(...raw);
+      raw=raw.filter(line=>line.points.length>=2);
+      if(raw.length)drawingLayers.push({elementId:element.id,name:element.name,lines:raw});
     });
 
     const pageIndex = elements.findIndex(element => element.type === 'page');
@@ -903,16 +907,19 @@ export function buildPlotterExport(
     let centers = pageCenterLinePolylines(pageElement, page);
     centers = clipPolylinesToRect(centers, pageRect);
     centers = clipPolylinesByOccluders(centers, allHigherThanPage);
-    drawing.push(...centers);
+    centers=centers.filter(line=>line.points.length>=2);
+    if(centers.length)drawingLayers.push({elementId:pageElement.id,name:pageElement.name,lines:centers});
   } finally {
     occludersById.forEach(items => items.forEach(item => item.dispose?.()));
   }
 
-  drawing = drawing.filter(line => line.points.length >= 2);
+  // Occlusion is computed in Layout-panel order (topmost first). SVG groups are then
+  // serialized bottom-to-top, matching SVG paint order and the on-canvas stack.
+  const drawing=drawingLayers.flatMap(layer=>layer.lines);
   const safety = analyzeSafety(drawing, page, matId);
-  const allLines = [...anchorPolylines(page), ...drawing];
-  const d = polylinesToPathD(allLines);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(page.width)}mm" height="${fmt(page.height)}mm" viewBox="0 0 ${fmt(page.width)} ${fmt(page.height)}"><path d="${d}" fill="none" stroke="#000000" stroke-width="${fmt(CRICUT_PEN_STROKE_MM)}" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const anchors=anchorPolylines(page),allLines=[...anchors,...drawing];
+  const layers:PlotterSvgLayer[]=[...drawingLayers].reverse().map(layer=>({elementId:layer.elementId,name:layer.name,pathData:polylinesToPathD(layer.lines)}));
+  const svg=serializePlotterSvg({width:page.width,height:page.height,strokeWidth:CRICUT_PEN_STROKE_MM,anchorPath:polylinesToPathD(anchors),layers,layering:options.layering,format:fmt});
 
   return { svg, warnings, safety, polylineCount: allLines.length };
 }
