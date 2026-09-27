@@ -2,6 +2,7 @@ import React, { useId } from 'react';
 
 import { pathD } from '@/lib/curve-helpers';
 import { constructionGuideDotPoints, type GuideSet } from '@/lib/guides/guide-template';
+import { dashPolylinePoints } from '@/lib/guides/polyline-dash';
 
 type GuideOverlayProps = {
   box?: { w: number; h: number };
@@ -161,16 +162,21 @@ export default function GuideOverlay({
 
         {showGridHorizontal && guideSet.hGuides?.map((poly, idx) => {
           const points = poly.map((p) => `${p.x},${p.y}`).join(' ');
+          const visibleSegments = horizontalDash
+            ? dashPolylinePoints(poly, horizontalDash.dashMM, horizontalDash.gapMM)
+            : [poly];
           return (
             <g key={`hguide-${idx}`}>
-              <polyline
-                points={points}
-                fill="none"
-                stroke={gridColors.tick ?? colors.tick}
-                strokeWidth={gridThin ?? style.thin}
-                strokeDasharray={horizontalDash?`${horizontalDash.dashMM} ${horizontalDash.gapMM}`:undefined}
-                vectorEffect="non-scaling-stroke"
-              />
+              {visibleSegments.map((segment, segmentIndex) => (
+                <polyline
+                  key={`segment-${segmentIndex}`}
+                  points={segment.map((p) => `${p.x},${p.y}`).join(' ')}
+                  fill="none"
+                  stroke={gridColors.tick ?? colors.tick}
+                  strokeWidth={gridThin ?? style.thin}
+                  vectorEffect="non-scaling-stroke"
+                />
+              ))}
               {interactive?.onGuidePointerDown && (
                 <polyline
                   points={points}

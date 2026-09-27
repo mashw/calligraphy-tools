@@ -6,7 +6,7 @@ import { safeLayerId, serializePlotterSvg } from '../src/lib/layout/plotter-svg.
 import { isGuidelinesPlanningPointBlocked, selectLineLayoutSpan } from '../src/lib/layout/guidelines-planning.ts';
 import { artworkBoundsContains, usesArtworkBoundsOcclusion } from '../src/lib/layout/artwork-occlusion.ts';
 import { resolveHorizontalGridAppearance } from '../src/lib/guides/horizontal-grid.ts';
-import { dashHorizontalGuidePoints, dashPolylinePoints } from '../src/lib/layout/polyline-dash.ts';
+import { dashHorizontalGuidePoints, dashPolylinePoints } from '../src/lib/guides/polyline-dash.ts';
 
 test('circle containment uses an inscribed constrained frame',()=>{
   assert.deepEqual(shapeGeometryFrame('circle',120,80),{x:20,y:0,width:80,height:80});
@@ -147,7 +147,8 @@ test('Artwork bounds uses a preview knockout and baked plotter clipping only',()
 });
 
 test('blackletter horizontal grid appearance defaults and validates physical dash lengths',()=>{
-  assert.deepEqual(resolveHorizontalGridAppearance(),{style:'solid',dashMM:2,gapMM:2});
+  assert.deepEqual(resolveHorizontalGridAppearance(),{style:'solid',dashMM:9,gapMM:5});
+  assert.deepEqual(resolveHorizontalGridAppearance({style:'dashed',dashMM:9.1,gapMM:4.6}),{style:'dashed',dashMM:9.1,gapMM:4.6});
   assert.deepEqual(resolveHorizontalGridAppearance({style:'dashed',dashMM:3,gapMM:1.5}),{style:'dashed',dashMM:3,gapMM:1.5});
   assert.deepEqual(resolveHorizontalGridAppearance({style:'dashed',dashMM:0,gapMM:-1}),{style:'dashed',dashMM:.1,gapMM:.1});
 });
@@ -155,13 +156,44 @@ test('blackletter horizontal grid appearance defaults and validates physical das
 test('only hGuides receive configurable dashes in preview and plotter output',()=>{
   const overlay=readFileSync(new URL('../src/components/preview/GuideOverlay.tsx',import.meta.url),'utf8');
   const plotter=readFileSync(new URL('../src/lib/layout/plotter-export.ts',import.meta.url),'utf8');
-  const horizontalBlock=overlay.slice(overlay.indexOf('showGridHorizontal'),overlay.indexOf('markerData &&'));
-  assert.match(horizontalBlock,/guideSet\.hGuides[\s\S]*?strokeDasharray=\{horizontalDash/);
+  const horizontalBlock=overlay.slice(overlay.indexOf('{showGridHorizontal &&'),overlay.indexOf('markerData &&'));
+  assert.match(horizontalBlock,/guideSet\.hGuides[\s\S]*?dashPolylinePoints\(poly, horizontalDash\.dashMM, horizontalDash\.gapMM\)/);
+  assert.match(horizontalBlock,/visibleSegments\.map/);
+  assert.doesNotMatch(horizontalBlock,/strokeDasharray/);
+  assert.match(horizontalBlock,/interactive\?\.onGuidePointerDown[\s\S]*?points=\{points\}/, 'the continuous source polyline remains the interaction target');
   const verticalBlock=overlay.slice(overlay.indexOf('showGridVertical'),overlay.indexOf('showGridHorizontal'));
   assert.doesNotMatch(verticalBlock,/strokeDasharray/);
   assert.match(plotter,/dashHorizontalGuidePoints\(guide\.hGuides\?\?\[\],horizontal\)/);
   assert.match(plotter,/element\.settings\.topBandScript==='Copperplate'\?undefined:horizontalGridAppearance/);
   assert.match(plotter,/guideOptions\(band === model\.inner \? element\.settings\.innerScript : element\.settings\.outerScript\)/);
+});
+
+test('straight, curved-title, and calligram previews share physical hGuide segmentation with plotter export',()=>{
+  const rendererFiles=['GuidelinesRenderer.tsx','../curved-title/CurvedTitleRenderer.tsx','../calligram/CalligramRenderer.tsx'];
+  for(const file of rendererFiles){
+    const source=readFileSync(new URL(`../src/components/guidelines/${file}`,import.meta.url),'utf8');
+    assert.match(source,/resolveHorizontalGridAppearance/);
+    assert.match(source,/horizontalDash:horizontalGrid\.style==='dashed'\?horizontalGrid:undefined/);
+  }
+  const overlay=readFileSync(new URL('../src/components/preview/GuideOverlay.tsx',import.meta.url),'utf8');
+  const plotter=readFileSync(new URL('../src/lib/layout/plotter-export.ts',import.meta.url),'utf8');
+  assert.match(overlay,/from '@\/lib\/guides\/polyline-dash'/);
+  assert.match(plotter,/from '\.\.\/guides\/polyline-dash'/);
+  assert.match(overlay,/horizontalDash[\s\S]*?dashPolylinePoints\(poly, horizontalDash\.dashMM, horizontalDash\.gapMM\)/);
+  assert.match(plotter,/dashHorizontalGuidePoints\(guide\.hGuides\?\?\[\],horizontal\)/);
+});
+
+test('physical 9/5 mm dashes share one cumulative pattern across source vertices',()=>{
+  const expected=[[0,9],[14,23],[28,37],[42,50]];
+  for(const points of [[{x:0,y:0},{x:50,y:0}],[{x:0,y:0},{x:3,y:0},{x:17,y:0},{x:31,y:0},{x:50,y:0}]]){
+    const dashes=dashPolylinePoints(points,9,5);
+    dashes.forEach((dash,index)=>{
+      assert(Math.abs(dash[0].x-expected[index][0])<1e-8);
+      assert(Math.abs(dash.at(-1)!.x-expected[index][1])<1e-8);
+    });
+    dashes.slice(0,-1).forEach(dash=>assert(Math.abs(arcLength(dash)-9)<1e-8));
+    assert.equal(arcLength(dashes.at(-1)!),8,'the final dash is truncated at the source endpoint');
+  }
 });
 
 const arcLength=(points:{x:number;y:number}[])=>points.slice(1).reduce((sum,point,index)=>sum+Math.hypot(point.x-points[index].x,point.y-points[index].y),0);

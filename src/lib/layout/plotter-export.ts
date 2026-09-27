@@ -9,7 +9,7 @@ import { pageSize, type Frame, type LayoutElement, type PageElement } from '@/li
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 import { serializePlotterSvg, type ExportLayering, type PlotterSvgLayer } from './plotter-svg';
 import { artworkBoundsContains, usesArtworkBoundsOcclusion } from './artwork-occlusion';
-import { dashHorizontalGuidePoints, dashPolylinePoints } from './polyline-dash';
+import { dashHorizontalGuidePoints, dashPolylinePoints } from '../guides/polyline-dash';
 
 /**
  * Cricut/plotter export invariant:
