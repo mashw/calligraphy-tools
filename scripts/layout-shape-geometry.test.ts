@@ -147,7 +147,7 @@ test('Artwork bounds uses a preview knockout and baked plotter clipping only',()
 });
 
 test('blackletter horizontal grid appearance defaults and validates physical dash lengths',()=>{
-  assert.deepEqual(resolveHorizontalGridAppearance(),{style:'solid',dashMM:9,gapMM:5});
+  assert.deepEqual(resolveHorizontalGridAppearance(),{style:'solid',dashMM:2,gapMM:2});
   assert.deepEqual(resolveHorizontalGridAppearance({style:'dashed',dashMM:9.1,gapMM:4.6}),{style:'dashed',dashMM:9.1,gapMM:4.6});
   assert.deepEqual(resolveHorizontalGridAppearance({style:'dashed',dashMM:3,gapMM:1.5}),{style:'dashed',dashMM:3,gapMM:1.5});
   assert.deepEqual(resolveHorizontalGridAppearance({style:'dashed',dashMM:0,gapMM:-1}),{style:'dashed',dashMM:.1,gapMM:.1});
