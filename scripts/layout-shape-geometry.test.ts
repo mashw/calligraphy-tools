@@ -98,6 +98,37 @@ test('drawable bounds include registration and exclude empty page area',()=>{
   assert.deepEqual(drawableGeometryBounds([drawing]),{x:30,y:26,width:150,height:260.9229});
 });
 
+test('drawable bounds stream safely across 250,000 points',()=>{
+  const lines=Array.from({length:250},(_,lineIndex)=>({
+    points:Array.from({length:1000},(_,pointIndex)=>({x:lineIndex*1000+pointIndex-5000,y:pointIndex-lineIndex-700})),
+  }));
+  assert.deepEqual(drawableGeometryBounds(lines),{
+    x:-5000,
+    y:-949,
+    width:249999,
+    height:1248,
+  });
+});
+
+test('duplicated complex artwork remains independent and contributes to bounds',()=>{
+  const registration={points:[{x:6.35,y:6.85},{x:6.35,y:6.35},{x:6.85,y:6.35}]};
+  const guidelines=Array.from({length:100},(_,index)=>({points:[{x:10,y:20+index},{x:180,y:20+index}]}));
+  const artworkSource=Array.from({length:100},(_,line)=>({points:Array.from({length:1000},(_,point)=>({x:20+point*.04,y:30+line*.3}))}));
+  const secondArtwork=artworkSource.map(line=>({points:line.points.map(point=>({x:point.x+100,y:point.y+150}))}));
+  const geometry=[registration,...guidelines,...artworkSource,...secondArtwork];
+  assert.equal(geometry.length,301,'both 100-polyline artwork copies remain present');
+  assert.deepEqual(drawableGeometryBounds(geometry),{x:6.35,y:6.35,width:173.65,height:203.35});
+});
+
+test('drawable bounds handle empty, invalid, mixed, and negative coordinates',()=>{
+  assert.equal(drawableGeometryBounds([]),null);
+  assert.equal(drawableGeometryBounds([{points:[]},{points:[{x:NaN,y:1},{x:2,y:Infinity}]}]),null);
+  assert.deepEqual(drawableGeometryBounds([{points:[{x:NaN,y:0},{x:-8,y:-5},{x:4,y:9}]}]),{x:-8,y:-5,width:12,height:14});
+  const oneLargeLine={points:Array.from({length:150000},(_,index)=>({x:index-75000,y:index%101-50}))};
+  const manyLines=Array.from({length:150},(_,line)=>({points:oneLargeLine.points.slice(line*1000,(line+1)*1000)}));
+  assert.deepEqual(drawableGeometryBounds([oneLargeLine]),drawableGeometryBounds(manyLines));
+});
+
 test('normal Layout SVG remains millimetre-sized and Cricut safety remains millimetre-based',()=>{
   const stage=readFileSync(new URL('../src/components/layout/LayoutStage.tsx',import.meta.url),'utf8');
   const plotter=readFileSync(new URL('../src/lib/layout/plotter-export.ts',import.meta.url),'utf8');

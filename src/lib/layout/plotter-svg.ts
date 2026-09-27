@@ -3,10 +3,18 @@ export type PlotterSvgLayer = { elementId:string; name:string; pathData:string }
 export type PlotterSvgViewport = { x:number; y:number; width:number; height:number };
 
 export function drawableGeometryBounds(lines:{points:{x:number;y:number}[]}[]):PlotterSvgViewport|null{
-  const points=lines.flatMap(line=>line.points).filter(point=>Number.isFinite(point.x)&&Number.isFinite(point.y));
-  if(!points.length)return null;
-  const minX=Math.min(...points.map(point=>point.x)),minY=Math.min(...points.map(point=>point.y));
-  const maxX=Math.max(...points.map(point=>point.x)),maxY=Math.max(...points.map(point=>point.y));
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity,found=false;
+  for(const line of lines){
+    for(const point of line.points){
+      if(!Number.isFinite(point.x)||!Number.isFinite(point.y))continue;
+      found=true;
+      if(point.x<minX)minX=point.x;
+      if(point.y<minY)minY=point.y;
+      if(point.x>maxX)maxX=point.x;
+      if(point.y>maxY)maxY=point.y;
+    }
+  }
+  if(!found)return null;
   return{x:minX,y:minY,width:maxX-minX,height:maxY-minY};
 }
 
