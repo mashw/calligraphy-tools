@@ -77,6 +77,31 @@ test('plotter SVG supports combined and one-layer-per-element output',()=>{
   for(const geometry of ['M 10 10 L 20 10','M 30 30 L 40 30'])assert(combined.includes(geometry)&&separate.includes(geometry));
 });
 
+test('Cricut SVG uses inch root dimensions while preserving millimetre geometry',()=>{
+  const input={width:210,height:297,strokeWidth:.2,anchorPath:'M 6 6 L 7 6',format:String,layers:[
+    {elementId:'guide-a',name:'Guidelines',pathData:'M 100 20 L 150 20'},
+  ]};
+  for(const layering of ['combined','elements'] as const){
+    const svg=serializePlotterSvg({...input,layering});
+    assert.match(svg,/width="8\.2677165354in"/);
+    assert.match(svg,/height="11\.6929133858in"/);
+    assert.match(svg,/viewBox="0 0 210 297"/);
+    assert.match(svg,/M 100 20 L 150 20/,'path coordinates remain in Layout millimetres');
+    assert.match(svg,/M 6 6 L 7 6/,'registration geometry remains unchanged');
+  }
+  const square=serializePlotterSvg({...input,width:304.8,height:304.8,layering:'combined'});
+  assert.match(square,/width="12in" height="12in" viewBox="0 0 304\.8 304\.8"/);
+});
+
+test('normal Layout SVG remains millimetre-sized and Cricut safety remains millimetre-based',()=>{
+  const stage=readFileSync(new URL('../src/components/layout/LayoutStage.tsx',import.meta.url),'utf8');
+  const plotter=readFileSync(new URL('../src/lib/layout/plotter-export.ts',import.meta.url),'utf8');
+  assert.match(stage,/clone\.setAttribute\('width', `\$\{page\.width\}mm`\)/);
+  assert.match(stage,/clone\.setAttribute\('height', `\$\{page\.height\}mm`\)/);
+  assert.match(plotter,/Every point handled by this module is a physical page coordinate in millimetres/);
+  assert.match(plotter,/const safety = analyzeSafety\(drawing, page, matId\)/);
+});
+
 test('plotter builder keeps safety and baked element grouping ahead of serialization',()=>{
   const source=readFileSync(new URL('../src/lib/layout/plotter-export.ts',import.meta.url),'utf8');
   assert.match(source,/raw = clipPolylinesByOccluders\(raw, higherOccluders\);[\s\S]*?drawingLayers\.push/);
