@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { SHAPE_OPTIONS, shapeBoundaryPoints, shapeContainsPoint, shapeFootprintContains, shapeGeometryFrame, shapePathData } from '../src/lib/layout/shape.ts';
-import { safeLayerId, serializePlotterSvg } from '../src/lib/layout/plotter-svg.ts';
+import { drawableGeometryBounds, safeLayerId, serializePlotterSvg } from '../src/lib/layout/plotter-svg.ts';
 import { isGuidelinesPlanningPointBlocked, selectLineLayoutSpan } from '../src/lib/layout/guidelines-planning.ts';
 import { artworkBoundsContains, usesArtworkBoundsOcclusion } from '../src/lib/layout/artwork-occlusion.ts';
 import { resolveHorizontalGridAppearance } from '../src/lib/guides/horizontal-grid.ts';
@@ -60,7 +60,7 @@ test('preview and both occlusion pipelines retain rectangles only for unmasked g
 });
 
 test('plotter SVG supports combined and one-layer-per-element output',()=>{
-  const input={width:210,height:297,strokeWidth:.2,anchorPath:'M 6 6 L 7 6',format:(value:number)=>String(value),layers:[
+  const input={viewport:{x:6,y:6,width:34,height:24},strokeWidth:.2,anchorPath:'M 6 6 L 7 6',format:(value:number)=>String(value),layers:[
     {elementId:'guide-a',name:'Guidelines',pathData:'M 10 10 L 20 10'},
     {elementId:'guide-b',name:'Guidelines',pathData:'M 30 30 L 40 30'},
     {elementId:'empty',name:'Empty',pathData:''},
@@ -78,19 +78,24 @@ test('plotter SVG supports combined and one-layer-per-element output',()=>{
 });
 
 test('Cricut SVG uses inch root dimensions while preserving millimetre geometry',()=>{
-  const input={width:210,height:297,strokeWidth:.2,anchorPath:'M 6 6 L 7 6',format:String,layers:[
+  const input={viewport:{x:6.35,y:6.35,width:173.65,height:280.5729},strokeWidth:.2,anchorPath:'M 6.35 6.85 L 6.35 6.35 L 6.85 6.35',format:String,layers:[
     {elementId:'guide-a',name:'Guidelines',pathData:'M 100 20 L 150 20'},
   ]};
   for(const layering of ['combined','elements'] as const){
     const svg=serializePlotterSvg({...input,layering});
-    assert.match(svg,/width="8\.2677165354in"/);
-    assert.match(svg,/height="11\.6929133858in"/);
-    assert.match(svg,/viewBox="0 0 210 297"/);
+    assert.match(svg,/width="6\.8366141732in"/);
+    assert.match(svg,/height="11\.0461771654in"/);
+    assert.match(svg,/viewBox="6\.35 6\.35 173\.65 280\.5729"/);
     assert.match(svg,/M 100 20 L 150 20/,'path coordinates remain in Layout millimetres');
-    assert.match(svg,/M 6 6 L 7 6/,'registration geometry remains unchanged');
+    assert.match(svg,/M 6\.35 6\.85 L 6\.35 6\.35 L 6\.85 6\.35/,'registration geometry remains unchanged');
   }
-  const square=serializePlotterSvg({...input,width:304.8,height:304.8,layering:'combined'});
-  assert.match(square,/width="12in" height="12in" viewBox="0 0 304\.8 304\.8"/);
+});
+
+test('drawable bounds include registration and exclude empty page area',()=>{
+  const registration={points:[{x:6.35,y:6.85},{x:6.35,y:6.35},{x:6.85,y:6.35}]};
+  const drawing={points:[{x:30,y:26},{x:180,y:286.9229}]};
+  assert.deepEqual(drawableGeometryBounds([registration,drawing]),{x:6.35,y:6.35,width:173.65,height:280.5729});
+  assert.deepEqual(drawableGeometryBounds([drawing]),{x:30,y:26,width:150,height:260.9229});
 });
 
 test('normal Layout SVG remains millimetre-sized and Cricut safety remains millimetre-based',()=>{
@@ -106,6 +111,7 @@ test('plotter builder keeps safety and baked element grouping ahead of serializa
   const source=readFileSync(new URL('../src/lib/layout/plotter-export.ts',import.meta.url),'utf8');
   assert.match(source,/raw = clipPolylinesByOccluders\(raw, higherOccluders\);[\s\S]*?drawingLayers\.push/);
   assert.match(source,/const safety = analyzeSafety\(drawing, page, matId\)/);
+  assert.match(source,/allLines=\[\.\.\.anchors,\.\.\.drawing\][\s\S]*?viewport=drawableGeometryBounds\(allLines\)/);
   assert.match(source,/anchorPath:polylinesToPathD\(anchors\)/);
 });
 
@@ -242,7 +248,7 @@ test('curved dashes use arc length and custom physical values',()=>{
 
 test('serialized Cricut path retains physical dash endpoints as separate subpaths',()=>{
   const dashes=dashPolylinePoints([{x:0,y:0},{x:20,y:0}],2,2),pathData=dashes.map(dash=>`M ${dash[0].x} 5 L ${dash.at(-1)!.x} 5`).join(' ');
-  const svg=serializePlotterSvg({width:20,height:10,strokeWidth:.2,anchorPath:'',layers:[{elementId:'g',name:'Textura',pathData}],layering:'combined',format:String});
+  const svg=serializePlotterSvg({viewport:{x:0,y:0,width:20,height:10},strokeWidth:.2,anchorPath:'',layers:[{elementId:'g',name:'Textura',pathData}],layering:'combined',format:String});
   assert.match(svg,/M 0 5 L 2 5 M 4 5 L 6 5 M 8 5 L 10 5 M 12 5 L 14 5 M 16 5 L 18 5/);
 });
 

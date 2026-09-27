@@ -7,7 +7,7 @@ import { pathHasOnlyClosedSubpaths, type ArtworkNode } from '@/lib/layout/artwor
 import { expandedShapeFrame, shapeBoundaryPoints, shapeContainsPoint, shapeFootprintContains } from '@/lib/layout/shape';
 import { pageSize, type Frame, type LayoutElement, type PageElement } from '@/lib/layout/types';
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
-import { serializePlotterSvg, type ExportLayering, type PlotterSvgLayer } from './plotter-svg';
+import { drawableGeometryBounds, serializePlotterSvg, type ExportLayering, type PlotterSvgLayer } from './plotter-svg';
 import { artworkBoundsContains, usesArtworkBoundsOcclusion } from './artwork-occlusion';
 import { dashHorizontalGuidePoints, dashPolylinePoints } from '../guides/polyline-dash';
 
@@ -891,8 +891,11 @@ export function buildPlotterExport(
   const drawing=drawingLayers.flatMap(layer=>layer.lines);
   const safety = analyzeSafety(drawing, page, matId);
   const anchors=anchorPolylines(page),allLines=[...anchors,...drawing];
+  const viewport=drawableGeometryBounds(allLines);
+  if(!viewport)warnings.push('No drawable plotter geometry was produced.');
+  else if(viewport.width<=EPS||viewport.height<=EPS)warnings.push('Drawable plotter geometry has no two-dimensional export bounds.');
   const layers:PlotterSvgLayer[]=[...drawingLayers].reverse().map(layer=>({elementId:layer.elementId,name:layer.name,pathData:polylinesToPathD(layer.lines)}));
-  const svg=serializePlotterSvg({width:page.width,height:page.height,strokeWidth:CRICUT_PEN_STROKE_MM,anchorPath:polylinesToPathD(anchors),layers,layering:options.layering,format:fmt});
+  const svg=serializePlotterSvg({viewport:viewport&&viewport.width>EPS&&viewport.height>EPS?viewport:{x:0,y:0,width:1,height:1},strokeWidth:CRICUT_PEN_STROKE_MM,anchorPath:polylinesToPathD(anchors),layers,layering:options.layering,format:fmt});
 
   return { svg, warnings, safety, polylineCount: allLines.length };
 }
