@@ -1,20 +1,12 @@
 import type { SVGProps } from 'react';
-import { PAGE_BACKGROUND, shapePolygonPoints, type ShapeKind } from '@/lib/layout/shape';
+import { PAGE_BACKGROUND, shapePathData, type ShapeKind } from '@/lib/layout/shape';
 import type { Frame, ShapeElement } from '@/lib/layout/types';
 
 type GeometryProps = SVGProps<SVGElement> & { kind: ShapeKind; width: number; height: number; inset?: number; cornerRadiusMM?: number };
 
 export function ShapeGeometry({ kind, width, height, inset = 0, cornerRadiusMM = 0, ...paint }: GeometryProps) {
   const innerWidth = Math.max(0, width - inset * 2), innerHeight = Math.max(0, height - inset * 2);
-  const rounded = kind === 'roundedRectangle' || kind === 'roundedSquare';
-  const radius = rounded ? Math.min(Math.max(0, cornerRadiusMM), innerWidth / 2, innerHeight / 2) : 0;
-  const ellipse = kind === 'ellipse' || kind === 'circle';
-  const polygon = shapePolygonPoints(kind, innerWidth, innerHeight);
-  return <g transform={`translate(${inset} ${inset})`}>
-    {ellipse ? <ellipse cx={innerWidth/2} cy={innerHeight/2} rx={innerWidth/2} ry={innerHeight/2} {...paint as SVGProps<SVGEllipseElement>} />
-      : polygon ? <polygon points={polygon} {...paint as SVGProps<SVGPolygonElement>} />
-      : <rect width={innerWidth} height={innerHeight} rx={radius} ry={radius} {...paint as SVGProps<SVGRectElement>} />}
-  </g>;
+  return <g transform={`translate(${inset} ${inset})`}><path d={shapePathData(kind,innerWidth,innerHeight,cornerRadiusMM)} {...paint as SVGProps<SVGPathElement>} /></g>;
 }
 
 export default function ShapeElementRenderer({ element, frame, selected }: { element: ShapeElement; frame: Frame; selected: boolean }) {

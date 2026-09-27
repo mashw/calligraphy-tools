@@ -5,11 +5,12 @@ import { SCRIPT_PROFILES } from '@/lib/scripts';
 import { buildCalligramModel } from '@/lib/calligram/model';
 import { buildCurvedTitleModel } from '@/lib/curved-title/model';
 import { occupiedRect } from './geometry';
-import { shapePolygonPoints } from './shape';
+import { expandedShapeFrame, shapeContainsPoint, shapeFootprintContains } from './shape';
 import { pageSize, type GuidelinesElement, type LayoutElement, type PageElement } from './types';
 import { pathHasOnlyClosedSubpaths, type ArtworkNode } from './artwork';
 import { lineMetricFromMeasuredRun } from '@/lib/measure/measure-lines-generic';
 import type { PlannedLineAlignment } from './types';
+import { isGuidelinesPlanningPointBlocked, selectLineLayoutSpan } from './guidelines-planning';
 
 type Point = { x: number; y: number };
 type Occluder = { bounds: { x: number; y: number; width: number; height: number }; contains: (point: Point) => boolean; dispose?:()=>void };
@@ -44,12 +45,8 @@ const polygonOccluder = (points: Point[], padding: number): Occluder => {
 const rectOccluder = (bounds: Occluder['bounds']): Occluder => ({ bounds, contains: point => inBounds(point,bounds) });
 
 function shapeOccluder(element: Extract<LayoutElement,{type:'shape'}>): Occluder {
-  const {frame,settings}=element,border=(settings.appearance==='border'||settings.appearance==='fillAndBorder')?settings.borderWidthMM/2:0,pad=Math.max(0,element.paddingMM+border),local=(p:Point)=>({x:p.x-frame.x,y:p.y-frame.y}),bounds={x:frame.x-pad,y:frame.y-pad,width:frame.width+2*pad,height:frame.height+2*pad};
-  if(settings.kind==='ellipse'||settings.kind==='circle') return {bounds,contains:p=>{const q=local(p),rx=frame.width/2+pad,ry=frame.height/2+pad;return ((q.x-frame.width/2)/rx)**2+((q.y-frame.height/2)/ry)**2<=1;}};
-  if(settings.kind==='rectangle'||settings.kind==='square') return rectOccluder(bounds);
-  if(settings.kind==='roundedRectangle'||settings.kind==='roundedSquare') return {bounds,contains:p=>{const q=local(p),r=Math.min(settings.cornerRadiusMM,frame.width/2,frame.height/2)+pad,cx=frame.width/2,cy=frame.height/2,dx=Math.max(Math.abs(q.x-cx)-(frame.width/2-r),0),dy=Math.max(Math.abs(q.y-cy)-(frame.height/2-r),0);return dx*dx+dy*dy<=r*r;}};
-  const points=shapePolygonPoints(settings.kind,frame.width,frame.height).split(/\s+/).map(pair=>{const[x,y]=pair.split(',').map(Number);return{x:x+frame.x,y:y+frame.y};});
-  return polygonOccluder(points,pad);
+  const {frame,settings}=element,border=(settings.appearance==='border'||settings.appearance==='fillAndBorder')?settings.borderWidthMM/2:0,pad=Math.max(0,element.paddingMM+border),bounds={x:frame.x-pad,y:frame.y-pad,width:frame.width+2*pad,height:frame.height+2*pad};
+  return {bounds,contains:p=>shapeContainsPoint(settings.kind,bounds.width,bounds.height,{x:p.x-bounds.x,y:p.y-bounds.y},settings.cornerRadiusMM+pad)};
 }
 
 function artworkOccluder(element:Extract<LayoutElement,{type:'artwork'}>):Occluder|null{
@@ -67,8 +64,15 @@ function artworkOccluder(element:Extract<LayoutElement,{type:'artwork'}>):Occlud
 function elementOccluders(element: LayoutElement): Occluder[] {
   if(element.type==='page') return [];
   if(element.type==='shape') return [shapeOccluder(element)];
-  if(element.type==='guidelines') return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
-  if(element.type==='artwork'){const occluder=artworkOccluder(element);return occluder?[occluder]:[];}
+  if(element.type==='guidelines') {
+    if(!element.mask?.enabled)return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
+    const bounds=expandedShapeFrame(element.frame,element.paddingMM);
+    return [{bounds,contains:point=>shapeFootprintContains(element.mask.kind,element.frame,point,element.mask.cornerRadiusMM,element.paddingMM)}];
+  }
+  if(element.type==='artwork'){
+    if((element.settings.textFitExclusion??'bounds')==='bounds')return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
+    const occluder=artworkOccluder(element);return occluder?[occluder]:[];
+  }
   if(element.type==='curved-title') {
     if(!(element.settings.transparentWhitespace??true)) return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
     const model=buildCurvedTitleModel({w:element.frame.width,h:element.frame.height},element.settings),points=model.footprintPoints.map(p=>({x:p.x+element.frame.x,y:p.y+element.frame.y}));
@@ -80,13 +84,13 @@ function elementOccluders(element: LayoutElement): Occluder[] {
 }
 
 export function buildGuidelinesVisibleSpans(element: GuidelinesElement, page: PageElement, elements: LayoutElement[]): VisibleGuideSpan[] {
-  const pageBox=pageSize(page),model=calculateStraightGuidelines({width:element.frame.width,height:element.frame.height},element.settings),index=elements.findIndex(item=>item.id===element.id),occluders=elements.slice(0,Math.max(0,index)).flatMap(elementOccluders),spans:VisibleGuideSpan[]=[];
+  const pageBox=pageSize(page),model=calculateStraightGuidelines({width:element.frame.width,height:element.frame.height},element.settings),index=elements.findIndex(item=>item.id===element.id),occluders=element.avoidOccludingElements!==false?elements.slice(0,Math.max(0,index)).flatMap(elementOccluders):[],spans:VisibleGuideSpan[]=[];
   model.guideSets.forEach((guide,rowIndex)=>{
     const asc=guide.ascLine[0].y,waist=guide.waistLine[0].y,base=guide.baseLine[0].y,desc=guide.descLine[0].y,pageAsc=element.frame.y+asc,pageDesc=element.frame.y+desc;
     if(asc<0||desc>element.frame.height||pageAsc<0||pageDesc>pageBox.height)return;
     const rawX1=element.frame.x+guide.baseLine[0].x,rawX2=element.frame.x+guide.baseLine.at(-1)!.x,x1=Math.max(0,rawX1),x2=Math.min(pageBox.width,rawX2);if(x2<=x1)return;
     let start:number|null=null;const step=.5;
-    for(let x=x1;x<x2-.0001;x+=step){const end=Math.min(x2,x+step),mid=(x+end)/2;let blocked=false;for(let y=pageAsc;y<=pageDesc+.001&&!blocked;y+=.5){const point={x:mid,y:Math.min(pageDesc,y)};blocked=occluders.some(o=>inBounds(point,o.bounds)&&o.contains(point));}if(!blocked){const point={x:mid,y:pageDesc};blocked=occluders.some(o=>inBounds(point,o.bounds)&&o.contains(point));}if(!blocked){if(start===null)start=x;}else if(start!==null){spans.push({rowIndex,x1:start,x2:x,ascY:pageAsc,waistY:element.frame.y+waist,baseY:element.frame.y+base,descY:pageDesc});start=null;}}
+    for(let x=x1;x<x2-.0001;x+=step){const end=Math.min(x2,x+step),mid=(x+end)/2;let blocked=false;for(let y=pageAsc;y<=pageDesc+.001&&!blocked;y+=.5){const point={x:mid,y:Math.min(pageDesc,y)},externallyOccluded=occluders.some(o=>inBounds(point,o.bounds)&&o.contains(point)),insideMask=!element.mask?.enabled||shapeContainsPoint(element.mask.kind,element.frame.width,element.frame.height,{x:point.x-element.frame.x,y:point.y-element.frame.y},element.mask.cornerRadiusMM);blocked=isGuidelinesPlanningPointBlocked({avoidOccludingElements:element.avoidOccludingElements!==false,externallyOccluded,maskEnabled:element.mask?.enabled??false,textLayoutRespectsMask:element.mask?.textLayoutRespectsMask??true,insideMask});}if(!blocked){const point={x:mid,y:pageDesc},externallyOccluded=occluders.some(o=>inBounds(point,o.bounds)&&o.contains(point)),insideMask=!element.mask?.enabled||shapeContainsPoint(element.mask.kind,element.frame.width,element.frame.height,{x:point.x-element.frame.x,y:point.y-element.frame.y},element.mask.cornerRadiusMM);blocked=isGuidelinesPlanningPointBlocked({avoidOccludingElements:element.avoidOccludingElements!==false,externallyOccluded,maskEnabled:element.mask?.enabled??false,textLayoutRespectsMask:element.mask?.textLayoutRespectsMask??true,insideMask});}if(!blocked){if(start===null)start=x;}else if(start!==null){spans.push({rowIndex,x1:start,x2:x,ascY:pageAsc,waistY:element.frame.y+waist,baseY:element.frame.y+base,descY:pageDesc});start=null;}}
     if(start!==null)spans.push({rowIndex,x1:start,x2,ascY:pageAsc,waistY:element.frame.y+waist,baseY:element.frame.y+base,descY:pageDesc});
   });
   occluders.forEach(occluder=>occluder.dispose?.());
@@ -99,7 +103,7 @@ export function getCachedGuidelinesVisibleSpans(key: string, element: Guidelines
   const spans=buildGuidelinesVisibleSpans(element,page,elements);if(visibleSpanCache.size>=50)visibleSpanCache.delete(visibleSpanCache.keys().next().value!);visibleSpanCache.set(key,spans);return spans;
 }
 
-export function buildGuidelinesVisibilityCacheKey(element:GuidelinesElement,page:PageElement,higherElements:LayoutElement[]){return JSON.stringify({frame:element.frame,settings:element.settings,page,higher:higherElements.map(item=>item.type==='guidelines'?{...item,fitText:'',plannedLines:[],textMode:'estimate',rightAlignMode:'waist'}:item)});}
+export function buildGuidelinesVisibilityCacheKey(element:GuidelinesElement,page:PageElement,higherElements:LayoutElement[]){return JSON.stringify({frame:element.frame,settings:element.settings,mask:element.mask,avoidOccludingElements:element.avoidOccludingElements!==false,page,higher:element.avoidOccludingElements!==false?higherElements.map(item=>item.type==='guidelines'?{...item,fitText:'',plannedLines:[],textMode:'estimate',rightAlignMode:'waist'}:item):[]});}
 
 export function buildGuidelinesTextFitPlan(element: GuidelinesElement, visibleSpans: VisibleGuideSpan[]): GuidelinesTextFitPlan {
   const measurementText=element.fitText.replace(/\s*\n+\s*/g,' ').replace(/\s+/g,' ').trim();
@@ -112,7 +116,8 @@ export function buildGuidelinesTextFitPlan(element: GuidelinesElement, visibleSp
 
 function measureGuidelinesRun(element:GuidelinesElement,text:string){const s=element.settings,effective=s.nibMM*Math.cos(s.penAngleDeg*Math.PI/180),ctx=s.script==='Copperplate'?buildCopperplateContext({xHeightMM:s.xHeightMM,capStyle:'simple',calibration:{enabled:false}}).ctx:{xHeightMM:s.xNib*effective,nibMM:effective,scale:1,spaceMult:1,capStyle:'simple' as const};return measureRun(text,SCRIPT_PROFILES[s.script],ctx);}
 export function buildGuidelinesLineLayoutPlan(element:GuidelinesElement,visibleSpans:VisibleGuideSpan[],page?:PageElement):GuidelinesLineLayoutPlan{
-  const model=calculateStraightGuidelines({width:element.frame.width,height:element.frame.height},element.settings),rows:VisibleGuideSpan[]=[];
-  model.guideSets.forEach((g,rowIndex)=>{const ascY=element.frame.y+g.ascLine[0].y,descY=element.frame.y+g.descLine[0].y,pageHeight=page?pageSize(page).height:Infinity;if(g.ascLine[0].y<0||g.descLine[0].y>element.frame.height||ascY<0||descY>pageHeight)return;rows.push({rowIndex,x1:element.frame.x+g.baseLine[0].x,x2:element.frame.x+g.baseLine.at(-1)!.x,ascY,waistY:element.frame.y+g.waistLine[0].y,baseY:element.frame.y+g.baseLine[0].y,descY});});
-  const lines=element.plannedLines.map((line,index):PlannedLineResult=>{const row=rows[index],run=measureGuidelinesRun(element,line.text),metric=lineMetricFromMeasuredRun(line.text,run,line.alignment==='center'?'center':'right'),advance=metric.lengthMM,slant=element.settings.script==='Copperplate'?element.settings.xHeightMM/Math.tan(55*Math.PI/180):0;if(!row)return{lineId:line.id,rowIndex:null,text:line.text,alignment:line.alignment,measuredAdvanceMM:advance,slantShiftMM:slant,baselineStartX:0,baselineEndX:0,startFromLeftMM:0,startFromRightMM:0,maxCustomStartMM:0,glyphs:[],tooLongByMM:0,collision:false,waistY:0,baseY:0};const width=row.x2-row.x1,footprint=advance+slant,max=Math.max(0,width-footprint);const start=line.alignment==='left'?row.x1:line.alignment==='center'?(row.x1+row.x2)/2-advance/2:line.alignment==='right'?row.x2-advance-(element.settings.script==='Copperplate'&&element.rightAlignMode==='waist'?slant:0):row.x1+Math.max(0,Math.min(max,line.customStartMM));const spans=visibleSpans.filter(span=>span.rowIndex===row.rowIndex),glyphs:PlannedGlyphPlacement[]=[];let cursor=start;run.glyphs.forEach(g=>{const a=cursor,b=cursor+g.advMM,space=g.kind==='space',end=b+(space?0:slant),collision=!space&&!spans.some(span=>a>=span.x1-.001&&end<=span.x2+.001);glyphs.push({ch:g.ch,kind:space?'space':'letter',startX:a,endX:b,collision});cursor=b;});return{lineId:line.id,rowIndex:row.rowIndex,text:line.text,alignment:line.alignment,measuredAdvanceMM:advance,slantShiftMM:slant,baselineStartX:start,baselineEndX:start+advance,startFromLeftMM:start-row.x1,startFromRightMM:row.x2-start,maxCustomStartMM:max,glyphs,tooLongByMM:Math.max(0,footprint-width),collision:glyphs.some(g=>g.collision),waistY:row.waistY,baseY:row.baseY};});return{rows,lines,fits:lines.every(line=>line.rowIndex!==null&&!line.tooLongByMM&&!line.collision)};
+  const model=calculateStraightGuidelines({width:element.frame.width,height:element.frame.height},element.settings),pageHeight=page?pageSize(page).height:Infinity;
+  const candidates=model.guideSets.flatMap((g,rowIndex)=>{const ascY=element.frame.y+g.ascLine[0].y,descY=element.frame.y+g.descLine[0].y;if(g.ascLine[0].y<0||g.descLine[0].y>element.frame.height||ascY<0||descY>pageHeight)return[];const row={rowIndex,x1:element.frame.x+g.baseLine[0].x,x2:element.frame.x+g.baseLine.at(-1)!.x,ascY,waistY:element.frame.y+g.waistLine[0].y,baseY:element.frame.y+g.baseLine[0].y,descY},spans=visibleSpans.filter(span=>span.rowIndex===rowIndex).sort((a,b)=>a.x1-b.x1);return spans.length?[{row,spans}]:[];});
+  const rows=candidates.map(({row,spans})=>{const widest=[...spans].sort((a,b)=>(b.x2-b.x1)-(a.x2-a.x1))[0];return{...row,x1:widest.x1,x2:widest.x2};});
+  const lines=element.plannedLines.map((line,index):PlannedLineResult=>{const candidate=candidates[index],run=measureGuidelinesRun(element,line.text),metric=lineMetricFromMeasuredRun(line.text,run,line.alignment==='center'?'center':'right'),advance=metric.lengthMM,slant=element.settings.script==='Copperplate'?element.settings.xHeightMM/Math.tan(55*Math.PI/180):0;if(!candidate)return{lineId:line.id,rowIndex:null,text:line.text,alignment:line.alignment,measuredAdvanceMM:advance,slantShiftMM:slant,baselineStartX:0,baselineEndX:0,startFromLeftMM:0,startFromRightMM:0,maxCustomStartMM:0,glyphs:[],tooLongByMM:0,collision:false,waistY:0,baseY:0};const{row,spans}=candidate,footprint=advance+slant,selection=selectLineLayoutSpan(spans,line.alignment,footprint,(row.x1+row.x2)/2,row.x1+line.customStartMM)!;const selected=selection.span,start=selection.start,glyphs:PlannedGlyphPlacement[]=[];let cursor=start;run.glyphs.forEach(g=>{const a=cursor,b=cursor+g.advMM,space=g.kind==='space',end=b+(space?0:slant),collision=!space&&(a<selected.x1-.001||end>selected.x2+.001);glyphs.push({ch:g.ch,kind:space?'space':'letter',startX:a,endX:b,collision});cursor=b;});return{lineId:line.id,rowIndex:row.rowIndex,text:line.text,alignment:line.alignment,measuredAdvanceMM:advance,slantShiftMM:slant,baselineStartX:start,baselineEndX:start+advance,startFromLeftMM:start-row.x1,startFromRightMM:row.x2-start,maxCustomStartMM:Math.max(0,selected.x2-footprint-row.x1),glyphs,tooLongByMM:Math.max(0,footprint-(selected.x2-selected.x1)),collision:!selection.fits||glyphs.some(g=>g.collision),waistY:row.waistY,baseY:row.baseY};});return{rows,lines,fits:lines.every(line=>line.rowIndex!==null&&!line.tooLongByMM&&!line.collision)};
 }

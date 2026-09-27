@@ -1,5 +1,6 @@
 import { lengthPoly, offset, pointAt, pointAtExtended } from '@/lib/curve-helpers';
 import { blackletterConstructionDistances } from '@/lib/guides/construction-guide-offsets';
+export { DEFAULT_HORIZONTAL_GRID_APPEARANCE, resolveHorizontalGridAppearance, type HorizontalGridAppearance, type HorizontalGridLineStyle } from './horizontal-grid';
 
 
 // mm-space points (same convention as curve tool)

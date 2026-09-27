@@ -1,5 +1,5 @@
 import type { ScriptId } from '@/lib/scripts';
-import { DEFAULT_CONSTRUCTION_GUIDES, type ConstructionGuideSettings } from '@/lib/guides/guide-template';
+import { DEFAULT_CONSTRUCTION_GUIDES, DEFAULT_HORIZONTAL_GRID_APPEARANCE, type ConstructionGuideSettings, type HorizontalGridAppearance } from '@/lib/guides/guide-template';
 
 export type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 export type GridWidthMode = 'effective' | 'actual';
@@ -19,6 +19,7 @@ export type GuidelinesSettings = {
   slant: { angle: number; secondEnabled: boolean; secondAngle: number; spacingMM: number; contrast: number };
   grid: { widthMode: GridWidthMode; contrast: number; thickness: number; horizontal: boolean; vertical: boolean; nibAngleGuide: boolean };
   constructionGuides?: ConstructionGuideSettings;
+  horizontalGridAppearance?: HorizontalGridAppearance;
   appearance: {
     baselineIndicator: boolean; baselineColor: string; waistlineColor: string;
     xLineContrast: number; xLineThickness: number; midpointDashGap: number;
@@ -34,6 +35,7 @@ export function createDefaultGuidelinesSettings(): GuidelinesSettings {
     slant: { angle: 55, secondEnabled: false, secondAngle: 55, spacingMM: 10, contrast: .3 },
     grid: { widthMode: 'effective', contrast: .5, thickness: 1, horizontal: true, vertical: true, nibAngleGuide: true },
     constructionGuides: { ...DEFAULT_CONSTRUCTION_GUIDES },
+    horizontalGridAppearance: { ...DEFAULT_HORIZONTAL_GRID_APPEARANCE },
     appearance: { baselineIndicator: false, baselineColor: '#111827', waistlineColor: '#111827', xLineContrast: 1, xLineThickness: 1, midpointDashGap: 6, midpointDashContrast: .5, highContrast: false, centerLine: false },
   };
 }
