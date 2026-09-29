@@ -462,7 +462,8 @@ const slantAngleDeg = useMemo(() => {
   const [gridThickness, setGridThickness] = useState(1);
   const [showGridHorizontal, setShowGridHorizontal] = useState(true);
   const [showGridVertical, setShowGridVertical] = useState(true);
-  const [gridWidthMode, setGridWidthMode] = useState<'effective' | 'actual'>('effective');
+  const [gridWidthMode, setGridWidthMode] = useState<'effective' | 'actual' | 'custom'>('effective');
+  const [customGridWidthMM, setCustomGridWidthMM] = useState(sharedDefaults.grid.customWidthMM ?? Math.SQRT2);
   const [showNibAngleGuide, setShowNibAngleGuide] = useState(true);
   const [constructionGuides, setConstructionGuides] = useState(() => ({ ...sharedDefaults.constructionGuides! }));
   const [highContrastMode, setHighContrastMode] = useState(false);
@@ -773,7 +774,9 @@ const slantAngleDeg = useMemo(() => {
       const gridUnitMM =
         gridWidthMode === 'actual'
           ? nibMM
-          : effectiveNibMM;
+          : gridWidthMode === 'custom'
+            ? customGridWidthMM
+            : effectiveNibMM;
 
       return buildGuideSet(guideTemplate, {
         baseline,
@@ -788,7 +791,7 @@ const slantAngleDeg = useMemo(() => {
       });
     });
 
-  }, [baselinePositions, margins.left, margins.right, box.w, guideTemplate, xMM, ascMM, descMM, script, effectiveNibMM, nibMM, gridWidthMode]);
+  }, [baselinePositions, margins.left, margins.right, box.w, guideTemplate, xMM, ascMM, descMM, script, effectiveNibMM, nibMM, gridWidthMode, customGridWidthMM]);
 
   const computeBaseView = () => {
     const topPadPX = 30;
@@ -1073,7 +1076,7 @@ const slantAngleDeg = useMemo(() => {
     copperplateUnits: { desc: copperplateDescUnits, x: copperplateXUnits, asc: copperplateAscUnits },
     penAngleDeg, xNib, ascNib, descNib,
     slant: { angle: slantAngleDeg, secondEnabled: enableSlant2, secondAngle: slantAngle2, spacingMM: slantSpacingMM, contrast: slantLineContrast },
-    grid: { widthMode: gridWidthMode, contrast: gridContrast, thickness: gridThickness, horizontal: showGridHorizontal, vertical: showGridVertical, nibAngleGuide: showNibAngleGuide },
+    grid: { widthMode: gridWidthMode, customWidthMM: customGridWidthMM, contrast: gridContrast, thickness: gridThickness, horizontal: showGridHorizontal, vertical: showGridVertical, nibAngleGuide: showNibAngleGuide },
     constructionGuides,
     appearance: { baselineIndicator: showBaselineIndicator, baselineColor, waistlineColor, xLineContrast, xLineThickness, midpointDashGap: midlineDashGap, midpointDashContrast: midlineDashContrast, highContrast: highContrastMode, centerLine: showCenterLine },
   };
@@ -1770,16 +1773,18 @@ const slantAngleDeg = useMemo(() => {
 
                     {/* Grid width */}
                     {showGridControls ? (
-                      <div>
+                      <div className="space-y-2">
                         <label className="font-medium text-slate-700">Grid width</label>
                         <select
                           className="mt-1 w-full p-2 rounded-lg border border-slate-300"
                           value={gridWidthMode}
-                          onChange={(e) => setGridWidthMode(e.target.value as 'effective' | 'actual')}
+                          onChange={(e) => setGridWidthMode(e.target.value as 'effective' | 'actual' | 'custom')}
                         >
-                          <option value="effective">Angled</option>
-                          <option value="actual">Actual</option>
+                          <option value="effective">Stroke-width</option>
+                          <option value="actual">Actual nib</option>
+                          <option value="custom">Custom</option>
                         </select>
+                        {gridWidthMode === 'custom' && <label className="block font-medium text-slate-700">Custom grid width<div className="relative"><input className="mt-1 w-full rounded-lg border border-slate-300 p-2 pr-10" type="number" min="0.1" step="0.1" value={customGridWidthMM} onChange={e => { const next = Number(e.target.value); if (Number.isFinite(next) && next >= .1) setCustomGridWidthMM(next); }} /><span className="pointer-events-none absolute right-3 top-3 text-sm text-slate-400">mm</span></div></label>}
                       </div>
                     ) : (
                       <div />

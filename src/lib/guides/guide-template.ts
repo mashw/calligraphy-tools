@@ -1,5 +1,7 @@
 import { lengthPoly, offset, pointAt, pointAtExtended } from '@/lib/curve-helpers';
 import { blackletterConstructionDistances } from '@/lib/guides/construction-guide-offsets';
+import { BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/straight/blackletter';
+export { BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/straight/blackletter';
 export { DEFAULT_HORIZONTAL_GRID_APPEARANCE, resolveHorizontalGridAppearance, type HorizontalGridAppearance, type HorizontalGridLineStyle } from './horizontal-grid';
 
 
@@ -59,12 +61,6 @@ export type GuideTemplateParams = {
   constructionGuides?: Partial<ConstructionGuideSettings>;
 };
 
-
-export const BLACKLETTER_GUIDE_DEFAULTS = {
-  xNib: 5,
-  ascNib: 3,
-  descNib: 2,
-};
 
 const COPPERPLATE_SLANT_DEG = 55;
 
