@@ -16,6 +16,7 @@ import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 import { buildPlotterExport, CRICUT_MATS, DEFAULT_PLOTTER_EXPORT_OPTIONS, getCricutSafeRect, type CricutMatId, type PlotterExportOptions } from '@/lib/layout/plotter-export';
 import { safeLayerId, type ExportLayering } from '@/lib/layout/plotter-svg';
 import ArtworkRenderer from './ArtworkRenderer';
+import { customStartFromDrag } from '@/lib/layout/planned-line-placement';
 
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type Interaction =
@@ -319,9 +320,28 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
   </section>;
 }
 
-function LineLayoutOverlay({guidelinesId,entry,frame,onCommit}:{guidelinesId:string;entry:Extract<GuidelinesTextFitEntry,{mode:'line-layout'}>;frame:Frame;onCommit:(guidelinesId:string,lineId:string,start:number)=>void}){
-  const [drag,setDrag]=useState<{lineId:string;pointerId:number;clientX:number;start:number;max:number;live:number}|null>(null);
-  return <g data-no-export="true">{entry.plan.lines.filter(line=>line.rowIndex!==null&&line.text).map(line=>{const live=drag?.lineId===line.lineId?drag.live:line.startFromLeftMM,dx=live-line.startFromLeftMM,y1=line.waistY-frame.y,y2=line.baseY-frame.y,start=line.baselineStartX-frame.x+dx,end=line.baselineEndX-frame.x+dx,shift=line.slantShiftMM;return <g key={line.lineId} onPointerMove={event=>{if(!drag||drag.pointerId!==event.pointerId)return;const svg=event.currentTarget.ownerSVGElement!,rect=svg.getBoundingClientRect(),mm=(event.clientX-drag.clientX)/rect.width*svg.viewBox.baseVal.width,next=Math.max(0,Math.min(drag.max,drag.start+mm));setDrag({...drag,live:next});}} onPointerUp={event=>{if(!drag||drag.pointerId!==event.pointerId)return;event.currentTarget.releasePointerCapture(event.pointerId);onCommit(guidelinesId,line.lineId,drag.live);setDrag(null);}}>{line.glyphs.map((glyph,index)=>{const x1=glyph.startX-frame.x+dx,x2=glyph.endX-frame.x+dx,d=`M ${x1+shift},${y1} L ${x2+shift},${y1} L ${x2},${y2} L ${x1},${y2} Z`;return <g key={index}><path d={d} fill={glyph.collision?'rgba(239,68,68,.22)':entry.color.fill} stroke={glyph.collision?'#dc2626':entry.color.stroke} strokeWidth=".3" vectorEffect="non-scaling-stroke"/><text x={(x1+x2)/2+shift/2} y={(y1+y2)/2} textAnchor="middle" dominantBaseline="central" fontSize={Math.max(1.8,(y2-y1)*.65)} fill="#334155">{glyph.kind==='space'?'':glyph.ch}</text></g>})}{[start,end].map((x,index)=><g key={index} style={{cursor:'ew-resize'}} onPointerDown={event=>{event.preventDefault();event.stopPropagation();event.currentTarget.parentElement?.setPointerCapture(event.pointerId);setDrag({lineId:line.lineId,pointerId:event.pointerId,clientX:event.clientX,start:line.startFromLeftMM,max:line.maxCustomStartMM,live:line.startFromLeftMM});}}><line x1={x+shift} x2={x} y1={y1} y2={y2} stroke={entry.color.stroke} strokeWidth="2" vectorEffect="non-scaling-stroke"/><line x1={x-4} x2={x+4} y1={y1} y2={y2} stroke="transparent" strokeWidth="14" vectorEffect="non-scaling-stroke"/></g>)}</g>;})}</g>;
+function pointerSvgX(event: React.PointerEvent<SVGElement>) {
+  const matrix = event.currentTarget.ownerSVGElement?.getScreenCTM();
+  if (!matrix) return null;
+  try {
+    return new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse()).x;
+  } catch {
+    return null;
+  }
+}
+
+function LineLayoutOverlay({guidelinesId,entry,frame,selected,onCommit}:{guidelinesId:string;entry:Extract<GuidelinesTextFitEntry,{mode:'line-layout'}>;frame:Frame;selected:boolean;onCommit:(guidelinesId:string,lineId:string,start:number)=>void}){
+  const [drag,setDrag]=useState<{lineId:string;pointerId:number;startSvgX:number;start:number;max:number;live:number}|null>(null);
+  const cancelDrag=(event:React.PointerEvent<SVGElement>)=>{
+    event.stopPropagation();
+    setDrag(current=>current?.pointerId===event.pointerId?null:current);
+  };
+  return <g data-no-export="true" data-line-layout-overlay="true">{entry.plan.lines.filter(line=>line.rowIndex!==null&&line.text.trim()).map(line=>{
+    const live=drag?.lineId===line.lineId?drag.live:line.startFromLeftMM,dx=live-line.startFromLeftMM,y1=line.waistY-frame.y,y2=line.baseY-frame.y,start=line.baselineStartX-frame.x+dx,end=line.baselineEndX-frame.x+dx,shift=line.slantShiftMM;
+    const showHandles=selected&&line.alignment==='custom';
+    const draggable=showHandles&&line.maxCustomStartMM>0;
+    return <g key={line.lineId} data-planned-line-id={line.lineId}>{line.glyphs.map((glyph,index)=>{const x1=glyph.startX-frame.x+dx,x2=glyph.endX-frame.x+dx,d=`M ${x1+shift},${y1} L ${x2+shift},${y1} L ${x2},${y2} L ${x1},${y2} Z`;return <g key={index}><path d={d} fill={glyph.collision?'rgba(239,68,68,.22)':entry.color.fill} stroke={glyph.collision?'#dc2626':entry.color.stroke} strokeWidth=".3" vectorEffect="non-scaling-stroke"/><text x={(x1+x2)/2+shift/2} y={(y1+y2)/2} textAnchor="middle" dominantBaseline="central" fontSize={Math.max(1.8,(y2-y1)*.65)} fill="#334155">{glyph.kind==='space'?'':glyph.ch}</text></g>})}{showHandles&&[start,end].map((x,index)=><g key={index} data-custom-placement-handle={index?'end':'start'} aria-label={`${index?'End':'Start'} placement handle for ${line.text}`} role="slider" aria-disabled={!draggable} style={{cursor:draggable?'ew-resize':'default',opacity:draggable?1:.4}} onPointerDown={event=>{if(!draggable||event.button!==0)return;event.preventDefault();event.stopPropagation();const startSvgX=pointerSvgX(event);if(startSvgX===null)return;event.currentTarget.setPointerCapture(event.pointerId);setDrag({lineId:line.lineId,pointerId:event.pointerId,startSvgX,start:line.startFromLeftMM,max:line.maxCustomStartMM,live:line.startFromLeftMM});}} onPointerMove={event=>{if(!drag||drag.lineId!==line.lineId||drag.pointerId!==event.pointerId)return;event.preventDefault();event.stopPropagation();const svgX=pointerSvgX(event);if(svgX===null)return;setDrag({...drag,live:customStartFromDrag(drag.start,svgX-drag.startSvgX,drag.max)});}} onPointerUp={event=>{if(!drag||drag.lineId!==line.lineId||drag.pointerId!==event.pointerId)return;event.preventDefault();event.stopPropagation();const final=drag.live;setDrag(null);if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);onCommit(guidelinesId,drag.lineId,final);}} onPointerCancel={cancelDrag} onLostPointerCapture={cancelDrag}><line x1={x+shift} x2={x} y1={y1} y2={y2} stroke={entry.color.stroke} strokeWidth="2" strokeLinecap="round" vectorEffect="non-scaling-stroke" pointerEvents="none"/><line x1={x-5} x2={x+5} y1={y1} y2={y2} stroke="transparent" strokeWidth="18" vectorEffect="non-scaling-stroke"/></g>)}</g>;
+  })}</g>;
 }
 
 function ElementVisual({ element, frame, simplify, selected, textFitEntry,onPlannedLinePlacementChange }: { element: LayoutElement; frame: Frame; simplify: boolean; selected: boolean; textFitEntry: GuidelinesTextFitEntry | null;onPlannedLinePlacementChange:(guidelinesId:string,lineId:string,customStartMM:number)=>void }) {
@@ -339,7 +359,7 @@ function ElementVisual({ element, frame, simplify, selected, textFitEntry,onPlan
       <g clipPath={mask?.enabled?`url(#${clipId})`:undefined}>{content}</g>
       {mask?.enabled&&mask.showOutline&&<ShapeGeometry kind={mask.kind} width={frame.width} height={frame.height} cornerRadiusMM={mask.cornerRadiusMM} fill="none" stroke={mask.outlineColor} strokeWidth={mask.outlineWidthMM}/>}
     </g>;
-    if(textFitEntry?.mode==='line-layout')return wrap(<><GuidelinesRenderer box={{width:frame.width,height:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`}/><LineLayoutOverlay guidelinesId={element.id} entry={textFitEntry} frame={frame} onCommit={onPlannedLinePlacementChange}/></>);
+    if(textFitEntry?.mode==='line-layout')return wrap(<><GuidelinesRenderer box={{width:frame.width,height:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`}/><LineLayoutOverlay guidelinesId={element.id} entry={textFitEntry} frame={frame} selected={selected} onCommit={onPlannedLinePlacementChange}/></>);
     const placements = textFitEntry?.mode==='estimate'?textFitEntry.plan.placements:[];
     const placementGeometry = placements.map(placement => {
       const x=placement.x1-frame.x,y1=placement.waistY-frame.y,y2=placement.baseY-frame.y,shift=placement.slantShiftMM,x2=x+placement.consumedMM;
