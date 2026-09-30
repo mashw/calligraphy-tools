@@ -255,6 +255,15 @@ test('transparent curved titles neither paint nor occlude their footprint',()=>{
   assert.match(planning,/element\.type==='curved-title'[\s\S]*?transparentWhitespace\?\?true\)\) return \[rectOccluder[\s\S]*?return \[\];/);
 });
 
+test('Layout curved-title controls use Layout transforms and compact visual aids',()=>{
+  const panel=readFileSync(new URL('../src/components/curved-title/CurvedTitleSettingsPanel.tsx',import.meta.url),'utf8');
+  const inspector=readFileSync(new URL('../src/components/layout/LayoutInspector.tsx',import.meta.url),'utf8');
+  assert.doesNotMatch(panel,/title="Curve & Guides"|Reset rotation &amp; scale|Scale \(%\)/);
+  assert.match(panel,/Title text[\s\S]*?Visual aids[\s\S]*?Show letter bounding boxes[\s\S]*?Show title span fill[\s\S]*?Curve length:/);
+  assert.match(inspector,/Math\.round\(value\*10\)\/10/);
+  assert.match(inspector,/step="0\.1"/);
+});
+
 test('blackletter horizontal grid appearance defaults and validates physical dash lengths',()=>{
   assert.deepEqual(resolveHorizontalGridAppearance(),{style:'solid',dashMM:2,gapMM:2});
   assert.deepEqual(resolveHorizontalGridAppearance({style:'dashed',dashMM:9.1,gapMM:4.6}),{style:'dashed',dashMM:9.1,gapMM:4.6});

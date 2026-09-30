@@ -24,7 +24,8 @@ function MillimetreField({ label, value, onChange, min, max, whole = false }: { 
 }
 
 function RotationField({value,onChange}:{value:number;onChange:(value:number)=>void}){
-  return <label className="space-y-1 text-xs font-medium text-slate-600">Rotation<div className="relative"><input className={input} type="number" step="0.1" value={value} onChange={event=>{const parsed=Number(event.target.value);if(Number.isFinite(parsed))onChange(normalizeDegrees(parsed));}}/><span className="pointer-events-none absolute right-2 top-1.5 text-slate-400">°</span></div></label>;
+  const rounded=Math.round(value*10)/10,displayed=Number.isInteger(rounded)?String(rounded):rounded.toFixed(1);
+  return <label className="space-y-1 text-xs font-medium text-slate-600">Rotation<div className="relative"><input className={input} type="number" step="0.1" value={displayed} onChange={event=>{const parsed=Number(event.target.value);if(Number.isFinite(parsed))onChange(normalizeDegrees(parsed));}}/><span className="pointer-events-none absolute right-2 top-1.5 text-slate-400">°</span></div></label>;
 }
 
 export default function LayoutInspector({ element, page, textFitEntry, onChange }: { element: LayoutElement; page: PageElement; textFitEntry: GuidelinesTextFitEntry | null; onChange: (element: LayoutElement) => void }) {
