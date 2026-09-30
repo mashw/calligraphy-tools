@@ -3,7 +3,6 @@ import { calculateStraightGuidelines } from '@/lib/guides/straight/model';
 import { measureRun } from '@/lib/measure/measure-run';
 import { SCRIPT_PROFILES } from '@/lib/scripts';
 import { buildCalligramModel } from '@/lib/calligram/model';
-import { buildCurvedTitleModel } from '@/lib/curved-title/model';
 import { occupiedRect } from './geometry';
 import { expandedShapeFrame, shapeContainsPoint, shapeFootprintContains } from './shape';
 import { pageSize, type GuidelinesElement, type LayoutElement, type PageElement } from './types';
@@ -75,8 +74,7 @@ function elementOccluders(element: LayoutElement): Occluder[] {
   }
   if(element.type==='curved-title') {
     if(!(element.settings.transparentWhitespace??true)) return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
-    const model=buildCurvedTitleModel({w:element.frame.width,h:element.frame.height},element.settings),points=model.footprintPoints.map(p=>({x:p.x+element.frame.x,y:p.y+element.frame.y}));
-    return [polygonOccluder(points,element.paddingMM)];
+    return [];
   }
   if(!(element.settings.transparentWhitespace??true)) return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
   const model=buildCalligramModel({w:element.frame.width,h:element.frame.height},element.settings);

@@ -208,6 +208,17 @@ test('Artwork bounds uses a preview knockout and baked plotter clipping only',()
   assert.doesNotMatch(plotter,/fill=["']white|PAGE_BACKGROUND/);
 });
 
+test('transparent curved titles neither paint nor occlude their footprint',()=>{
+  const stage=readFileSync(new URL('../src/components/layout/LayoutStage.tsx',import.meta.url),'utf8');
+  const panel=readFileSync(new URL('../src/components/curved-title/CurvedTitleSettingsPanel.tsx',import.meta.url),'utf8');
+  const plotter=readFileSync(new URL('../src/lib/layout/plotter-export.ts',import.meta.url),'utf8');
+  const planning=readFileSync(new URL('../src/lib/layout/guidelines-text-fit.ts',import.meta.url),'utf8');
+  assert.match(stage,/pageBackground=\{!\(element\.settings\.transparentWhitespace\?\?true\)\?PAGE_BACKGROUND:undefined\}/);
+  assert.match(panel,/Show lower layers through the gaps between the curved guides\./);
+  assert.match(plotter,/element\.type === 'curved-title'[\s\S]*?transparentWhitespace \?\? true\)\) return \[rectOccluder[\s\S]*?return \[\];/);
+  assert.match(planning,/element\.type==='curved-title'[\s\S]*?transparentWhitespace\?\?true\)\) return \[rectOccluder[\s\S]*?return \[\];/);
+});
+
 test('blackletter horizontal grid appearance defaults and validates physical dash lengths',()=>{
   assert.deepEqual(resolveHorizontalGridAppearance(),{style:'solid',dashMM:2,gapMM:2});
   assert.deepEqual(resolveHorizontalGridAppearance({style:'dashed',dashMM:9.1,gapMM:4.6}),{style:'dashed',dashMM:9.1,gapMM:4.6});

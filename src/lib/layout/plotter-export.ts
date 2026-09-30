@@ -360,8 +360,7 @@ function elementOccluders(element: LayoutElement): Occluder[] {
   }
   if (element.type === 'curved-title') {
     if (!(element.settings.transparentWhitespace ?? true)) return [rectOccluder(occupiedRect(element.frame, element.paddingMM))];
-    const model = buildCurvedTitleModel({ w: element.frame.width, h: element.frame.height }, element.settings);
-    return [polygonOccluder(model.footprintPoints.map(point => ({ x: point.x + element.frame.x, y: point.y + element.frame.y })), element.paddingMM)];
+    return [];
   }
   if (!(element.settings.transparentWhitespace ?? true)) return [rectOccluder(occupiedRect(visualCalligramBounds(element), element.paddingMM))];
   const model = buildCalligramModel({ w: element.frame.width, h: element.frame.height }, element.settings);
