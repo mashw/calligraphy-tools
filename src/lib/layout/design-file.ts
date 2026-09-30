@@ -12,7 +12,8 @@ type JsonObject = Record<string, unknown>;
 
 const ELEMENT_TYPES = new Set(['page', 'guidelines', 'calligram', 'curved-title', 'shape', 'artwork']);
 const ARTWORK_TAGS = new Set(['g', 'path', 'rect', 'circle', 'ellipse', 'polygon', 'polyline', 'line']);
-const LINE_ALIGNMENTS = new Set(['left', 'center', 'right', 'custom']);\nconst PAPER_IDS = new Set(['A3', 'A4', 'A5', 'DL', 'C5', 'C6', 'Custom']);
+const LINE_ALIGNMENTS = new Set(['left', 'center', 'right', 'custom']);
+const PAPER_IDS = new Set(['A3', 'A4', 'A5', 'DL', 'C5', 'C6', 'Custom']);
 
 const isObject = (value: unknown): value is JsonObject => typeof value === 'object' && value !== null && !Array.isArray(value);
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
