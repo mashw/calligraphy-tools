@@ -196,6 +196,18 @@ test('visibility cache includes both planning toggles',()=>{
   assert.match(source,/occluders=element\.avoidOccludingElements!==false\?/);
 });
 
+test('overlapping elements warn without repositioning guideline text',()=>{
+  const planning=readFileSync(new URL('../src/lib/layout/guidelines-text-fit.ts',import.meta.url),'utf8');
+  const page=readFileSync(new URL('../src/app/layout/page.tsx',import.meta.url),'utf8');
+  const panel=readFileSync(new URL('../src/components/guidelines/GuidelinesSettingsPanel.tsx',import.meta.url),'utf8');
+  assert.match(planning,/getCachedGuidelinesPlacementSpans[\s\S]*?avoidOccludingElements:false[\s\S]*?buildGuidelinesVisibleSpans/);
+  assert.match(planning,/buildGuidelinesCollisionSpans[\s\S]*?pageWaist[\s\S]*?pageBase/);
+  assert.match(page,/collisionSpans=getCachedGuidelinesCollisionSpans[\s\S]*?placementSpans=getCachedGuidelinesPlacementSpans/);
+  assert.match(page,/buildGuidelinesTextFitPlan\(item,placementSpans\)/);
+  assert.match(page,/buildGuidelinesLineLayoutPlan\(item,placementSpans,page,collisionSpans\)/);
+  assert.match(panel,/Flag element collisions/);
+});
+
 test('Line Layout selects one fitting contiguous span for every alignment',()=>{
   const spans=[{x1:0,x2:25},{x1:40,x2:100}],footprint=30,center=50;
   assert.deepEqual(selectLineLayoutSpan(spans,'left',footprint,center,0)?.span,spans[1]);
