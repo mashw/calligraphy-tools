@@ -3,8 +3,8 @@ import { calculateStraightGuidelines } from '@/lib/guides/straight/model';
 import { measureRun } from '@/lib/measure/measure-run';
 import { SCRIPT_PROFILES } from '@/lib/scripts';
 import { buildCalligramModel } from '@/lib/calligram/model';
-import { buildCurvedTitleModel } from '@/lib/curved-title/model';
-import { occupiedRect } from './geometry';
+import { boundsOfRotatedFrame, inverseRotatePoint, occupiedRect } from './geometry';
+import { elementRotationCenter } from './element-transform';
 import { expandedShapeFrame, shapeContainsPoint, shapeFootprintContains } from './shape';
 import { pageSize, type GuidelinesElement, type LayoutElement, type PageElement } from './types';
 import { pathHasOnlyClosedSubpaths, type ArtworkNode } from './artwork';
@@ -61,7 +61,7 @@ function artworkOccluder(element:Extract<LayoutElement,{type:'artwork'}>):Occlud
   return{bounds:element.frame,dispose:()=>root.remove(),contains:point=>{const rootMatrix=root.getScreenCTM();if(!rootMatrix)return false;const viewBox=element.document.viewBox,sourceX=viewBox.x+(point.x-element.frame.x)/element.frame.width*viewBox.width,sourceY=viewBox.y+(point.y-element.frame.y)/element.frame.height*viewBox.height,screen=new DOMPoint(sourceX,sourceY).matrixTransform(rootMatrix);return geometries.some(geometry=>{if(!visible(geometry))return false;const matrix=geometry.getScreenCTM();if(!matrix)return false;const local=screen.matrixTransform(matrix.inverse()),style=getComputedStyle(geometry),fill=style.fill!=='none',stroke=style.stroke!=='none'&&Number.parseFloat(style.strokeWidth)>0;return (fill||element.settings.occludeClosedShapes&&closed(geometry))&&geometry.isPointInFill(local)||stroke&&geometry.isPointInStroke(local);});}};
 }
 
-function elementOccluders(element: LayoutElement): Occluder[] {
+function unrotatedElementOccluders(element: LayoutElement): Occluder[] {
   if(element.type==='page') return [];
   if(element.type==='shape') return [shapeOccluder(element)];
   if(element.type==='guidelines') {
@@ -75,12 +75,18 @@ function elementOccluders(element: LayoutElement): Occluder[] {
   }
   if(element.type==='curved-title') {
     if(!(element.settings.transparentWhitespace??true)) return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
-    const model=buildCurvedTitleModel({w:element.frame.width,h:element.frame.height},element.settings),points=model.footprintPoints.map(p=>({x:p.x+element.frame.x,y:p.y+element.frame.y}));
-    return [polygonOccluder(points,element.paddingMM)];
+    return [];
   }
   if(!(element.settings.transparentWhitespace??true)) return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
   const model=buildCalligramModel({w:element.frame.width,h:element.frame.height},element.settings);
   return model.bands.map(band=>polygonOccluder([...band.guideSet.ascLine,...[...band.guideSet.descLine].reverse()].map(p=>({x:p.x+element.frame.x,y:p.y+element.frame.y})),element.paddingMM));
+}
+
+function elementOccluders(element:LayoutElement):Occluder[]{
+  const raw=unrotatedElementOccluders(element),degrees=element.type==='page'?0:element.rotationDeg??0;
+  if(!degrees)return raw;
+  const centre=elementRotationCenter(element);
+  return raw.map(occluder=>({bounds:boundsOfRotatedFrame(occluder.bounds,degrees,centre),contains:point=>occluder.contains(inverseRotatePoint(point,centre,degrees)),dispose:occluder.dispose}));
 }
 
 export function buildGuidelinesVisibleSpans(element: GuidelinesElement, page: PageElement, elements: LayoutElement[]): VisibleGuideSpan[] {

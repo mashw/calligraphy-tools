@@ -3,8 +3,9 @@
 import GuidelinesSettingsPanel from '@/components/guidelines/GuidelinesSettingsPanel';
 import DisclosureSection from '@/components/layout/DisclosureSection';
 import { PAPERS_MM, type Orientation } from '@/lib/curve-helpers';
-import { alignContent, pageContentRect, sizeToPageContent, type Alignment } from '@/lib/layout/geometry';
-import { pageSize, type LayoutElement, type LayoutPaperId, type PageElement } from '@/lib/layout/types';
+import { alignContent, normalizeDegrees, pageContentRect, resizeAroundCenter, sizeToPageContent, type Alignment } from '@/lib/layout/geometry';
+import { rotatedElementBounds } from '@/lib/layout/element-transform';
+import { defaultArtworkSize, defaultElementSize, pageSize, type LayoutElement, type LayoutPaperId, type PageElement } from '@/lib/layout/types';
 import { constrainFrameToSquare, createDefaultShapeSettings, isConstrainedShape, SHAPE_OPTIONS, type ShapeAppearance, type ShapeKind } from '@/lib/layout/shape';
 import CurvedTitleSettingsPanel from '@/components/curved-title/CurvedTitleSettingsPanel';
 import CalligramSettingsPanel from '@/components/calligram/CalligramSettingsPanel';
@@ -20,6 +21,11 @@ const sectionClass = '';
 function MillimetreField({ label, value, onChange, min, max, whole = false }: { label: string; value: number; onChange: (value: number) => void; min?: number; max?: number; whole?: boolean }) {
   const displayed = whole ? Math.round(value) : value;
   return <label className="space-y-1 text-xs font-medium capitalize text-slate-600">{label}<div className="relative"><input className={input} type="number" step={whole ? 1 : .5} min={min} max={max} value={displayed} onChange={event => { const parsed = Number(event.target.value); const next = whole ? Math.round(parsed) : parsed; if (Number.isFinite(next) && (min === undefined || next >= min) && (max === undefined || next <= max)) onChange(next); }} /><span className="pointer-events-none absolute right-2 top-1.5 text-slate-400">mm</span></div></label>;
+}
+
+function RotationField({value,onChange}:{value:number;onChange:(value:number)=>void}){
+  const rounded=Math.round(value*10)/10,displayed=Number.isInteger(rounded)?String(rounded):rounded.toFixed(1);
+  return <label className="space-y-1 text-xs font-medium text-slate-600">Rotation<div className="relative"><input className={input} type="number" step="0.1" value={displayed} onChange={event=>{const parsed=Number(event.target.value);if(Number.isFinite(parsed))onChange(normalizeDegrees(parsed));}}/><span className="pointer-events-none absolute right-2 top-1.5 text-slate-400">°</span></div></label>;
 }
 
 export default function LayoutInspector({ element, page, textFitEntry, onChange }: { element: LayoutElement; page: PageElement; textFitEntry: GuidelinesTextFitEntry | null; onChange: (element: LayoutElement) => void }) {
@@ -41,7 +47,20 @@ export default function LayoutInspector({ element, page, textFitEntry, onChange 
     }
     onChange({ ...element, frame });
   };
-  const align = (alignment: Alignment) => { if (element.type !== 'page') onChange({ ...element, frame: alignContent(element.frame, internalMargins, pageRect, alignment) }); };
+  const align = (alignment: Alignment) => { if (element.type !== 'page') {
+    if(!(element.rotationDeg??0)){onChange({...element,frame:alignContent(element.frame,internalMargins,pageRect,alignment)});return;}
+    const bounds=rotatedElementBounds(element),target=alignContent(bounds,{top:0,right:0,bottom:0,left:0},pageRect,alignment);
+    onChange({...element,frame:{...element.frame,x:element.frame.x+target.x-bounds.x,y:element.frame.y+target.y-bounds.y}});
+  } };
+  const resetSize=()=>{
+    if(element.type==='page')return;
+    const raw=element.type==='artwork'?defaultArtworkSize(element.intrinsicAspectRatio,pageRect,element.document.viewBox.width):defaultElementSize(element.type,pageSize(page));
+    let size=element.type==='guidelines'&&!element.allowPartialGuidelines?{...raw,height:getNearestCompleteGuidelinesHeight(element.settings,raw.height)}:raw;
+    if(element.type==='shape'&&isConstrainedShape(element.settings)){const side=Math.min(size.width,size.height);size={width:side,height:side};}
+    const frame=resizeAroundCenter(element.frame,size);
+    if(element.type==='calligram'){const radiusMM=Math.max(5,element.settings.radiusMM+(frame.width-element.frame.width)/2);onChange({...element,frame,settings:{...element.settings,radiusMM}});return;}
+    onChange({...element,frame});
+  };
   const quickSize = (axis: 'width' | 'height', fraction: 0.5 | 1) => {
     if (element.type === 'page') return;
     let frame = sizeToPageContent(element.frame, internalMargins, pageRect, axis, fraction);
@@ -90,6 +109,8 @@ export default function LayoutInspector({ element, page, textFitEntry, onChange 
       </> : <>
         <DisclosureSection title="Position & Size" defaultOpen className={sectionClass}>
           <div className="grid grid-cols-2 gap-3">{(['x', 'y', 'width', 'height'] as const).map(key => <MillimetreField key={key} label={key} whole min={key === 'width' || key === 'height' ? 4 : undefined} value={element.frame[key]} onChange={value => patchFrame(key, value)} />)}</div>
+          <div className="mt-3 grid grid-cols-2 items-end gap-3"><RotationField value={element.rotationDeg??0} onChange={rotationDeg=>onChange({...element,rotationDeg})}/><button type="button" className={smallButton} onClick={()=>onChange({...element,rotationDeg:0})}>Reset rotation</button></div>
+          <button type="button" className={`${smallButton} mt-3 w-full`} onClick={resetSize}>Reset size</button>
           {(element.type === 'guidelines' || element.type === 'shape' || element.type === 'curved-title' || element.type === 'calligram' || element.type === 'artwork') && <><div className="mt-4"><div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Align</div><div className="grid grid-cols-3 gap-2">{([['left', '←', 'Align left'], ['h-center', '↔', 'Align horizontal centre'], ['right', '→', 'Align right'], ['top', '↑', 'Align top'], ['v-center', '↕', 'Align vertical centre'], ['bottom', '↓', 'Align bottom']] as [Alignment, string, string][]).map(([action, symbol, title]) => <button key={action} type="button" title={title} aria-label={title} onClick={() => align(action)} className={smallButton}>{symbol}</button>)}</div></div>
             <div className="mt-4"><div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Quick size</div><div className="grid grid-cols-2 gap-2"><button type="button" title="Set usable guideline width to half the usable page width" onClick={() => quickSize('width', .5)} className={smallButton}>½ Page width</button><button type="button" title="Set usable guideline width to the full usable page width" onClick={() => quickSize('width', 1)} className={smallButton}>Full width</button><button type="button" title="Set usable guideline height to half the usable page height" onClick={() => quickSize('height', .5)} className={smallButton}>½ Page height</button><button type="button" title="Set usable guideline height to the full usable page height" onClick={() => quickSize('height', 1)} className={smallButton}>Full height</button></div></div></>}
           {element.type === 'guidelines' && <div className="mt-4 space-y-3 border-t border-slate-200 pt-4"><div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mask</div><label className="block space-y-1 text-xs font-medium text-slate-600">Shape mask<select className={input} value={element.mask?.enabled ? element.mask.kind : 'none'} onChange={event=>onChange({...element,mask:{...(element.mask??{enabled:false,kind:'circle',textLayoutRespectsMask:true,showOutline:false,outlineColor:'#334155',outlineWidthMM:.5,cornerRadiusMM:3}),enabled:event.target.value!=='none',kind:event.target.value==='none'?'circle':event.target.value as ShapeKind}})}><option value="none">None</option>{SHAPE_OPTIONS.map(option=><option key={option.kind} value={option.kind}>{option.label}</option>)}</select></label>{element.mask?.enabled&&<><label className="flex items-center justify-between text-sm text-slate-700"><span>Text layout respects mask</span><input type="checkbox" className="accent-indigo-600" checked={element.mask.textLayoutRespectsMask} onChange={event=>onChange({...element,mask:{...element.mask,textLayoutRespectsMask:event.target.checked}})}/></label><label className="flex items-center justify-between text-sm text-slate-700"><span>Show mask outline</span><input type="checkbox" className="accent-indigo-600" checked={element.mask.showOutline} onChange={event=>onChange({...element,mask:{...element.mask,showOutline:event.target.checked}})}/></label>{element.mask.showOutline&&<><label className="block space-y-1 text-xs font-medium text-slate-600">Outline colour<input type="color" className="h-9 w-full rounded border border-slate-300" value={element.mask.outlineColor} onChange={event=>onChange({...element,mask:{...element.mask,outlineColor:event.target.value}})}/></label><MillimetreField label="Outline width" min={0} value={element.mask.outlineWidthMM} onChange={outlineWidthMM=>onChange({...element,mask:{...element.mask,outlineWidthMM}})}/></>}</>}</div>}

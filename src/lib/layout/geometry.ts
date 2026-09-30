@@ -1,5 +1,24 @@
 import type { Frame, Margins, ResizeAspectMode, ResizeHandle } from './types';
 
+export type Point = {x:number;y:number};
+export const frameCenter=(frame:Frame):Point=>({x:frame.x+frame.width/2,y:frame.y+frame.height/2});
+export function normalizeDegrees(degrees:number){
+  if(!Number.isFinite(degrees))return 0;
+  const normalized=((degrees+180)%360+360)%360-180;
+  return Object.is(normalized,-0)?0:normalized;
+}
+export function rotatePoint(point:Point,centre:Point,degrees:number):Point{
+  if(!degrees)return {...point};
+  const angle=degrees*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),x=point.x-centre.x,y=point.y-centre.y;
+  return{x:centre.x+x*c-y*s,y:centre.y+x*s+y*c};
+}
+export const inverseRotatePoint=(point:Point,centre:Point,degrees:number)=>rotatePoint(point,centre,-degrees);
+export const rotatePoints=(points:ReadonlyArray<Point>,centre:Point,degrees:number)=>points.map(point=>rotatePoint(point,centre,degrees));
+export function rectCorners(frame:Frame):Point[]{return[{x:frame.x,y:frame.y},{x:frame.x+frame.width,y:frame.y},{x:frame.x+frame.width,y:frame.y+frame.height},{x:frame.x,y:frame.y+frame.height}];}
+export const rotatedRectCorners=(frame:Frame,degrees:number,centre=frameCenter(frame))=>rotatePoints(rectCorners(frame),centre,degrees);
+export const boundsOfRotatedFrame=(frame:Frame,degrees:number,centre=frameCenter(frame))=>boundsOfPoints(rotatedRectCorners(frame,degrees,centre));
+export function resizeAroundCenter(frame:Frame,size:{width:number;height:number}):Frame{return{x:frame.x+(frame.width-size.width)/2,y:frame.y+(frame.height-size.height)/2,...size};}
+
 export function boundsOfPoints(points: ReadonlyArray<{ x: number; y: number }>): Frame {
   if (!points.length) return { x: 0, y: 0, width: 0, height: 0 };
   let minX = points[0].x, maxX = points[0].x, minY = points[0].y, maxY = points[0].y;

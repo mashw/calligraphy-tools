@@ -30,6 +30,7 @@ import ConstructionGuideControls from '@/components/guidelines/ConstructionGuide
 import { computeCurvedTitleLayout, type CurvedTitlePlace } from '@/lib/curved-title/model';
 import { createDefaultCurvedTitleSettings, type CurvedTitleCurveId } from '@/lib/curved-title/settings';
 import { fitCustomCurve, type CustomCurve } from '@/lib/curved-title/custom-curve';
+import { buildTextSpanMarkers } from '@/lib/curved-title/span-markers';
 import CustomCurveUpload from '@/components/curved-title/CustomCurveUpload';
 
 import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
@@ -874,6 +875,8 @@ export default function CurvedTitlePage() {
     const sEnd = Math.min(arcLen, last.sMid + last.w / 2);
     return { sStart, sEnd };
   }, [layout, arcLen]);
+
+  const textSpanMarkers=useMemo(()=>text.trim()&&layout.placements.length?buildTextSpanMarkers(baseline,span,xMM):null,[baseline,layout.placements.length,span,text,xMM]);
 
   const guideSet = useMemo(
     () =>
@@ -1883,6 +1886,11 @@ export default function CurvedTitlePage() {
                 {showBoxes && renderLetterBoxes(layout.placements, guideSet.baseLine, arcLen, xMM, script, 'main')}
                 {showBoxes && topBandEnabled && renderLetterBoxes(topLayout.placements, topGuideSet.baseLine, topArcLen, topXMM, topBandScript, 'top')}
                 {showBoxes && bottomBandEnabled && renderLetterBoxes(bottomLayout.placements, bottomGuideSet.baseLine, bottomArcLen, bottomXMM, bottomBandScript, 'bottom')}
+
+                {textSpanMarkers&&<g data-text-span-markers="true" fill="none" stroke="#111827" strokeWidth={swBold} strokeLinecap="square" vectorEffect="non-scaling-stroke">
+                  <line data-text-span-marker="start" x1={textSpanMarkers.start.from.x} y1={textSpanMarkers.start.from.y} x2={textSpanMarkers.start.to.x} y2={textSpanMarkers.start.to.y}/>
+                  {textSpanMarkers.end.map((marker,index)=><line key={index} data-text-span-marker="end" x1={marker.from.x} y1={marker.from.y} x2={marker.to.x} y2={marker.to.y}/>) }
+                </g>}
 
                 {/* Endpoints */}
                 <circle cx={startPt.x} cy={startPt.y} r={1} fill="#0ea5e9" />

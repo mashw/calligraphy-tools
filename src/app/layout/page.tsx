@@ -4,7 +4,7 @@ import { useState } from 'react';
 import LayoutInspector from '@/components/layout/LayoutInspector';
 import LayoutStage from '@/components/layout/LayoutStage';
 import LayersPanel from '@/components/layout/LayersPanel';
-import { newElement, pageElement, pageSize, type ElementType, type Frame, type LayoutElement } from '@/lib/layout/types';
+import { defaultArtworkSize, newElement, pageElement, pageSize, type ElementType, type Frame, type LayoutElement } from '@/lib/layout/types';
 import { buildGuidelinesLineLayoutPlan, buildGuidelinesTextFitPlan, buildGuidelinesVisibilityCacheKey, getCachedGuidelinesVisibleSpans, resolveTextFitColors, TEXT_FIT_COLORS, preferredTextFitColorIndex, type GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 import { sanitizeArtworkSvg } from '@/lib/layout/artwork';
 import { pageContentRect } from '@/lib/layout/geometry';
@@ -24,7 +24,7 @@ export default function LayoutPage() {
     const element = newElement(type, count, pageSize(page));
     setElements(current => [element, ...current]); setSelectedId(element.id);
   };
-  const addArtwork=async(files:FileList)=>{const imported:Extract<LayoutElement,{type:'artwork'}>[]=[];const messages:string[]=[];const usable=pageContentRect(pageSize(page),page.settings.margins);for(const file of [...files]){try{const document=sanitizeArtworkSvg(await file.text()),ratio=document.viewBox.width/document.viewBox.height,maxWidth=Math.max(4,usable.width-10),maxHeight=Math.max(4,usable.height-10),width=Math.min(document.viewBox.width,100,maxWidth,maxHeight*ratio),height=width/ratio;imported.push({id:`artwork-${crypto.randomUUID()}`,type:'artwork',name:file.name.replace(/\.svg$/i,''),locked:false,paddingMM:0,sourceFilename:file.name,document,intrinsicAspectRatio:ratio,settings:{lockProportions:true,opacity:100,occludeLowerLayers:true,occludeClosedShapes:true,occlusionArea:'visible-artwork',textFitExclusion:'bounds'},frame:{x:usable.x+(usable.width-width)/2,y:usable.y+(usable.height-height)/2,width,height}});if(document.warning)messages.push(`${file.name}: ${document.warning}`);}catch(error){messages.push(`${file.name}: ${error instanceof Error?error.message:'Could not import SVG.'}`);}}if(imported.length){setElements(current=>[...imported,...current]);setSelectedId(imported.at(-1)!.id);}setArtworkMessage(messages.join(' ')||null);};
+  const addArtwork=async(files:FileList)=>{const imported:Extract<LayoutElement,{type:'artwork'}>[]=[];const messages:string[]=[];const usable=pageContentRect(pageSize(page),page.settings.margins);for(const file of [...files]){try{const document=sanitizeArtworkSvg(await file.text()),ratio=document.viewBox.width/document.viewBox.height,{width,height}=defaultArtworkSize(ratio,usable,document.viewBox.width);imported.push({id:`artwork-${crypto.randomUUID()}`,type:'artwork',name:file.name.replace(/\.svg$/i,''),locked:false,paddingMM:0,rotationDeg:0,sourceFilename:file.name,document,intrinsicAspectRatio:ratio,settings:{lockProportions:true,opacity:100,occludeLowerLayers:true,occludeClosedShapes:true,occlusionArea:'visible-artwork',textFitExclusion:'bounds'},frame:{x:usable.x+(usable.width-width)/2,y:usable.y+(usable.height-height)/2,width,height}});if(document.warning)messages.push(`${file.name}: ${document.warning}`);}catch(error){messages.push(`${file.name}: ${error instanceof Error?error.message:'Could not import SVG.'}`);}}if(imported.length){setElements(current=>[...imported,...current]);setSelectedId(imported.at(-1)!.id);}setArtworkMessage(messages.join(' ')||null);};
   const move = (id: string, direction: -1 | 1) => setElements(current => {
     const index = current.findIndex(element => element.id === id); const target = index + direction;
     if (index < 0 || target < 0 || target >= current.length || current[target].type === 'page') return current;
@@ -36,9 +36,9 @@ export default function LayoutPage() {
     setElements(current => { const index = current.findIndex(element => element.id === id); const next = [...current]; next.splice(index, 0, copy); return next; }); setSelectedId(copy.id);
   };
   const remove = (id: string) => { if (id === 'page') return; setElements(current => current.filter(element => element.id !== id)); if (selectedId === id) setSelectedId('page'); };
-  const commit = (id: string, frame: Frame) => update(id, element => element.type === 'calligram'
-    ? ({ ...element, frame: { ...frame, height: frame.width }, settings: { ...element.settings, radiusMM: Math.max(5, element.settings.radiusMM + (frame.width - element.frame.width) / 2) } })
-    : ({ ...element, frame }));
+  const commit = (id: string, frame: Frame, rotationDeg?:number) => update(id, element => element.type === 'calligram'
+    ? ({ ...element, rotationDeg:rotationDeg??element.rotationDeg??0, frame: { ...frame, height: frame.width }, settings: { ...element.settings, radiusMM: Math.max(5, element.settings.radiusMM + (frame.width - element.frame.width) / 2) } })
+    : element.type==='page'?element:({ ...element, rotationDeg:rotationDeg??element.rotationDeg??0, frame }));
 
   return <main className="min-h-screen bg-slate-100 px-4 py-8 text-sm text-slate-900 sm:px-6">
     <header className="mx-auto mb-5 max-w-[1480px]"><h1 className="text-3xl font-semibold tracking-tight">Calligraphy Tools <span className="text-indigo-600">— Layout</span></h1><p className="mt-1 text-slate-600">Arrange calligraphy elements on a physical page.</p></header>

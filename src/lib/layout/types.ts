@@ -10,7 +10,7 @@ export type Frame = { x: number; y: number; width: number; height: number };
 export type Margins = { top: number; right: number; bottom: number; left: number };
 export type LayoutPaperId = PaperId | 'Custom';
 type ElementBase = { id: string; name: string; frame: Frame; locked: boolean };
-type MovableElementBase = ElementBase & { paddingMM: number };
+type MovableElementBase = ElementBase & { paddingMM: number; rotationDeg?: number };
 export type PageElement = ElementBase & { id: 'page'; type: 'page'; locked: true; settings: { paper: LayoutPaperId; orientation: Orientation; customWidthMM: number; customHeightMM: number; margins: Margins; centerLines: { vertical: boolean; horizontal: boolean } } };
 export type GuidelinesMaskSettings = { enabled:boolean;kind:ShapeKind;textLayoutRespectsMask:boolean;showOutline:boolean;outlineColor:string;outlineWidthMM:number;cornerRadiusMM:number };
 export const createDefaultGuidelinesMaskSettings=():GuidelinesMaskSettings=>({enabled:false,kind:'circle',textLayoutRespectsMask:true,showOutline:false,outlineColor:'#334155',outlineWidthMM:.5,cornerRadiusMM:3});
@@ -32,10 +32,22 @@ export function pageSize(element: PageElement) {
 }
 export const pageElement = (): PageElement => ({ id:'page',type:'page',name:'Page',locked:true,settings:{paper:'A4',orientation:PAPERS_MM.A4.defaultOrientation,customWidthMM:210,customHeightMM:297,margins:{top:0,right:0,bottom:0,left:0},centerLines:{vertical:false,horizontal:false}},frame:{x:0,y:0,width:210,height:297} });
 const labels = { guidelines:'Guidelines',calligram:'Calligram','curved-title':'Curved title',shape:'Shape' } as const;
+export function defaultElementSize(type: Exclude<ElementType,'page'|'artwork'>, page:{width:number;height:number}) {
+  const width=Math.min(type==='guidelines'?150:type==='shape'?40:type==='curved-title'?page.width*.8:type==='calligram'?140:72,Math.max(20,page.width-30));
+  const height=type==='calligram'?width:Math.min(type==='guidelines'?180:type==='shape'?35:type==='curved-title'?60:50,Math.max(20,page.height-30));
+  return {width,height};
+}
+
+export function defaultArtworkSize(intrinsicAspectRatio:number, usable:Frame, sourceWidth=Number.POSITIVE_INFINITY) {
+  const ratio=Number.isFinite(intrinsicAspectRatio)&&intrinsicAspectRatio>0?intrinsicAspectRatio:1;
+  const maxWidth=Math.max(4,usable.width-10),maxHeight=Math.max(4,usable.height-10);
+  const width=Math.min(sourceWidth,100,maxWidth,maxHeight*ratio);
+  return {width,height:width/ratio};
+}
+
 export function newElement(type: Exclude<ElementType,'page'|'artwork'>, count:number, page:{width:number;height:number}): LayoutElement {
-  const proportional=type==='calligram';
-  const width=Math.min(type==='guidelines'?150:type==='shape'?40:type==='curved-title'?page.width*.8:type==='calligram'?140:72,Math.max(20,page.width-30)); const height=type==='calligram'?width:Math.min(type==='guidelines'?180:type==='shape'?35:type==='curved-title'?60:proportional?65:50,Math.max(20,page.height-30));
-  const base={id:`${type}-${crypto.randomUUID()}`,type,name:`${labels[type]} ${count}`,locked:false,paddingMM:0,frame:{x:Math.max(5,(page.width-width)/2),y:type==='curved-title'?Math.max(5,(page.height-height)*.2):Math.max(5,(page.height-height)/2),width,height}};
+  const {width,height}=defaultElementSize(type,page);
+  const base={id:`${type}-${crypto.randomUUID()}`,type,name:`${labels[type]} ${count}`,locked:false,paddingMM:0,rotationDeg:0,frame:{x:Math.max(5,(page.width-width)/2),y:type==='curved-title'?Math.max(5,(page.height-height)*.2):Math.max(5,(page.height-height)/2),width,height}};
   if(type==='guidelines') { const settings=createDefaultGuidelinesSettings(); settings.margins={top:0,right:0,bottom:0,left:0}; return {...base,type,allowPartialGuidelines:true,fitText:'',textMode:'estimate',plannedLines:[],rightAlignMode:'waist',avoidOccludingElements:true,mask:createDefaultGuidelinesMaskSettings(),settings}; }
   if(type==='shape') return {...base,type,settings:createDefaultShapeSettings()};
   if(type==='curved-title') return {...base,type,settings:createDefaultCurvedTitleSettings()};
