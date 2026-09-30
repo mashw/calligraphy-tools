@@ -12,7 +12,7 @@ type JsonObject = Record<string, unknown>;
 
 const ELEMENT_TYPES = new Set(['page', 'guidelines', 'calligram', 'curved-title', 'shape', 'artwork']);
 const ARTWORK_TAGS = new Set(['g', 'path', 'rect', 'circle', 'ellipse', 'polygon', 'polyline', 'line']);
-const LINE_ALIGNMENTS = new Set(['left', 'center', 'right', 'custom']);
+const LINE_ALIGNMENTS = new Set(['left', 'center', 'right', 'custom']);\nconst PAPER_IDS = new Set(['A3', 'A4', 'A5', 'DL', 'C5', 'C6', 'Custom']);
 
 const isObject = (value: unknown): value is JsonObject => typeof value === 'object' && value !== null && !Array.isArray(value);
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
@@ -73,7 +73,7 @@ function validateBaseElement(value: JsonObject, index: number) {
 function validatePage(value: JsonObject) {
   if (value.id !== 'page' || value.locked !== true || !isObject(value.settings)) fail('The saved design has an invalid page element.');
   const settings = value.settings;
-  if (typeof settings.paper !== 'string' || !['portrait', 'landscape'].includes(String(settings.orientation))) fail('The saved page has invalid paper settings.');
+  if (typeof settings.paper !== 'string' || !PAPER_IDS.has(settings.paper) || !['portrait', 'landscape'].includes(String(settings.orientation))) fail('The saved page has invalid paper settings.');
   if (!isFiniteNumber(settings.customWidthMM) || !isFiniteNumber(settings.customHeightMM) || (settings.customWidthMM as number) <= 0 || (settings.customHeightMM as number) <= 0) fail('The saved page has invalid custom dimensions.');
   validateMargins(settings.margins);
   if (!isObject(settings.centerLines) || typeof settings.centerLines.vertical !== 'boolean' || typeof settings.centerLines.horizontal !== 'boolean') fail('The saved page has invalid centre-line settings.');
