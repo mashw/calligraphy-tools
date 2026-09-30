@@ -2,20 +2,31 @@
 
 import type { ElementType, LayoutElement } from '@/lib/layout/types';
 
+export type DesignMessage = { kind: 'success' | 'error'; text: string };
+
 type Props = {
   className?: string;
   elements: LayoutElement[]; selectedId: string; onSelect: (id: string) => void;
   onAdd: (type: Exclude<ElementType, 'page'|'artwork'>) => void; onAddArtwork:(files:FileList)=>void; artworkMessage:string|null; onToggleLock: (id: string) => void;
   onMove: (id: string, direction: -1 | 1) => void; onDuplicate: (id: string) => void; onDelete: (id: string) => void;
+  onSaveDesign: () => void; onOpenDesign: (file: File) => void | Promise<void>; designMessage: DesignMessage | null;
 };
 
 const icons: Record<ElementType, string> = { page: '▱', guidelines: '☰', calligram: '◯', 'curved-title': '⌒', shape: '◇', artwork:'✧' };
 const button = 'h-7 w-7 rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30';
+const fileButton = 'rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50';
 
-export default function LayersPanel({ className = '', elements, selectedId, onSelect, onAdd, onAddArtwork, artworkMessage, onToggleLock, onMove, onDuplicate, onDelete }: Props) {
+export default function LayersPanel({ className = '', elements, selectedId, onSelect, onAdd, onAddArtwork, artworkMessage, onToggleLock, onMove, onDuplicate, onDelete, onSaveDesign, onOpenDesign, designMessage }: Props) {
   const additions: [Exclude<ElementType, 'page'|'artwork'>, string][] = [['guidelines', 'Guidelines'], ['calligram', 'Calligram'], ['curved-title', 'Curved title'], ['shape', 'Shape']];
   return <section className={`flex min-h-0 flex-col rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 ${className}`}>
-    <h2 className="font-semibold text-slate-800">Elements</h2>
+    <div className="flex items-center justify-between gap-3">
+      <h2 className="font-semibold text-slate-800">Elements</h2>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <button type="button" onClick={onSaveDesign} className={fileButton} title="Save this layout design to a file">Save</button>
+        <label className={`cursor-pointer ${fileButton}`} title="Open a saved layout design">Open<input className="sr-only" type="file" accept=".json,.calligraphy-layout.json,application/json" onChange={event=>{const file=event.target.files?.[0];if(file)void onOpenDesign(file);event.target.value='';}}/></label>
+      </div>
+    </div>
+    {designMessage&&<p className={`mt-2 text-xs ${designMessage.kind==='error'?'text-red-700':'text-emerald-700'}`}>{designMessage.text}</p>}
     <div className="mt-3 flex flex-wrap gap-2">{additions.map(([type, label]) => <button key={type} onClick={() => onAdd(type)} className="rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100">+ {label}</button>)}<label className="cursor-pointer rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100">+ Artwork<input className="sr-only" type="file" accept=".svg,image/svg+xml" multiple onChange={event=>{if(event.target.files?.length)onAddArtwork(event.target.files);event.target.value='';}}/></label></div>
     {artworkMessage&&<p className="mt-2 text-xs text-amber-700">{artworkMessage}</p>}
     <div className="mt-3 min-h-0 space-y-1 overflow-y-auto">{elements.map((element, index) => {
