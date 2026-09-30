@@ -28,12 +28,14 @@ import { buildGuideSet, BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/guide-te
 import GuideOverlay from '@/components/preview/GuideOverlay';
 import ConstructionGuideControls from '@/components/guidelines/ConstructionGuideControls';
 import { computeCurvedTitleLayout, type CurvedTitlePlace } from '@/lib/curved-title/model';
-import { createDefaultCurvedTitleSettings } from '@/lib/curved-title/settings';
+import { createDefaultCurvedTitleSettings, type CurvedTitleCurveId } from '@/lib/curved-title/settings';
+import { fitCustomCurve, type CustomCurve } from '@/lib/curved-title/custom-curve';
+import CustomCurveUpload from '@/components/curved-title/CustomCurveUpload';
 
 import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 
 type PaperId = keyof typeof PAPERS_MM;
-type CurvePresetId = 'simpleArch' | 'highArch' | 'shallowArch' | 'compoundArch' | 'zanerian';
+type CurvePresetId = CurvedTitleCurveId;
 type Orientation = 'portrait' | 'landscape';
 type AlignMode = 'start' | 'center' | 'end';
 type ViewMode = 'autofit' | 'fullpage' | 'custom';
@@ -429,6 +431,7 @@ export default function CurvedTitlePage() {
 
   const [script, setScript] = useState<ScriptId>(curvedTitleDefaults.script);
   const [curve, setCurve] = useState<CurvePresetId>(curvedTitleDefaults.curve);
+  const [customCurve, setCustomCurve] = useState<CustomCurve>();
   const [flipCurve, setFlipCurve] = useState(curvedTitleDefaults.flipCurve);
   const [align, setAlign] = useState<AlignMode>(curvedTitleDefaults.align);
   const [text, setText] = useState(curvedTitleDefaults.text);
@@ -788,7 +791,7 @@ export default function CurvedTitlePage() {
 
   // ---------- Curve geometry ----------
   const cubicRaw = useMemo<PtCubic>(() => {
-    const base = buildPreset(curve, box);
+    const base = buildPreset(curve === 'custom' ? 'simpleArch' : curve, box);
     if (!flipCurve) return base;
 
     const flipped = flipCubicVertically(base, box.h);
@@ -811,6 +814,7 @@ export default function CurvedTitlePage() {
 
 
   const baselineBase = useMemo<Pt[]>(() => {
+    if (curve === 'custom') return fitCustomCurve(customCurve ?? { filename: '', aspectRatio: 0, points: [{ x: -.5, y: 0 }, { x: .5, y: 0 }] }, box, scalePct / 100, rotDeg, flipCurve);
     const extra = (cubic as PtCubic)._extraSegs;
     if (extra && extra.length) {
       const pts: Pt[] = [];
@@ -826,7 +830,7 @@ export default function CurvedTitlePage() {
       return pts;
     }
     return sample(cubic.p0, cubic.p1, cubic.p2, cubic.p3, 900);
-  }, [cubic]);
+  }, [cubic, curve, customCurve, box, scalePct, rotDeg, flipCurve]);
 
   const baselineBaseCenterX = useMemo(() => {
     if (!baselineBase.length) return box.w / 2;
@@ -1977,8 +1981,10 @@ export default function CurvedTitlePage() {
                   <option value="shallowArch">Shallow Arch</option>
                   <option value="compoundArch">Compound Arch</option>
                   <option value="zanerian">Zanerian Resolution</option>
+                  <option value="custom">Custom</option>
                 </select>
               </InsetLabeledField>
+              {curve === 'custom' && <CustomCurveUpload value={customCurve} onChange={setCustomCurve} />}
             </div>
 
             <div className="sm:col-span-2">

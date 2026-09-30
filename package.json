@@ -9,7 +9,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:layout-shapes": "node --experimental-strip-types --test scripts/layout-shape-geometry.test.ts"
+    "test:layout-shapes": "node --experimental-strip-types --test scripts/layout-shape-geometry.test.ts",
+    "test:custom-curves": "node --experimental-strip-types --test scripts/custom-curved-title.test.ts"
   },
   "dependencies": {
     "react": "19.2.0",

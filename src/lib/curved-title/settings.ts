@@ -1,12 +1,14 @@
 import type { CurvePresetId } from '@/lib/curve-helpers';
 import type { ScriptId } from '@/lib/scripts';
+import type { CustomCurve } from './custom-curve';
 import { BLACKLETTER_GUIDE_DEFAULTS, DEFAULT_CONSTRUCTION_GUIDES, DEFAULT_HORIZONTAL_GRID_APPEARANCE, type ConstructionGuideSettings, type HorizontalGridAppearance } from '@/lib/guides/guide-template';
 
 export type CurvedTitleAlign = 'start' | 'center' | 'end';
 export type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 
+export type CurvedTitleCurveId = CurvePresetId | 'custom';
 export type CurvedTitleSettings = {
-  script: ScriptId; curve: CurvePresetId; flipCurve: boolean; align: CurvedTitleAlign; text: string;
+  script: ScriptId; curve: CurvedTitleCurveId; customCurve?: CustomCurve; flipCurve: boolean; align: CurvedTitleAlign; text: string;
   xHeightMM: number; capStyle: 'simple' | 'flourished'; nibText: string; penAngleDeg: 35 | 40 | 45;
   xNib: number; ascNib: number; descNib: number;
   copperplateRatioPreset: CopperplateRatioPreset;
