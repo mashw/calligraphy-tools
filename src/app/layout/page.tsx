@@ -5,7 +5,7 @@ import LayoutInspector from '@/components/layout/LayoutInspector';
 import LayoutStage from '@/components/layout/LayoutStage';
 import LayersPanel, { type DesignMessage } from '@/components/layout/LayersPanel';
 import { defaultArtworkSize, newElement, pageElement, pageSize, type ElementType, type Frame, type LayoutElement } from '@/lib/layout/types';
-import { buildGuidelinesLineLayoutPlan, buildGuidelinesTextFitPlan, buildGuidelinesVisibilityCacheKey, getCachedGuidelinesVisibleSpans, resolveTextFitColors, TEXT_FIT_COLORS, preferredTextFitColorIndex, type GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
+import { buildGuidelinesLineLayoutPlan, buildGuidelinesTextFitPlan, buildGuidelinesVisibilityCacheKey, getCachedGuidelinesCollisionSpans, getCachedGuidelinesPlacementSpans, resolveTextFitColors, TEXT_FIT_COLORS, preferredTextFitColorIndex, type GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 import { sanitizeArtworkSvg } from '@/lib/layout/artwork';
 import { pageContentRect } from '@/lib/layout/geometry';
 import { parseLayoutDesign, serializeLayoutDesign } from '@/lib/layout/design-file';
@@ -18,7 +18,7 @@ export default function LayoutPage() {
   const selected = elements.find(element => element.id === selectedId) ?? elements[elements.length - 1];
   const page = elements.find(element => element.type === 'page')!;
   const allGuidelines=elements.filter((item):item is Extract<LayoutElement,{type:'guidelines'}>=>item.type==='guidelines'),activeGuidelines=allGuidelines.filter(item=>item.textMode==='estimate'?!!item.fitText.trim():item.plannedLines.some(line=>!!line.text.trim())),colors=resolveTextFitColors(allGuidelines.map(item=>item.id).sort());
-  const textFitPlans=activeGuidelines.reduce<Record<string,GuidelinesTextFitEntry>>((plans,item)=>{const index=elements.findIndex(element=>element.id===item.id),key=buildGuidelinesVisibilityCacheKey(item,page,elements.slice(0,index)),spans=getCachedGuidelinesVisibleSpans(key,item,page,elements);plans[item.id]=item.textMode==='estimate'?{mode:'estimate',plan:buildGuidelinesTextFitPlan(item,spans),color:colors[item.id]}:{mode:'line-layout',plan:buildGuidelinesLineLayoutPlan(item,spans,page),color:colors[item.id]};return plans;},{});
+  const textFitPlans=activeGuidelines.reduce<Record<string,GuidelinesTextFitEntry>>((plans,item)=>{const index=elements.findIndex(element=>element.id===item.id),key=buildGuidelinesVisibilityCacheKey(item,page,elements.slice(0,index)),collisionSpans=getCachedGuidelinesCollisionSpans(key,item,page,elements),placementSpans=getCachedGuidelinesPlacementSpans(item,page);plans[item.id]=item.textMode==='estimate'?{mode:'estimate',plan:buildGuidelinesTextFitPlan(item,placementSpans),color:colors[item.id]}:{mode:'line-layout',plan:buildGuidelinesLineLayoutPlan(item,placementSpans,page,collisionSpans),color:colors[item.id]};return plans;},{});
   const selectedTextFitEntry=selected.type==='guidelines'?(textFitPlans[selected.id]??(selected.textMode==='estimate'?{mode:'estimate',plan:buildGuidelinesTextFitPlan(selected,[]),color:TEXT_FIT_COLORS[preferredTextFitColorIndex(selected.id)]}:{mode:'line-layout',plan:buildGuidelinesLineLayoutPlan(selected,[],page),color:TEXT_FIT_COLORS[preferredTextFitColorIndex(selected.id)]})):null;
   const markEdited=()=>setDesignMessage(null);
   const update = (id: string, fn: (element: LayoutElement) => LayoutElement) => { markEdited(); setElements(current => current.map(element => element.id === id ? fn(element) : element)); };
