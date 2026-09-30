@@ -1,11 +1,12 @@
 import { buildGuideSet } from '@/lib/guides/guide-template';
 import type { Pt } from '@/lib/guides/guide-template';
 import type { GuidelinesSettings } from './settings';
+import { blackletterVerticalMetricsMM, effectiveBlackletterNibMM, resolveBlackletterGridWidthMM } from './blackletter';
 
 export function calculateGuidelinesVerticalMetrics(settings: GuidelinesSettings) {
   const { script, nibMM } = settings;
   const heights = (() => {
-    if (script !== 'Copperplate') return { xMM: settings.xNib * nibMM, ascMM: settings.ascNib * nibMM, descMM: settings.descNib * nibMM };
+    if (script !== 'Copperplate') return blackletterVerticalMetricsMM(nibMM, settings.xNib, settings.ascNib, settings.descNib);
     if (settings.copperplateRatioPreset === 'custom') return {
       xMM: settings.xHeightMM * settings.copperplateUnits.x,
       ascMM: settings.xHeightMM * settings.copperplateUnits.asc,
@@ -32,7 +33,7 @@ export function getNearestCompleteGuidelinesHeight(settings: GuidelinesSettings,
 
 export function calculateStraightGuidelines(box: { width: number; height: number }, settings: GuidelinesSettings) {
   const { script, nibMM } = settings;
-  const effectiveNibMM = script === 'Copperplate' ? nibMM : nibMM * Math.cos(settings.penAngleDeg * Math.PI / 180);
+  const effectiveNibMM = script === 'Copperplate' ? nibMM : effectiveBlackletterNibMM(nibMM, settings.penAngleDeg);
   const { lineHeightMM: lineHeight, rowStepMM, ...heights } = calculateGuidelinesVerticalMetrics(settings);
   const startY = settings.margins.top + heights.ascMM + heights.xMM;
   const overshootEndY = box.height + lineHeight + rowStepMM;
@@ -40,7 +41,7 @@ export function calculateStraightGuidelines(box: { width: number; height: number
   const baselinePositions = Array.from({ length: count + 1 }, (_, index) => startY + index * rowStepMM);
   const guideSets = baselinePositions.map(y => {
     const baseline: Pt[] = [{ x: settings.margins.left, y }, { x: box.width - settings.margins.right, y }];
-    const gridUnitMM = settings.grid.widthMode === 'actual' ? nibMM : effectiveNibMM;
+    const gridUnitMM = resolveBlackletterGridWidthMM(settings.grid.widthMode, nibMM, settings.penAngleDeg, settings.grid.customWidthMM);
     return buildGuideSet(script === 'Copperplate' ? 'copperplate' : 'blackletter', {
       baseline, ...heights, tickStepMM: script === 'Copperplate' ? Math.max(heights.xMM * .9, 3) : gridUnitMM, actualNibMM: nibMM,
       penAngleDeg: settings.penAngleDeg, blackletterScript: script === 'Copperplate' ? undefined : script,

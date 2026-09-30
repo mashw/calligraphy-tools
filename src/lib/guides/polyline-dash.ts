@@ -1,4 +1,6 @@
 export type DashPoint={x:number;y:number};
+export const CRICUT_PRIMARY_GUIDE_DASH_MM=6;
+export const CRICUT_PRIMARY_GUIDE_GAP_MM=4;
 const EPS=1e-7;
 const distance=(a:DashPoint,b:DashPoint)=>Math.hypot(b.x-a.x,b.y-a.y);
 const interpolate=(a:DashPoint,b:DashPoint,t:number):DashPoint=>({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t});
@@ -17,4 +19,11 @@ export function dashPolylinePoints(points:DashPoint[],dashMM:number,gapMM:number
 
 export function dashHorizontalGuidePoints(guides:DashPoint[][],appearance:{style:'solid'|'dashed';dashMM:number;gapMM:number}){
   return guides.flatMap((points,index)=>(appearance.style==='dashed'?dashPolylinePoints(points,appearance.dashMM,appearance.gapMM):[points]).map(points=>({guideIndex:index,points})));
+}
+
+/** Applies the Cricut-only primary-line treatment without affecting any grid geometry. */
+export function cricutGuidePathSegments(kind:'asc'|'waist'|'base'|'desc',points:DashPoint[],enabled:boolean){
+  return enabled&&(kind==='waist'||kind==='base')
+    ? dashPolylinePoints(points,CRICUT_PRIMARY_GUIDE_DASH_MM,CRICUT_PRIMARY_GUIDE_GAP_MM)
+    : [points];
 }

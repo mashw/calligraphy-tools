@@ -1,5 +1,9 @@
 import { lengthPoly, offset, pointAt, pointAtExtended } from '@/lib/curve-helpers';
 import { blackletterConstructionDistances } from '@/lib/guides/construction-guide-offsets';
+import { BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/straight/blackletter';
+import { nibEdgeMarkerSegment, resolveConstructionGuideSettings, xMarkerSegments, type ConstructionGuideAppearance, type ConstructionGuideSettings } from '@/lib/guides/construction-guide-markers';
+export { BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/straight/blackletter';
+export { CONSTRUCTION_GUIDE_DOT_RADIUS_MM, DEFAULT_CONSTRUCTION_GUIDES, resolveConstructionGuideSettings, type ConstructionGuideAppearance, type ConstructionGuideSettings } from '@/lib/guides/construction-guide-markers';
 export { DEFAULT_HORIZONTAL_GRID_APPEARANCE, resolveHorizontalGridAppearance, type HorizontalGridAppearance, type HorizontalGridLineStyle } from './horizontal-grid';
 
 
@@ -20,23 +24,8 @@ export type GuideSet = {
 
 export type BlackletterScript = 'Fraktur' | 'TexturaQuadrata';
 export type ConstructionGuideKind = 'downstrokeStart' | 'spurHeight' | 'upperQuadrantStart' | 'lowerQuadrantStart';
-export type ConstructionGuideAppearance = 'dashed' | 'dots';
-export type ConstructionGuide = { kind: ConstructionGuideKind; line: Pt[]; markerPoints: Pt[]; offsetMM: number; appearance: ConstructionGuideAppearance; dotEvery: number; color: string };
-export type ConstructionGuideSettings = { upper: boolean; lower: boolean; color: string; appearance?: ConstructionGuideAppearance; upperAppearance?: ConstructionGuideAppearance; lowerAppearance?: ConstructionGuideAppearance; dotEvery?: number };
-export const DEFAULT_CONSTRUCTION_GUIDES: ConstructionGuideSettings = { upper: false, lower: false, color: '#dc2626' };
-
-export function resolveConstructionGuideSettings(script: BlackletterScript, value?: Partial<ConstructionGuideSettings>) {
-  const dotEvery = Number.isFinite(value?.dotEvery) ? Math.max(1, Math.min(12, Math.round(value!.dotEvery!))) : 3;
-  const defaultAppearance = script === 'Fraktur' ? 'dots' : 'dashed';
-  return {
-    upper: value?.upper ?? DEFAULT_CONSTRUCTION_GUIDES.upper,
-    lower: value?.lower ?? DEFAULT_CONSTRUCTION_GUIDES.lower,
-    color: value?.color ?? DEFAULT_CONSTRUCTION_GUIDES.color,
-    upperAppearance: value?.upperAppearance ?? value?.appearance ?? defaultAppearance,
-    lowerAppearance: value?.lowerAppearance ?? value?.appearance ?? defaultAppearance,
-    dotEvery,
-  };
-}
+export type MarkerSegment = { a: Pt; b: Pt };
+export type ConstructionGuide = { kind: ConstructionGuideKind; line: Pt[]; markerPoints: Pt[]; nibEdgeSegments: MarkerSegment[]; xSegments: MarkerSegment[]; offsetMM: number; appearance: ConstructionGuideAppearance; dotEvery: number; color: string };
 
 export function constructionGuideDotPoints(guide: Pick<ConstructionGuide, 'markerPoints' | 'dotEvery'>) {
   return guide.markerPoints.filter((_, index) => index % guide.dotEvery === 0);
@@ -60,12 +49,6 @@ export type GuideTemplateParams = {
 };
 
 
-export const BLACKLETTER_GUIDE_DEFAULTS = {
-  xNib: 5,
-  ascNib: 3,
-  descNib: 2,
-};
-
 const COPPERPLATE_SLANT_DEG = 55;
 
 export function blackletterGuideHeightsMM(nibMM: number) {
@@ -88,7 +71,7 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
 
   const step = Math.max(0.0001, tickStepMM ?? 1);
   const ticks: { a: Pt; b: Pt }[] = [];
-  const uprightSamples: { p: Pt; n: Pt }[] = [];
+  const uprightSamples: { p: Pt; n: Pt; t: Pt }[] = [];
   const arcLen = lengthPoly(baseline);
 
   const isClosed = (() => {
@@ -117,8 +100,8 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
         // Closed loops: avoid drawing both s=0 and s=arcLen (same physical seam).
         if (isClosed && sClamped >= arcLen - 1e-9) continue;
 
-    const { p, n } = pointAt(baseline, sClamped);
-    uprightSamples.push({ p, n });
+    const { p, n, t } = pointAt(baseline, sClamped);
+    uprightSamples.push({ p, n, t });
 
     ticks.push({
       a: { x: p.x + n.x * topScalar * normalSign, y: p.y + n.y * topScalar * normalSign },
@@ -225,7 +208,11 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
   if (actualNibMM && params.blackletterScript) {
     const distances = blackletterConstructionDistances(actualNibMM, params.penAngleDeg ?? 45, params.blackletterScript);
     const offBase = invertGuides ? -xMM * normalSign : 0;
-    const add = (kind: ConstructionGuideKind, d: number) => constructionGuides.push({ kind, offsetMM: d, line: offset(baseline, d), markerPoints: uprightSamples.map(({ p, n }) => ({ x: p.x + n.x * d * normalSign, y: p.y + n.y * d * normalSign })), appearance: kind === 'downstrokeStart' || kind === 'upperQuadrantStart' ? construction!.upperAppearance : construction!.lowerAppearance, dotEvery: construction!.dotEvery, color: construction!.color });
+    const add = (kind: ConstructionGuideKind, d: number) => {
+      const samples = uprightSamples.map(({ p, n, t }) => ({ point: { x: p.x + n.x * d * normalSign, y: p.y + n.y * d * normalSign }, tangent: t }));
+      const selected = samples.filter((_, index) => index % construction!.dotEvery === 0);
+      constructionGuides.push({ kind, offsetMM: d, line: offset(baseline, d), markerPoints: samples.map(sample => sample.point), nibEdgeSegments: selected.map(sample => nibEdgeMarkerSegment(sample.point, sample.tangent, actualNibMM, params.penAngleDeg ?? 45, kind === 'downstrokeStart' ? 'right-edge' : 'center')), xSegments: selected.flatMap(sample => xMarkerSegments(sample.point)), appearance: kind === 'downstrokeStart' || kind === 'upperQuadrantStart' ? construction!.upperAppearance : construction!.lowerAppearance, dotEvery: construction!.dotEvery, color: construction!.color });
+    };
     const offWaist = invertGuides ? 0 : -xMM * normalSign;
 const directionTowardBaseline = Math.sign(offBase - offWaist);
 

@@ -302,6 +302,7 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
               ['slantGuides', 'Primary slant guides'],
               ['secondarySlantGuides', 'Secondary slant guides'],
               ['midpointReferences', 'Copperplate midpoint references'],
+              ['dashedBaselineWaistline', 'Dash baseline + waistline'],
               ['constructionGrid', 'Construction grid / ticks'],
               ['constructionGuides', 'Semantic construction guides'],
               ['nibAngleMarker', 'Nib-angle marker'],

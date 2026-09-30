@@ -1,7 +1,7 @@
 import React, { useId } from 'react';
 
 import { pathD } from '@/lib/curve-helpers';
-import { constructionGuideDotPoints, type GuideSet } from '@/lib/guides/guide-template';
+import { CONSTRUCTION_GUIDE_DOT_RADIUS_MM, constructionGuideDotPoints, type GuideSet } from '@/lib/guides/guide-template';
 import { dashPolylinePoints } from '@/lib/guides/polyline-dash';
 
 type GuideOverlayProps = {
@@ -194,7 +194,10 @@ export default function GuideOverlay({
         })}
 
         {guideSet.constructionGuides?.map(guide => guide.appearance === 'dots'
-          ? <g key={guide.kind}>{constructionGuideDotPoints(guide).map((point, index) => <circle key={index} cx={point.x} cy={point.y} r={0.35} fill={colors.construction ?? guide.color ?? '#dc2626'} />)}</g>
+          ? <g key={guide.kind}>{constructionGuideDotPoints(guide).map((point, index) => <circle key={index} cx={point.x} cy={point.y} r={CONSTRUCTION_GUIDE_DOT_RADIUS_MM} fill={colors.construction ?? guide.color ?? '#dc2626'} />)}</g>
+          : null)}
+        {guideSet.constructionGuides?.map(guide => guide.appearance === 'nib-edge' || guide.appearance === 'x'
+          ? <g key={guide.kind}>{(guide.appearance === 'nib-edge' ? guide.nibEdgeSegments : guide.xSegments).map((segment, index) => <line key={index} x1={segment.a.x} y1={segment.a.y} x2={segment.b.x} y2={segment.b.y} stroke={colors.construction ?? guide.color ?? '#dc2626'} strokeWidth={gridThin ?? style.thin} vectorEffect="non-scaling-stroke" />)}</g>
           : null)}
 
         {markerData && (() => {

@@ -1,7 +1,7 @@
 import { buildCalligramModel } from '@/lib/calligram/model';
 import { buildCurvedTitleModel } from '@/lib/curved-title/model';
 import { buildStraightSlantLines, calculateStraightGuidelines } from '@/lib/guides/straight/model';
-import { constructionGuideDotPoints, resolveHorizontalGridAppearance, type ConstructionGuideAppearance, type HorizontalGridAppearance } from '@/lib/guides/guide-template';
+import { CONSTRUCTION_GUIDE_DOT_RADIUS_MM, constructionGuideDotPoints, resolveHorizontalGridAppearance, type ConstructionGuideAppearance, type HorizontalGridAppearance } from '@/lib/guides/guide-template';
 import { occupiedRect } from '@/lib/layout/geometry';
 import { pathHasOnlyClosedSubpaths, type ArtworkNode } from '@/lib/layout/artwork';
 import { expandedShapeFrame, shapeBoundaryPoints, shapeContainsPoint, shapeFootprintContains } from '@/lib/layout/shape';
@@ -9,7 +9,8 @@ import { pageSize, type Frame, type LayoutElement, type PageElement } from '@/li
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 import { drawableGeometryBounds, serializePlotterSvg, type ExportLayering, type PlotterSvgLayer } from './plotter-svg';
 import { artworkBoundsContains, usesArtworkBoundsOcclusion } from './artwork-occlusion';
-import { dashHorizontalGuidePoints, dashPolylinePoints } from '../guides/polyline-dash';
+import { cricutGuidePathSegments, dashHorizontalGuidePoints, dashPolylinePoints } from '../guides/polyline-dash';
+export { CRICUT_PRIMARY_GUIDE_DASH_MM, CRICUT_PRIMARY_GUIDE_GAP_MM } from '../guides/polyline-dash';
 
 /**
  * Cricut/plotter export invariant:
@@ -27,6 +28,7 @@ export type PlotterExportOptions = {
   slantGuides: boolean;
   secondarySlantGuides: boolean;
   midpointReferences: boolean;
+  dashedBaselineWaistline: boolean;
   constructionGrid: boolean;
   constructionGuides: boolean;
   nibAngleMarker: boolean;
@@ -41,6 +43,7 @@ export const DEFAULT_PLOTTER_EXPORT_OPTIONS: PlotterExportOptions = {
   slantGuides: true,
   secondarySlantGuides: true,
   midpointReferences: true,
+  dashedBaselineWaistline: true,
   constructionGrid: true,
   constructionGuides: true,
   nibAngleMarker: false,
@@ -83,7 +86,7 @@ type GuideLike = {
   descLine: Pt[];
   ticks?: { a: Pt; b: Pt }[];
   hGuides?: Pt[][];
-  constructionGuides?: { kind: string; line: Pt[]; markerPoints: Pt[]; appearance: ConstructionGuideAppearance; dotEvery: number }[];
+  constructionGuides?: { kind: string; line: Pt[]; markerPoints: Pt[]; nibEdgeSegments: { a: Pt; b: Pt }[]; xSegments: { a: Pt; b: Pt }[]; appearance: ConstructionGuideAppearance; dotEvery: number }[];
 };
 
 type Occluder = {
@@ -436,6 +439,7 @@ function guideSetPolylines(
     ticks?: boolean;
     hGuides?: boolean;
     horizontalGridAppearance?:HorizontalGridAppearance;
+    dashedBaselineWaistline?:boolean;
     nibAngleMarker?: boolean;
     nibAngleDeg?: number;
     constructionGuides?: boolean;
@@ -453,7 +457,7 @@ function guideSetPolylines(
     base: guide.baseLine,
     desc: guide.descLine,
   };
-  keys.forEach(key => add(paths[key], key));
+  keys.forEach(key => cricutGuidePathSegments(key, paths[key], options?.dashedBaselineWaistline ?? false).forEach((points,index) => add(points, `${key}${index ? `-${index}` : ''}`)));
 
   const bandXs = guide.ascLine.map(point => point.x).concat(guide.descLine.map(point => point.x));
   const bandYs = guide.ascLine.map(point => point.y).concat(guide.descLine.map(point => point.y));
@@ -480,7 +484,15 @@ function guideSetPolylines(
     (guide.constructionGuides ?? []).forEach(item => {
       if (item.appearance === 'dots') {
         constructionGuideDotPoints(item).forEach((point, index) => {
-          const marker = circleOutline(point.x, point.y, 0.35, `${source}:construction-${item.kind}-dot-${index}`);
+          const marker = circleOutline(point.x, point.y, CONSTRUCTION_GUIDE_DOT_RADIUS_MM, `${source}:construction-${item.kind}-dot-${index}`);
+          if (marker) result.push(...(bandRect ? clipPolylineToRect(marker, bandRect) : [marker]));
+        });
+        return;
+      }
+      if (item.appearance === 'nib-edge' || item.appearance === 'x') {
+        const segments = item.appearance === 'nib-edge' ? item.nibEdgeSegments : item.xSegments;
+        segments.forEach((segment, index) => {
+          const marker = linePolyline(segment.a, segment.b, `${source}:construction-${item.kind}-${item.appearance}-${index}`);
           if (marker) result.push(...(bandRect ? clipPolylineToRect(marker, bandRect) : [marker]));
         });
         return;
@@ -534,6 +546,7 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
         ticks: settings.script !== 'Copperplate' && options.constructionGrid,
         hGuides: settings.script !== 'Copperplate' && options.constructionGrid,
         horizontalGridAppearance,
+        dashedBaselineWaistline: options.dashedBaselineWaistline,
         nibAngleMarker: settings.script !== 'Copperplate' && options.nibAngleMarker,
         nibAngleDeg: settings.penAngleDeg,
         constructionGuides: options.constructionGuides,
@@ -624,7 +637,7 @@ function curvedTitlePolylines(element: Extract<LayoutElement, { type: 'curved-ti
   const model = buildCurvedTitleModel({ w: element.frame.width, h: element.frame.height }, element.settings);
   const result: PlotPolyline[] = [];
   const horizontalGridAppearance=resolveHorizontalGridAppearance(element.settings.horizontalGridAppearance);
-  result.push(...guideSetPolylines(model.guideSet as GuideLike, `curved:${element.id}:main`, { ticks: options.constructionGrid, hGuides: options.constructionGrid, horizontalGridAppearance:element.settings.script==='Copperplate'?undefined:horizontalGridAppearance, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
+  result.push(...guideSetPolylines(model.guideSet as GuideLike, `curved:${element.id}:main`, { ticks: options.constructionGrid, hGuides: options.constructionGrid, horizontalGridAppearance:element.settings.script==='Copperplate'?undefined:horizontalGridAppearance, dashedBaselineWaistline:options.dashedBaselineWaistline, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
   if (options.midpointReferences && model.midAscPts) {
     const base = polyline(model.midAscPts, `curved:${element.id}:mid-asc`);
     if (base) result.push(...dashPolyline(base, 10, 12));
@@ -634,10 +647,10 @@ function curvedTitlePolylines(element: Extract<LayoutElement, { type: 'curved-ti
     if (base) result.push(...dashPolyline(base, 10, 12));
   }
   if (model.top.enabled) {
-    result.push(...guideSetPolylines(model.top.guideSet as GuideLike, `curved:${element.id}:top`, { pathKeys: ['asc', 'waist'], ticks: options.constructionGrid, hGuides: options.constructionGrid, horizontalGridAppearance:element.settings.topBandScript==='Copperplate'?undefined:horizontalGridAppearance, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
+    result.push(...guideSetPolylines(model.top.guideSet as GuideLike, `curved:${element.id}:top`, { pathKeys: ['asc', 'waist'], ticks: options.constructionGrid, hGuides: options.constructionGrid, horizontalGridAppearance:element.settings.topBandScript==='Copperplate'?undefined:horizontalGridAppearance, dashedBaselineWaistline:options.dashedBaselineWaistline, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
   }
   if (model.bottom.enabled) {
-    result.push(...guideSetPolylines(model.bottom.guideSet as GuideLike, `curved:${element.id}:bottom`, { pathKeys: ['base', 'desc'], ticks: options.constructionGrid, hGuides: options.constructionGrid, horizontalGridAppearance:element.settings.bottomBandScript==='Copperplate'?undefined:horizontalGridAppearance, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
+    result.push(...guideSetPolylines(model.bottom.guideSet as GuideLike, `curved:${element.id}:bottom`, { pathKeys: ['base', 'desc'], ticks: options.constructionGrid, hGuides: options.constructionGrid, horizontalGridAppearance:element.settings.bottomBandScript==='Copperplate'?undefined:horizontalGridAppearance, dashedBaselineWaistline:options.dashedBaselineWaistline, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
   }
   return translatePolylines(result, element.frame.x, element.frame.y);
 }
@@ -645,7 +658,7 @@ function curvedTitlePolylines(element: Extract<LayoutElement, { type: 'curved-ti
 function calligramPolylines(element: Extract<LayoutElement, { type: 'calligram' }>, options: PlotterExportOptions) {
   const model = buildCalligramModel({ w: element.frame.width, h: element.frame.height }, element.settings);
   const horizontalGridAppearance=resolveHorizontalGridAppearance(element.settings.horizontalGridAppearance);
-  const guideOptions=(script:typeof element.settings.script)=>({ ticks: options.constructionGrid, hGuides: options.constructionGrid, horizontalGridAppearance:script==='Copperplate'?undefined:horizontalGridAppearance, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg });
+  const guideOptions=(script:typeof element.settings.script)=>({ ticks: options.constructionGrid, hGuides: options.constructionGrid, horizontalGridAppearance:script==='Copperplate'?undefined:horizontalGridAppearance, dashedBaselineWaistline:options.dashedBaselineWaistline, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg });
   const main = guideSetPolylines(model.main.guideSet as GuideLike, `calligram:${element.id}:main`, guideOptions(element.settings.script));
   const mainBand = polygonOccluder([
     ...model.main.guideSet.ascLine,
