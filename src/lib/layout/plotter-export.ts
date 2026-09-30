@@ -2,7 +2,8 @@ import { buildCalligramModel } from '@/lib/calligram/model';
 import { buildCurvedTitleModel } from '@/lib/curved-title/model';
 import { buildStraightSlantLines, calculateStraightGuidelines } from '@/lib/guides/straight/model';
 import { CONSTRUCTION_GUIDE_DOT_RADIUS_MM, constructionGuideDotPoints, resolveHorizontalGridAppearance, type ConstructionGuideAppearance, type HorizontalGridAppearance } from '@/lib/guides/guide-template';
-import { occupiedRect } from '@/lib/layout/geometry';
+import { boundsOfRotatedFrame, inverseRotatePoint, occupiedRect, rotatePoint } from '@/lib/layout/geometry';
+import { elementRotationCenter } from '@/lib/layout/element-transform';
 import { pathHasOnlyClosedSubpaths, type ArtworkNode } from '@/lib/layout/artwork';
 import { expandedShapeFrame, shapeBoundaryPoints, shapeContainsPoint, shapeFootprintContains } from '@/lib/layout/shape';
 import { pageSize, type Frame, type LayoutElement, type PageElement } from '@/lib/layout/types';
@@ -153,6 +154,13 @@ function translatePoints(points: Pt[], dx: number, dy: number) {
 
 function translatePolylines(lines: PlotPolyline[], dx: number, dy: number) {
   return lines.map(line => ({ ...line, points: translatePoints(line.points, dx, dy) }));
+}
+
+export function rotatePlotterPoints(points:Pt[],centre:Pt,degrees:number){return points.map(point=>rotatePoint(point,centre,degrees));}
+function rotateElementPolylines(lines:PlotPolyline[],element:LayoutElement){
+  const degrees=element.type==='page'?0:element.rotationDeg??0;if(!degrees)return lines;
+  const centre=elementRotationCenter(element);
+  return lines.map(line=>({...line,points:rotatePlotterPoints(line.points,centre,degrees)}));
 }
 
 function closedPolyline(points: Pt[], source: string) {
@@ -345,7 +353,7 @@ function visualCalligramBounds(element: Extract<LayoutElement, { type: 'calligra
   return { x: element.frame.x + visual.x, y: element.frame.y + visual.y, width: visual.width, height: visual.height };
 }
 
-function elementOccluders(element: LayoutElement): Occluder[] {
+function unrotatedElementOccluders(element: LayoutElement): Occluder[] {
   if (element.type === 'page') return [];
   if (element.type === 'shape') return [shapeOccluder(element)];
   if (element.type === 'guidelines') {
@@ -368,6 +376,13 @@ function elementOccluders(element: LayoutElement): Occluder[] {
     ...band.guideSet.ascLine,
     ...[...band.guideSet.descLine].reverse(),
   ].map(point => ({ x: point.x + element.frame.x, y: point.y + element.frame.y })), element.paddingMM));
+}
+
+function elementOccluders(element:LayoutElement):Occluder[]{
+  const raw=unrotatedElementOccluders(element),degrees=element.type==='page'?0:element.rotationDeg??0;
+  if(!degrees)return raw;
+  const centre=elementRotationCenter(element);
+  return raw.map(occluder=>({bounds:boundsOfRotatedFrame(occluder.bounds,degrees,centre),contains:point=>occluder.contains(inverseRotatePoint(point,centre,degrees)),dispose:occluder.dispose}));
 }
 
 function isBlocked(point: Pt, occluders: Occluder[]) {
@@ -784,11 +799,12 @@ function sampleArtwork(element: Extract<LayoutElement, { type: 'artwork' }>, war
 
 function elementPolylines(element: LayoutElement, textFitEntry: GuidelinesTextFitEntry | null, warnings: string[], options: PlotterExportOptions) {
   if (element.type === 'page') return [];
-  if (element.type === 'guidelines') return straightGuidelinesPolylines(element, textFitEntry, options);
-  if (element.type === 'shape') return options.shapeOutlines ? shapeBoundaryPolylines(element) : [];
-  if (element.type === 'curved-title') return curvedTitlePolylines(element, options);
-  if (element.type === 'calligram') return calligramPolylines(element, options);
-  return sampleArtwork(element, warnings);
+  const lines=element.type === 'guidelines'?straightGuidelinesPolylines(element, textFitEntry, options)
+    :element.type === 'shape'?(options.shapeOutlines ? shapeBoundaryPolylines(element) : [])
+    :element.type === 'curved-title'?curvedTitlePolylines(element, options)
+    :element.type === 'calligram'?calligramPolylines(element, options)
+    :sampleArtwork(element, warnings);
+  return rotateElementPolylines(lines,element);
 }
 
 function pageCenterLinePolylines(pageElement: PageElement, page: { width: number; height: number }) {

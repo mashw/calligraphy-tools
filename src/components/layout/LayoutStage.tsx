@@ -2,15 +2,14 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { bakeExportStrokes, cloneSvgForRasterExport, computeRasterPxPerMM, jpegDataUrlToPdf, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
-import { occupiedRect, pageContentRect, resizeFrame, snapMove, type SnapState } from '@/lib/layout/geometry';
+import { inverseRotatePoint, normalizeDegrees, occupiedRect, pageContentRect, resizeFrame, rotatePoint, snapMove, type SnapState } from '@/lib/layout/geometry';
+import { elementRotationCenter, elementVisualFrame, rotatedElementBounds } from '@/lib/layout/element-transform';
 import { pageSize, resizeAspectMode, type Frame, type LayoutElement, type ResizeAspectMode, type ResizeHandle } from '@/lib/layout/types';
 import GuidelinesRenderer from '@/components/guidelines/GuidelinesRenderer';
 import ShapeElementRenderer, { ShapeGeometry } from '@/components/layout/ShapeElementRenderer';
 import { PAGE_BACKGROUND, shapePathData } from '@/lib/layout/shape';
 import CurvedTitleRenderer from '@/components/curved-title/CurvedTitleRenderer';
-import { buildCurvedTitleModel } from '@/lib/curved-title/model';
 import CalligramRenderer from '@/components/calligram/CalligramRenderer';
-import { buildCalligramModel } from '@/lib/calligram/model';
 import { getNearestCompleteGuidelinesHeight } from '@/lib/guides/straight/model';
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 import { buildPlotterExport, CRICUT_MATS, DEFAULT_PLOTTER_EXPORT_OPTIONS, getCricutSafeRect, type CricutMatId, type PlotterExportOptions } from '@/lib/layout/plotter-export';
@@ -21,8 +20,9 @@ type ViewMode = 'autofit' | 'fullpage' | 'custom';
 type Interaction =
   | { mode: 'none' }
   | { mode: 'pan'; pointerId: number; startClient: { x: number; y: number }; startPan: { x: number; y: number }; rect: DOMRect; vb: { w: number; h: number } }
-  | { mode: 'move'; pointerId: number; elementId: string; startClient: { x: number; y: number }; original: Frame; visualOriginal: Frame; rect: DOMRect; vb: { w: number; h: number }; live: Frame; liveVisual: Frame; snap: SnapState }
-  | { mode: 'resize'; pointerId: number; elementId: string; handle: ResizeHandle; startClient: { x: number; y: number }; original: Frame; visualOriginal: Frame; rect: DOMRect; vb: { w: number; h: number }; live: Frame; liveVisual: Frame; aspectMode: ResizeAspectMode; aspectRatio: number };
+  | { mode: 'move'; pointerId: number; elementId: string; startClient: { x: number; y: number }; original: Frame; visualOriginal: Frame; boundsOriginal:Frame; rect: DOMRect; vb: { w: number; h: number }; live: Frame; liveVisual: Frame; snap: SnapState }
+  | { mode: 'resize'; pointerId: number; elementId: string; handle: ResizeHandle; startClient: { x: number; y: number }; original: Frame; visualOriginal: Frame; rect: DOMRect; vb: { w: number; h: number }; live: Frame; liveVisual: Frame; aspectMode: ResizeAspectMode; aspectRatio: number; rotationDeg:number }
+  | {mode:'rotate';pointerId:number;elementId:string;original:Frame;live:Frame;rotationDeg:number;initialRotation:number;initialPointerAngle:number;centre:{x:number;y:number};rect:DOMRect;vb:{x:number;y:number;w:number;h:number}};
 
 const handles: { id: ResizeHandle; x: number; y: number; cursor: string }[] = [
   { id: 'nw', x: 0, y: 0, cursor: 'nwse-resize' }, { id: 'n', x: .5, y: 0, cursor: 'ns-resize' }, { id: 'ne', x: 1, y: 0, cursor: 'nesw-resize' },
@@ -31,14 +31,6 @@ const handles: { id: ResizeHandle; x: number; y: number; cursor: string }[] = [
 ];
 const control = 'shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm transition hover:bg-slate-50 active:scale-[.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500';
 const wholeFrame = (frame: Frame): Frame => ({ x: Math.round(frame.x), y: Math.round(frame.y), width: Math.max(4, Math.round(frame.width)), height: Math.max(4, Math.round(frame.height)) });
-
-function visualFrame(element: LayoutElement, frame: Frame): Frame {
-  if (element.type !== 'curved-title' && element.type !== 'calligram') return frame;
-  const bounds = element.type === 'curved-title'
-    ? buildCurvedTitleModel({ w: frame.width, h: frame.height }, element.settings).visualBounds
-    : buildCalligramModel({ w: frame.width, h: frame.height }, element.settings).visualBounds;
-  return { x: frame.x + bounds.x, y: frame.y + bounds.y, width: bounds.width, height: bounds.height };
-}
 
 function baseFrameFromVisualResize(base: Frame, visual: Frame, target: Frame): Frame {
   const scaleX = target.width / Math.max(.001, visual.width), scaleY = target.height / Math.max(.001, visual.height);
@@ -133,11 +125,11 @@ function constrainGuidelinesResize(frame: Frame, original: Frame, handle: Resize
 function stripNoExport(svg: SVGSVGElement) { svg.querySelectorAll('[data-no-export="true"], #stage-bg').forEach(node => node.remove()); }
 function download(blob: Blob, name: string) { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url); }
 
-export default function LayoutStage({ elements, selectedId, textFitPlans, onSelect, onCommit,onPlannedLinePlacementChange }: { elements: LayoutElement[]; selectedId: string; textFitPlans: Record<string,GuidelinesTextFitEntry>; onSelect: (id: string) => void; onCommit: (id: string, frame: Frame) => void;onPlannedLinePlacementChange:(guidelinesId:string,lineId:string,customStartMM:number)=>void }) {
+export default function LayoutStage({ elements, selectedId, textFitPlans, onSelect, onCommit,onPlannedLinePlacementChange }: { elements: LayoutElement[]; selectedId: string; textFitPlans: Record<string,GuidelinesTextFitEntry>; onSelect: (id: string) => void; onCommit: (id: string, frame: Frame, rotationDeg?:number) => void;onPlannedLinePlacementChange:(guidelinesId:string,lineId:string,customStartMM:number)=>void }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const interactionRef = useRef<Interaction>({ mode: 'none' });
   const paintPending = useRef(false);
-  const [livePaint, setLivePaint] = useState<{ id: string; frame: Frame; visual?: Frame } | null>(null);
+  const [livePaint, setLivePaint] = useState<{ id: string; frame: Frame; visual?: Frame; rotationDeg?:number } | null>(null);
   const [interactionActive, setInteractionActive] = useState(false);
   const [view, setView] = useState<ViewMode>('autofit');
   const [zoom, setZoom] = useState(1);
@@ -172,11 +164,19 @@ export default function LayoutStage({ elements, selectedId, textFitPlans, onSele
     if (e.button !== 0) return; e.preventDefault(); e.stopPropagation(); onSelect(element.id);
     if (element.locked || !svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
-    const visualOriginal = visualFrame(element, element.frame);
+    const visualOriginal = elementVisualFrame(element, element.frame);
+    const rotationDeg=element.rotationDeg??0;
     interactionRef.current = handle
-      ? { mode: 'resize', pointerId: e.pointerId, elementId: element.id, handle, startClient: { x: e.clientX, y: e.clientY }, original: element.frame, visualOriginal, live: element.frame, liveVisual: visualOriginal, rect, vb: { w: vb.w, h: vb.h }, aspectMode: resizeAspectMode(element), aspectRatio: visualOriginal.width / Math.max(0.001, visualOriginal.height) }
-      : { mode: 'move', pointerId: e.pointerId, elementId: element.id, startClient: { x: e.clientX, y: e.clientY }, original: element.frame, visualOriginal, live: element.frame, liveVisual: visualOriginal, rect, vb: { w: vb.w, h: vb.h }, snap: { x: null, y: null } };
+      ? { mode: 'resize', pointerId: e.pointerId, elementId: element.id, handle, startClient: { x: e.clientX, y: e.clientY }, original: element.frame, visualOriginal, live: element.frame, liveVisual: visualOriginal, rect, vb: { w: vb.w, h: vb.h }, aspectMode: resizeAspectMode(element), aspectRatio: visualOriginal.width / Math.max(0.001, visualOriginal.height),rotationDeg }
+      : { mode: 'move', pointerId: e.pointerId, elementId: element.id, startClient: { x: e.clientX, y: e.clientY }, original: element.frame, visualOriginal, boundsOriginal:rotatedElementBounds(element), live: element.frame, liveVisual: visualOriginal, rect, vb: { w: vb.w, h: vb.h }, snap: { x: null, y: null } };
     svgRef.current.setPointerCapture(e.pointerId); setInteractionActive(true);
+  };
+  const beginRotate=(e:React.PointerEvent<SVGElement>,element:LayoutElement)=>{
+    if(e.button!==0||element.type==='page'||element.locked||!svgRef.current)return;e.preventDefault();e.stopPropagation();onSelect(element.id);
+    const rect=svgRef.current.getBoundingClientRect(),centre=elementRotationCenter(element),px=vb.x+(e.clientX-rect.left)/rect.width*vb.w,py=vb.y+(e.clientY-rect.top)/rect.height*vb.h;
+    const rotationDeg=element.rotationDeg??0;
+    interactionRef.current={mode:'rotate',pointerId:e.pointerId,elementId:element.id,original:element.frame,live:element.frame,rotationDeg,initialRotation:rotationDeg,initialPointerAngle:Math.atan2(py-centre.y,px-centre.x),centre,rect,vb};
+    svgRef.current.setPointerCapture(e.pointerId);setInteractionActive(true);
   };
   const onStageDown = (e: React.PointerEvent<SVGSVGElement>) => {
     if (e.button !== 0 || e.target !== e.currentTarget) return; e.preventDefault();
@@ -186,21 +186,28 @@ export default function LayoutStage({ elements, selectedId, textFitPlans, onSele
   };
   const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
     const active = interactionRef.current; if (active.mode === 'none' || active.pointerId !== e.pointerId) return;
+    if(active.mode==='rotate'){
+      const px=active.vb.x+(e.clientX-active.rect.left)/active.rect.width*active.vb.w,py=active.vb.y+(e.clientY-active.rect.top)/active.rect.height*active.vb.h;
+      const delta=(Math.atan2(py-active.centre.y,px-active.centre.x)-active.initialPointerAngle)*180/Math.PI;
+      const free=active.initialRotation+delta;active.rotationDeg=normalizeDegrees(e.shiftKey?Math.round(free/15)*15:free);
+      setLivePaint({id:active.elementId,frame:active.live,rotationDeg:active.rotationDeg});return;
+    }
     const dx = (e.clientX - active.startClient.x) / active.rect.width * active.vb.w;
     const dy = (e.clientY - active.startClient.y) / active.rect.height * active.vb.h;
     if (active.mode === 'pan') { setView('custom'); setPan({ x: active.startPan.x - dx, y: active.startPan.y - dy }); return; }
     if (active.mode === 'move') {
       const element=elements.find(item=>item.id===active.elementId);
-      const internal=element?.type==='guidelines'?element.settings.margins:{top:0,right:0,bottom:0,left:0};
-      const unsnappedVisual = { ...active.visualOriginal, x: active.visualOriginal.x + dx, y: active.visualOriginal.y + dy };
-      const snapped = snapMove(unsnappedVisual, internal, pageRect, { x: 6 / active.rect.width * active.vb.w, y: 6 / active.rect.height * active.vb.h }, { x: 10 / active.rect.width * active.vb.w, y: 10 / active.rect.height * active.vb.h }, active.snap);
-      active.liveVisual=snapped.frame; active.live={...active.original,x:active.original.x+snapped.frame.x-active.visualOriginal.x,y:active.original.y+snapped.frame.y-active.visualOriginal.y}; active.snap=snapped.snap;
+      const internal=element?.type==='guidelines'&&!(element.rotationDeg??0)?element.settings.margins:{top:0,right:0,bottom:0,left:0};
+      const unsnappedBounds = { ...active.boundsOriginal, x: active.boundsOriginal.x + dx, y: active.boundsOriginal.y + dy };
+      const snapped = snapMove(unsnappedBounds, internal, pageRect, { x: 6 / active.rect.width * active.vb.w, y: 6 / active.rect.height * active.vb.h }, { x: 10 / active.rect.width * active.vb.w, y: 10 / active.rect.height * active.vb.h }, active.snap);
+      active.live={...active.original,x:active.original.x+snapped.frame.x-active.boundsOriginal.x,y:active.original.y+snapped.frame.y-active.boundsOriginal.y};active.liveVisual={...active.visualOriginal,x:active.visualOriginal.x+active.live.x-active.original.x,y:active.visualOriginal.y+active.live.y-active.original.y}; active.snap=snapped.snap;
     } else {
+      const localDelta=inverseRotatePoint({x:dx,y:dy},{x:0,y:0},active.rotationDeg);
       active.liveVisual=resizeFrame(
         active.visualOriginal,
         active.handle,
-        dx,
-        dy,
+        localDelta.x,
+        localDelta.y,
         active.aspectMode,
         active.aspectRatio,
       );
@@ -210,12 +217,18 @@ export default function LayoutStage({ elements, selectedId, textFitPlans, onSele
         active.live = constrainGuidelinesResize(active.live, active.original, active.handle, element.settings, 6 / active.rect.height * active.vb.h);
         active.liveVisual = active.live;
       }
+      const anchorX=active.handle.includes('w')?1:active.handle.includes('e')?0:.5,anchorY=active.handle.includes('n')?1:active.handle.includes('s')?0:.5;
+      const oldCentre={x:active.visualOriginal.x+active.visualOriginal.width/2,y:active.visualOriginal.y+active.visualOriginal.height/2},newCentre={x:active.liveVisual.x+active.liveVisual.width/2,y:active.liveVisual.y+active.liveVisual.height/2};
+      const desired=rotatePoint({x:active.visualOriginal.x+active.visualOriginal.width*anchorX,y:active.visualOriginal.y+active.visualOriginal.height*anchorY},oldCentre,active.rotationDeg);
+      const actual=rotatePoint({x:active.liveVisual.x+active.liveVisual.width*anchorX,y:active.liveVisual.y+active.liveVisual.height*anchorY},newCentre,active.rotationDeg);
+      const shift={x:desired.x-actual.x,y:desired.y-actual.y};active.live={...active.live,x:active.live.x+shift.x,y:active.live.y+shift.y};active.liveVisual={...active.liveVisual,x:active.liveVisual.x+shift.x,y:active.liveVisual.y+shift.y};
     }
 if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()=>{paintPending.current=false;setLivePaint({id:active.elementId,frame:active.live,visual:active.liveVisual});}); }
   };
   const finish = (e: React.PointerEvent<SVGSVGElement>) => {
     const active = interactionRef.current; if (active.mode === 'none' || active.pointerId !== e.pointerId) return;
     if (active.mode === 'move') onCommit(active.elementId, wholeFrame(active.live));
+    if(active.mode==='rotate')onCommit(active.elementId,active.live,active.rotationDeg);
     if (active.mode === 'resize') {
       const element = elements.find(item => item.id === active.elementId);
       const frame = element?.type === 'guidelines' && !element.allowPartialGuidelines && (active.handle.includes('n') || active.handle.includes('s'))
@@ -258,8 +271,10 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
         <rect x="0" y="0" width={page.width} height={page.height} fill={PAGE_BACKGROUND} stroke="#94a3b8" strokeWidth=".3" onPointerDown={e => { e.stopPropagation(); onSelect('page'); }} style={{ cursor: 'default' }} />
         {[...elements].reverse().filter(element => element.type !== 'page').map(element => {
           const frame = livePaint?.id === element.id ? livePaint.frame : element.frame;
-          const occupied = occupiedRect(element.type==='calligram'&&!(element.settings.transparentWhitespace??true)?visualFrame(element,frame):frame, element.paddingMM);
-          return <g key={element.id} data-export-layer-id={safeLayerId(element.name,element.id)} data-export-layer-name={element.name} onPointerDown={e => begin(e, element)} style={{ cursor: element.locked ? 'pointer' : 'move' }}>
+          const rotationDeg=livePaint?.id===element.id&&livePaint.rotationDeg!==undefined?livePaint.rotationDeg:element.rotationDeg??0;
+          const centre=elementRotationCenter(element,frame);
+          const occupied = occupiedRect(element.type==='calligram'&&!(element.settings.transparentWhitespace??true)?elementVisualFrame(element,frame):frame, element.paddingMM);
+          return <g key={element.id} transform={`rotate(${rotationDeg} ${centre.x} ${centre.y})`} data-export-layer-id={safeLayerId(element.name,element.id)} data-export-layer-name={element.name} onPointerDown={e => begin(e, element)} style={{ cursor: element.locked ? 'pointer' : 'move' }}>
             {element.type==='guidelines'&&element.mask?.enabled
               ? <path transform={`translate(${occupied.x} ${occupied.y})`} d={shapePathData(element.mask.kind,occupied.width,occupied.height,element.mask.cornerRadiusMM+Math.max(0,element.paddingMM))} fill={PAGE_BACKGROUND}/>
               : element.type !== 'shape' && element.type !== 'artwork' && !((element.type==='curved-title'||element.type==='calligram')&&(element.settings.transparentWhitespace??true)) && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
@@ -278,10 +293,12 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
           {pageElement.settings.centerLines.vertical&&<line x1={pageRect.x+pageRect.width/2} x2={pageRect.x+pageRect.width/2} y1={pageRect.y} y2={pageRect.y+pageRect.height} stroke="#818cf8" strokeWidth="1" strokeDasharray="5 4" strokeOpacity=".65" vectorEffect="non-scaling-stroke" />}
           {pageElement.settings.centerLines.horizontal&&<line x1={pageRect.x} x2={pageRect.x+pageRect.width} y1={pageRect.y+pageRect.height/2} y2={pageRect.y+pageRect.height/2} stroke="#818cf8" strokeWidth="1" strokeDasharray="5 4" strokeOpacity=".65" vectorEffect="non-scaling-stroke" />}
         </g>
-        {selected && selected.type !== 'page' && (() => { const baseFrame = livePaint?.id === selected.id ? livePaint.frame : selected.frame; const frame = livePaint?.id===selected.id&&livePaint.visual?livePaint.visual:visualFrame(selected,baseFrame); const occupied = occupiedRect(baseFrame, selected.paddingMM); return <g data-no-export="true">
+        {selected && selected.type !== 'page' && (() => { const baseFrame = livePaint?.id === selected.id ? livePaint.frame : selected.frame; const frame = livePaint?.id===selected.id&&livePaint.visual?livePaint.visual:elementVisualFrame(selected,baseFrame); const occupied = occupiedRect(baseFrame, selected.paddingMM);const rotationDeg=livePaint?.id===selected.id&&livePaint.rotationDeg!==undefined?livePaint.rotationDeg:selected.rotationDeg??0,centre={x:frame.x+frame.width/2,y:frame.y+frame.height/2},zone=10/Math.max(.001,zoom); return <g data-no-export="true" transform={`rotate(${rotationDeg} ${centre.x} ${centre.y})`}>
           {selected.type !== 'shape' && selected.type !== 'curved-title' && selected.type !== 'calligram' && selected.paddingMM > 0 && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill="none" stroke="#818cf8" strokeWidth="1" strokeDasharray="4 3" strokeOpacity=".55" vectorEffect="non-scaling-stroke" pointerEvents="none" />}
           <rect x={frame.x} y={frame.y} width={frame.width} height={frame.height} fill="none" stroke="#4f46e5" strokeWidth="1.25" strokeOpacity=".8" vectorEffect="non-scaling-stroke" pointerEvents="none" />
           {!selected.locked && handles.map(handle => { const x = frame.x + frame.width * handle.x; const y = frame.y + frame.height * handle.y; return <g key={handle.id} style={{ cursor: handle.cursor }} onPointerDown={e => begin(e, selected, handle.id)}><circle cx={x} cy={y} r="7" fill="transparent" vectorEffect="non-scaling-stroke" /><rect x={x - 1.8} y={y - 1.8} width="3.6" height="3.6" rx=".5" fill="white" stroke="#4f46e5" strokeWidth="1.2" vectorEffect="non-scaling-stroke" /></g>; })}
+          {!selected.locked&&handles.filter(handle=>handle.id.length===2).map(handle=>{const corner={x:frame.x+frame.width*handle.x,y:frame.y+frame.height*handle.y},vx=corner.x-centre.x,vy=corner.y-centre.y,length=Math.hypot(vx,vy)||1,x=corner.x+vx/length*zone,y=corner.y+vy/length*zone;return <circle key={`rotate-${handle.id}`} cx={x} cy={y} r={zone*.65} fill="transparent" pointerEvents="all" style={{cursor:'grab'}} onPointerDown={event=>beginRotate(event,selected)}/>})}
+          {livePaint?.id===selected.id&&livePaint.rotationDeg!==undefined&&<text x={frame.x+frame.width/2} y={frame.y-zone} textAnchor="middle" fontSize={12/Math.max(.001,zoom)} fill="#4338ca">{livePaint.rotationDeg.toFixed(1)}°</text>}
         </g>; })()}
       </svg>
     </div>

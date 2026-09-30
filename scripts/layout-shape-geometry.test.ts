@@ -7,6 +7,42 @@ import { isGuidelinesPlanningPointBlocked, selectLineLayoutSpan } from '../src/l
 import { artworkBoundsContains, usesArtworkBoundsOcclusion } from '../src/lib/layout/artwork-occlusion.ts';
 import { resolveHorizontalGridAppearance } from '../src/lib/guides/horizontal-grid.ts';
 import { dashHorizontalGuidePoints, dashPolylinePoints } from '../src/lib/guides/polyline-dash.ts';
+import { boundsOfRotatedFrame, inverseRotatePoint, normalizeDegrees, rotatePoint, rotatePoints } from '../src/lib/layout/geometry.ts';
+
+const close=(actual:number,expected:number,message?:string)=>assert(Math.abs(actual-expected)<1e-9,message??`${actual} should equal ${expected}`);
+
+test('Layout rotation geometry handles cardinal and arbitrary angles',()=>{
+  const origin={x:0,y:0},point={x:3,y:4};
+  assert.deepEqual(rotatePoint(point,origin,0),point);
+  const p90=rotatePoint({x:2,y:0},origin,90);close(p90.x,0);close(p90.y,2);
+  const n90=rotatePoint({x:2,y:0},origin,-90);close(n90.x,0);close(n90.y,-2);
+  const p180=rotatePoint({x:2,y:0},origin,180);close(p180.x,-2);close(p180.y,0);
+  const rotated=rotatePoint(point,{x:11,y:-7},37),restored=inverseRotatePoint(rotated,{x:11,y:-7},37);
+  close(restored.x,point.x);close(restored.y,point.y);
+});
+
+test('rotated rectangle bounds and degree normalization are deterministic',()=>{
+  const bounds=boundsOfRotatedFrame({x:10,y:20,width:30,height:10},90);
+  close(bounds.x,20);close(bounds.y,10);close(bounds.width,10);close(bounds.height,30);
+  assert.equal(normalizeDegrees(0),0);assert.equal(normalizeDegrees(180),-180);assert.equal(normalizeDegrees(-90),-90);assert.equal(normalizeDegrees(540),-180);assert.equal(normalizeDegrees(-540),-180);
+});
+
+test('plotter point rotation keeps physical millimetre coordinates',()=>{
+  const [start,end]=rotatePoints([{x:10,y:20},{x:30,y:20}],{x:20,y:20},90);
+  close(start.x,20);close(start.y,10);close(end.x,20);close(end.y,30);
+});
+
+test('Layout element creation and reset size share defaults and preserve the centre',()=>{
+  const types=readFileSync(new URL('../src/lib/layout/types.ts',import.meta.url),'utf8');
+  const inspector=readFileSync(new URL('../src/components/layout/LayoutInspector.tsx',import.meta.url),'utf8');
+  const page=readFileSync(new URL('../src/app/layout/page.tsx',import.meta.url),'utf8');
+  assert.match(types,/export function defaultElementSize/);
+  assert.match(types,/export function defaultArtworkSize/);
+  assert.match(types,/const \{width,height\}=defaultElementSize\(type,page\)/);
+  assert.match(types,/rotationDeg:0/);
+  assert.match(page,/defaultArtworkSize\(ratio,usable,document\.viewBox\.width\)/);
+  assert.match(inspector,/resizeAroundCenter\(element\.frame,size\)/);
+});
 
 test('circle containment uses an inscribed constrained frame',()=>{
   assert.deepEqual(shapeGeometryFrame('circle',120,80),{x:20,y:0,width:80,height:80});
