@@ -194,6 +194,7 @@ type LinePreviewProps = {
   nibMM: number;
   penAngleDeg: number;
   constructionGuides: ConstructionGuideSettings;
+  showCelticGrid: boolean;
 };
 
 function LinePreview(props: LinePreviewProps) {
@@ -211,7 +212,7 @@ function LinePreview(props: LinePreviewProps) {
     baselineTopY,
     showLetterBoxes,
     guideTemplate,
-    script, nibMM, penAngleDeg, constructionGuides,
+    script, nibMM, penAngleDeg, constructionGuides, showCelticGrid,
   } = props;
 
   const { lengthMM, segments } = metric;
@@ -305,6 +306,11 @@ function LinePreview(props: LinePreviewProps) {
                 bold: '#e2e8f0', // <-- important: prevents black line showing through box fill
                 tick: '#e2e8f0',
                 construction: constructionGuides.color,
+              },
+              grid: {
+                thin: 1,
+                showHorizontal: script !== 'CelticHalfUncial' || showCelticGrid,
+                showVertical: script !== 'CelticHalfUncial' || showCelticGrid,
               },
             }}
           />
@@ -575,6 +581,7 @@ function LinePreview(props: LinePreviewProps) {
 
 export default function Home() {
   const [script, setScript] = useState<ScriptId>('Copperplate');
+  const [showCelticGrid, setShowCelticGrid] = useState(false);
 
 
   const [linesInput, setLinesInput] = useState('');
@@ -598,7 +605,7 @@ export default function Home() {
     return Number.isFinite(v) ? v : 2;
   }, [nibText]);
 
-  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
+  const [penAngleDeg, setPenAngleDeg] = useState<15 | 35 | 40 | 45>(45);
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
   const [constructionGuides, setConstructionGuides] = useState<ConstructionGuideSettings>({ upper: false, lower: false, color: '#dc2626' });
 
@@ -969,6 +976,7 @@ export default function Home() {
                   nibMM={nibMM}
                   penAngleDeg={penAngleDeg}
                   constructionGuides={constructionGuides}
+                  showCelticGrid={showCelticGrid}
                 />
               ))}
             </svg>
@@ -993,11 +1001,17 @@ export default function Home() {
                   <select
                     className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={script}
-                    onChange={(e) => setScript(e.target.value as ScriptId)}
+                    onChange={(e) => {
+                      const next = e.target.value as ScriptId;
+                      setScript(next);
+                      if (next === 'CelticHalfUncial') { setXNib(5); setPenAngleDeg(15); setShowCelticGrid(false); }
+                      else if (next === 'Fraktur' || next === 'TexturaQuadrata') { setXNib(4.5); setPenAngleDeg(next === 'Fraktur' ? 40 : 45); }
+                    }}
                   >
                     <option value="Copperplate">Copperplate</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="TexturaQuadrata">Textura Quadrata</option>
+                     <option value="CelticHalfUncial">Celtic Half-Uncial</option>
                   </select>
                 </div>
 
@@ -1121,9 +1135,10 @@ export default function Home() {
                         <select
                           className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           value={penAngleDeg}
-                          onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
+                          onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 15 | 35 | 40 | 45)}
                         >
-                          <option value={35}>35°</option>
+                          <option value={15}>15°</option>
+                           <option value={35}>35°</option>
                           <option value={40}>40°</option>
                           <option value={45}>45°</option>
                         </select>
@@ -1136,7 +1151,8 @@ export default function Home() {
                     </div>
                   </>
                 )}
-                {script !== 'Copperplate' && <div className="sm:col-span-3 rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} compact /></div>}
+                {script === 'CelticHalfUncial' && <label className="sm:col-span-3 inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={showCelticGrid} onChange={e => setShowCelticGrid(e.target.checked)} /> Show intermediate grid</label>}
+                 {script !== 'Copperplate' && <div className="sm:col-span-3 rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} compact /></div>}
 
                 <label className="inline-flex items-center gap-2 text-sm text-slate-800 sm:col-span-3">
                   <input

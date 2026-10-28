@@ -541,7 +541,7 @@ const slantAngleDeg = useMemo(() => {
   };
 
   const [script, setScript] = useState<ScriptId>(sharedDefaults.script);
-  const showGridControls = script === 'Fraktur' || script === 'TexturaQuadrata';
+  const showGridControls = script !== 'Copperplate';
   const gridContrastBeforeHigh = useRef<number | null>(null);
 
 
@@ -565,16 +565,29 @@ const slantAngleDeg = useMemo(() => {
     const v = parseFloat(nibText);
     return Number.isFinite(v) ? v : 2;
   }, [nibText]);
-  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(sharedDefaults.penAngleDeg);
+  const [penAngleDeg, setPenAngleDeg] = useState<15 | 35 | 40 | 45>(sharedDefaults.penAngleDeg);
   const [xNib, setXNib] = useState(sharedDefaults.xNib);
 
   const [ascNib, setAscNib] = useState(sharedDefaults.ascNib);
   const [descNib, setDescNib] = useState(sharedDefaults.descNib);
 
   useEffect(() => {
-    if (script === 'Fraktur' || script === 'TexturaQuadrata') {
+    if (script === 'CelticHalfUncial') {
+      setXNib(5);
       setAscNib(2);
       setDescNib(2);
+      setPenAngleDeg(15);
+      setShowGridHorizontal(false);
+      setShowGridVertical(false);
+      setShowNibAngleGuide(false);
+    } else if (script === 'Fraktur' || script === 'TexturaQuadrata') {
+      setXNib(4.5);
+      setAscNib(2);
+      setDescNib(2);
+      setPenAngleDeg(script === 'Fraktur' ? 40 : 45);
+      setShowGridHorizontal(true);
+      setShowGridVertical(true);
+      setShowNibAngleGuide(true);
     }
   }, [script]);
 
@@ -1094,7 +1107,7 @@ const slantAngleDeg = useMemo(() => {
             Calligraphy Tools <span className="text-indigo-600">— Guideline Generator</span>
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Generate printable guidelines for Copperplate and Textura Quadrata using straight baselines.
+            Generate printable guidelines for Copperplate, blackletter, and Celtic Half-Uncial using straight baselines.
           </p>
         </div>
       </header>
@@ -1509,6 +1522,7 @@ const slantAngleDeg = useMemo(() => {
                     <option value="Copperplate">Copperplate</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="TexturaQuadrata">Textura Quadrata</option>
+                     <option value="CelticHalfUncial">Celtic Half-Uncial</option>
                   </select>
                 </div>
               </div>
@@ -1763,9 +1777,10 @@ const slantAngleDeg = useMemo(() => {
                       <select
                         className="mt-1 w-full p-2 rounded-lg border border-slate-300"
                         value={penAngleDeg}
-                        onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
+                        onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 15 | 35 | 40 | 45)}
                       >
-                        <option value={35}>35°</option>
+                        <option value={15}>15°</option>
+                         <option value={35}>35°</option>
                         <option value={40}>40°</option>
                         <option value={45}>45°</option>
                       </select>
