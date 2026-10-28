@@ -897,17 +897,17 @@ export default function CurvedTitlePage() {
   const topBaseline = useMemo(() => guideSet.ascLine, [guideSet.ascLine]);
   const topArcLen = useMemo(() => lengthPoly(topBaseline), [topBaseline]);
   const topXMM = useMemo(
-    () => (topBandScript === 'Copperplate' ? topBandSizeMM : topBandSizeMM * xNib),
-    [topBandScript, topBandSizeMM, xNib],
+    () => (topBandScript === 'Copperplate' ? topBandSizeMM : topBandSizeMM * (topBandScript === 'CelticHalfUncial' && script !== 'CelticHalfUncial' ? 5 : xNib)),
+    [topBandScript, topBandSizeMM, xNib, script],
   );
   const topAscMM = useMemo(
-    () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * ascNib),
-    [topBandScript, topBandSizeMM, ascNib],
+    () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * (topBandScript === 'CelticHalfUncial' && script !== 'CelticHalfUncial' ? 2 : ascNib)),
+    [topBandScript, topBandSizeMM, ascNib, script],
   );
   const topCapMM = useMemo(
     () => (topBandScript === 'Copperplate'
       ? topXMM * 1.05
-      : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * topBandSizeMM),
+      : (SCRIPT_DEFAULTS[topBandScript]?.capHeight ?? 7) * topBandSizeMM),
     [topBandScript, topXMM, topBandSizeMM, penAngleDeg, constructionGuides],
   );
   const topTickStepMM = useMemo(
@@ -941,17 +941,17 @@ export default function CurvedTitlePage() {
   );
 
   const bottomXMM = useMemo(
-    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM : bottomBandSizeMM * xNib),
-    [bottomBandScript, bottomBandSizeMM, xNib],
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM : bottomBandSizeMM * (bottomBandScript === 'CelticHalfUncial' && script !== 'CelticHalfUncial' ? 5 : xNib)),
+    [bottomBandScript, bottomBandSizeMM, xNib, script],
   );
   const bottomDescMM = useMemo(
-    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM * (2.5 / 2) : bottomBandSizeMM * descNib),
-    [bottomBandScript, bottomBandSizeMM, descNib],
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM * (2.5 / 2) : bottomBandSizeMM * (bottomBandScript === 'CelticHalfUncial' && script !== 'CelticHalfUncial' ? 2 : descNib)),
+    [bottomBandScript, bottomBandSizeMM, descNib, script],
   );
   const bottomCapMM = useMemo(
     () => (bottomBandScript === 'Copperplate'
       ? bottomXMM * 1.05
-      : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * bottomBandSizeMM),
+      : (SCRIPT_DEFAULTS[bottomBandScript]?.capHeight ?? 7) * bottomBandSizeMM),
     [bottomBandScript, bottomXMM, bottomBandSizeMM, penAngleDeg, constructionGuides],
   );
   const bottomBaseline = useMemo(() => offset(guideSet.descLine, bottomXMM), [guideSet.descLine, bottomXMM]);
