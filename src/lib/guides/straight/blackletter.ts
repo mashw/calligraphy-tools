@@ -16,6 +16,20 @@ export const CELTIC_HALF_UNCIAL_DEFAULTS = {
   nibAngleGuide: false,
 };
 
+/**
+ * Insular majuscule reference: interlinear whitespace is about two minim heights.
+ * The tool's row gap excludes ascender and descender guide zones, so subtract
+ * those zones to leave two x-heights of space between the letter bodies.
+ */
+export function celticHalfUncialRowGapMM(
+  nibMM: number,
+  xNib = CELTIC_HALF_UNCIAL_DEFAULTS.xNib,
+  ascNib = CELTIC_HALF_UNCIAL_DEFAULTS.ascNib,
+  descNib = CELTIC_HALF_UNCIAL_DEFAULTS.descNib,
+) {
+  return Math.max(0, (2 * xNib - ascNib - descNib) * nibMM);
+}
+
 export type BlackletterGridWidthMode = 'effective' | 'actual' | 'custom';
 
 export function effectiveBlackletterNibMM(nibMM: number, penAngleDeg: number) {

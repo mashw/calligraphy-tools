@@ -1,6 +1,6 @@
 import type { ScriptId } from '@/lib/scripts';
 import { DEFAULT_CONSTRUCTION_GUIDES, DEFAULT_HORIZONTAL_GRID_APPEARANCE, type ConstructionGuideSettings, type HorizontalGridAppearance } from '@/lib/guides/guide-template';
-import { BLACKLETTER_GUIDE_DEFAULTS, CELTIC_HALF_UNCIAL_DEFAULTS } from './blackletter';
+import { BLACKLETTER_GUIDE_DEFAULTS, CELTIC_HALF_UNCIAL_DEFAULTS, celticHalfUncialRowGapMM } from './blackletter';
 
 export type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 export type GridWidthMode = 'effective' | 'actual' | 'custom';
@@ -48,12 +48,19 @@ export function guidelinesSettingsForScript(current: GuidelinesSettings, script:
     return {
       ...current, script, xNib: d.xNib, ascNib: d.ascNib, descNib: d.descNib,
       penAngleDeg: d.penAngleDeg,
+      rowGapMM: celticHalfUncialRowGapMM(current.nibMM),
       grid: { ...current.grid, horizontal: d.gridHorizontal, vertical: d.gridVertical, nibAngleGuide: d.nibAngleGuide },
     };
   }
-  if (script === 'Copperplate') return { ...current, script };
+  // Restore standard spacing when leaving Celtic's calculated default.
+  // Retain manual row-gap edits.
+  const rowGapMM = current.script === 'CelticHalfUncial'
+    && Math.abs(current.rowGapMM - celticHalfUncialRowGapMM(current.nibMM, current.xNib, current.ascNib, current.descNib)) < 1e-6
+    ? createDefaultGuidelinesSettings().rowGapMM
+    : current.rowGapMM;
+  if (script === 'Copperplate') return { ...current, script, rowGapMM };
   return {
-    ...current, script,
+    ...current, script, rowGapMM,
     xNib: BLACKLETTER_GUIDE_DEFAULTS.xNib, ascNib: 2, descNib: 2,
     penAngleDeg: script === 'Fraktur' ? 40 : 45,
     grid: { ...current.grid, horizontal: true, vertical: true, nibAngleGuide: true },
