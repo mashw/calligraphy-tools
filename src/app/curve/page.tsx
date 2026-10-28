@@ -431,6 +431,7 @@ export default function CurvedTitlePage() {
   const snap05 = (v: number) => Math.round(v / 0.5) * 0.5;
 
   const [script, setScript] = useState<ScriptId>(curvedTitleDefaults.script);
+  const [showCelticGrid, setShowCelticGrid] = useState(false);
   const [curve, setCurve] = useState<CurvePresetId>(curvedTitleDefaults.curve);
   const [customCurve, setCustomCurve] = useState<CustomCurve>();
   const [flipCurve, setFlipCurve] = useState(curvedTitleDefaults.flipCurve);
@@ -468,7 +469,7 @@ export default function CurvedTitlePage() {
     const v = parseFloat(bottomBandSizeText);
     return Number.isFinite(v) ? v : nibMM;
   }, [bottomBandSizeText, nibMM]);
-  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
+  const [penAngleDeg, setPenAngleDeg] = useState<15 | 35 | 40 | 45>(45);
   const [constructionGuides, setConstructionGuides] = useState(() => ({ upper: false, lower: false, color: '#dc2626', ...curvedTitleDefaults.constructionGuides }));
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
 
@@ -1743,6 +1744,7 @@ export default function CurvedTitlePage() {
                   style={{
                     thin: swBold,
                     bold: swBold,
+                    grid: { thin: swBold, showHorizontal: script !== 'CelticHalfUncial' || showCelticGrid, showVertical: script !== 'CelticHalfUncial' || showCelticGrid },
                     colors: {
                       thin: isCurveDragging ? '#7c3aed' : '#111827',
                       bold: isCurveDragging ? '#7c3aed' : '#111827',
@@ -1764,6 +1766,7 @@ export default function CurvedTitlePage() {
                       style={{
                         thin: swBold,
                         bold: swBold,
+                        grid: { thin: swBold, showHorizontal: topBandScript !== 'CelticHalfUncial' || showCelticGrid, showVertical: topBandScript !== 'CelticHalfUncial' || showCelticGrid },
                         colors: {
                           thin: isCurveDragging ? '#7c3aed' : '#111827',
                           bold: isCurveDragging ? '#7c3aed' : '#111827',
@@ -1785,6 +1788,7 @@ export default function CurvedTitlePage() {
                       style={{
                         thin: swBold,
                         bold: swBold,
+                        grid: { thin: swBold, showHorizontal: bottomBandScript !== 'CelticHalfUncial' || showCelticGrid, showVertical: bottomBandScript !== 'CelticHalfUncial' || showCelticGrid },
                         colors: {
                           thin: isCurveDragging ? '#7c3aed' : '#111827',
                           bold: isCurveDragging ? '#7c3aed' : '#111827',
@@ -1943,13 +1947,20 @@ export default function CurvedTitlePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
             <div className="sm:col-span-2">
               <InsetLabeledField label="Script">
-                <select className={INSET_CONTROL_BASE} value={script} onChange={e => setScript(e.target.value as ScriptId)}>
+                <select className={INSET_CONTROL_BASE} value={script} onChange={e => {
+                   const next = e.target.value as ScriptId;
+                   setScript(next);
+                   if (next === 'CelticHalfUncial') { setXNib(5); setAscNib(2); setDescNib(2); setPenAngleDeg(15); setShowCelticGrid(false); }
+                   else if (next === 'Fraktur' || next === 'TexturaQuadrata') { setXNib(4.5); setAscNib(2); setDescNib(2); setPenAngleDeg(next === 'Fraktur' ? 40 : 45); }
+                 }}>
                   <option value="Copperplate">Copperplate</option>
                   <option value="Fraktur">Fraktur</option>
                   <option value="TexturaQuadrata">Textura Quadrata</option>
+                   <option value="CelticHalfUncial">Celtic Half-Uncial</option>
                 </select>
               </InsetLabeledField>
             </div>
+            {(script === 'CelticHalfUncial' || (topBandEnabled && topBandScript === 'CelticHalfUncial') || (bottomBandEnabled && bottomBandScript === 'CelticHalfUncial')) && <label className="sm:col-span-2 inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={showCelticGrid} onChange={e => setShowCelticGrid(e.target.checked)} /> Show intermediate grid</label>}
 
             <div>
               <InsetLabeledField label="Paper size">
@@ -2409,9 +2420,10 @@ export default function CurvedTitlePage() {
                 <select
                   className={INSET_CONTROL_BASE}
                   value={penAngleDeg}
-                  onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
+                  onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 15 | 35 | 40 | 45)}
                 >
-                  <option value={35}>35°</option>
+                  <option value={15}>15°</option>
+                   <option value={35}>35°</option>
                   <option value={40}>40°</option>
                   <option value={45}>45°</option>
                 </select>
@@ -2440,6 +2452,7 @@ export default function CurvedTitlePage() {
                     disabled={!topBandEnabled}
                   >
                     <option value="TexturaQuadrata">TexturaQuadrata</option>
+                     <option value="CelticHalfUncial">Celtic Half-Uncial</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="Copperplate">Copperplate</option>
                   </select>
@@ -2477,6 +2490,7 @@ export default function CurvedTitlePage() {
                     disabled={!bottomBandEnabled}
                   >
                     <option value="TexturaQuadrata">TexturaQuadrata</option>
+                     <option value="CelticHalfUncial">Celtic Half-Uncial</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="Copperplate">Copperplate</option>
                   </select>
