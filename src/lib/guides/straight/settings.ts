@@ -1,6 +1,6 @@
 import type { ScriptId } from '@/lib/scripts';
 import { DEFAULT_CONSTRUCTION_GUIDES, DEFAULT_HORIZONTAL_GRID_APPEARANCE, type ConstructionGuideSettings, type HorizontalGridAppearance } from '@/lib/guides/guide-template';
-import { BLACKLETTER_GUIDE_DEFAULTS } from './blackletter';
+import { BLACKLETTER_GUIDE_DEFAULTS, CELTIC_HALF_UNCIAL_DEFAULTS } from './blackletter';
 
 export type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 export type GridWidthMode = 'effective' | 'actual' | 'custom';
@@ -13,7 +13,7 @@ export type GuidelinesSettings = {
   nibMM: number;
   copperplateRatioPreset: CopperplateRatioPreset;
   copperplateUnits: { desc: number; x: number; asc: number };
-  penAngleDeg: 35 | 40 | 45;
+  penAngleDeg: 15 | 35 | 40 | 45;
   xNib: number;
   ascNib: number;
   descNib: number;
@@ -38,5 +38,24 @@ export function createDefaultGuidelinesSettings(): GuidelinesSettings {
     constructionGuides: { ...DEFAULT_CONSTRUCTION_GUIDES },
     horizontalGridAppearance: { ...DEFAULT_HORIZONTAL_GRID_APPEARANCE },
     appearance: { baselineIndicator: false, baselineColor: '#111827', waistlineColor: '#111827', xLineContrast: 1, xLineThickness: 1, midpointDashGap: 6, midpointDashContrast: .5, highContrast: false, centerLine: false },
+  };
+}
+
+/** Apply the complete preset on script selection; custom edits thereafter stay editable. */
+export function guidelinesSettingsForScript(current: GuidelinesSettings, script: ScriptId): GuidelinesSettings {
+  if (script === 'CelticHalfUncial') {
+    const d = CELTIC_HALF_UNCIAL_DEFAULTS;
+    return {
+      ...current, script, xNib: d.xNib, ascNib: d.ascNib, descNib: d.descNib,
+      penAngleDeg: d.penAngleDeg,
+      grid: { ...current.grid, horizontal: d.gridHorizontal, vertical: d.gridVertical, nibAngleGuide: d.nibAngleGuide },
+    };
+  }
+  if (script === 'Copperplate') return { ...current, script };
+  return {
+    ...current, script,
+    xNib: BLACKLETTER_GUIDE_DEFAULTS.xNib, ascNib: 2, descNib: 2,
+    penAngleDeg: script === 'Fraktur' ? 40 : 45,
+    grid: { ...current.grid, horizontal: true, vertical: true, nibAngleGuide: true },
   };
 }

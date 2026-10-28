@@ -4,7 +4,7 @@ import HorizontalGridAppearanceControls from '@/components/guidelines/Horizontal
 
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import DisclosureSection from '@/components/layout/DisclosureSection';
-import type { GuidelinesSettings } from '@/lib/guides/straight/settings';
+import { guidelinesSettingsForScript, type GuidelinesSettings } from '@/lib/guides/straight/settings';
 import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 import type { GuidelinesTextMode, PlannedLineAlignment, PlannedTextLine } from '@/lib/layout/types';
@@ -28,8 +28,8 @@ export default function GuidelinesSettingsPanel({ value, onChange, paddingMM, on
   const sectionClass = '';
   return <div className="contents">
     <DisclosureSection title="Basics" defaultOpen className={sectionClass}>
-      <div className="grid grid-cols-2 gap-3"><label className={`${label} col-span-2`}>Script<select className={input} value={value.script} onChange={event => set('script', event.target.value as ScriptId)}>{Object.keys(SCRIPT_PROFILES).map(script => <option key={script}>{script}</option>)}</select></label>
-        {blackletter ? <><NumberField title="Nib size" value={value.nibMM} onChange={next => set('nibMM', next)} /><label className={label}>Pen angle<select className={input} value={value.penAngleDeg} onChange={event => set('penAngleDeg', Number(event.target.value) as 35 | 40 | 45)}><option>35</option><option>40</option><option>45</option></select></label><NumberField title="X-height (nibs)" unit="" value={value.xNib} onChange={next => set('xNib', next)} /></> : <NumberField title="X-height" value={value.xHeightMM} onChange={next => set('xHeightMM', next)} />}<NumberField title="Row gap" value={value.rowGapMM} onChange={next => set('rowGapMM', next)} /><NumberField title="Padding" value={paddingMM} onChange={onPaddingChange} /><div className="col-span-2" title="When disabled, vertical resizing snaps to complete guideline rows."><Toggle title="Allow partial guidelines" checked={allowPartialGuidelines} onChange={onAllowPartialGuidelinesChange} /></div>
+      <div className="grid grid-cols-2 gap-3"><label className={`${label} col-span-2`}>Script<select className={input} value={value.script} onChange={event => onChange(guidelinesSettingsForScript(value, event.target.value as ScriptId))}>{(Object.keys(SCRIPT_PROFILES) as ScriptId[]).map(script => <option key={script} value={script}>{SCRIPT_PROFILES[script].label}</option>)}</select></label>
+        {blackletter ? <><NumberField title="Nib size" value={value.nibMM} onChange={next => set('nibMM', next)} /><label className={label}>Pen angle<select className={input} value={value.penAngleDeg} onChange={event => set('penAngleDeg', Number(event.target.value) as 15 | 35 | 40 | 45)}><option>15</option><option>35</option><option>40</option><option>45</option></select></label><NumberField title="X-height (nibs)" unit="" value={value.xNib} onChange={next => set('xNib', next)} /></> : <NumberField title="X-height" value={value.xHeightMM} onChange={next => set('xHeightMM', next)} />}<NumberField title="Row gap" value={value.rowGapMM} onChange={next => set('rowGapMM', next)} /><NumberField title="Padding" value={paddingMM} onChange={onPaddingChange} /><div className="col-span-2" title="When disabled, vertical resizing snaps to complete guideline rows."><Toggle title="Allow partial guidelines" checked={allowPartialGuidelines} onChange={onAllowPartialGuidelinesChange} /></div>
       </div>
     </DisclosureSection>
     <DisclosureSection title="Script Details" defaultOpen><div className="space-y-3">

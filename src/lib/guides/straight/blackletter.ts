@@ -4,6 +4,18 @@ export const BLACKLETTER_GUIDE_DEFAULTS = {
   descNib: 2,
 };
 
+// Insular half-uncial uses a broad, rounded 5-nib body with 2-nib extensions.
+// Its intermediate grid is optional and starts hidden.
+export const CELTIC_HALF_UNCIAL_DEFAULTS = {
+  xNib: 5,
+  ascNib: 2,
+  descNib: 2,
+  penAngleDeg: 15 as const,
+  gridHorizontal: false,
+  gridVertical: false,
+  nibAngleGuide: false,
+};
+
 export type BlackletterGridWidthMode = 'effective' | 'actual' | 'custom';
 
 export function effectiveBlackletterNibMM(nibMM: number, penAngleDeg: number) {
