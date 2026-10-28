@@ -12,6 +12,7 @@ import GuidelinesRenderer from '@/components/guidelines/GuidelinesRenderer';
 import ConstructionGuideControls from '@/components/guidelines/ConstructionGuideControls';
 import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 import { createDefaultGuidelinesSettings, type GuidelinesSettings } from '@/lib/guides/straight/settings';
+import { celticHalfUncialRowGapMM } from '@/lib/guides/straight/blackletter';
 
 type PaperId = keyof typeof PAPERS_MM;
 type Orientation = 'portrait' | 'landscape';
@@ -593,6 +594,22 @@ const slantAngleDeg = useMemo(() => {
 
 
   const [rowGapMM, setRowGapMM] = useState(sharedDefaults.rowGapMM);
+  const lastSuggestedCelticGap = useRef<number | null>(null);
+  const previousRowGapScript = useRef(script);
+  useEffect(() => {
+    const prior = lastSuggestedCelticGap.current;
+    if (script !== 'CelticHalfUncial') {
+      if (previousRowGapScript.current === 'CelticHalfUncial' && prior !== null) {
+        setRowGapMM(current => Math.abs(current - prior) < 1e-6 ? sharedDefaults.rowGapMM : current);
+      }
+      lastSuggestedCelticGap.current = null;
+    } else {
+      const next = celticHalfUncialRowGapMM(nibMM, xNib, ascNib, descNib);
+      setRowGapMM(current => prior === null || Math.abs(current - prior) < 1e-6 ? next : current);
+      lastSuggestedCelticGap.current = next;
+    }
+    previousRowGapScript.current = script;
+  }, [script, nibMM, xNib, ascNib, descNib]);
 
   const [isNarrow, setIsNarrow] = useState(() => (typeof window !== 'undefined'
     ? window.matchMedia('(max-width: 640px)').matches
