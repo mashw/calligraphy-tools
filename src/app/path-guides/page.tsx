@@ -49,8 +49,9 @@ type Strap = {
   color: string;
   script: ScriptId;
   nibMMText: string;
-  nibAngleDeg: 35 | 40 | 45;
+  nibAngleDeg: 15 | 35 | 40 | 45;
   constructionGuides?: ConstructionGuideSettings;
+  showCelticGrid?: boolean;
   xHeightMMText?: string;
   copperplateRatioPreset?: CopperplateRatioPreset;
   copperplateDescUnitsText?: string;
@@ -1003,6 +1004,13 @@ const SCRIPT_DEFAULTS = {
     ascNibText: '2',
     descNibText: '2',
   },
+  CelticHalfUncial: {
+    nibMMText: '4',
+    nibAngleDeg: 15 as const,
+    xNibText: '5',
+    ascNibText: '2',
+    descNibText: '2',
+  },
   Copperplate: {
     xHeightMMText: '6',
     copperplateRatioPreset: '3:2:3' as CopperplateRatioPreset,
@@ -1022,9 +1030,7 @@ function applyScriptDefaults(strap: Strap, script: ScriptId): Strap {
     };
   }
 
-  const blackletterDefaults = script === 'Fraktur'
-    ? SCRIPT_DEFAULTS.Fraktur
-    : SCRIPT_DEFAULTS.TexturaQuadrata;
+  const blackletterDefaults = SCRIPT_DEFAULTS[script];
 
   return {
     ...strap,
@@ -1034,6 +1040,7 @@ function applyScriptDefaults(strap: Strap, script: ScriptId): Strap {
     xNibText: blackletterDefaults.xNibText,
     ascNibText: blackletterDefaults.ascNibText,
     descNibText: blackletterDefaults.descNibText,
+    showCelticGrid: script === 'CelticHalfUncial' ? false : strap.showCelticGrid,
   };
 }
 
@@ -2513,6 +2520,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                         style={{
                           thin: guideStroke.thin,
                           bold: guideStroke.bold,
+                          grid: { thin: guideStroke.thin, showHorizontal: strap.script !== 'CelticHalfUncial' || !!strap.showCelticGrid, showVertical: strap.script !== 'CelticHalfUncial' || !!strap.showCelticGrid },
                           colors: { ...guideOverlayColors(strap.id, strap.color), construction: strap.constructionGuides?.color ?? '#dc2626' },
                         }}
                         interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
@@ -2545,6 +2553,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
           style={{
             thin: guideStroke.thin,
             bold: guideStroke.bold,
+            grid: { thin: guideStroke.thin, showHorizontal: strapEntry.strap.script !== 'CelticHalfUncial' || !!strapEntry.strap.showCelticGrid, showVertical: strapEntry.strap.script !== 'CelticHalfUncial' || !!strapEntry.strap.showCelticGrid },
             colors: { ...guideOverlayColors(member.strapId, strapEntry.strap.color), construction: strapEntry.strap.constructionGuides?.color ?? '#dc2626' },
           }}
           interactive={{ onGuidePointerDown: beginStrapDrag(member.strapId), hitStrokeWidthMM: 6 }}
@@ -2763,9 +2772,11 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     );
   }}
 >
-                  {Object.keys(SCRIPT_PROFILES).map((id) => <option key={id} value={id}>{id}</option>)}
+                  {(Object.keys(SCRIPT_PROFILES) as ScriptId[]).map((id) => <option key={id} value={id}>{SCRIPT_PROFILES[id].label}</option>)}
                 </select>
               </InsetLabeledField>
+
+              {activeStrap.script === 'CelticHalfUncial' && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={activeStrap.showCelticGrid ?? false} onChange={e => updateStrap(activeStrap.id, { showCelticGrid: e.target.checked })} /> Show intermediate grid</label>}
 
               {activeStrap.script === 'Copperplate' ? (
                 <>
@@ -2812,8 +2823,8 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     </InsetLabeledField>
                   </div>
                   <InsetLabeledField label="Nib angle (°)">
-                    <select className={INSET_CONTROL_BASE} value={activeStrap.nibAngleDeg} onChange={(e) => updateStrap(activeStrap.id, { nibAngleDeg: Number(e.target.value) as 35 | 40 | 45 })}>
-                      <option value={35}>35°</option><option value={40}>40°</option><option value={45}>45°</option>
+                    <select className={INSET_CONTROL_BASE} value={activeStrap.nibAngleDeg} onChange={(e) => updateStrap(activeStrap.id, { nibAngleDeg: Number(e.target.value) as 15 | 35 | 40 | 45 })}>
+                      <option value={15}>15°</option><option value={35}>35°</option><option value={40}>40°</option><option value={45}>45°</option>
                     </select>
                   </InsetLabeledField>
                   <div className="rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={activeStrap.script} value={activeStrap.constructionGuides} onChange={constructionGuides => updateStrap(activeStrap.id, { constructionGuides })} compact /></div>
