@@ -12,7 +12,7 @@ import GuidelinesRenderer from '@/components/guidelines/GuidelinesRenderer';
 import ConstructionGuideControls from '@/components/guidelines/ConstructionGuideControls';
 import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 import { createDefaultGuidelinesSettings, type GuidelinesSettings } from '@/lib/guides/straight/settings';
-import { celticHalfUncialRowGapMM } from '@/lib/guides/straight/blackletter';
+import { insularHalfUncialRowGapMM } from '@/lib/guides/straight/blackletter';
 
 type PaperId = keyof typeof PAPERS_MM;
 type Orientation = 'portrait' | 'landscape';
@@ -573,7 +573,7 @@ const slantAngleDeg = useMemo(() => {
   const [descNib, setDescNib] = useState(sharedDefaults.descNib);
 
   useEffect(() => {
-    if (script === 'CelticHalfUncial') {
+    if (script === 'InsularMajuscule') {
       setXNib(5);
       setAscNib(2);
       setDescNib(2);
@@ -594,19 +594,19 @@ const slantAngleDeg = useMemo(() => {
 
 
   const [rowGapMM, setRowGapMM] = useState(sharedDefaults.rowGapMM);
-  const lastSuggestedCelticGap = useRef<number | null>(null);
+  const lastSuggestedInsularGap = useRef<number | null>(null);
   const previousRowGapScript = useRef(script);
   useEffect(() => {
-    const prior = lastSuggestedCelticGap.current;
-    if (script !== 'CelticHalfUncial') {
-      if (previousRowGapScript.current === 'CelticHalfUncial' && prior !== null) {
+    const prior = lastSuggestedInsularGap.current;
+    if (script !== 'InsularMajuscule') {
+      if (previousRowGapScript.current === 'InsularMajuscule' && prior !== null) {
         setRowGapMM(current => Math.abs(current - prior) < 1e-6 ? sharedDefaults.rowGapMM : current);
       }
-      lastSuggestedCelticGap.current = null;
+      lastSuggestedInsularGap.current = null;
     } else {
-      const next = celticHalfUncialRowGapMM(nibMM, xNib, ascNib, descNib);
+      const next = insularHalfUncialRowGapMM(nibMM, xNib, ascNib, descNib);
       setRowGapMM(current => prior === null || Math.abs(current - prior) < 1e-6 ? next : current);
-      lastSuggestedCelticGap.current = next;
+      lastSuggestedInsularGap.current = next;
     }
     previousRowGapScript.current = script;
   }, [script, nibMM, xNib, ascNib, descNib]);
@@ -1124,7 +1124,7 @@ const slantAngleDeg = useMemo(() => {
             Calligraphy Tools <span className="text-indigo-600">— Guideline Generator</span>
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Generate printable guidelines for Copperplate, blackletter, and Celtic Half-Uncial using straight baselines.
+            Generate printable guidelines for Copperplate, blackletter, and Insular Majuscule using straight baselines.
           </p>
         </div>
       </header>
@@ -1539,7 +1539,7 @@ const slantAngleDeg = useMemo(() => {
                     <option value="Copperplate">Copperplate</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="TexturaQuadrata">Textura Quadrata</option>
-                     <option value="CelticHalfUncial">Celtic Half-Uncial</option>
+                     <option value="InsularMajuscule">Insular Majuscule</option>
                   </select>
                 </div>
               </div>

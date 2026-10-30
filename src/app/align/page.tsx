@@ -194,7 +194,7 @@ type LinePreviewProps = {
   nibMM: number;
   penAngleDeg: number;
   constructionGuides: ConstructionGuideSettings;
-  showCelticGrid: boolean;
+  showInsularGrid: boolean;
 };
 
 function LinePreview(props: LinePreviewProps) {
@@ -212,7 +212,7 @@ function LinePreview(props: LinePreviewProps) {
     baselineTopY,
     showLetterBoxes,
     guideTemplate,
-    script, nibMM, penAngleDeg, constructionGuides, showCelticGrid,
+    script, nibMM, penAngleDeg, constructionGuides, showInsularGrid,
   } = props;
 
   const { lengthMM, segments } = metric;
@@ -309,8 +309,8 @@ function LinePreview(props: LinePreviewProps) {
               },
               grid: {
                 thin: 1,
-                showHorizontal: script !== 'CelticHalfUncial' || showCelticGrid,
-                showVertical: script !== 'CelticHalfUncial' || showCelticGrid,
+                showHorizontal: script !== 'InsularMajuscule' || showInsularGrid,
+                showVertical: script !== 'InsularMajuscule' || showInsularGrid,
               },
             }}
           />
@@ -581,7 +581,7 @@ function LinePreview(props: LinePreviewProps) {
 
 export default function Home() {
   const [script, setScript] = useState<ScriptId>('Copperplate');
-  const [showCelticGrid, setShowCelticGrid] = useState(false);
+  const [showInsularGrid, setShowInsularGrid] = useState(false);
 
 
   const [linesInput, setLinesInput] = useState('');
@@ -793,7 +793,7 @@ export default function Home() {
   }, [script, nibMM, penAngleDeg]);
 
 
-  const texturaXHeightMM = xNib * effectiveNibMM;
+  const texturaXHeightMM = xNib * (script === 'InsularMajuscule' ? nibMM : effectiveNibMM);
   const scriptCtx = useMemo<ScriptContext>(() => {
     if (script === 'Copperplate') return copper.ctx;
 
@@ -845,12 +845,12 @@ export default function Home() {
     const capHeightNibs = defaults?.capHeight ?? 7;
 
     return {
-      xMM: xNib * effectiveNibMM,
+      xMM: xNib * (script === 'InsularMajuscule' ? nibMM : effectiveNibMM),
       descMM: 0,
       ascMM: 0,
       capMM: capHeightNibs * effectiveNibMM,
     };
-  }, [guideTemplate, xHeight, xNib, effectiveNibMM, script]);
+  }, [guideTemplate, xHeight, xNib, effectiveNibMM, nibMM, script]);
   const previewXHeightMM = normalizePreviewHeight
     ? DISPLAY_X_MM
     : guideTemplate === 'blackletter'
@@ -976,7 +976,7 @@ export default function Home() {
                   nibMM={nibMM}
                   penAngleDeg={penAngleDeg}
                   constructionGuides={constructionGuides}
-                  showCelticGrid={showCelticGrid}
+                  showInsularGrid={showInsularGrid}
                 />
               ))}
             </svg>
@@ -1004,14 +1004,14 @@ export default function Home() {
                     onChange={(e) => {
                       const next = e.target.value as ScriptId;
                       setScript(next);
-                      if (next === 'CelticHalfUncial') { setXNib(5); setPenAngleDeg(15); setShowCelticGrid(false); }
+                      if (next === 'InsularMajuscule') { setXNib(5); setPenAngleDeg(15); setShowInsularGrid(false); }
                       else if (next === 'Fraktur' || next === 'TexturaQuadrata') { setXNib(4.5); setPenAngleDeg(next === 'Fraktur' ? 40 : 45); }
                     }}
                   >
                     <option value="Copperplate">Copperplate</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="TexturaQuadrata">Textura Quadrata</option>
-                     <option value="CelticHalfUncial">Celtic Half-Uncial</option>
+                     <option value="InsularMajuscule">Insular Majuscule</option>
                   </select>
                 </div>
 
@@ -1151,7 +1151,7 @@ export default function Home() {
                     </div>
                   </>
                 )}
-                {script === 'CelticHalfUncial' && <label className="sm:col-span-3 inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={showCelticGrid} onChange={e => setShowCelticGrid(e.target.checked)} /> Show intermediate grid</label>}
+                {script === 'InsularMajuscule' && <label className="sm:col-span-3 inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={showInsularGrid} onChange={e => setShowInsularGrid(e.target.checked)} /> Show intermediate grid</label>}
                  {script !== 'Copperplate' && <div className="sm:col-span-3 rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} compact /></div>}
 
                 <label className="inline-flex items-center gap-2 text-sm text-slate-800 sm:col-span-3">

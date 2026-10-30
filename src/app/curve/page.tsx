@@ -431,7 +431,7 @@ export default function CurvedTitlePage() {
   const snap05 = (v: number) => Math.round(v / 0.5) * 0.5;
 
   const [script, setScript] = useState<ScriptId>(curvedTitleDefaults.script);
-  const [showCelticGrid, setShowCelticGrid] = useState(false);
+  const [showInsularGrid, setShowInsularGrid] = useState(false);
   const [curve, setCurve] = useState<CurvePresetId>(curvedTitleDefaults.curve);
   const [customCurve, setCustomCurve] = useState<CustomCurve>();
   const [flipCurve, setFlipCurve] = useState(curvedTitleDefaults.flipCurve);
@@ -668,7 +668,7 @@ export default function CurvedTitlePage() {
 
   const capMM = script === 'Copperplate'
     ? xHeightMM * 1.05
-    : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * nibMM;
+    : (SCRIPT_DEFAULTS[script]?.capHeight ?? 7) * nibMM;
 
   const copperplateHeights = useMemo(() => {
     if (copperplateRatioPreset === 'custom') {
@@ -765,23 +765,23 @@ export default function CurvedTitlePage() {
   const topCtx = useMemo<ScriptContext>(() => {
     if (topBandScript === 'Copperplate') return topCopper.ctx;
     return {
-      xHeightMM: xNib * topBandSizeMM,
+      xHeightMM: (topBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 5 : xNib) * topBandSizeMM,
       nibMM: effectiveTopNibMM,
       scale: 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [topBandScript, topCopper.ctx, topBandSizeMM, effectiveTopNibMM, xNib]);
+  }, [topBandScript, topCopper.ctx, topBandSizeMM, effectiveTopNibMM, xNib, script]);
   const bottomCtx = useMemo<ScriptContext>(() => {
     if (bottomBandScript === 'Copperplate') return bottomCopper.ctx;
     return {
-      xHeightMM: xNib * bottomBandSizeMM,
+      xHeightMM: (bottomBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 5 : xNib) * bottomBandSizeMM,
       nibMM: effectiveBottomNibMM,
       scale: 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [bottomBandScript, bottomCopper.ctx, bottomBandSizeMM, effectiveBottomNibMM, xNib]);
+  }, [bottomBandScript, bottomCopper.ctx, bottomBandSizeMM, effectiveBottomNibMM, xNib, script]);
   const topRun = useMemo(
     () => measureRun(topText, SCRIPT_PROFILES[topBandScript], topCtx),
     [topText, topBandScript, topCtx],
@@ -897,11 +897,11 @@ export default function CurvedTitlePage() {
   const topBaseline = useMemo(() => guideSet.ascLine, [guideSet.ascLine]);
   const topArcLen = useMemo(() => lengthPoly(topBaseline), [topBaseline]);
   const topXMM = useMemo(
-    () => (topBandScript === 'Copperplate' ? topBandSizeMM : topBandSizeMM * (topBandScript === 'CelticHalfUncial' && script !== 'CelticHalfUncial' ? 5 : xNib)),
+    () => (topBandScript === 'Copperplate' ? topBandSizeMM : topBandSizeMM * (topBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 5 : xNib)),
     [topBandScript, topBandSizeMM, xNib, script],
   );
   const topAscMM = useMemo(
-    () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * (topBandScript === 'CelticHalfUncial' && script !== 'CelticHalfUncial' ? 2 : ascNib)),
+    () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * (topBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 2 : ascNib)),
     [topBandScript, topBandSizeMM, ascNib, script],
   );
   const topCapMM = useMemo(
@@ -941,11 +941,11 @@ export default function CurvedTitlePage() {
   );
 
   const bottomXMM = useMemo(
-    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM : bottomBandSizeMM * (bottomBandScript === 'CelticHalfUncial' && script !== 'CelticHalfUncial' ? 5 : xNib)),
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM : bottomBandSizeMM * (bottomBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 5 : xNib)),
     [bottomBandScript, bottomBandSizeMM, xNib, script],
   );
   const bottomDescMM = useMemo(
-    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM * (2.5 / 2) : bottomBandSizeMM * (bottomBandScript === 'CelticHalfUncial' && script !== 'CelticHalfUncial' ? 2 : descNib)),
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM * (2.5 / 2) : bottomBandSizeMM * (bottomBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 2 : descNib)),
     [bottomBandScript, bottomBandSizeMM, descNib, script],
   );
   const bottomCapMM = useMemo(
@@ -1744,7 +1744,7 @@ export default function CurvedTitlePage() {
                   style={{
                     thin: swBold,
                     bold: swBold,
-                    grid: { thin: swBold, showHorizontal: script !== 'CelticHalfUncial' || showCelticGrid, showVertical: script !== 'CelticHalfUncial' || showCelticGrid },
+                    grid: { thin: swBold, showHorizontal: script !== 'InsularMajuscule' || showInsularGrid, showVertical: script !== 'InsularMajuscule' || showInsularGrid },
                     colors: {
                       thin: isCurveDragging ? '#7c3aed' : '#111827',
                       bold: isCurveDragging ? '#7c3aed' : '#111827',
@@ -1766,7 +1766,7 @@ export default function CurvedTitlePage() {
                       style={{
                         thin: swBold,
                         bold: swBold,
-                        grid: { thin: swBold, showHorizontal: topBandScript !== 'CelticHalfUncial' || showCelticGrid, showVertical: topBandScript !== 'CelticHalfUncial' || showCelticGrid },
+                        grid: { thin: swBold, showHorizontal: topBandScript !== 'InsularMajuscule' || showInsularGrid, showVertical: topBandScript !== 'InsularMajuscule' || showInsularGrid },
                         colors: {
                           thin: isCurveDragging ? '#7c3aed' : '#111827',
                           bold: isCurveDragging ? '#7c3aed' : '#111827',
@@ -1788,7 +1788,7 @@ export default function CurvedTitlePage() {
                       style={{
                         thin: swBold,
                         bold: swBold,
-                        grid: { thin: swBold, showHorizontal: bottomBandScript !== 'CelticHalfUncial' || showCelticGrid, showVertical: bottomBandScript !== 'CelticHalfUncial' || showCelticGrid },
+                        grid: { thin: swBold, showHorizontal: bottomBandScript !== 'InsularMajuscule' || showInsularGrid, showVertical: bottomBandScript !== 'InsularMajuscule' || showInsularGrid },
                         colors: {
                           thin: isCurveDragging ? '#7c3aed' : '#111827',
                           bold: isCurveDragging ? '#7c3aed' : '#111827',
@@ -1950,17 +1950,17 @@ export default function CurvedTitlePage() {
                 <select className={INSET_CONTROL_BASE} value={script} onChange={e => {
                    const next = e.target.value as ScriptId;
                    setScript(next);
-                   if (next === 'CelticHalfUncial') { setXNib(5); setAscNib(2); setDescNib(2); setPenAngleDeg(15); setShowCelticGrid(false); }
+                   if (next === 'InsularMajuscule') { setXNib(5); setAscNib(2); setDescNib(2); setPenAngleDeg(15); setShowInsularGrid(false); }
                    else if (next === 'Fraktur' || next === 'TexturaQuadrata') { setXNib(4.5); setAscNib(2); setDescNib(2); setPenAngleDeg(next === 'Fraktur' ? 40 : 45); }
                  }}>
                   <option value="Copperplate">Copperplate</option>
                   <option value="Fraktur">Fraktur</option>
                   <option value="TexturaQuadrata">Textura Quadrata</option>
-                   <option value="CelticHalfUncial">Celtic Half-Uncial</option>
+                   <option value="InsularMajuscule">Insular Majuscule</option>
                 </select>
               </InsetLabeledField>
             </div>
-            {(script === 'CelticHalfUncial' || (topBandEnabled && topBandScript === 'CelticHalfUncial') || (bottomBandEnabled && bottomBandScript === 'CelticHalfUncial')) && <label className="sm:col-span-2 inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={showCelticGrid} onChange={e => setShowCelticGrid(e.target.checked)} /> Show intermediate grid</label>}
+            {(script === 'InsularMajuscule' || (topBandEnabled && topBandScript === 'InsularMajuscule') || (bottomBandEnabled && bottomBandScript === 'InsularMajuscule')) && <label className="sm:col-span-2 inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={showInsularGrid} onChange={e => setShowInsularGrid(e.target.checked)} /> Show intermediate grid</label>}
 
             <div>
               <InsetLabeledField label="Paper size">
@@ -2452,7 +2452,7 @@ export default function CurvedTitlePage() {
                     disabled={!topBandEnabled}
                   >
                     <option value="TexturaQuadrata">TexturaQuadrata</option>
-                     <option value="CelticHalfUncial">Celtic Half-Uncial</option>
+                     <option value="InsularMajuscule">Insular Majuscule</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="Copperplate">Copperplate</option>
                   </select>
@@ -2490,7 +2490,7 @@ export default function CurvedTitlePage() {
                     disabled={!bottomBandEnabled}
                   >
                     <option value="TexturaQuadrata">TexturaQuadrata</option>
-                     <option value="CelticHalfUncial">Celtic Half-Uncial</option>
+                     <option value="InsularMajuscule">Insular Majuscule</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="Copperplate">Copperplate</option>
                   </select>

@@ -51,7 +51,7 @@ type Strap = {
   nibMMText: string;
   nibAngleDeg: 15 | 35 | 40 | 45;
   constructionGuides?: ConstructionGuideSettings;
-  showCelticGrid?: boolean;
+  showInsularGrid?: boolean;
   xHeightMMText?: string;
   copperplateRatioPreset?: CopperplateRatioPreset;
   copperplateDescUnitsText?: string;
@@ -1004,7 +1004,7 @@ const SCRIPT_DEFAULTS = {
     ascNibText: '2',
     descNibText: '2',
   },
-  CelticHalfUncial: {
+  InsularMajuscule: {
     nibMMText: '4',
     nibAngleDeg: 15 as const,
     xNibText: '5',
@@ -1040,7 +1040,7 @@ function applyScriptDefaults(strap: Strap, script: ScriptId): Strap {
     xNibText: blackletterDefaults.xNibText,
     ascNibText: blackletterDefaults.ascNibText,
     descNibText: blackletterDefaults.descNibText,
-    showCelticGrid: script === 'CelticHalfUncial' ? false : strap.showCelticGrid,
+    showInsularGrid: script === 'InsularMajuscule' ? false : strap.showInsularGrid,
   };
 }
 
@@ -2520,7 +2520,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                         style={{
                           thin: guideStroke.thin,
                           bold: guideStroke.bold,
-                          grid: { thin: guideStroke.thin, showHorizontal: strap.script !== 'CelticHalfUncial' || !!strap.showCelticGrid, showVertical: strap.script !== 'CelticHalfUncial' || !!strap.showCelticGrid },
+                          grid: { thin: guideStroke.thin, showHorizontal: strap.script !== 'InsularMajuscule' || !!strap.showInsularGrid, showVertical: strap.script !== 'InsularMajuscule' || !!strap.showInsularGrid },
                           colors: { ...guideOverlayColors(strap.id, strap.color), construction: strap.constructionGuides?.color ?? '#dc2626' },
                         }}
                         interactive={{ onGuidePointerDown: beginStrapDrag(strap.id), hitStrokeWidthMM: 6 }}
@@ -2553,7 +2553,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
           style={{
             thin: guideStroke.thin,
             bold: guideStroke.bold,
-            grid: { thin: guideStroke.thin, showHorizontal: strapEntry.strap.script !== 'CelticHalfUncial' || !!strapEntry.strap.showCelticGrid, showVertical: strapEntry.strap.script !== 'CelticHalfUncial' || !!strapEntry.strap.showCelticGrid },
+            grid: { thin: guideStroke.thin, showHorizontal: strapEntry.strap.script !== 'InsularMajuscule' || !!strapEntry.strap.showInsularGrid, showVertical: strapEntry.strap.script !== 'InsularMajuscule' || !!strapEntry.strap.showInsularGrid },
             colors: { ...guideOverlayColors(member.strapId, strapEntry.strap.color), construction: strapEntry.strap.constructionGuides?.color ?? '#dc2626' },
           }}
           interactive={{ onGuidePointerDown: beginStrapDrag(member.strapId), hitStrokeWidthMM: 6 }}
@@ -2776,7 +2776,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 </select>
               </InsetLabeledField>
 
-              {activeStrap.script === 'CelticHalfUncial' && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={activeStrap.showCelticGrid ?? false} onChange={e => updateStrap(activeStrap.id, { showCelticGrid: e.target.checked })} /> Show intermediate grid</label>}
+              {activeStrap.script === 'InsularMajuscule' && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={activeStrap.showInsularGrid ?? false} onChange={e => updateStrap(activeStrap.id, { showInsularGrid: e.target.checked })} /> Show intermediate grid</label>}
 
               {activeStrap.script === 'Copperplate' ? (
                 <>

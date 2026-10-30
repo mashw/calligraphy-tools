@@ -5,7 +5,7 @@ import HorizontalGridAppearanceControls from '@/components/guidelines/Horizontal
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import DisclosureSection from '@/components/layout/DisclosureSection';
 import { guidelinesSettingsForScript, type GuidelinesSettings } from '@/lib/guides/straight/settings';
-import { celticHalfUncialRowGapMM } from '@/lib/guides/straight/blackletter';
+import { insularHalfUncialRowGapMM } from '@/lib/guides/straight/blackletter';
 import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 import type { GuidelinesTextMode, PlannedLineAlignment, PlannedTextLine } from '@/lib/layout/types';
@@ -25,11 +25,11 @@ function LinePlanner({lines,plan,script,rightAlignMode,onChange,onRightAlignMode
 export default function GuidelinesSettingsPanel({ value, onChange, paddingMM, onPaddingChange, allowPartialGuidelines, onAllowPartialGuidelinesChange, fitText, onFitTextChange, fitEntry,textMode,plannedLines,rightAlignMode,avoidOccludingElements,onPlanningChange }: { value: GuidelinesSettings; onChange: (value: GuidelinesSettings) => void; paddingMM: number; onPaddingChange: (value: number) => void; allowPartialGuidelines: boolean; onAllowPartialGuidelinesChange: (value: boolean) => void; fitText: string; onFitTextChange: (value: string) => void; fitEntry: GuidelinesTextFitEntry;textMode:GuidelinesTextMode;plannedLines:PlannedTextLine[];rightAlignMode:'waist'|'baseline';avoidOccludingElements:boolean;onPlanningChange:(patch:{textMode?:GuidelinesTextMode;plannedLines?:PlannedTextLine[];rightAlignMode?:'waist'|'baseline';fitText?:string;avoidOccludingElements?:boolean})=>void }) {
   const set = <K extends keyof GuidelinesSettings>(key: K, next: GuidelinesSettings[K]) => {
     const updated: GuidelinesSettings = { ...value, [key]: next };
-    if (value.script === 'CelticHalfUncial'
+    if (value.script === 'InsularMajuscule'
       && (key === 'nibMM' || key === 'xNib' || key === 'ascNib' || key === 'descNib')
-      && Math.abs(value.rowGapMM - celticHalfUncialRowGapMM(value.nibMM, value.xNib, value.ascNib, value.descNib)) < 1e-6) {
+      && Math.abs(value.rowGapMM - insularHalfUncialRowGapMM(value.nibMM, value.xNib, value.ascNib, value.descNib)) < 1e-6) {
       // Follow geometry changes until the user manually edits the row gap.
-      updated.rowGapMM = celticHalfUncialRowGapMM(updated.nibMM, updated.xNib, updated.ascNib, updated.descNib);
+      updated.rowGapMM = insularHalfUncialRowGapMM(updated.nibMM, updated.xNib, updated.ascNib, updated.descNib);
     }
     onChange(updated);
   };

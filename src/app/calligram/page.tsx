@@ -49,23 +49,23 @@ type DefaultsResolver = (args: {
 const MAIN_DEFAULTS = {
   Fraktur: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 40 as const, xNib: 4.5, ascNib: 2, descNib: 2 },
   TexturaQuadrata: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 45 as const, xNib: 5, ascNib: 2, descNib: 2 },
-  CelticHalfUncial: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 15 as const, xNib: 5, ascNib: 2, descNib: 2 },
+  InsularMajuscule: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 15 as const, xNib: 5, ascNib: 2, descNib: 2 },
   Copperplate: { radiusMM: 60, nibMMText: '4', nibAngleDeg: 45 as const, xHeightMMText: '6.0', ratioId: '3:2:3' as const },
 };
 
 const CIRCLE_DEFAULTS = {
   Fraktur: { innerRadiusMM: 21, innerScript: 'Fraktur' as const, innerNibMMText: '2', outerRadiusMM: 78, outerScript: 'Fraktur' as const, outerNibMMText: '2' },
   TexturaQuadrata: { innerRadiusMM: 21, innerScript: 'Fraktur' as const, innerNibMMText: '2', outerRadiusMM: 80, outerScript: 'Fraktur' as const, outerNibMMText: '2' },
-  CelticHalfUncial: { innerRadiusMM: 21, innerScript: 'CelticHalfUncial' as const, innerNibMMText: '2', outerRadiusMM: 80, outerScript: 'CelticHalfUncial' as const, outerNibMMText: '2' },
+  InsularMajuscule: { innerRadiusMM: 21, innerScript: 'InsularMajuscule' as const, innerNibMMText: '2', outerRadiusMM: 80, outerScript: 'InsularMajuscule' as const, outerNibMMText: '2' },
   Copperplate: { innerRadiusMM: 50, innerScript: 'Copperplate' as const, innerNibMMText: '3.5', outerRadiusMM: 92, outerScript: 'Copperplate' as const, outerNibMMText: '3.5' },
 };
 
 
 const BAND_DEFAULT_RULES: Record<ScriptId, Partial<Record<BandId, Partial<Record<ScriptId, BandDefaults>>>>> = {
-  CelticHalfUncial: {
-    main: { CelticHalfUncial: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 15 } },
-    inner: { CelticHalfUncial: { radiusMM: 21, nibMMText: '2' } },
-    outer: { CelticHalfUncial: { radiusMM: 80, nibMMText: '2' } },
+  InsularMajuscule: {
+    main: { InsularMajuscule: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 15 } },
+    inner: { InsularMajuscule: { radiusMM: 21, nibMMText: '2' } },
+    outer: { InsularMajuscule: { radiusMM: 80, nibMMText: '2' } },
   },
   Copperplate: {
     main: {
@@ -475,7 +475,7 @@ export default function CalligramPage() {
   };
   const snap05 = (v: number) => Math.round(v / 0.5) * 0.5;
   const [script, setScript] = useState<ScriptId>(calligramDefaults.script);
-  const [showCelticGrid, setShowCelticGrid] = useState(false);
+  const [showInsularGrid, setShowInsularGrid] = useState(false);
   const [allowPartialNibWidths, setAllowPartialNibWidths] = useState(calligramDefaults.allowPartialNibWidths);
   const [radiusMM, setRadiusMM] = useState(calligramDefaults.radiusMM);
   const [innerOffsetMM, setInnerOffsetMM] = useState(
@@ -717,7 +717,7 @@ export default function CalligramPage() {
 
   const capMM = script === 'Copperplate'
     ? xHeightMM * 1.05
-    : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * nibMM;
+    : (SCRIPT_DEFAULTS[script]?.capHeight ?? 7) * nibMM;
 
   const copperplateHeights = useMemo(() => {
     if (copperplateRatioPreset === 'custom') {
@@ -830,23 +830,23 @@ export default function CalligramPage() {
   const topCtx = useMemo<ScriptContext>(() => {
     if (topBandScript === 'Copperplate') return topCopper.ctx;
     return {
-      xHeightMM: xNib * topBandSizeMM,
+      xHeightMM: (topBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 5 : xNib) * topBandSizeMM,
       nibMM: effectiveTopNibMM,
       scale: 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [topBandScript, topCopper.ctx, topBandSizeMM, effectiveTopNibMM, xNib]);
+  }, [topBandScript, topCopper.ctx, topBandSizeMM, effectiveTopNibMM, xNib, script]);
   const bottomCtx = useMemo<ScriptContext>(() => {
     if (bottomBandScript === 'Copperplate') return bottomCopper.ctx;
     return {
-      xHeightMM: xNib * bottomBandSizeMM,
+      xHeightMM: (bottomBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 5 : xNib) * bottomBandSizeMM,
       nibMM: effectiveBottomNibMM,
       scale: 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [bottomBandScript, bottomCopper.ctx, bottomBandSizeMM, effectiveBottomNibMM, xNib]);
+  }, [bottomBandScript, bottomCopper.ctx, bottomBandSizeMM, effectiveBottomNibMM, xNib, script]);
   const topRun = useMemo(
     () => measureRun(topText, SCRIPT_PROFILES[topBandScript], topCtx),
     [topText, topBandScript, topCtx],
@@ -941,7 +941,7 @@ export default function CalligramPage() {
   const clampedOuterOffsetMM = Math.max(outerOffsetMinMM, Math.min(outerOffsetMaxMM, outerOffsetMM));
 
 const topXMM = useMemo(
-  () => (topBandScript === 'Copperplate' ? topBandSizeMM : topBandSizeMM * (topBandScript === 'CelticHalfUncial' && script !== 'CelticHalfUncial' ? 5 : xNib)),
+  () => (topBandScript === 'Copperplate' ? topBandSizeMM : topBandSizeMM * (topBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 5 : xNib)),
   [topBandScript, topBandSizeMM, xNib, script],
 );
 
@@ -986,11 +986,11 @@ const innerRadiusMaxMM = useMemo(
   const innerNormalSign = useMemo(() => normalSignForBaseline(topBaseline), [topBaseline]);
   const topArcLen = useMemo(() => 2 * Math.PI * innerRadiusMM, [innerRadiusMM]);
   const topAscMM = useMemo(
-    () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * (topBandScript === 'CelticHalfUncial' && script !== 'CelticHalfUncial' ? 2 : ascNib)),
+    () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * (topBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 2 : ascNib)),
     [topBandScript, topBandSizeMM, ascNib, script],
   );
   const topDescMM = useMemo(
-    () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * (topBandScript === 'CelticHalfUncial' && script !== 'CelticHalfUncial' ? 2 : descNib)),
+    () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * (topBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 2 : descNib)),
     [topBandScript, topBandSizeMM, descNib, script],
   );
   const topCapMM = useMemo(
@@ -1032,15 +1032,15 @@ const innerRadiusMaxMM = useMemo(
   );
 
   const bottomXMM = useMemo(
-    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM : bottomBandSizeMM * (bottomBandScript === 'CelticHalfUncial' && script !== 'CelticHalfUncial' ? 5 : xNib)),
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM : bottomBandSizeMM * (bottomBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 5 : xNib)),
     [bottomBandScript, bottomBandSizeMM, xNib, script],
   );
   const bottomAscMM = useMemo(
-    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM * (2.5 / 2) : bottomBandSizeMM * (bottomBandScript === 'CelticHalfUncial' && script !== 'CelticHalfUncial' ? 2 : ascNib)),
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM * (2.5 / 2) : bottomBandSizeMM * (bottomBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 2 : ascNib)),
     [bottomBandScript, bottomBandSizeMM, ascNib, script],
   );
   const bottomDescMM = useMemo(
-    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM * (2.5 / 2) : bottomBandSizeMM * (bottomBandScript === 'CelticHalfUncial' && script !== 'CelticHalfUncial' ? 2 : descNib)),
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM * (2.5 / 2) : bottomBandSizeMM * (bottomBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 2 : descNib)),
     [bottomBandScript, bottomBandSizeMM, descNib, script],
   );
   const bottomCapMM = useMemo(
@@ -1541,10 +1541,10 @@ const innerRadiusMaxMM = useMemo(
     const circles = CIRCLE_DEFAULTS[nextScript];
 
     setScript(nextScript);
-    if (nextScript === 'CelticHalfUncial') setShowCelticGrid(false);
+    if (nextScript === 'InsularMajuscule') setShowInsularGrid(false);
 
-    if (nextScript === 'CelticHalfUncial') {
-      const defaults = MAIN_DEFAULTS.CelticHalfUncial;
+    if (nextScript === 'InsularMajuscule') {
+      const defaults = MAIN_DEFAULTS.InsularMajuscule;
       setXNib(defaults.xNib);
       setAscNib(defaults.ascNib);
       setDescNib(defaults.descNib);
@@ -1854,8 +1854,8 @@ const innerRadiusMaxMM = useMemo(
                     },
                     grid: {
                        thin: gridStrokeWidth,
-                       showHorizontal: script !== 'CelticHalfUncial' || showCelticGrid,
-                       showVertical: script !== 'CelticHalfUncial' || showCelticGrid,
+                       showHorizontal: script !== 'InsularMajuscule' || showInsularGrid,
+                       showVertical: script !== 'InsularMajuscule' || showInsularGrid,
                        colors: { tick: gridColor },
                      },
                   }}
@@ -1876,8 +1876,8 @@ const innerRadiusMaxMM = useMemo(
                         },
                         grid: {
                        thin: gridStrokeWidth,
-                       showHorizontal: topBandScript !== 'CelticHalfUncial' || showCelticGrid,
-                       showVertical: topBandScript !== 'CelticHalfUncial' || showCelticGrid,
+                       showHorizontal: topBandScript !== 'InsularMajuscule' || showInsularGrid,
+                       showVertical: topBandScript !== 'InsularMajuscule' || showInsularGrid,
                        colors: { tick: gridColor },
                      },
                       }}
@@ -1900,8 +1900,8 @@ const innerRadiusMaxMM = useMemo(
                         },
                         grid: {
                        thin: gridStrokeWidth,
-                       showHorizontal: bottomBandScript !== 'CelticHalfUncial' || showCelticGrid,
-                       showVertical: bottomBandScript !== 'CelticHalfUncial' || showCelticGrid,
+                       showHorizontal: bottomBandScript !== 'InsularMajuscule' || showInsularGrid,
+                       showVertical: bottomBandScript !== 'InsularMajuscule' || showInsularGrid,
                        colors: { tick: gridColor },
                      },
                       }}
@@ -2036,11 +2036,11 @@ const innerRadiusMaxMM = useMemo(
                   <option value="Copperplate">Copperplate</option>
                   <option value="Fraktur">Fraktur</option>
                   <option value="TexturaQuadrata">Textura Quadrata</option>
-                   <option value="CelticHalfUncial">Celtic Half-Uncial</option>
+                   <option value="InsularMajuscule">Insular Majuscule</option>
                 </select>
               </InsetLabeledField>
             </div>
-            {(script === 'CelticHalfUncial' || (topBandEnabled && topBandScript === 'CelticHalfUncial') || (bottomBandEnabled && bottomBandScript === 'CelticHalfUncial')) && <label className="sm:col-span-2 inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={showCelticGrid} onChange={e => setShowCelticGrid(e.target.checked)} /> Show intermediate grid</label>}
+            {(script === 'InsularMajuscule' || (topBandEnabled && topBandScript === 'InsularMajuscule') || (bottomBandEnabled && bottomBandScript === 'InsularMajuscule')) && <label className="sm:col-span-2 inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={showInsularGrid} onChange={e => setShowInsularGrid(e.target.checked)} /> Show intermediate grid</label>}
 
             <div>
               <InsetLabeledField label="Paper size">
@@ -2462,7 +2462,7 @@ const innerRadiusMaxMM = useMemo(
                     disabled={!topBandEnabled}
                   >
                     <option value="TexturaQuadrata">TexturaQuadrata</option>
-                     <option value="CelticHalfUncial">Celtic Half-Uncial</option>
+                     <option value="InsularMajuscule">Insular Majuscule</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="Copperplate">Copperplate</option>
                   </select>
@@ -2545,7 +2545,7 @@ const innerRadiusMaxMM = useMemo(
                     disabled={!bottomBandEnabled}
                   >
                     <option value="TexturaQuadrata">TexturaQuadrata</option>
-                     <option value="CelticHalfUncial">Celtic Half-Uncial</option>
+                     <option value="InsularMajuscule">Insular Majuscule</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="Copperplate">Copperplate</option>
                   </select>
