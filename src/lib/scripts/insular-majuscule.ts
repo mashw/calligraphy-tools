@@ -1,17 +1,29 @@
 import type { ScriptProfile } from './types';
 
-// Provisional optical estimates for Insular Majuscule, normalised to o = 1 x-height.
-// Only a few glyph ratios are independently documented; the rest are working estimates
-// from the reference manuscript. Widths exclude interletter spacing and decorative initials.
-// At the standard 5-nib x-height, each width unit equals 1/5 of the x-height.
+// A working calibration of Insular Majuscule line estimation, not a canonical
+// historical alphabet. Most letters remain manuscript-informed optical estimates.
+// Selected widths below are measured visible ink extents from a single 3 mm nib,
+// 15 degree handwriting sample; normalised to nib units at x-height = 5 nibs.
+// Lowercase and ordinary (non-decorative) capitals share widths.
 export const INSULAR_MAJUSCULE_LOWER_NIB_WIDTHS: Readonly<Record<string, number>> = {
   a: 6, b: 5, c: 5, d: 5.5, e: 4.5, f: 4, g: 5, h: 5,
-  i: 2, j: 2, k: 5, l: 2, m: 7.3, n: 4.5, o: 5, p: 5,
-  q: 5, r: 4, s: 4, t: 3.5, u: 4.5, v: 4.5, w: 8,
+  i: 2, j: 2, k: 5, l: 2, m: 23 / 3, n: 17 / 3, o: 17 / 3, p: 6,
+  q: 5, r: 19 / 3, s: 15.5 / 3, t: 17 / 3, u: 16 / 3, v: 4.5, w: 8,
   x: 5, y: 5, z: 5,
 };
-// In this hand ordinary capitals are estimated from the same letter widths;
-// decorated manuscript initials are deliberately excluded from line estimates.
+
+// Pair corrections are derived from written two-letter samples, expressed in
+// nib units. Negative values represent overlap of visible letter shapes.
+// Unmeasured joins use the measured sample median of zero; do not assume
+// uniform positive interletter spacing as in the previous estimator.
+// The 'un' correction is inferred from the two 4-letter samples runt/sunt.
+export const INSULAR_MAJUSCULE_PAIR_SPACING_NIBS: Readonly<Record<string, number>> = {
+  oo: 0, pp: 2 / 3, uu: 2 / 3,
+  po: -1 / 3, op: -1 / 3, pu: 1 / 3,
+  ru: -4 / 3, su: -4.5 / 3, nt: 0,
+  un: 2 / 3,
+};
+
 const punct: Record<string, number> = {
   '.': 1, ',': 1, ':': 1, ';': 1, '!': 1, '?': 2,
   "'": 1, '"': 2, '-': 2, '–': 3, '—': 5, '(': 2, ')': 2,
@@ -28,9 +40,9 @@ export const insularMajusculeProfile: ScriptProfile = {
     return INSULAR_MAJUSCULE_LOWER_NIB_WIDTHS[ch.toLowerCase()] ?? punct[ch] ?? 5;
   },
   afterSpacingUnits: (_prev, ch, next) => {
-    // Approximate one rounded 'o' for word spaces; optically modest letter spacing.
+    // Word spacing is uncalibrated; retain an approximate 5-nib word gap.
     if (ch === ' ') return 5;
     if (!next || next === ' ') return 0;
-    return 0.75;
+    return INSULAR_MAJUSCULE_PAIR_SPACING_NIBS[ch.toLowerCase() + next.toLowerCase()] ?? 0;
   },
 };

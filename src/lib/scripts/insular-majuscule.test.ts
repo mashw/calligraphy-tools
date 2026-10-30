@@ -13,22 +13,23 @@ test('Insular majuscule uses nib-width units and its own profile', () => {
   assert.equal(insularMajusculeProfile.unitToMm!({ xHeightMM: 10, nibMM: 2 }), 2);
 });
 
-test('rounded c and o are approximately an x-height wide', () => {
+test('rounded c and o reflect their separate planning widths', () => {
   assert.equal(insularMajusculeProfile.glyphWidthUnits!('c', context), 5);
-  assert.equal(insularMajusculeProfile.glyphWidthUnits!('o', context), 5);
+  assert.equal(insularMajusculeProfile.glyphWidthUnits!('o', context), 17 / 3);
 });
 
-test('word spacing is approximately an o and punctuation has finite width', () => {
+test('word spaces remain provisional and interletter gaps are pair-dependent', () => {
   assert.equal(insularMajusculeProfile.afterSpacingUnits!('o', ' ', 'c', context), 5);
-  assert.equal(insularMajusculeProfile.afterSpacingUnits!('o', 'c', 'e', context), 0.75);
+  assert.equal(insularMajusculeProfile.afterSpacingUnits!('o', 'c', 'e', context), 0);
+  assert.equal(insularMajusculeProfile.afterSpacingUnits!('o', 'p', 'o', context), -1 / 3);
   assert.equal(insularMajusculeProfile.afterSpacingUnits!('o', 'c', null, context), 0);
   assert.ok(insularMajusculeProfile.glyphWidthUnits!('?', context) > 0);
 });
 
 test('proposed manuscript alphabet widths use o = 5 units', () => {
   const expected: Record<string,number> = {
-    a:6,b:5,c:5,d:5.5,e:4.5,f:4,g:5,h:5,i:2,j:2,k:5,l:2,m:7.3,
-    n:4.5,o:5,p:5,q:5,r:4,s:4,t:3.5,u:4.5,v:4.5,w:8,x:5,y:5,z:5
+    a:6,b:5,c:5,d:5.5,e:4.5,f:4,g:5,h:5,i:2,j:2,k:5,l:2,m:23/3,
+    n:17/3,o:17/3,p:6,q:5,r:19/3,s:15.5/3,t:17/3,u:16/3,v:4.5,w:8,x:5,y:5,z:5
   };
   for (const [letter, width] of Object.entries(expected)) {
     assert.equal(insularMajusculeProfile.glyphWidthUnits!(letter, context), width, letter);
@@ -44,10 +45,31 @@ test('shared measurement engine uses the new profile for text length and charact
   const near = (actual:number, expected:number) => assert.ok(Math.abs(actual-expected)<1e-8, `${actual} differs from ${expected}`);
   const ctx = {xHeightMM:10, nibMM:2*Math.cos(Math.PI/12), scale:1, spaceMult:1};
   const run=measureRun('aom',insularMajusculeProfile,ctx);
-  near(run.glyphs[0].wMM,12);
-  near(run.glyphs[1].wMM,10);
-  near(run.glyphs[2].wMM,14.6);
-  near(run.totalAdvanceMM,39.6); // 12 + 1.5 + 10 + 1.5 + 14.6
-  near(measureRun('AOM',insularMajusculeProfile,ctx).totalAdvanceMM,39.6);
-  near(measureRun('o',insularMajusculeProfile,{...ctx,xHeightMM:15}).totalAdvanceMM,15);
+  near(run.glyphs[0].wMM, 12);
+  near(run.glyphs[1].wMM, 34 / 3);
+  near(run.glyphs[2].wMM, 46 / 3);
+  near(run.totalAdvanceMM, 12 + 34 / 3 + 46 / 3);
+  near(measureRun('AOM',insularMajusculeProfile,ctx).totalAdvanceMM,run.totalAdvanceMM);
+  near(measureRun('o',insularMajusculeProfile,{...ctx,xHeightMM:15}).totalAdvanceMM,17);
+});
+
+test('measured single-letter and pair samples at 3 mm reproduce advances', () => {
+  const measuredCtx = { ...context, xHeightMM: 15, nibMM: 3 };
+  const singles: Record<string,number> = {o:17,p:18,u:16,m:23,n:17,s:15.5,t:17,r:19};
+  const pairs: Record<string,number> = {
+    oo:34,pp:38,uu:34,po:34,op:34,pu:35,ru:31,su:27,nt:34,
+  };
+  for (const [word, mm] of Object.entries({...singles,...pairs})) {
+    const result = measureRun(word, insularMajusculeProfile, measuredCtx);
+    assert.ok(Math.abs(result.totalAdvanceMM - mm) < 1e-8, `${word}: ${result.totalAdvanceMM} != ${mm}`);
+  }
+});
+
+test('multiple-letter comparisons remain plausible without overfitting a single word', () => {
+  const ctx = {...context,xHeightMM:15,nibMM:3};
+  const near=(a:number,b:number)=>assert.ok(Math.abs(a-b)<1e-8,`${a} != ${b}`);
+  near(measureRun('pop',insularMajusculeProfile,ctx).totalAdvanceMM,51);
+  near(measureRun('runt',insularMajusculeProfile,ctx).totalAdvanceMM,67);
+  near(measureRun('sunt',insularMajusculeProfile,ctx).totalAdvanceMM,63);
+  near(measureRun('esse',insularMajusculeProfile,ctx).totalAdvanceMM,58);
 });
