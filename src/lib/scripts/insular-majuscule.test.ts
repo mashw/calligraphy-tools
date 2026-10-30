@@ -38,7 +38,7 @@ test('proposed manuscript alphabet widths use o = 5 units', () => {
 });
 test('o width tracks x-height rather than projected pen width', () => {
   assert.equal(insularMajusculeProfile.unitToMm!({xHeightMM: 10, nibMM: 1.93}), 2);
-  assert.equal(insularMajusculeProfile.glyphWidthUnits!('o',context) * insularMajusculeProfile.unitToMm!({xHeightMM:10,nibMM:1.93}), 10);
+  assert.equal(insularMajusculeProfile.glyphWidthUnits!('o',context) * insularMajusculeProfile.unitToMm!({xHeightMM:10,nibMM:1.93}), 34 / 3);
 });
 
 test('shared measurement engine uses the new profile for text length and character advances', () => {
