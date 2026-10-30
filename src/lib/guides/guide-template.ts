@@ -22,7 +22,7 @@ export type GuideSet = {
   constructionGuides?: ConstructionGuide[];
 };
 
-export type BlackletterScript = 'Fraktur' | 'TexturaQuadrata' | 'CelticHalfUncial';
+export type BlackletterScript = 'Fraktur' | 'TexturaQuadrata' | 'InsularMajuscule';
 export type ConstructionGuideKind = 'downstrokeStart' | 'spurHeight' | 'upperQuadrantStart' | 'lowerQuadrantStart';
 export type MarkerSegment = { a: Pt; b: Pt };
 export type ConstructionGuide = { kind: ConstructionGuideKind; line: Pt[]; markerPoints: Pt[]; nibEdgeSegments: MarkerSegment[]; xSegments: MarkerSegment[]; offsetMM: number; appearance: ConstructionGuideAppearance; dotEvery: number; color: string };

@@ -3,7 +3,7 @@
  * ====================================================================== */
 
 export type PaperId = 'A3' | 'A4' | 'A5' | 'DL' | 'C5' | 'C6';
-export type ScriptId = 'TexturaQuadrata' | 'Fraktur' | 'CelticHalfUncial';
+export type ScriptId = 'TexturaQuadrata' | 'Fraktur' | 'InsularMajuscule';
 export type CurvePresetId =
   | 'simpleArch'
   | 'highArch'
@@ -68,7 +68,7 @@ export const SCRIPT_DEFAULTS: Record<
 > = {
   TexturaQuadrata: { asc: 3, desc: 2, xNibDefault: 5, capHeight: 7.5 },
   Fraktur: { asc: 3, desc: 3, xNibDefault: 5, capHeight: 8 },
-  CelticHalfUncial: { asc: 2, desc: 2, xNibDefault: 5, capHeight: 7 },
+  InsularMajuscule: { asc: 2, desc: 2, xNibDefault: 5, capHeight: 7 },
 };
 
 // Like pointAt(), but allows s < 0 and s > total by extrapolating

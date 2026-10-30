@@ -1,12 +1,12 @@
 import { copperplateProfile } from './copperplate';
 import { frakturProfile } from './fraktur';
-import { celticHalfUncialProfile } from './celtic-half-uncial';
+import { insularMajusculeProfile } from './insular-majuscule';
 import { texturaQuadrataProfile } from './textura-quadrata';
 
 export const SCRIPT_PROFILES = {
   Copperplate: copperplateProfile,
   Fraktur: frakturProfile,
-  CelticHalfUncial: celticHalfUncialProfile,
+  InsularMajuscule: insularMajusculeProfile,
   TexturaQuadrata: texturaQuadrataProfile,
 } as const;
 

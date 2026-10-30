@@ -1,6 +1,6 @@
 import type { ScriptId } from '@/lib/scripts';
 import { DEFAULT_CONSTRUCTION_GUIDES, DEFAULT_HORIZONTAL_GRID_APPEARANCE, type ConstructionGuideSettings, type HorizontalGridAppearance } from '@/lib/guides/guide-template';
-import { BLACKLETTER_GUIDE_DEFAULTS, CELTIC_HALF_UNCIAL_DEFAULTS, celticHalfUncialRowGapMM } from './blackletter';
+import { BLACKLETTER_GUIDE_DEFAULTS, INSULAR_MAJUSCULE_DEFAULTS, insularMajusculeRowGapMM } from './blackletter';
 
 export type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 export type GridWidthMode = 'effective' | 'actual' | 'custom';
@@ -43,19 +43,19 @@ export function createDefaultGuidelinesSettings(): GuidelinesSettings {
 
 /** Apply the complete preset on script selection; custom edits thereafter stay editable. */
 export function guidelinesSettingsForScript(current: GuidelinesSettings, script: ScriptId): GuidelinesSettings {
-  if (script === 'CelticHalfUncial') {
-    const d = CELTIC_HALF_UNCIAL_DEFAULTS;
+  if (script === 'InsularMajuscule') {
+    const d = INSULAR_MAJUSCULE_DEFAULTS;
     return {
       ...current, script, xNib: d.xNib, ascNib: d.ascNib, descNib: d.descNib,
       penAngleDeg: d.penAngleDeg,
-      rowGapMM: celticHalfUncialRowGapMM(current.nibMM),
+      rowGapMM: insularMajusculeRowGapMM(current.nibMM),
       grid: { ...current.grid, horizontal: d.gridHorizontal, vertical: d.gridVertical, nibAngleGuide: d.nibAngleGuide },
     };
   }
-  // Restore standard spacing when leaving Celtic's calculated default.
+  // Restore standard spacing when leaving Insular's calculated default.
   // Retain manual row-gap edits.
-  const rowGapMM = current.script === 'CelticHalfUncial'
-    && Math.abs(current.rowGapMM - celticHalfUncialRowGapMM(current.nibMM, current.xNib, current.ascNib, current.descNib)) < 1e-6
+  const rowGapMM = current.script === 'InsularMajuscule'
+    && Math.abs(current.rowGapMM - insularMajusculeRowGapMM(current.nibMM, current.xNib, current.ascNib, current.descNib)) < 1e-6
     ? createDefaultGuidelinesSettings().rowGapMM
     : current.rowGapMM;
   if (script === 'Copperplate') return { ...current, script, rowGapMM };

@@ -6,7 +6,7 @@ export const DEFAULT_CONSTRUCTION_GUIDES: ConstructionGuideSettings = { upper: f
 export const CONSTRUCTION_GUIDE_DOT_RADIUS_MM = .2;
 export const CONSTRUCTION_GUIDE_X_SIZE_MM = .9;
 
-export function resolveConstructionGuideSettings(script: 'Fraktur' | 'TexturaQuadrata' | 'CelticHalfUncial', value?: Partial<ConstructionGuideSettings>) {
+export function resolveConstructionGuideSettings(script: 'Fraktur' | 'TexturaQuadrata' | 'InsularMajuscule', value?: Partial<ConstructionGuideSettings>) {
   const dotEvery = Number.isFinite(value?.dotEvery) ? Math.max(1, Math.min(12, Math.round(value!.dotEvery!))) : 3;
   const defaultAppearance: ConstructionGuideAppearance = script === 'Fraktur' ? 'nib-edge' : 'dashed';
   return {

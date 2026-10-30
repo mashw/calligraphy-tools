@@ -6,7 +6,7 @@ export const BLACKLETTER_GUIDE_DEFAULTS = {
 
 // Insular half-uncial uses a broad, rounded 5-nib body with 2-nib extensions.
 // Its intermediate grid is optional and starts hidden.
-export const CELTIC_HALF_UNCIAL_DEFAULTS = {
+export const INSULAR_MAJUSCULE_DEFAULTS = {
   xNib: 5,
   ascNib: 2,
   descNib: 2,
@@ -21,11 +21,11 @@ export const CELTIC_HALF_UNCIAL_DEFAULTS = {
  * The tool's row gap excludes ascender and descender guide zones, so subtract
  * those zones to leave two x-heights of space between the letter bodies.
  */
-export function celticHalfUncialRowGapMM(
+export function insularMajusculeRowGapMM(
   nibMM: number,
-  xNib = CELTIC_HALF_UNCIAL_DEFAULTS.xNib,
-  ascNib = CELTIC_HALF_UNCIAL_DEFAULTS.ascNib,
-  descNib = CELTIC_HALF_UNCIAL_DEFAULTS.descNib,
+  xNib = INSULAR_MAJUSCULE_DEFAULTS.xNib,
+  ascNib = INSULAR_MAJUSCULE_DEFAULTS.ascNib,
+  descNib = INSULAR_MAJUSCULE_DEFAULTS.descNib,
 ) {
   return Math.max(0, (2 * xNib - ascNib - descNib) * nibMM);
 }
