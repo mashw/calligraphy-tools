@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 // @ts-expect-error Native Node TypeScript runner uses the explicit .ts extension.
 import { insularMajusculeProfile } from './insular-majuscule.ts';
+// @ts-expect-error The Node TypeScript runner requires .ts module specifiers.
+import { measureRun } from '../measure/measure-run.ts';
 
 const context = { xHeightMM: 10, nibMM: 2, scale: 1, spaceMult: 1 };
 
@@ -36,4 +38,16 @@ test('proposed manuscript alphabet widths use o = 5 units', () => {
 test('o width tracks x-height rather than projected pen width', () => {
   assert.equal(insularMajusculeProfile.unitToMm!({xHeightMM: 10, nibMM: 1.93}), 2);
   assert.equal(insularMajusculeProfile.glyphWidthUnits!('o',context) * insularMajusculeProfile.unitToMm!({xHeightMM:10,nibMM:1.93}), 10);
+});
+
+test('shared measurement engine uses the new profile for text length and character advances', () => {
+  const near = (actual:number, expected:number) => assert.ok(Math.abs(actual-expected)<1e-8, `${actual} differs from ${expected}`);
+  const ctx = {xHeightMM:10, nibMM:2*Math.cos(Math.PI/12), scale:1, spaceMult:1};
+  const run=measureRun('aom',insularMajusculeProfile,ctx);
+  near(run.glyphs[0].wMM,12);
+  near(run.glyphs[1].wMM,10);
+  near(run.glyphs[2].wMM,14.6);
+  near(run.totalAdvanceMM,39.6); // 12 + 1.5 + 10 + 1.5 + 14.6
+  near(measureRun('AOM',insularMajusculeProfile,ctx).totalAdvanceMM,39.6);
+  near(measureRun('o',insularMajusculeProfile,{...ctx,xHeightMM:15}).totalAdvanceMM,15);
 });

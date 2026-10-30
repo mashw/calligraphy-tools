@@ -1,8 +1,9 @@
 import type { ScriptProfile } from './types';
 
-// Optical estimates for Celtic (Insular) half-uncial, expressed in full nib widths.
-// Manuscript letters vary by hand; these are planning widths rather than traced glyph metrics.
-// In particular, the rounded c and o are approximately one x-height wide (5 nibs).
+// Provisional optical estimates for Insular Majuscule, normalised to o = 1 x-height.
+// Only a few glyph ratios are independently documented; the rest are working estimates
+// from the reference manuscript. Widths exclude interletter spacing and decorative initials.
+// At the standard 5-nib x-height, each width unit equals 1/5 of the x-height.
 export const INSULAR_MAJUSCULE_LOWER_NIB_WIDTHS: Readonly<Record<string, number>> = {
   a: 6, b: 5, c: 5, d: 5.5, e: 4.5, f: 4, g: 5, h: 5,
   i: 2, j: 2, k: 5, l: 2, m: 7.3, n: 4.5, o: 5, p: 5,
