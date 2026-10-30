@@ -544,8 +544,8 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
   const settings = element.settings;
   const model = calculateStraightGuidelines(box, settings);
   const horizontalGridAppearance=resolveHorizontalGridAppearance(settings.horizontalGridAppearance);
-  const exportHorizontalGrid = options.constructionGrid && (settings.script !== 'CelticHalfUncial' || settings.grid.horizontal);
-  const exportVerticalGrid = options.constructionGrid && (settings.script !== 'CelticHalfUncial' || settings.grid.vertical);
+  const exportHorizontalGrid = options.constructionGrid && (settings.script !== 'InsularMajuscule' || settings.grid.horizontal);
+  const exportVerticalGrid = options.constructionGrid && (settings.script !== 'InsularMajuscule' || settings.grid.vertical);
   const clipRect = {
     x: settings.margins.left,
     y: 0,
@@ -653,8 +653,8 @@ function curvedTitlePolylines(element: Extract<LayoutElement, { type: 'curved-ti
   const model = buildCurvedTitleModel({ w: element.frame.width, h: element.frame.height }, element.settings);
   const result: PlotPolyline[] = [];
   const horizontalGridAppearance=resolveHorizontalGridAppearance(element.settings.horizontalGridAppearance);
-  const celticGrid=(script:typeof element.settings.script)=>options.constructionGrid && (script!=='CelticHalfUncial' || !!element.settings.showCelticGrid);
-  result.push(...guideSetPolylines(model.guideSet as GuideLike, `curved:${element.id}:main`, { ticks: celticGrid(element.settings.script), hGuides: celticGrid(element.settings.script), horizontalGridAppearance:element.settings.script==='Copperplate'?undefined:horizontalGridAppearance, dashedBaselineWaistline:options.dashedBaselineWaistline, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
+  const insularGrid=(script:typeof element.settings.script)=>options.constructionGrid && (script!=='InsularMajuscule' || !!element.settings.showInsularGrid);
+  result.push(...guideSetPolylines(model.guideSet as GuideLike, `curved:${element.id}:main`, { ticks: insularGrid(element.settings.script), hGuides: insularGrid(element.settings.script), horizontalGridAppearance:element.settings.script==='Copperplate'?undefined:horizontalGridAppearance, dashedBaselineWaistline:options.dashedBaselineWaistline, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
   if (options.midpointReferences && model.midAscPts) {
     const base = polyline(model.midAscPts, `curved:${element.id}:mid-asc`);
     if (base) result.push(...dashPolyline(base, 10, 12));
@@ -664,10 +664,10 @@ function curvedTitlePolylines(element: Extract<LayoutElement, { type: 'curved-ti
     if (base) result.push(...dashPolyline(base, 10, 12));
   }
   if (model.top.enabled) {
-    result.push(...guideSetPolylines(model.top.guideSet as GuideLike, `curved:${element.id}:top`, { pathKeys: ['asc', 'waist'], ticks: celticGrid(element.settings.topBandScript), hGuides: celticGrid(element.settings.topBandScript), horizontalGridAppearance:element.settings.topBandScript==='Copperplate'?undefined:horizontalGridAppearance, dashedBaselineWaistline:options.dashedBaselineWaistline, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
+    result.push(...guideSetPolylines(model.top.guideSet as GuideLike, `curved:${element.id}:top`, { pathKeys: ['asc', 'waist'], ticks: insularGrid(element.settings.topBandScript), hGuides: insularGrid(element.settings.topBandScript), horizontalGridAppearance:element.settings.topBandScript==='Copperplate'?undefined:horizontalGridAppearance, dashedBaselineWaistline:options.dashedBaselineWaistline, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
   }
   if (model.bottom.enabled) {
-    result.push(...guideSetPolylines(model.bottom.guideSet as GuideLike, `curved:${element.id}:bottom`, { pathKeys: ['base', 'desc'], ticks: celticGrid(element.settings.bottomBandScript), hGuides: celticGrid(element.settings.bottomBandScript), horizontalGridAppearance:element.settings.bottomBandScript==='Copperplate'?undefined:horizontalGridAppearance, dashedBaselineWaistline:options.dashedBaselineWaistline, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
+    result.push(...guideSetPolylines(model.bottom.guideSet as GuideLike, `curved:${element.id}:bottom`, { pathKeys: ['base', 'desc'], ticks: insularGrid(element.settings.bottomBandScript), hGuides: insularGrid(element.settings.bottomBandScript), horizontalGridAppearance:element.settings.bottomBandScript==='Copperplate'?undefined:horizontalGridAppearance, dashedBaselineWaistline:options.dashedBaselineWaistline, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
   }
   return translatePolylines(result, element.frame.x, element.frame.y);
 }
@@ -675,7 +675,7 @@ function curvedTitlePolylines(element: Extract<LayoutElement, { type: 'curved-ti
 function calligramPolylines(element: Extract<LayoutElement, { type: 'calligram' }>, options: PlotterExportOptions) {
   const model = buildCalligramModel({ w: element.frame.width, h: element.frame.height }, element.settings);
   const horizontalGridAppearance=resolveHorizontalGridAppearance(element.settings.horizontalGridAppearance);
-  const guideOptions=(script:typeof element.settings.script)=>({ ticks: options.constructionGrid && (script!=='CelticHalfUncial'||!!element.settings.showCelticGrid), hGuides: options.constructionGrid && (script!=='CelticHalfUncial'||!!element.settings.showCelticGrid), horizontalGridAppearance:script==='Copperplate'?undefined:horizontalGridAppearance, dashedBaselineWaistline:options.dashedBaselineWaistline, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg });
+  const guideOptions=(script:typeof element.settings.script)=>({ ticks: options.constructionGrid && (script!=='InsularMajuscule'||!!element.settings.showInsularGrid), hGuides: options.constructionGrid && (script!=='InsularMajuscule'||!!element.settings.showInsularGrid), horizontalGridAppearance:script==='Copperplate'?undefined:horizontalGridAppearance, dashedBaselineWaistline:options.dashedBaselineWaistline, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg });
   const main = guideSetPolylines(model.main.guideSet as GuideLike, `calligram:${element.id}:main`, guideOptions(element.settings.script));
   const mainBand = polygonOccluder([
     ...model.main.guideSet.ascLine,

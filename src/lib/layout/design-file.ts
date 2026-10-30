@@ -150,6 +150,19 @@ export function parseLayoutDesign(source: string): LayoutDesignSnapshot {
   if (parsed.elements.at(-1)?.type !== 'page') fail('The page must be the bottom layer in the saved design.');
 
   const elements = parsed.elements as LayoutElement[];
+  // Version 1 designs written before the script rename must continue to open.
+  // Normalise at the IO boundary; new exports use only InsularMajuscule.
+  for (const element of elements) {
+    if (element.type !== 'guidelines' && element.type !== 'curved-title' && element.type !== 'calligram') continue;
+    const settings = element.settings as unknown as Record<string, unknown>;
+    for (const key of ['script', 'topBandScript', 'bottomBandScript', 'innerScript', 'outerScript']) {
+      if (settings[key] === 'CelticHalfUncial') settings[key] = 'InsularMajuscule';
+    }
+    if (settings.showInsularGrid === undefined && typeof settings.showCelticGrid === 'boolean') {
+      settings.showInsularGrid = settings.showCelticGrid;
+    }
+    delete settings.showCelticGrid;
+  }
   const selectedElementId = typeof parsed.selectedElementId === 'string' && ids.has(parsed.selectedElementId)
     ? parsed.selectedElementId
     : (elements.find(element => element.type !== 'page')?.id ?? 'page');

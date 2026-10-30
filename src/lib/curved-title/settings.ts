@@ -20,7 +20,7 @@ export type CurvedTitleSettings = {
   transparentWhitespace: boolean;
   constructionGuides?: ConstructionGuideSettings;
   horizontalGridAppearance?: HorizontalGridAppearance;
-  showCelticGrid?: boolean;
+  showInsularGrid?: boolean;
 };
 
 export function createDefaultCurvedTitleSettings(): CurvedTitleSettings {
@@ -32,13 +32,13 @@ export function createDefaultCurvedTitleSettings(): CurvedTitleSettings {
     topBandEnabled: false, topText: '', topBandScript: 'TexturaQuadrata', topBandSizeText: '2',
     bottomBandEnabled: false, bottomText: '', bottomBandScript: 'TexturaQuadrata', bottomBandSizeText: '2',
     useCalibration: false, calWordLowerMM: '', calWordDoubleMM: '', userScaleFactor: 1, userSpaceFactor: 1,
-    showCelticGrid: false,
+    showInsularGrid: false,
     rotation: 0, scale: 100, showBoxes: false, showSpanFill: true, transparentWhitespace: true, constructionGuides: { ...DEFAULT_CONSTRUCTION_GUIDES }, horizontalGridAppearance: { ...DEFAULT_HORIZONTAL_GRID_APPEARANCE },
   };
 }
 
-// Keep the Celtic 2:5:2 geometry when chosen in the layout editor.
+// Keep the Insular 2:5:2 geometry when chosen in the layout editor.
 export function curvedTitleSettingsForScript(current: CurvedTitleSettings, script: ScriptId): CurvedTitleSettings {
-  if (script !== 'CelticHalfUncial') return { ...current, script };
-  return { ...current, script, xNib: 5, ascNib: 2, descNib: 2, penAngleDeg: 15, showCelticGrid: false };
+  if (script !== 'InsularMajuscule') return { ...current, script };
+  return { ...current, script, xNib: 5, ascNib: 2, descNib: 2, penAngleDeg: 15, showInsularGrid: false };
 }
