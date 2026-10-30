@@ -1,4 +1,4 @@
-export function blackletterConstructionDistances(actualNibMM: number, penAngleDeg: number, script: 'Fraktur' | 'TexturaQuadrata') {
+export function blackletterConstructionDistances(actualNibMM: number, penAngleDeg: number, script: 'Fraktur' | 'TexturaQuadrata' | 'InsularMajuscule') {
   const effectiveNibMM = actualNibMM * Math.cos(penAngleDeg * Math.PI / 180);
   return {
     effectiveNibMM,

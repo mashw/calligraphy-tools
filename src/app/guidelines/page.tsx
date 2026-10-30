@@ -12,6 +12,7 @@ import GuidelinesRenderer from '@/components/guidelines/GuidelinesRenderer';
 import ConstructionGuideControls from '@/components/guidelines/ConstructionGuideControls';
 import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 import { createDefaultGuidelinesSettings, type GuidelinesSettings } from '@/lib/guides/straight/settings';
+import { insularHalfUncialRowGapMM } from '@/lib/guides/straight/blackletter';
 
 type PaperId = keyof typeof PAPERS_MM;
 type Orientation = 'portrait' | 'landscape';
@@ -541,7 +542,7 @@ const slantAngleDeg = useMemo(() => {
   };
 
   const [script, setScript] = useState<ScriptId>(sharedDefaults.script);
-  const showGridControls = script === 'Fraktur' || script === 'TexturaQuadrata';
+  const showGridControls = script !== 'Copperplate';
   const gridContrastBeforeHigh = useRef<number | null>(null);
 
 
@@ -565,21 +566,50 @@ const slantAngleDeg = useMemo(() => {
     const v = parseFloat(nibText);
     return Number.isFinite(v) ? v : 2;
   }, [nibText]);
-  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(sharedDefaults.penAngleDeg);
+  const [penAngleDeg, setPenAngleDeg] = useState<15 | 35 | 40 | 45>(sharedDefaults.penAngleDeg);
   const [xNib, setXNib] = useState(sharedDefaults.xNib);
 
   const [ascNib, setAscNib] = useState(sharedDefaults.ascNib);
   const [descNib, setDescNib] = useState(sharedDefaults.descNib);
 
   useEffect(() => {
-    if (script === 'Fraktur' || script === 'TexturaQuadrata') {
+    if (script === 'InsularMajuscule') {
+      setXNib(5);
       setAscNib(2);
       setDescNib(2);
+      setPenAngleDeg(15);
+      setShowGridHorizontal(false);
+      setShowGridVertical(false);
+      setShowNibAngleGuide(false);
+    } else if (script === 'Fraktur' || script === 'TexturaQuadrata') {
+      setXNib(4.5);
+      setAscNib(2);
+      setDescNib(2);
+      setPenAngleDeg(script === 'Fraktur' ? 40 : 45);
+      setShowGridHorizontal(true);
+      setShowGridVertical(true);
+      setShowNibAngleGuide(true);
     }
   }, [script]);
 
 
   const [rowGapMM, setRowGapMM] = useState(sharedDefaults.rowGapMM);
+  const lastSuggestedInsularGap = useRef<number | null>(null);
+  const previousRowGapScript = useRef(script);
+  useEffect(() => {
+    const prior = lastSuggestedInsularGap.current;
+    if (script !== 'InsularMajuscule') {
+      if (previousRowGapScript.current === 'InsularMajuscule' && prior !== null) {
+        setRowGapMM(current => Math.abs(current - prior) < 1e-6 ? sharedDefaults.rowGapMM : current);
+      }
+      lastSuggestedInsularGap.current = null;
+    } else {
+      const next = insularHalfUncialRowGapMM(nibMM, xNib, ascNib, descNib);
+      setRowGapMM(current => prior === null || Math.abs(current - prior) < 1e-6 ? next : current);
+      lastSuggestedInsularGap.current = next;
+    }
+    previousRowGapScript.current = script;
+  }, [script, nibMM, xNib, ascNib, descNib]);
 
   const [isNarrow, setIsNarrow] = useState(() => (typeof window !== 'undefined'
     ? window.matchMedia('(max-width: 640px)').matches
@@ -1094,7 +1124,7 @@ const slantAngleDeg = useMemo(() => {
             Calligraphy Tools <span className="text-indigo-600">— Guideline Generator</span>
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Generate printable guidelines for Copperplate and Textura Quadrata using straight baselines.
+            Generate printable guidelines for Copperplate, blackletter, and Insular Majuscule using straight baselines.
           </p>
         </div>
       </header>
@@ -1509,6 +1539,7 @@ const slantAngleDeg = useMemo(() => {
                     <option value="Copperplate">Copperplate</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="TexturaQuadrata">Textura Quadrata</option>
+                     <option value="InsularMajuscule">Insular Majuscule</option>
                   </select>
                 </div>
               </div>
@@ -1763,9 +1794,10 @@ const slantAngleDeg = useMemo(() => {
                       <select
                         className="mt-1 w-full p-2 rounded-lg border border-slate-300"
                         value={penAngleDeg}
-                        onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
+                        onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 15 | 35 | 40 | 45)}
                       >
-                        <option value={35}>35°</option>
+                        <option value={15}>15°</option>
+                         <option value={35}>35°</option>
                         <option value={40}>40°</option>
                         <option value={45}>45°</option>
                       </select>

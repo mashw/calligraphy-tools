@@ -35,7 +35,7 @@ type BandId = 'main' | 'inner' | 'outer';
 type BandDefaults = {
   radiusMM?: number;
   nibMMText?: string;
-  nibAngleDeg?: 35 | 40 | 45;
+  nibAngleDeg?: 15 | 35 | 40 | 45;
   xHeightMMText?: string;
   ratioId?: CopperplateRatioPreset;
 };
@@ -49,17 +49,24 @@ type DefaultsResolver = (args: {
 const MAIN_DEFAULTS = {
   Fraktur: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 40 as const, xNib: 4.5, ascNib: 2, descNib: 2 },
   TexturaQuadrata: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 45 as const, xNib: 5, ascNib: 2, descNib: 2 },
+  InsularMajuscule: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 15 as const, xNib: 5, ascNib: 2, descNib: 2 },
   Copperplate: { radiusMM: 60, nibMMText: '4', nibAngleDeg: 45 as const, xHeightMMText: '6.0', ratioId: '3:2:3' as const },
 };
 
 const CIRCLE_DEFAULTS = {
   Fraktur: { innerRadiusMM: 21, innerScript: 'Fraktur' as const, innerNibMMText: '2', outerRadiusMM: 78, outerScript: 'Fraktur' as const, outerNibMMText: '2' },
   TexturaQuadrata: { innerRadiusMM: 21, innerScript: 'Fraktur' as const, innerNibMMText: '2', outerRadiusMM: 80, outerScript: 'Fraktur' as const, outerNibMMText: '2' },
+  InsularMajuscule: { innerRadiusMM: 21, innerScript: 'InsularMajuscule' as const, innerNibMMText: '2', outerRadiusMM: 80, outerScript: 'InsularMajuscule' as const, outerNibMMText: '2' },
   Copperplate: { innerRadiusMM: 50, innerScript: 'Copperplate' as const, innerNibMMText: '3.5', outerRadiusMM: 92, outerScript: 'Copperplate' as const, outerNibMMText: '3.5' },
 };
 
 
 const BAND_DEFAULT_RULES: Record<ScriptId, Partial<Record<BandId, Partial<Record<ScriptId, BandDefaults>>>>> = {
+  InsularMajuscule: {
+    main: { InsularMajuscule: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 15 } },
+    inner: { InsularMajuscule: { radiusMM: 21, nibMMText: '2' } },
+    outer: { InsularMajuscule: { radiusMM: 80, nibMMText: '2' } },
+  },
   Copperplate: {
     main: {
       Copperplate: {
@@ -468,6 +475,7 @@ export default function CalligramPage() {
   };
   const snap05 = (v: number) => Math.round(v / 0.5) * 0.5;
   const [script, setScript] = useState<ScriptId>(calligramDefaults.script);
+  const [showInsularGrid, setShowInsularGrid] = useState(false);
   const [allowPartialNibWidths, setAllowPartialNibWidths] = useState(calligramDefaults.allowPartialNibWidths);
   const [radiusMM, setRadiusMM] = useState(calligramDefaults.radiusMM);
   const [innerOffsetMM, setInnerOffsetMM] = useState(
@@ -518,7 +526,7 @@ export default function CalligramPage() {
     const v = parseFloat(bottomBandSizeText);
     return Number.isFinite(v) ? v : nibMM;
   }, [bottomBandSizeText, nibMM]);
-  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(MAIN_DEFAULTS.TexturaQuadrata.nibAngleDeg);
+  const [penAngleDeg, setPenAngleDeg] = useState<15 | 35 | 40 | 45>(MAIN_DEFAULTS.TexturaQuadrata.nibAngleDeg);
   const [constructionGuides, setConstructionGuides] = useState(() => ({ upper: false, lower: false, color: '#dc2626', ...calligramDefaults.constructionGuides }));
   const [xNib, setXNib] = useState(MAIN_DEFAULTS.TexturaQuadrata.xNib);
 
@@ -709,7 +717,7 @@ export default function CalligramPage() {
 
   const capMM = script === 'Copperplate'
     ? xHeightMM * 1.05
-    : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * nibMM;
+    : (SCRIPT_DEFAULTS[script]?.capHeight ?? 7) * nibMM;
 
   const copperplateHeights = useMemo(() => {
     if (copperplateRatioPreset === 'custom') {
@@ -822,23 +830,23 @@ export default function CalligramPage() {
   const topCtx = useMemo<ScriptContext>(() => {
     if (topBandScript === 'Copperplate') return topCopper.ctx;
     return {
-      xHeightMM: xNib * topBandSizeMM,
+      xHeightMM: (topBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 5 : xNib) * topBandSizeMM,
       nibMM: effectiveTopNibMM,
       scale: 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [topBandScript, topCopper.ctx, topBandSizeMM, effectiveTopNibMM, xNib]);
+  }, [topBandScript, topCopper.ctx, topBandSizeMM, effectiveTopNibMM, xNib, script]);
   const bottomCtx = useMemo<ScriptContext>(() => {
     if (bottomBandScript === 'Copperplate') return bottomCopper.ctx;
     return {
-      xHeightMM: xNib * bottomBandSizeMM,
+      xHeightMM: (bottomBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 5 : xNib) * bottomBandSizeMM,
       nibMM: effectiveBottomNibMM,
       scale: 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [bottomBandScript, bottomCopper.ctx, bottomBandSizeMM, effectiveBottomNibMM, xNib]);
+  }, [bottomBandScript, bottomCopper.ctx, bottomBandSizeMM, effectiveBottomNibMM, xNib, script]);
   const topRun = useMemo(
     () => measureRun(topText, SCRIPT_PROFILES[topBandScript], topCtx),
     [topText, topBandScript, topCtx],
@@ -933,8 +941,8 @@ export default function CalligramPage() {
   const clampedOuterOffsetMM = Math.max(outerOffsetMinMM, Math.min(outerOffsetMaxMM, outerOffsetMM));
 
 const topXMM = useMemo(
-  () => (topBandScript === 'Copperplate' ? topBandSizeMM : topBandSizeMM * xNib),
-  [topBandScript, topBandSizeMM, xNib],
+  () => (topBandScript === 'Copperplate' ? topBandSizeMM : topBandSizeMM * (topBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 5 : xNib)),
+  [topBandScript, topBandSizeMM, xNib, script],
 );
 
 // Minimum inward offset so that INNER waistline (baseline + topXMM) cannot exceed
@@ -978,17 +986,17 @@ const innerRadiusMaxMM = useMemo(
   const innerNormalSign = useMemo(() => normalSignForBaseline(topBaseline), [topBaseline]);
   const topArcLen = useMemo(() => 2 * Math.PI * innerRadiusMM, [innerRadiusMM]);
   const topAscMM = useMemo(
-    () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * ascNib),
-    [topBandScript, topBandSizeMM, ascNib],
+    () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * (topBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 2 : ascNib)),
+    [topBandScript, topBandSizeMM, ascNib, script],
   );
   const topDescMM = useMemo(
-    () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * descNib),
-    [topBandScript, topBandSizeMM, descNib],
+    () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * (topBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 2 : descNib)),
+    [topBandScript, topBandSizeMM, descNib, script],
   );
   const topCapMM = useMemo(
     () => (topBandScript === 'Copperplate'
       ? topXMM * 1.05
-      : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * topBandSizeMM),
+      : (SCRIPT_DEFAULTS[topBandScript]?.capHeight ?? 7) * topBandSizeMM),
     [topBandScript, topXMM, topBandSizeMM, penAngleDeg, constructionGuides],
   );
   const topTickStepMM = useMemo(
@@ -1024,21 +1032,21 @@ const innerRadiusMaxMM = useMemo(
   );
 
   const bottomXMM = useMemo(
-    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM : bottomBandSizeMM * xNib),
-    [bottomBandScript, bottomBandSizeMM, xNib],
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM : bottomBandSizeMM * (bottomBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 5 : xNib)),
+    [bottomBandScript, bottomBandSizeMM, xNib, script],
   );
   const bottomAscMM = useMemo(
-    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM * (2.5 / 2) : bottomBandSizeMM * ascNib),
-    [bottomBandScript, bottomBandSizeMM, ascNib],
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM * (2.5 / 2) : bottomBandSizeMM * (bottomBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 2 : ascNib)),
+    [bottomBandScript, bottomBandSizeMM, ascNib, script],
   );
   const bottomDescMM = useMemo(
-    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM * (2.5 / 2) : bottomBandSizeMM * descNib),
-    [bottomBandScript, bottomBandSizeMM, descNib],
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM * (2.5 / 2) : bottomBandSizeMM * (bottomBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 2 : descNib)),
+    [bottomBandScript, bottomBandSizeMM, descNib, script],
   );
   const bottomCapMM = useMemo(
     () => (bottomBandScript === 'Copperplate'
       ? bottomXMM * 1.05
-      : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * bottomBandSizeMM),
+      : (SCRIPT_DEFAULTS[bottomBandScript]?.capHeight ?? 7) * bottomBandSizeMM),
     [bottomBandScript, bottomXMM, bottomBandSizeMM, penAngleDeg, constructionGuides],
   );
   const bottomBaseline = useMemo<Pt[]>(() => buildCircleBaseline(outerRadiusMM), [box, outerRadiusMM, startAngleRad, dirSign]);
@@ -1533,8 +1541,14 @@ const innerRadiusMaxMM = useMemo(
     const circles = CIRCLE_DEFAULTS[nextScript];
 
     setScript(nextScript);
+    if (nextScript === 'InsularMajuscule') setShowInsularGrid(false);
 
-    if (nextScript === 'Fraktur') {
+    if (nextScript === 'InsularMajuscule') {
+      const defaults = MAIN_DEFAULTS.InsularMajuscule;
+      setXNib(defaults.xNib);
+      setAscNib(defaults.ascNib);
+      setDescNib(defaults.descNib);
+    } else if (nextScript === 'Fraktur') {
       const blackletter = MAIN_DEFAULTS.Fraktur;
       setXNib(blackletter.xNib);
       setAscNib(blackletter.ascNib);
@@ -1839,9 +1853,11 @@ const innerRadiusMaxMM = useMemo(
                       construction: highContrastMode ? '#111827' : constructionGuides.color,
                     },
                     grid: {
-                      thin: gridStrokeWidth,
-                      colors: { tick: gridColor },
-                    },
+                       thin: gridStrokeWidth,
+                       showHorizontal: script !== 'InsularMajuscule' || showInsularGrid,
+                       showVertical: script !== 'InsularMajuscule' || showInsularGrid,
+                       colors: { tick: gridColor },
+                     },
                   }}
                 />
 
@@ -1859,9 +1875,11 @@ const innerRadiusMaxMM = useMemo(
                       construction: highContrastMode ? '#111827' : constructionGuides.color,
                         },
                         grid: {
-                          thin: gridStrokeWidth,
-                          colors: { tick: gridColor },
-                        },
+                       thin: gridStrokeWidth,
+                       showHorizontal: topBandScript !== 'InsularMajuscule' || showInsularGrid,
+                       showVertical: topBandScript !== 'InsularMajuscule' || showInsularGrid,
+                       colors: { tick: gridColor },
+                     },
                       }}
                     />
                   )}
@@ -1881,9 +1899,11 @@ const innerRadiusMaxMM = useMemo(
                       construction: highContrastMode ? '#111827' : constructionGuides.color,
                         },
                         grid: {
-                          thin: gridStrokeWidth,
-                          colors: { tick: gridColor },
-                        },
+                       thin: gridStrokeWidth,
+                       showHorizontal: bottomBandScript !== 'InsularMajuscule' || showInsularGrid,
+                       showVertical: bottomBandScript !== 'InsularMajuscule' || showInsularGrid,
+                       colors: { tick: gridColor },
+                     },
                       }}
                     />
                   )}
@@ -2016,9 +2036,11 @@ const innerRadiusMaxMM = useMemo(
                   <option value="Copperplate">Copperplate</option>
                   <option value="Fraktur">Fraktur</option>
                   <option value="TexturaQuadrata">Textura Quadrata</option>
+                   <option value="InsularMajuscule">Insular Majuscule</option>
                 </select>
               </InsetLabeledField>
             </div>
+            {(script === 'InsularMajuscule' || (topBandEnabled && topBandScript === 'InsularMajuscule') || (bottomBandEnabled && bottomBandScript === 'InsularMajuscule')) && <label className="sm:col-span-2 inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={showInsularGrid} onChange={e => setShowInsularGrid(e.target.checked)} /> Show intermediate grid</label>}
 
             <div>
               <InsetLabeledField label="Paper size">
@@ -2373,9 +2395,10 @@ const innerRadiusMaxMM = useMemo(
                 <select
                   className={INSET_CONTROL_BASE}
                   value={penAngleDeg}
-                  onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
+                  onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 15 | 35 | 40 | 45)}
                 >
-                  <option value={35}>35°</option>
+                  <option value={15}>15°</option>
+                   <option value={35}>35°</option>
                   <option value={40}>40°</option>
                   <option value={45}>45°</option>
                 </select>
@@ -2439,6 +2462,7 @@ const innerRadiusMaxMM = useMemo(
                     disabled={!topBandEnabled}
                   >
                     <option value="TexturaQuadrata">TexturaQuadrata</option>
+                     <option value="InsularMajuscule">Insular Majuscule</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="Copperplate">Copperplate</option>
                   </select>
@@ -2521,6 +2545,7 @@ const innerRadiusMaxMM = useMemo(
                     disabled={!bottomBandEnabled}
                   >
                     <option value="TexturaQuadrata">TexturaQuadrata</option>
+                     <option value="InsularMajuscule">Insular Majuscule</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="Copperplate">Copperplate</option>
                   </select>

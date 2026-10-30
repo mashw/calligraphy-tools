@@ -431,6 +431,7 @@ export default function CurvedTitlePage() {
   const snap05 = (v: number) => Math.round(v / 0.5) * 0.5;
 
   const [script, setScript] = useState<ScriptId>(curvedTitleDefaults.script);
+  const [showInsularGrid, setShowInsularGrid] = useState(false);
   const [curve, setCurve] = useState<CurvePresetId>(curvedTitleDefaults.curve);
   const [customCurve, setCustomCurve] = useState<CustomCurve>();
   const [flipCurve, setFlipCurve] = useState(curvedTitleDefaults.flipCurve);
@@ -468,7 +469,7 @@ export default function CurvedTitlePage() {
     const v = parseFloat(bottomBandSizeText);
     return Number.isFinite(v) ? v : nibMM;
   }, [bottomBandSizeText, nibMM]);
-  const [penAngleDeg, setPenAngleDeg] = useState<35 | 40 | 45>(45);
+  const [penAngleDeg, setPenAngleDeg] = useState<15 | 35 | 40 | 45>(45);
   const [constructionGuides, setConstructionGuides] = useState(() => ({ upper: false, lower: false, color: '#dc2626', ...curvedTitleDefaults.constructionGuides }));
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
 
@@ -667,7 +668,7 @@ export default function CurvedTitlePage() {
 
   const capMM = script === 'Copperplate'
     ? xHeightMM * 1.05
-    : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * nibMM;
+    : (SCRIPT_DEFAULTS[script]?.capHeight ?? 7) * nibMM;
 
   const copperplateHeights = useMemo(() => {
     if (copperplateRatioPreset === 'custom') {
@@ -764,23 +765,23 @@ export default function CurvedTitlePage() {
   const topCtx = useMemo<ScriptContext>(() => {
     if (topBandScript === 'Copperplate') return topCopper.ctx;
     return {
-      xHeightMM: xNib * topBandSizeMM,
+      xHeightMM: (topBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 5 : xNib) * topBandSizeMM,
       nibMM: effectiveTopNibMM,
       scale: 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [topBandScript, topCopper.ctx, topBandSizeMM, effectiveTopNibMM, xNib]);
+  }, [topBandScript, topCopper.ctx, topBandSizeMM, effectiveTopNibMM, xNib, script]);
   const bottomCtx = useMemo<ScriptContext>(() => {
     if (bottomBandScript === 'Copperplate') return bottomCopper.ctx;
     return {
-      xHeightMM: xNib * bottomBandSizeMM,
+      xHeightMM: (bottomBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 5 : xNib) * bottomBandSizeMM,
       nibMM: effectiveBottomNibMM,
       scale: 1,
       spaceMult: 1,
       capStyle: 'simple',
     };
-  }, [bottomBandScript, bottomCopper.ctx, bottomBandSizeMM, effectiveBottomNibMM, xNib]);
+  }, [bottomBandScript, bottomCopper.ctx, bottomBandSizeMM, effectiveBottomNibMM, xNib, script]);
   const topRun = useMemo(
     () => measureRun(topText, SCRIPT_PROFILES[topBandScript], topCtx),
     [topText, topBandScript, topCtx],
@@ -896,17 +897,17 @@ export default function CurvedTitlePage() {
   const topBaseline = useMemo(() => guideSet.ascLine, [guideSet.ascLine]);
   const topArcLen = useMemo(() => lengthPoly(topBaseline), [topBaseline]);
   const topXMM = useMemo(
-    () => (topBandScript === 'Copperplate' ? topBandSizeMM : topBandSizeMM * xNib),
-    [topBandScript, topBandSizeMM, xNib],
+    () => (topBandScript === 'Copperplate' ? topBandSizeMM : topBandSizeMM * (topBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 5 : xNib)),
+    [topBandScript, topBandSizeMM, xNib, script],
   );
   const topAscMM = useMemo(
-    () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * ascNib),
-    [topBandScript, topBandSizeMM, ascNib],
+    () => (topBandScript === 'Copperplate' ? topBandSizeMM * (2.5 / 2) : topBandSizeMM * (topBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 2 : ascNib)),
+    [topBandScript, topBandSizeMM, ascNib, script],
   );
   const topCapMM = useMemo(
     () => (topBandScript === 'Copperplate'
       ? topXMM * 1.05
-      : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * topBandSizeMM),
+      : (SCRIPT_DEFAULTS[topBandScript]?.capHeight ?? 7) * topBandSizeMM),
     [topBandScript, topXMM, topBandSizeMM, penAngleDeg, constructionGuides],
   );
   const topTickStepMM = useMemo(
@@ -940,17 +941,17 @@ export default function CurvedTitlePage() {
   );
 
   const bottomXMM = useMemo(
-    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM : bottomBandSizeMM * xNib),
-    [bottomBandScript, bottomBandSizeMM, xNib],
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM : bottomBandSizeMM * (bottomBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 5 : xNib)),
+    [bottomBandScript, bottomBandSizeMM, xNib, script],
   );
   const bottomDescMM = useMemo(
-    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM * (2.5 / 2) : bottomBandSizeMM * descNib),
-    [bottomBandScript, bottomBandSizeMM, descNib],
+    () => (bottomBandScript === 'Copperplate' ? bottomBandSizeMM * (2.5 / 2) : bottomBandSizeMM * (bottomBandScript === 'InsularMajuscule' && script !== 'InsularMajuscule' ? 2 : descNib)),
+    [bottomBandScript, bottomBandSizeMM, descNib, script],
   );
   const bottomCapMM = useMemo(
     () => (bottomBandScript === 'Copperplate'
       ? bottomXMM * 1.05
-      : (SCRIPT_DEFAULTS.TexturaQuadrata?.capHeight ?? 7) * bottomBandSizeMM),
+      : (SCRIPT_DEFAULTS[bottomBandScript]?.capHeight ?? 7) * bottomBandSizeMM),
     [bottomBandScript, bottomXMM, bottomBandSizeMM, penAngleDeg, constructionGuides],
   );
   const bottomBaseline = useMemo(() => offset(guideSet.descLine, bottomXMM), [guideSet.descLine, bottomXMM]);
@@ -1743,6 +1744,7 @@ export default function CurvedTitlePage() {
                   style={{
                     thin: swBold,
                     bold: swBold,
+                    grid: { thin: swBold, showHorizontal: script !== 'InsularMajuscule' || showInsularGrid, showVertical: script !== 'InsularMajuscule' || showInsularGrid },
                     colors: {
                       thin: isCurveDragging ? '#7c3aed' : '#111827',
                       bold: isCurveDragging ? '#7c3aed' : '#111827',
@@ -1764,6 +1766,7 @@ export default function CurvedTitlePage() {
                       style={{
                         thin: swBold,
                         bold: swBold,
+                        grid: { thin: swBold, showHorizontal: topBandScript !== 'InsularMajuscule' || showInsularGrid, showVertical: topBandScript !== 'InsularMajuscule' || showInsularGrid },
                         colors: {
                           thin: isCurveDragging ? '#7c3aed' : '#111827',
                           bold: isCurveDragging ? '#7c3aed' : '#111827',
@@ -1785,6 +1788,7 @@ export default function CurvedTitlePage() {
                       style={{
                         thin: swBold,
                         bold: swBold,
+                        grid: { thin: swBold, showHorizontal: bottomBandScript !== 'InsularMajuscule' || showInsularGrid, showVertical: bottomBandScript !== 'InsularMajuscule' || showInsularGrid },
                         colors: {
                           thin: isCurveDragging ? '#7c3aed' : '#111827',
                           bold: isCurveDragging ? '#7c3aed' : '#111827',
@@ -1943,13 +1947,20 @@ export default function CurvedTitlePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
             <div className="sm:col-span-2">
               <InsetLabeledField label="Script">
-                <select className={INSET_CONTROL_BASE} value={script} onChange={e => setScript(e.target.value as ScriptId)}>
+                <select className={INSET_CONTROL_BASE} value={script} onChange={e => {
+                   const next = e.target.value as ScriptId;
+                   setScript(next);
+                   if (next === 'InsularMajuscule') { setXNib(5); setAscNib(2); setDescNib(2); setPenAngleDeg(15); setShowInsularGrid(false); }
+                   else if (next === 'Fraktur' || next === 'TexturaQuadrata') { setXNib(4.5); setAscNib(2); setDescNib(2); setPenAngleDeg(next === 'Fraktur' ? 40 : 45); }
+                 }}>
                   <option value="Copperplate">Copperplate</option>
                   <option value="Fraktur">Fraktur</option>
                   <option value="TexturaQuadrata">Textura Quadrata</option>
+                   <option value="InsularMajuscule">Insular Majuscule</option>
                 </select>
               </InsetLabeledField>
             </div>
+            {(script === 'InsularMajuscule' || (topBandEnabled && topBandScript === 'InsularMajuscule') || (bottomBandEnabled && bottomBandScript === 'InsularMajuscule')) && <label className="sm:col-span-2 inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={showInsularGrid} onChange={e => setShowInsularGrid(e.target.checked)} /> Show intermediate grid</label>}
 
             <div>
               <InsetLabeledField label="Paper size">
@@ -2409,9 +2420,10 @@ export default function CurvedTitlePage() {
                 <select
                   className={INSET_CONTROL_BASE}
                   value={penAngleDeg}
-                  onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 35 | 40 | 45)}
+                  onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 15 | 35 | 40 | 45)}
                 >
-                  <option value={35}>35°</option>
+                  <option value={15}>15°</option>
+                   <option value={35}>35°</option>
                   <option value={40}>40°</option>
                   <option value={45}>45°</option>
                 </select>
@@ -2440,6 +2452,7 @@ export default function CurvedTitlePage() {
                     disabled={!topBandEnabled}
                   >
                     <option value="TexturaQuadrata">TexturaQuadrata</option>
+                     <option value="InsularMajuscule">Insular Majuscule</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="Copperplate">Copperplate</option>
                   </select>
@@ -2477,6 +2490,7 @@ export default function CurvedTitlePage() {
                     disabled={!bottomBandEnabled}
                   >
                     <option value="TexturaQuadrata">TexturaQuadrata</option>
+                     <option value="InsularMajuscule">Insular Majuscule</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="Copperplate">Copperplate</option>
                   </select>

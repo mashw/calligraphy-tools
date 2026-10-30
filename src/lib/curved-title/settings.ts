@@ -9,7 +9,7 @@ export type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 export type CurvedTitleCurveId = CurvePresetId | 'custom';
 export type CurvedTitleSettings = {
   script: ScriptId; curve: CurvedTitleCurveId; customCurve?: CustomCurve; flipCurve: boolean; align: CurvedTitleAlign; text: string;
-  xHeightMM: number; capStyle: 'simple' | 'flourished'; nibText: string; penAngleDeg: 35 | 40 | 45;
+  xHeightMM: number; capStyle: 'simple' | 'flourished'; nibText: string; penAngleDeg: 15 | 35 | 40 | 45;
   xNib: number; ascNib: number; descNib: number;
   copperplateRatioPreset: CopperplateRatioPreset;
   copperplateDescUnitsText: string; copperplateXUnitsText: string; copperplateAscUnitsText: string;
@@ -20,6 +20,7 @@ export type CurvedTitleSettings = {
   transparentWhitespace: boolean;
   constructionGuides?: ConstructionGuideSettings;
   horizontalGridAppearance?: HorizontalGridAppearance;
+  showInsularGrid?: boolean;
 };
 
 export function createDefaultCurvedTitleSettings(): CurvedTitleSettings {
@@ -31,6 +32,13 @@ export function createDefaultCurvedTitleSettings(): CurvedTitleSettings {
     topBandEnabled: false, topText: '', topBandScript: 'TexturaQuadrata', topBandSizeText: '2',
     bottomBandEnabled: false, bottomText: '', bottomBandScript: 'TexturaQuadrata', bottomBandSizeText: '2',
     useCalibration: false, calWordLowerMM: '', calWordDoubleMM: '', userScaleFactor: 1, userSpaceFactor: 1,
+    showInsularGrid: false,
     rotation: 0, scale: 100, showBoxes: false, showSpanFill: true, transparentWhitespace: true, constructionGuides: { ...DEFAULT_CONSTRUCTION_GUIDES }, horizontalGridAppearance: { ...DEFAULT_HORIZONTAL_GRID_APPEARANCE },
   };
+}
+
+// Keep the Insular 2:5:2 geometry when chosen in the layout editor.
+export function curvedTitleSettingsForScript(current: CurvedTitleSettings, script: ScriptId): CurvedTitleSettings {
+  if (script !== 'InsularMajuscule') return { ...current, script };
+  return { ...current, script, xNib: 5, ascNib: 2, descNib: 2, penAngleDeg: 15, showInsularGrid: false };
 }
