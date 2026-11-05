@@ -1083,14 +1083,14 @@ const slantAngleDeg = useMemo(() => {
   const centerX = margins.left + (box.w - margins.left - margins.right) / 2;
 
   return (
-    <main className="min-h-screen text-slate-900 relative">
+    <main className="min-h-screen text-slate-900 relative pb-8">
       {/* FULL-VIEWPORT “PAINT OVER” LAYER */}
       <div className="fixed inset-0 -z-10 bg-slate-100" style={{ backgroundImage: 'none' }} />
 
       {/* Header */}
-      <header className="px-6 pt-8 pb-4">
-        <div className="max-w-[1120px] mx-auto">
-          <h1 className="text-3xl font-semibold tracking-tight">
+      <header className="px-4 sm:px-6 pt-6 sm:pt-8 pb-6">
+        <div className="max-w-[1280px] mx-auto">
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
             Calligraphy Tools <span className="text-indigo-600">— Guideline Generator</span>
           </h1>
           <p className="mt-1 text-sm text-slate-600">
@@ -1100,17 +1100,17 @@ const slantAngleDeg = useMemo(() => {
       </header>
 
       {/* Preview */}
-      <section className="px-6">
-        <div className="max-w-[1120px] mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
+      <section className="px-4 sm:px-6">
+        <div className="max-w-[1280px] mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-semibold text-slate-800">Preview</h3>
                 <InfoTip side="right">
                   Drag anywhere to pan. Zoom with ±. Use full page for print-ready output.
                 </InfoTip>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs text-slate-500">View:</span>
                 <select
                   className="p-1.5 text-sm rounded-lg border border-slate-300"
@@ -1127,27 +1127,27 @@ const slantAngleDeg = useMemo(() => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button onMouseDown={e => e.preventDefault()} onClick={() => adjustZoom('out')} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
+            <div className="flex flex-wrap items-center gap-2">
+              <button onMouseDown={e => e.preventDefault()} aria-label="Zoom out" onClick={() => adjustZoom('out')} className="min-h-10 px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
                 –
               </button>
-              <button onMouseDown={e => e.preventDefault()} onClick={() => adjustZoom('in')} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
+              <button onMouseDown={e => e.preventDefault()} aria-label="Zoom in" onClick={() => adjustZoom('in')} className="min-h-10 px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
                 +
               </button>
-              <button onMouseDown={e => e.preventDefault()} onClick={resetView} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
+              <button onMouseDown={e => e.preventDefault()} onClick={resetView} className="min-h-10 px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
                 Reset view
               </button>
-              <button onMouseDown={e => e.preventDefault()} onClick={goToTop} className="px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white">
+              <button onMouseDown={e => e.preventDefault()} onClick={goToTop} className="min-h-10 px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
                 Top
               </button>
 
-              <button onMouseDown={e => e.preventDefault()} onClick={downloadSVG} className="ml-2 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white">
+              <button onMouseDown={e => e.preventDefault()} onClick={downloadSVG} className="px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
                 SVG
               </button>
-              <button onMouseDown={e => e.preventDefault()} onClick={downloadPDF} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white">
+              <button onMouseDown={e => e.preventDefault()} onClick={downloadPDF} className="px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
                 PDF
               </button>
-              <button onMouseDown={e => e.preventDefault()} onClick={printToScale} className="px-3 py-1.5 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500">
+              <button onMouseDown={e => e.preventDefault()} onClick={printToScale} className="px-3 py-2 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500">
                 Print
               </button>
             </div>
@@ -1197,26 +1197,27 @@ const slantAngleDeg = useMemo(() => {
               <GuidelinesRenderer box={{ width: box.w, height: box.h }} settings={rendererSettings} idPrefix="standalone-guidelines" />
             </svg>
 
-            <div className="pointer-events-none absolute right-3 bottom-2 text-[13px] text-slate-700 text-right space-y-0.5">
-              <div>
-                Baselines: {guideSets.length} · Line height: {lineHeight.toFixed(1)} mm · Row gap: {rowGapMM.toFixed(1)} mm · Row step: {rowStepMM.toFixed(1)} mm
-              </div>
-            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs leading-5 text-slate-600">
+            <span>Baselines: {guideSets.length}</span>
+            <span>Line height: {lineHeight.toFixed(1)} mm</span>
+            <span>Row gap: {rowGapMM.toFixed(1)} mm</span>
+            <span>Row step: {rowStepMM.toFixed(1)} mm</span>
           </div>
         </div>
       </section>
 
       {/* Controls */}
-      <section className="px-6 py-5 max-w-[1120px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <section className="px-4 sm:px-6 py-6 max-w-[1328px] mx-auto grid grid-cols-1 lg:grid-cols-2 items-start gap-6">
         {/* Step 1 */}
-        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 min-w-0 p-5 sm:p-6">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold text-slate-800">Step 1 — Basics</h2>
             <InfoTip side="right">Guidelines are spaced by x-height + ascender + descender.</InfoTip>
           </div>
 
-          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <div className="col-span-2 sm:col-span-1">
+          <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="sm:col-span-2">
               <label className="font-medium text-slate-700">Paper size</label>
               <select
                 className="mt-1 w-full p-2 rounded-lg border border-slate-300"
@@ -1257,11 +1258,11 @@ const slantAngleDeg = useMemo(() => {
             </div>
           </div>
 
-          <div className="my-3 border-t border-slate-200/70" />
+          <div className="my-5 border-t border-slate-200/70" />
 
-          <div className="grid grid-cols-2 gap-y-4 gap-x-10 mt-4">
-            <div className="flex items-center gap-3">
-              <label className="w-28 shrink-0 font-medium text-slate-700">Top margin</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-5">
+            <div className="flex min-w-0 flex-col items-stretch gap-2">
+              <label className="block font-medium text-slate-700">Top margin</label>
               <div className="relative flex-1 min-w-0">
                 <input
                   type="number"
@@ -1275,8 +1276,8 @@ const slantAngleDeg = useMemo(() => {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <label className="w-28 shrink-0 font-medium text-slate-700">Bottom margin</label>
+            <div className="flex min-w-0 flex-col items-stretch gap-2">
+              <label className="block font-medium text-slate-700">Bottom margin</label>
               <div className="relative flex-1 min-w-0">
                 <input
                   type="number"
@@ -1290,8 +1291,8 @@ const slantAngleDeg = useMemo(() => {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <label className="w-28 shrink-0 font-medium text-slate-700">Left margin</label>
+            <div className="flex min-w-0 flex-col items-stretch gap-2">
+              <label className="block font-medium text-slate-700">Left margin</label>
               <div className="relative flex-1 min-w-0">
                 <input
                   type="number"
@@ -1305,8 +1306,8 @@ const slantAngleDeg = useMemo(() => {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <label className="w-28 shrink-0 font-medium text-slate-700">Right margin</label>
+            <div className="flex min-w-0 flex-col items-stretch gap-2">
+              <label className="block font-medium text-slate-700">Right margin</label>
               <div className="relative flex-1 min-w-0">
                 <input
                   type="number"
@@ -1320,14 +1321,14 @@ const slantAngleDeg = useMemo(() => {
               </div>
             </div>
 
-            <div className="col-span-2">
+            <div className="col-span-full">
               <div className="my-2 border-t border-slate-200/70" />
             </div>
 
-            <div className="col-span-2">
-              <div className="grid grid-cols-3 gap-4">
+            <div className="col-span-full">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {/* Baseline */}
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 flex-col items-stretch gap-2">
                   <div className="min-w-0 text-sm font-medium text-slate-700">Baseline</div>
                   <button
                     type="button"
@@ -1347,7 +1348,7 @@ const slantAngleDeg = useMemo(() => {
                 </div>
 
                 {/* High-contrast */}
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 flex-col items-stretch gap-2">
                   <div className="min-w-0 text-sm font-medium text-slate-700">High-contrast</div>
                   <button
                     type="button"
@@ -1379,7 +1380,7 @@ const slantAngleDeg = useMemo(() => {
                 </div>
 
                 {/* Center */}
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 flex-col items-stretch gap-2">
                   <div className="min-w-0 text-sm font-medium text-slate-700">Center</div>
                   <button
                     type="button"
@@ -1399,14 +1400,14 @@ const slantAngleDeg = useMemo(() => {
                 </div>
               </div>
             </div>
-            <div className="col-span-2">
-              <div className="grid grid-cols-2 gap-4 items-center">
+            <div className="col-span-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
                 {/* Baseline color */}
                 <label className="flex items-center justify-between gap-3">
                   <span className="font-medium text-slate-700">Baseline color</span>
                   <input
                     type="color"
-                    className="h-10 w-10 p-0 rounded-md border border-slate-300 bg-white"
+                    className="h-10 w-10 shrink-0 p-0 rounded-md border border-slate-300 bg-white"
                     value={baselineColor}
                     onChange={(e) => {
                       setBaselineColor(e.target.value);
@@ -1420,7 +1421,7 @@ const slantAngleDeg = useMemo(() => {
                   <span className="font-medium text-slate-700">Waistline color</span>
                   <input
                     type="color"
-                    className="h-10 w-10 p-0 rounded-md border border-slate-300 bg-white"
+                    className="h-10 w-10 shrink-0 p-0 rounded-md border border-slate-300 bg-white"
                     value={waistlineColor}
                     onChange={(e) => {
                       setWaistlineColor(e.target.value);
@@ -1431,13 +1432,13 @@ const slantAngleDeg = useMemo(() => {
               </div>
             </div>
 
-            <div className="col-span-2">
-              <div className="my-3 border-t border-slate-200/70" />
+            <div className="col-span-full">
+              <div className="my-5 border-t border-slate-200/70" />
             </div>
 
             {/* X-line contrast */}
             <div>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                 <label className="font-medium text-slate-700">X-line contrast</label>
                 <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : xLineContrast) * 100)}%</span>
               </div>
@@ -1460,7 +1461,7 @@ const slantAngleDeg = useMemo(() => {
 
             {/* X-line thickness */}
             <div>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                 <label className="font-medium text-slate-700">X-line thickness</label>
                 <span className="text-xs text-slate-500">{(highContrastMode ? 1.8 : xLineThickness).toFixed(2)}×</span>
               </div>
@@ -1484,7 +1485,7 @@ const slantAngleDeg = useMemo(() => {
         </div>
 
         {/* Step 2 */}
-        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 min-w-0 p-5 sm:p-6">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold text-slate-800">Step 2 — Heights & Guides</h2>
             <InfoTip side="right">
@@ -1495,11 +1496,11 @@ const slantAngleDeg = useMemo(() => {
           </div>
 
           {/* Top controls */}
-          <div className="mt-3 space-y-3">
+          <div className="mt-5 space-y-5">
             {/* Row 1: Script + X-height (keep 2-up on small screens; collapse only on very narrow) */}
-            <div className="grid grid-cols-2 max-[420px]:grid-cols-1 gap-3">
-              <div className="flex items-center gap-3">
-                <label className="w-28 shrink-0 font-medium text-slate-700">Script</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="flex min-w-0 flex-col items-stretch gap-2">
+                <label className="block font-medium text-slate-700">Script</label>
                 <div className="flex-1 min-w-0">
                   <select
                     className="w-full p-2 rounded-lg border border-slate-300"
@@ -1513,8 +1514,8 @@ const slantAngleDeg = useMemo(() => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <label className="w-28 shrink-0 font-medium text-slate-700">
+              <div className="flex min-w-0 flex-col items-stretch gap-2">
+                <label className="block font-medium text-slate-700">
                   {script === 'Copperplate' ? 'X-height (mm)' : 'x-height (nibs)'}
                 </label>
 
@@ -1570,8 +1571,8 @@ const slantAngleDeg = useMemo(() => {
               /* Copperplate-only options (unchanged content, just keeps it in the “top controls” zone) */
               <div className="space-y-4 pt-1">
                 <div>
-                  <div className="flex items-center gap-3">
-                    <label className="w-28 shrink-0 font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
+                  <div className="flex min-w-0 flex-col items-stretch gap-2">
+                    <label className="block font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
                     <div className="flex-1 min-w-0">
                       <select
                         className="w-full p-2 rounded-lg border border-slate-300"
@@ -1589,7 +1590,7 @@ const slantAngleDeg = useMemo(() => {
                 </div>
 
                 {copperplateRatioPreset === 'custom' && (
-                  <div className="grid grid-cols-2 max-[420px]:grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {/* Desc */}
                     <div>
                       <label className="font-medium text-slate-700">Desc units</label>
@@ -1720,10 +1721,10 @@ const slantAngleDeg = useMemo(() => {
             ) : (
               <>
                 {/* Blackletter controls */}
-                <div className="mt-3 space-y-3">
+                <div className="mt-5 space-y-5">
 
                   {/* Row 2: nib size / pen angle / grid width / angle guide */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 items-start">
                     {/* Nib size */}
                     <div>
                       <label className="font-medium text-slate-700">Nib size (mm)</label>
@@ -1816,7 +1817,7 @@ const slantAngleDeg = useMemo(() => {
                   </div>
 
                   {/* Row 3: ascender / descender */}
-                  <div className="grid grid-cols-2 max-[420px]:grid-cols-1 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
                       <label className="font-medium text-slate-700">Ascender (nibs)</label>
                       <input
@@ -1842,21 +1843,21 @@ const slantAngleDeg = useMemo(() => {
                       />
                     </div>
                   </div>
-                  <div className="rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} compact /></div>
+                  <div className="rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} /></div>
                 </div>
               </>
             )}
           </div>
 
-          <div className="my-3 border-t border-slate-200/70" />
+          <div className="my-5 border-t border-slate-200/70" />
 
           {/* Sliders (unchanged) */}
-          <div className="grid grid-cols-2 max-[520px]:grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-6">
             {script === 'Copperplate' && (
               <>
                 {/* 1st asc/desc dash spacing */}
                 <div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                     <label className="font-medium text-slate-700">1st asc/desc spacing</label>
                     <span className="text-xs text-slate-500">{midlineDashGap.toFixed(1)} mm</span>
                   </div>
@@ -1876,7 +1877,7 @@ const slantAngleDeg = useMemo(() => {
 
                 {/* 1st asc/desc contrast */}
                 <div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                     <label className="font-medium text-slate-700">1st asc/desc contrast</label>
                     <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : midlineDashContrast) * 100)}%</span>
                   </div>
@@ -1901,14 +1902,14 @@ const slantAngleDeg = useMemo(() => {
 
 {script === 'Copperplate' && (
   <>
-    <div className="col-span-2">
-      <div className="my-3 border-t border-slate-200/70" />
+    <div className="col-span-full">
+      <div className="my-5 border-t border-slate-200/70" />
     </div>
 
     {/* Slant angle */}
     <div>
-      <div className="flex items-center gap-3">
-        <label className="w-28 shrink-0 font-medium text-slate-700">Slant angle</label>
+      <div className="flex min-w-0 flex-col items-stretch gap-2">
+        <label className="block font-medium text-slate-700">Slant angle</label>
         <div className="relative flex-1 min-w-0">
           <input
             type="number"
@@ -1943,8 +1944,8 @@ const slantAngleDeg = useMemo(() => {
     </div>
 
     <div>
-      <div className="flex items-center gap-3">
-        <div className="w-28 shrink-0 flex items-center gap-2">
+      <div className="flex min-w-0 flex-col items-stretch gap-2">
+        <div className="flex items-center gap-2">
           <label className="font-medium text-slate-700">Slant 2</label>
           <input
             type="checkbox"
@@ -1975,7 +1976,7 @@ const slantAngleDeg = useMemo(() => {
 
     {/* Slant spacing */}
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <label className="font-medium text-slate-700">Slant spacing</label>
         <span className="text-xs text-slate-500">
           {slantSpacingMM.toFixed(1)} mm
@@ -1994,7 +1995,7 @@ const slantAngleDeg = useMemo(() => {
 
     {/* Slant contrast */}
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <label className="font-medium text-slate-700">Slant contrast</label>
         <span className="text-xs text-slate-500">
           {Math.round((highContrastMode ? 1 : slantLineContrast) * 100)}%
@@ -2021,7 +2022,7 @@ const slantAngleDeg = useMemo(() => {
             {showGridControls && (
               <>
                 <div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                     <label className="font-medium text-slate-700">Grid contrast</label>
                     <span className="text-xs text-slate-500">{Math.round(gridContrast * 100)}%</span>
                   </div>
@@ -2041,7 +2042,7 @@ const slantAngleDeg = useMemo(() => {
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                     <label className="font-medium text-slate-700">Grid thickness</label>
                     <span className="text-xs text-slate-500">{gridThickness.toFixed(2)}×</span>
                   </div>
@@ -2064,7 +2065,7 @@ const slantAngleDeg = useMemo(() => {
           </div>
 
           {showGridControls && (
-            <div className="mt-3 grid grid-cols-2 max-[520px]:grid-cols-1 gap-4">
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-6">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-medium text-slate-700">Horizontal grid lines</div>
                 <button
