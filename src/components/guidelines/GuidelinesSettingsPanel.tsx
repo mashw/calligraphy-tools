@@ -5,7 +5,7 @@ import HorizontalGridAppearanceControls from '@/components/guidelines/Horizontal
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import DisclosureSection from '@/components/layout/DisclosureSection';
 import { guidelinesSettingsForScript, type GuidelinesSettings } from '@/lib/guides/straight/settings';
-import { insularHalfUncialRowGapMM } from '@/lib/guides/straight/blackletter';
+import { insularMajusculeRowGapMM } from '@/lib/guides/straight/blackletter';
 import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 import type { GuidelinesTextMode, PlannedLineAlignment, PlannedTextLine } from '@/lib/layout/types';
@@ -27,9 +27,9 @@ export default function GuidelinesSettingsPanel({ value, onChange, paddingMM, on
     const updated: GuidelinesSettings = { ...value, [key]: next };
     if (value.script === 'InsularMajuscule'
       && (key === 'nibMM' || key === 'xNib' || key === 'ascNib' || key === 'descNib')
-      && Math.abs(value.rowGapMM - insularHalfUncialRowGapMM(value.nibMM, value.xNib, value.ascNib, value.descNib)) < 1e-6) {
+      && Math.abs(value.rowGapMM - insularMajusculeRowGapMM(value.nibMM, value.xNib, value.ascNib, value.descNib)) < 1e-6) {
       // Follow geometry changes until the user manually edits the row gap.
-      updated.rowGapMM = insularHalfUncialRowGapMM(updated.nibMM, updated.xNib, updated.ascNib, updated.descNib);
+      updated.rowGapMM = insularMajusculeRowGapMM(updated.nibMM, updated.xNib, updated.ascNib, updated.descNib);
     }
     onChange(updated);
   };
