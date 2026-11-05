@@ -12,7 +12,7 @@ import GuidelinesRenderer from '@/components/guidelines/GuidelinesRenderer';
 import ConstructionGuideControls from '@/components/guidelines/ConstructionGuideControls';
 import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 import { createDefaultGuidelinesSettings, type GuidelinesSettings } from '@/lib/guides/straight/settings';
-import { insularHalfUncialRowGapMM } from '@/lib/guides/straight/blackletter';
+import { insularMajusculeRowGapMM } from '@/lib/guides/straight/blackletter';
 
 type PaperId = keyof typeof PAPERS_MM;
 type Orientation = 'portrait' | 'landscape';
@@ -604,7 +604,7 @@ const slantAngleDeg = useMemo(() => {
       }
       lastSuggestedInsularGap.current = null;
     } else {
-      const next = insularHalfUncialRowGapMM(nibMM, xNib, ascNib, descNib);
+      const next = insularMajusculeRowGapMM(nibMM, xNib, ascNib, descNib);
       setRowGapMM(current => prior === null || Math.abs(current - prior) < 1e-6 ? next : current);
       lastSuggestedInsularGap.current = next;
     }
