@@ -40,8 +40,8 @@ function download(content: BlobPart, type: string, name: string) {
 export default function WovenPage() {
   const [design, setDesign] = useState<Design>(DEFAULT_DESIGN);
   const [selected, setSelected] = useState<string | null>(null);
-  const [view, setView] = useState<View>("autofit");
-  const [custom, setCustom] = useState<Box | null>(null);
+  
+  
   const [status, setStatus] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -78,7 +78,7 @@ export default function WovenPage() {
       h: maxY - minY + 16,
     };
   }, [model]);
-  const full = { x: -3, y: -3, w: model.page.w + 6, h: model.page.h + 6 };
+  
   const camera = useEditorCamera(svgRef, {x:0,y:0,w:model.page.w,h:model.page.h}, fit);
   const vb = camera;
   function update<K extends keyof Design>(key: K, value: Design[K]) {
@@ -99,11 +99,7 @@ export default function WovenPage() {
       },
     }));
   }
-  function preset(next: View) {
-    if (next === "custom") setCustom(vb);
-    else setCustom(null);
-    setView(next);
-  }
+  function preset(next: View) { camera.fit(next === 'autofit' ? 'content' : 'page'); }
   
   function numeric(
     key: keyof typeof LIMITS,
@@ -231,8 +227,8 @@ export default function WovenPage() {
       dy = e.clientY - d.y;
     if (Math.hypot(dx, dy) > 4) d.moved = true;
     if (d.moved) {
-      setView("custom");
-      setCustom({
+
+      camera.setFrame({
         ...d.box,
         x: d.box.x - dx / d.scale,
         y: d.box.y - dy / d.scale,

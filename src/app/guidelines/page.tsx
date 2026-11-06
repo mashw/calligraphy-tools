@@ -342,8 +342,8 @@ export default function GuidelinesPage() {
   // ---------- State ----------
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
-  const [view, setView] = useState<ViewMode>('autofit');
-  const [customOrigin, setCustomOrigin] = useState<'autofit' | 'fullpage'>('autofit');
+  
+  
 
 
   const [showBaselineIndicator, setShowBaselineIndicator] = useState(sharedDefaults.appearance.baselineIndicator);
@@ -521,43 +521,19 @@ const slantAngleDeg = useMemo(() => {
     previousRowGapScript.current = script;
   }, [script, nibMM, xNib, ascNib, descNib]);
 
-  const [isNarrow, setIsNarrow] = useState(() => (typeof window !== 'undefined'
-    ? window.matchMedia('(max-width: 640px)').matches
-    : false));
-  const DEFAULT_ZOOM = isNarrow ? 5 : 4;
-  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
-  const DEFAULT_AUTOFIT_ZOOM = 4;
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
+  
+  
+  
+  
+  
+  
 
-  const dragRef = useRef<{
-    px: number;
-    py: number;
-    panX: number;
-    panY: number;
-  } | null>(null);
+  
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(max-width: 640px)');
-    const update = () => setIsNarrow(mq.matches);
-    update();
-    if (mq.addEventListener) {
-      mq.addEventListener('change', update);
-    } else {
-      mq.addListener(update);
-    }
-    return () => {
-      if (mq.removeEventListener) {
-        mq.removeEventListener('change', update);
-      } else {
-        mq.removeListener(update);
-      }
-    };
-  }, []);
+  
 
   
 
@@ -864,7 +840,7 @@ const slantAngleDeg = useMemo(() => {
                   const id = e.target.value as PaperId;
                   setPaper(id);
                   setOrientation(PAPERS_MM[id].defaultOrientation);
-                  setPan({ x: 0, y: 0 });
+                  camera.fit('page');
                 }}
               >
                 {Object.entries(PAPERS_MM).map(([id, p]) => (

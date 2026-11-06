@@ -176,6 +176,7 @@ export default function LayoutStage({ elements, selectedId, textFitPlans, onSele
   };
   const beginRotate=(e:React.PointerEvent<SVGElement>,element:LayoutElement)=>{
     if(e.button!==0||element.type==='page'||element.locked||!svgRef.current)return;e.preventDefault();e.stopPropagation();onSelect(element.id);
+    camera.freeze();
     const rect=svgRef.current.getBoundingClientRect(),centre=elementRotationCenter(element),px=vb.x+(e.clientX-rect.left)/rect.width*vb.w,py=vb.y+(e.clientY-rect.top)/rect.height*vb.h;
     const rotationDeg=element.rotationDeg??0;
     interactionRef.current={mode:'rotate',pointerId:e.pointerId,elementId:element.id,original:element.frame,live:element.frame,rotationDeg,initialRotation:rotationDeg,initialPointerAngle:Math.atan2(py-centre.y,px-centre.x),centre,rect,vb};

@@ -2,8 +2,6 @@
 
 import { Toggle, NumericInput, Select, Button, Slider } from '@/components/editor/Controls';
 
-import { InfoTip } from '@/components/editor/Controls';
-
 import { useRef as useCameraRef } from 'react';
 import { pointBounds } from '@/lib/editor/camera';
 import { useEditorCamera } from '@/components/editor/useEditorCamera';
@@ -231,10 +229,10 @@ function KnotPage() {
   const [crossings, setCrossings] = useState<Crossing[]>(() => detectCrossings(INITIAL_GENERATION.sampled));
   const [selectedCrossingId, setSelectedCrossingId] = useState<number | null>(null);
 
-  const [view, setView] = useState<ViewMode>('autofit');
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const dragRef = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+  
+  
+  
+  
 
   const regenerate = (nextSeed: number, nextSymmetry: SymmetryMode, nextComplexity: number) => {
     const next = generateKnotSkeleton(nextSeed, nextSymmetry, nextComplexity);
@@ -306,19 +304,9 @@ function KnotPage() {
 
   const fullPolylinePath = useMemo(() => polylineToPath(sampledPolyline), [sampledPolyline]);
 
-  const zoomedSize = useMemo(() => ({
-    w: BOX.w / zoom,
-    h: BOX.h / zoom,
-  }), [zoom]);
+  
 
-  const clampedPan = useMemo(() => {
-    const maxPanX = Math.max(0, (BOX.w - zoomedSize.w) / 2);
-    const maxPanY = Math.max(0, (BOX.h - zoomedSize.h) / 2);
-    return {
-      x: clamp(pan.x, -maxPanX, maxPanX),
-      y: clamp(pan.y, -maxPanY, maxPanY),
-    };
-  }, [pan, zoomedSize.h, zoomedSize.w]);
+  
 
   const svgRef = useCameraRef<SVGSVGElement>(null);
 const camera = useEditorCamera(svgRef, {x:0,y:0,w:BOX.w,h:BOX.h}, pointBounds(sampledPolyline,{x:0,y:0,w:BOX.w,h:BOX.h},10));

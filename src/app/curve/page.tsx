@@ -305,8 +305,8 @@ export default function CurvedTitlePage() {
   // ---------- State ----------
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
-  const [view, setView] = useState<ViewMode>('autofit');
-  const [customOrigin, setCustomOrigin] = useState<'autofit' | 'fullpage'>('autofit');
+  
+  
 
   const snapHalf = (v: number) => Math.round(v * 2) / 2;
 
@@ -384,11 +384,11 @@ export default function CurvedTitlePage() {
     : false));
   const DEFAULT_ZOOM = isNarrow ? 5 : 4;
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
-  const DEFAULT_AUTOFIT_ZOOM = 4;
-  const [pan, setPan] = useState({ x: 0, y: 0 });
+  
+  
 
-  const [savedViewBeforeCurveDrag, setSavedViewBeforeCurveDrag] = useState<ViewMode | null>(null);
-  const [savedZoomBeforeCurveDrag, setSavedZoomBeforeCurveDrag] = useState<number | null>(null);
+  
+  
 
   const [curveOffset, setCurveOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isCurveDragging, setIsCurveDragging] = useState(false);
@@ -419,24 +419,7 @@ export default function CurvedTitlePage() {
   // Full-viewport paint layer to hide any layout decorations behind this route
   
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(max-width: 640px)');
-    const update = () => setIsNarrow(mq.matches);
-    update();
-    if (mq.addEventListener) {
-      mq.addEventListener('change', update);
-    } else {
-      mq.addListener(update);
-    }
-    return () => {
-      if (mq.removeEventListener) {
-        mq.removeEventListener('change', update);
-      } else {
-        mq.removeListener(update);
-      }
-    };
-  }, []);
+  
 
   
 
@@ -494,7 +477,7 @@ export default function CurvedTitlePage() {
     }
   }, [xHeightMM, script, useCalibration, calWordLowerMM, calWordDoubleMM, userScaleFactor, userSpaceFactor]);
 
-  const fs = (mm: number) => mm / Math.max(zoom, 0.001);
+  const fs = (mm: number) => mm / Math.max(camera.zoom, 0.001);
 
   // ---------- Page box (mm) ----------
   const raw = PAPERS_MM[paper];
@@ -984,20 +967,7 @@ export default function CurvedTitlePage() {
     );
   });
 
-  const getGuideCenter = () => {
-    const pts = [
-      ...guideSet.ascLine,
-      ...guideSet.waistLine,
-      ...guideSet.baseLine,
-      ...guideSet.descLine,
-    ];
-    const xs = pts.map(p => p.x);
-    const ys = pts.map(p => p.y);
-    return {
-      cx: (Math.min(...xs) + Math.max(...xs)) / 2,
-      cy: (Math.min(...ys) + Math.max(...ys)) / 2,
-    };
-  };
+  
 
   
 
@@ -1052,13 +1022,7 @@ export default function CurvedTitlePage() {
   }
 
   /* ---------------- Pan & Curve Drag handlers ---------------- */
-  function onPointerDown(e: React.PointerEvent<SVGSVGElement>) {
-    const svg = svgRef.current;
-    if (!svg) return;
-    svg.setPointerCapture(e.pointerId);
-    dragRef.current = { px: e.clientX, py: e.clientY, panX: pan.x, panY: pan.y, mode: 'pan' };
-    setIsCurveDragging(false);
-  }
+  
 
   function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
     if (!dragRef.current) return;
@@ -1107,16 +1071,13 @@ export default function CurvedTitlePage() {
       return;
     }
 
-    // Pan stage
-    const nx = dragRef.current.panX - (e.clientX - dragRef.current.px) * mmPerPxX;
-    const ny = dragRef.current.panY - (e.clientY - dragRef.current.py) * mmPerPxY;
-    setPan({ x: nx, y: ny });
+
   }
 
   function onPointerUp(e: React.PointerEvent<SVGSVGElement>) {
     const svg = svgRef.current;
     if (!svg) return;
-    const wasCurve = dragRef.current?.mode === 'curve';
+
     try {
       svg.releasePointerCapture(e.pointerId);
     } catch {
@@ -1125,17 +1086,7 @@ export default function CurvedTitlePage() {
     dragRef.current = null;
     setIsCurveDragging(false);
 
-    if (wasCurve && savedViewBeforeCurveDrag) {
-      setView(savedViewBeforeCurveDrag);
-      setSavedViewBeforeCurveDrag(null);
-
-      if (savedZoomBeforeCurveDrag != null) {
-        setZoom(savedZoomBeforeCurveDrag);
-        setSavedZoomBeforeCurveDrag(null);
-      }
-
-      setPan({ x: 0, y: 0 });
-    }
+    
   }
 
   
@@ -1202,24 +1153,19 @@ export default function CurvedTitlePage() {
   }
 
   function onGuidePointerDown(e: React.PointerEvent<SVGPathElement | SVGLineElement>) {
+    camera.freeze();
     e.stopPropagation();
     const svg = svgRef.current;
     if (!svg) return;
     svg.setPointerCapture(e.pointerId);
 
-    if (view !== 'fullpage') {
-      setSavedViewBeforeCurveDrag(prev => (prev === null ? view : prev));
-      setSavedZoomBeforeCurveDrag(prev => (prev === null ? zoom : prev));
-      setView('fullpage');
-      setZoom(1);
-      setPan({ x: 0, y: 0 });
-    }
+    
 
     dragRef.current = {
       px: e.clientX,
       py: e.clientY,
-      panX: pan.x,
-      panY: pan.y,
+      panX: 0,
+      panY: 0,
       mode: 'curve',
       ox: curveOffset.x,
       oy: curveOffset.y,
@@ -1311,7 +1257,6 @@ export default function CurvedTitlePage() {
               className="editor-svg"
               style={{ background: '#cbd5e1' }}
               preserveAspectRatio="xMidYMid meet"
-              onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerLeave={onPointerUp}
@@ -1630,7 +1575,7 @@ export default function CurvedTitlePage() {
                     const id = e.target.value as PaperId;
                     setPaper(id);
                     setOrientation(PAPERS_MM[id].defaultOrientation);
-                    setPan({ x: 0, y: 0 });
+                    camera.fit('page');
                   }}
                 >
                   {Object.entries(PAPERS_MM).map(([id, p]) => (

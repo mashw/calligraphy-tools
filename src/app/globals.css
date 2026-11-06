@@ -198,3 +198,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .ui-input[aria-invalid=true] { border-color: #d94758; }
 .ui-toggle, .ui-slider { accent-color: var(--accent); }
 .ui-toggle { width: 16px; height: 16px; flex-shrink: 0; }
+.editor-svg { cursor: grab; }
+.editor-svg:active { cursor: grabbing; }
+.editor-workspace.inspector-hidden.has-layers { grid-template-columns: minmax(0,1fr); }
+.editor-workspace.inspector-hidden.has-layers .editor-preview { grid-column: 1; }

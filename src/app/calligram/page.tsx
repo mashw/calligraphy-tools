@@ -350,8 +350,8 @@ export default function CalligramPage() {
   // ---------- State ----------
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>('landscape');
-  const [view, setView] = useState<ViewMode>('fullpage');
-  const [customOrigin, setCustomOrigin] = useState<'autofit' | 'fullpage'>('fullpage');
+  
+  
 
   const snapHalf = (v: number) => Math.round(v * 2) / 2;
 
@@ -435,13 +435,11 @@ export default function CalligramPage() {
   const [highContrastMode, setHighContrastMode] = useState(false);
 
 
-  const [isNarrow, setIsNarrow] = useState(() => (typeof window !== 'undefined'
-    ? window.matchMedia('(max-width: 640px)').matches
-    : false));
-  const DEFAULT_ZOOM = isNarrow ? 5 : 4;
-  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
-  const DEFAULT_AUTOFIT_ZOOM = 4;
-  const [pan, setPan] = useState({ x: 0, y: 0 });
+  
+  
+  
+  
+  
 
   const [isCurveDragging, setIsCurveDragging] = useState(false);
 
@@ -454,13 +452,7 @@ export default function CalligramPage() {
     && ((topBandEnabled && isBlackletterScript(topBandScript))
       || (bottomBandEnabled && isBlackletterScript(bottomBandScript)));
 
-  const dragRef = useRef<{
-    px: number;
-    py: number;
-    panX: number;
-    panY: number;
-    mode?: 'pan';
-  } | null>(null);
+  
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   
@@ -468,24 +460,7 @@ export default function CalligramPage() {
   // Full-viewport paint layer to hide any layout decorations behind this route
   
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(max-width: 640px)');
-    const update = () => setIsNarrow(mq.matches);
-    update();
-    if (mq.addEventListener) {
-      mq.addEventListener('change', update);
-    } else {
-      mq.addListener(update);
-    }
-    return () => {
-      if (mq.removeEventListener) {
-        mq.removeEventListener('change', update);
-      } else {
-        mq.removeListener(update);
-      }
-    };
-  }, []);
+  
 
   
 
@@ -543,7 +518,7 @@ export default function CalligramPage() {
     }
   }, [xHeightMM, script, useCalibration, calWordLowerMM, calWordDoubleMM, userScaleFactor, userSpaceFactor]);
 
-  const fs = (mm: number) => mm / Math.max(zoom, 0.001);
+  
 
   // ---------- Page box (mm) ----------
   const raw = PAPERS_MM[paper];
@@ -1149,20 +1124,7 @@ const innerRadiusMaxMM = useMemo(
     );
   });
 
-  const getGuideCenter = () => {
-    const pts = [
-      ...guideSet.ascLine,
-      ...guideSet.waistLine,
-      ...guideSet.baseLine,
-      ...guideSet.descLine,
-    ];
-    const xs = pts.map(p => p.x);
-    const ys = pts.map(p => p.y);
-    return {
-      cx: (Math.min(...xs) + Math.max(...xs)) / 2,
-      cy: (Math.min(...ys) + Math.max(...ys)) / 2,
-    };
-  };
+  
 
   
 
@@ -1682,7 +1644,7 @@ const innerRadiusMaxMM = useMemo(
                     const id = e.target.value as PaperId;
                     setPaper(id);
                     setOrientation(PAPERS_MM[id].defaultOrientation);
-                    setPan({ x: 0, y: 0 });
+                    camera.fit('page');
                   }}
                 >
                   {Object.entries(PAPERS_MM).map(([id, p]) => (

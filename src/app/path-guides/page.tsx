@@ -5,7 +5,7 @@ import { Button, NumericInput, Slider, Select, Toggle } from '@/components/edito
 import { INSET_CONTROL_BASE, INSET_CONTROL_MM, INSET_CONTROL_WIDE, InsetLabeledField } from '@/components/editor/Controls';
 
 import { pointBounds } from '@/lib/editor/camera';
-import { useEditorCamera } from '@/components/editor/useEditorCamera';
+import { useEditorCamera, type CameraSnapshot } from '@/components/editor/useEditorCamera';
 import PreviewToolbar from '@/components/editor/PreviewToolbar';
 
 import EditorWorkspace from '@/components/editor/EditorWorkspace';
@@ -84,6 +84,7 @@ type StrapGroup = {
 };
 
 type ExportedStateV1 = {
+  camera?: CameraSnapshot;
   paper: PaperId;
   orientation: Orientation;
   view: ViewMode;
@@ -1507,6 +1508,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 };
 
   const buildExportedState = (): ExportedStateV1 => ({
+    camera: camera.snapshot,
     // Export canonical placement fields for each strap: d, offset, scalePct, rotDeg, flip, and array order.
     paper,
     orientation,
@@ -1533,6 +1535,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
   const loadPreset = (preset: PathGuidesPresetV1) => {
     const state = { ...preset.state, straps: normalizeGuideJoinLinks(assignDistinctColors(preset.state.straps)) };
+    camera.restore(state.camera);
     setPaper(state.paper);
     setOrientation(state.orientation);
     setView(state.view);
@@ -1563,7 +1566,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       nudgeTimerRef.current = null;
     }
     setSelectedPresetId(preset.id);
-    lastAppliedPresetStateRef.current = JSON.stringify(state);
+    lastAppliedPresetStateRef.current = JSON.stringify({ ...state, camera: undefined });
   };
 
   const serializedCurrentState = useMemo(() => JSON.stringify({

@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { fitBounds, resizeBounds, zoomBounds, type Bounds, type Size } from '@/lib/editor/camera';
+import { fitBounds, resizeBounds, validBounds, zoomBounds, type Bounds, type Size } from '@/lib/editor/camera';
 
 type Mode = 'page' | 'content' | 'custom';
 type CustomView = { frame: Bounds; size: Size };
+export type CameraSnapshot = { mode: Mode; frame: Bounds; size: Size };
 
 export function useEditorCamera(svgRef: RefObject<SVGSVGElement | null>, page: Bounds, content: Bounds = page, backgroundPan = true) {
   const [size, setSize] = useState<Size>({ width: 800, height: 600 });
@@ -81,6 +82,14 @@ export function useEditorCamera(svgRef: RefObject<SVGSVGElement | null>, page: B
     ...frame, minX: frame.x, minY: frame.y, vw: frame.w, vh: frame.h,
     str: `${frame.x} ${frame.y} ${frame.w} ${frame.h}`,
     mode, zoom: fittedPage.w / frame.w, zoomBy,
+    freeze: () => { setCustom({ frame, size }); setMode('custom'); },
+    setFrame: (next: Bounds) => { if (validBounds(next)) { setCustom({ frame: next, size: latest.current.size }); setMode('custom'); } },
+    snapshot: { mode, frame, size } satisfies CameraSnapshot,
+    restore: (snapshot?: CameraSnapshot) => {
+      if (snapshot?.mode === 'custom' && snapshot.frame && validBounds(snapshot.frame) && snapshot.size && Number.isFinite(snapshot.size.width) && Number.isFinite(snapshot.size.height) && snapshot.size.width > 0 && snapshot.size.height > 0) {
+        setCustom({ frame: snapshot.frame, size: snapshot.size }); setMode('custom');
+      } else { setMode(snapshot?.mode === 'content' ? 'content' : 'page'); setCustom(null); }
+    },
     fit: (next: 'page' | 'content') => { setMode(next); setCustom(null); },
     top: () => { setCustom({ frame: { ...frame, y: page.y - frame.h * .04 }, size }); setMode('custom'); },
   };
