@@ -1,5 +1,12 @@
 'use client';
 
+import { Button, Toggle, Select } from '@/components/editor/Controls';
+
+import { useRef as useCameraRef } from 'react';
+import { pointBounds } from '@/lib/editor/camera';
+import { useEditorCamera } from '@/components/editor/useEditorCamera';
+import PreviewToolbar from '@/components/editor/PreviewToolbar';
+
 import React, { useEffect, useRef, useState } from 'react';
 import { bakeExportStrokes, cloneSvgForRasterExport, computeRasterPxPerMM, jpegDataUrlToPdf, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 import { inverseRotatePoint, normalizeDegrees, occupiedRect, pageContentRect, resizeFrame, rotatePoint, snapMove, type SnapState } from '@/lib/layout/geometry';
@@ -154,12 +161,8 @@ export default function LayoutStage({ elements, selectedId, textFitPlans, onSele
   const page = pageSize(pageElement);
   const cricutSafeRect = getCricutSafeRect(page, cricutMat);
   const pageRect = pageContentRect(page, pageElement.settings.margins);
-  const vb = (() => {
-    const margin = view === 'fullpage' ? 5 : 18;
-    const baseW = page.width + margin * 2;
-    const baseH = page.height + margin * 2;
-    return { x: -margin + pan.x + (baseW - baseW / zoom) / 2, y: -margin + pan.y + (baseH - baseH / zoom) / 2, w: baseW / zoom, h: baseH / zoom };
-  })();
+  const camera = useEditorCamera(svgRef, {x:0,y:0,w:page.width,h:page.height}, pointBounds(elements.filter(e=>e.type!=="page").flatMap(e=>{const b=rotatedElementBounds(e);return [{x:b.x,y:b.y},{x:b.x+b.width,y:b.y+b.height}]}),{x:0,y:0,w:page.width,h:page.height},5));
+  const vb = camera;
   const begin = (e: React.PointerEvent<SVGElement>, element: LayoutElement, handle?: ResizeHandle) => {
     if (e.button !== 0) return; e.preventDefault(); e.stopPropagation(); onSelect(element.id);
     if (element.locked || !svgRef.current) return;
@@ -255,26 +258,23 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
     setCricutMessage(result.warnings.length > 0 ? result.warnings.join(' ') : null);
   };
 
-  return <section className="min-w-0 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-    <div className="mb-3 flex flex-wrap items-center gap-2">
-      <h2 className="mr-1 font-semibold text-slate-800">Preview</h2>
-      <select value={view} onChange={e => reset(e.target.value as ViewMode)} className="rounded-lg border border-slate-300 bg-white p-1.5 text-sm"><option value="autofit">Auto-fit</option><option value="fullpage">Full page</option><option value="custom">Custom</option></select>
-      <button aria-pressed={simplify} onClick={() => setSimplify(value => !value)} className={`${control} ${simplify ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : ''}`}>Simplify</button>
-      <div className="ml-auto flex flex-wrap items-center gap-2">
-        <button aria-label="Zoom out" onClick={() => { setView('custom'); setZoom(value => Math.max(.35, value * .9)); }} className={control}>−</button><button aria-label="Zoom in" onClick={() => { setView('custom'); setZoom(value => Math.min(6, value * 1.1)); }} className={control}>+</button><button onClick={() => reset()} className={control}>Reset view</button>
-        <button onClick={()=>setExportModal('svg')} className={`${control} ml-1`}>SVG</button><button onClick={exportPdf} className={control}>PDF</button><button onClick={() => { setCricutMessage(null); setExportModal('cricut'); }} className={control}>Cricut Draw</button><label className="flex shrink-0 items-center gap-1 text-xs text-slate-700"><input type="checkbox" checked={showCricutSafeArea} onChange={event => setShowCricutSafeArea(event.target.checked)} />Show Cricut safe area</label><button onClick={print} className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500">Print</button>
-      </div>
-    </div>
+  return <section className="preview-panel min-w-0 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+    <PreviewToolbar camera={camera}><Button aria-pressed={simplify} onClick={() => setSimplify(value => !value)} className={`${control} ${simplify ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : ''}`}>Simplify</Button>
+<Button onClick={()=>setExportModal('svg')} className={`${control} ml-1`}>SVG</Button>
+<Button onClick={exportPdf} className={control}>PDF</Button>
+<Button onClick={() => { setCricutMessage(null); setExportModal('cricut'); }} className={control}>Cricut Draw</Button>
+<label className="flex shrink-0 items-center gap-1 text-xs text-slate-700"><Toggle type="checkbox" checked={showCricutSafeArea} onChange={event => setShowCricutSafeArea(event.target.checked)} />Show Cricut safe area</label>
+<Button onClick={print} className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500">Print</Button></PreviewToolbar>
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-300">
-      <svg ref={svgRef} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="block h-[52vh] min-h-[420px] w-full touch-none select-none" style={{ background: '#cbd5e1' }} onPointerDown={onStageDown} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}>
+      <svg ref={svgRef} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="editor-svg" style={{ background: '#cbd5e1' }} onPointerDown={onStageDown} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}>
         <rect id="stage-bg" x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="#cbd5e1" pointerEvents="none" />
-        <rect x="0" y="0" width={page.width} height={page.height} fill={PAGE_BACKGROUND} stroke="#94a3b8" strokeWidth=".3" onPointerDown={e => { e.stopPropagation(); onSelect('page'); }} style={{ cursor: 'default' }} />
+        <rect x="0" y="0" width={page.width} height={page.height} data-camera-interactive="true" fill={PAGE_BACKGROUND} stroke="#94a3b8" strokeWidth=".3" onPointerDown={e => { e.stopPropagation(); onSelect('page'); }} style={{ cursor: 'default' }} />
         {[...elements].reverse().filter(element => element.type !== 'page').map(element => {
           const frame = livePaint?.id === element.id ? livePaint.frame : element.frame;
           const rotationDeg=livePaint?.id===element.id&&livePaint.rotationDeg!==undefined?livePaint.rotationDeg:element.rotationDeg??0;
           const centre=elementRotationCenter(element,frame);
           const occupied = occupiedRect(element.type==='calligram'&&!(element.settings.transparentWhitespace??true)?elementVisualFrame(element,frame):frame, element.paddingMM);
-          return <g key={element.id} transform={`rotate(${rotationDeg} ${centre.x} ${centre.y})`} data-export-layer-id={safeLayerId(element.name,element.id)} data-export-layer-name={element.name} onPointerDown={e => begin(e, element)} style={{ cursor: element.locked ? 'pointer' : 'move' }}>
+          return <g key={element.id} transform={`rotate(${rotationDeg} ${centre.x} ${centre.y})`} data-camera-interactive="true" data-export-layer-id={safeLayerId(element.name,element.id)} data-export-layer-name={element.name} onPointerDown={e => begin(e, element)} style={{ cursor: element.locked ? 'pointer' : 'move' }}>
             {element.type==='guidelines'&&element.mask?.enabled
               ? <path transform={`translate(${occupied.x} ${occupied.y})`} d={shapePathData(element.mask.kind,occupied.width,occupied.height,element.mask.cornerRadiusMM+Math.max(0,element.paddingMM))} fill={PAGE_BACKGROUND}/>
               : element.type !== 'shape' && element.type !== 'artwork' && !((element.type==='curved-title'||element.type==='calligram')&&(element.settings.transparentWhitespace??true)) && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
@@ -293,7 +293,7 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
           {pageElement.settings.centerLines.vertical&&<line x1={pageRect.x+pageRect.width/2} x2={pageRect.x+pageRect.width/2} y1={pageRect.y} y2={pageRect.y+pageRect.height} stroke="#818cf8" strokeWidth="1" strokeDasharray="5 4" strokeOpacity=".65" vectorEffect="non-scaling-stroke" />}
           {pageElement.settings.centerLines.horizontal&&<line x1={pageRect.x} x2={pageRect.x+pageRect.width} y1={pageRect.y+pageRect.height/2} y2={pageRect.y+pageRect.height/2} stroke="#818cf8" strokeWidth="1" strokeDasharray="5 4" strokeOpacity=".65" vectorEffect="non-scaling-stroke" />}
         </g>
-        {selected && selected.type !== 'page' && (() => { const baseFrame = livePaint?.id === selected.id ? livePaint.frame : selected.frame; const frame = livePaint?.id===selected.id&&livePaint.visual?livePaint.visual:elementVisualFrame(selected,baseFrame); const occupied = occupiedRect(baseFrame, selected.paddingMM);const rotationDeg=livePaint?.id===selected.id&&livePaint.rotationDeg!==undefined?livePaint.rotationDeg:selected.rotationDeg??0,centre={x:frame.x+frame.width/2,y:frame.y+frame.height/2},zone=10/Math.max(.001,zoom); return <g data-no-export="true" transform={`rotate(${rotationDeg} ${centre.x} ${centre.y})`}>
+        {selected && selected.type !== 'page' && (() => { const baseFrame = livePaint?.id === selected.id ? livePaint.frame : selected.frame; const frame = livePaint?.id===selected.id&&livePaint.visual?livePaint.visual:elementVisualFrame(selected,baseFrame); const occupied = occupiedRect(baseFrame, selected.paddingMM);const rotationDeg=livePaint?.id===selected.id&&livePaint.rotationDeg!==undefined?livePaint.rotationDeg:selected.rotationDeg??0,centre={x:frame.x+frame.width/2,y:frame.y+frame.height/2},zone=10/Math.max(.001,zoom); return <g data-no-export="true" data-camera-interactive="true" transform={`rotate(${rotationDeg} ${centre.x} ${centre.y})`}>
           {selected.type !== 'shape' && selected.type !== 'curved-title' && selected.type !== 'calligram' && selected.paddingMM > 0 && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill="none" stroke="#818cf8" strokeWidth="1" strokeDasharray="4 3" strokeOpacity=".55" vectorEffect="non-scaling-stroke" pointerEvents="none" />}
           <rect x={frame.x} y={frame.y} width={frame.width} height={frame.height} fill="none" stroke="#4f46e5" strokeWidth="1.25" strokeOpacity=".8" vectorEffect="non-scaling-stroke" pointerEvents="none" />
           {!selected.locked && handles.map(handle => { const x = frame.x + frame.width * handle.x; const y = frame.y + frame.height * handle.y; return <g key={handle.id} style={{ cursor: handle.cursor }} onPointerDown={e => begin(e, selected, handle.id)}><circle cx={x} cy={y} r="7" fill="transparent" vectorEffect="non-scaling-stroke" /><rect x={x - 1.8} y={y - 1.8} width="3.6" height="3.6" rx=".5" fill="white" stroke="#4f46e5" strokeWidth="1.2" vectorEffect="non-scaling-stroke" /></g>; })}
@@ -304,11 +304,11 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
     </div>
     {exportModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setExportModal(null); }}>
       <div role="dialog" aria-modal="true" aria-labelledby="cricut-modal-title" className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
-        <div className="flex items-start justify-between gap-4"><h3 id="cricut-modal-title" className="text-lg font-semibold text-slate-900">{exportModal==='cricut'?'Cricut Draw SVG':'SVG export'}</h3><button type="button" aria-label="Close Cricut Draw dialog" onClick={() => setExportModal(null)} className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 hover:bg-slate-100">×</button></div>
+        <div className="flex items-start justify-between gap-4"><h3 id="cricut-modal-title" className="text-lg font-semibold text-slate-900">{exportModal==='cricut'?'Cricut Draw SVG':'SVG export'}</h3><Button type="button" aria-label="Close Cricut Draw dialog" onClick={() => setExportModal(null)} className="rounded-lg px-2 py-1 text-xl leading-none text-slate-500 hover:bg-slate-100">×</Button></div>
         {exportModal==='cricut'&&<label className="mt-4 flex items-center gap-3 text-sm font-medium text-slate-700">Mat
-          <select value={cricutMat} onChange={event => { setCricutMat(event.target.value as CricutMatId); setCricutMessage(null); }} className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 font-normal">
+          <Select value={cricutMat} onChange={event => { setCricutMat(event.target.value as CricutMatId); setCricutMessage(null); }} className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 font-normal">
             {Object.entries(CRICUT_MATS).map(([id, mat]) => <option key={id} value={id}>{mat.label}</option>)}
-          </select>
+          </Select>
         </label>}
         <fieldset className="mt-5"><legend>Layering</legend><div className="mt-2 space-y-2 text-sm text-slate-700">{([['combined','Combined — single drawing layer'],['elements','Separate by Layout element']] as const).map(([value,label])=><label key={value} className="flex items-center gap-2"><input type="radio" name="export-layering" value={value} checked={exportLayering===value} onChange={()=>setExportLayering(value)}/>{label}</label>)}</div></fieldset>
         {exportModal==='cricut'&&<fieldset className="mt-5"><legend className="font-semibold text-slate-800">Drawing guides</legend>
@@ -325,13 +325,13 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
               ['nibAngleMarker', 'Nib-angle marker'],
               ['calligramCenterMarkers', 'Calligram centre markers'],
               ['shapeOutlines', 'Shape outlines'],
-            ] as const).map(([key, label]) => <label key={key} className="flex items-center gap-2"><input type="checkbox" checked={cricutOptions[key]} onChange={event => setCricutOptions(current => ({ ...current, [key]: event.target.checked }))} />{label}</label>)}
+            ] as const).map(([key, label]) => <label key={key} className="flex items-center gap-2"><Toggle type="checkbox" checked={cricutOptions[key]} onChange={event => setCricutOptions(current => ({ ...current, [key]: event.target.checked }))} />{label}</label>)}
           </div>
         </fieldset>}
         {exportModal==='cricut'&&<><p className="mt-5 text-xs text-slate-600">These options affect Cricut Draw only. SVG, PDF, Print and the Layout preview are unchanged.</p>
         <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">Place paper flush with the top-left corner of the Cricut mat grid.<br />Upload without resizing and set the imported layer to Draw / Pen.</p>
         {cricutMessage && <p role="status" className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{cricutMessage}</p>}</>}
-        <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setExportModal(null)} className={control}>Cancel</button><button type="button" onClick={()=>{if(exportModal==='cricut')exportCricut();else{exportSvg();setExportModal(null);}}} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500">{exportModal==='cricut'?'Export Cricut SVG':'Export SVG'}</button></div>
+        <div className="mt-5 flex justify-end gap-2"><Button type="button" onClick={() => setExportModal(null)} className={control}>Cancel</Button><Button type="button" onClick={()=>{if(exportModal==='cricut')exportCricut();else{exportSvg();setExportModal(null);}}} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500">{exportModal==='cricut'?'Export Cricut SVG':'Export SVG'}</Button></div>
       </div>
     </div>}
   </section>;

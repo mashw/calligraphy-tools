@@ -1,5 +1,15 @@
 'use client';
 
+import { Button, NumericInput, Slider, Select, Toggle } from '@/components/editor/Controls';
+
+import { INSET_CONTROL_BASE, INSET_CONTROL_MM, INSET_CONTROL_WIDE, InsetLabeledField } from '@/components/editor/Controls';
+
+import { pointBounds } from '@/lib/editor/camera';
+import { useEditorCamera } from '@/components/editor/useEditorCamera';
+import PreviewToolbar from '@/components/editor/PreviewToolbar';
+
+import EditorWorkspace from '@/components/editor/EditorWorkspace';
+
 import SlantStyleControl from '@/components/guidelines/SlantStyleControl';
 import { resolveSlantStyle, type SlantStyle } from '@/lib/guides/slant-paths';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -36,15 +46,7 @@ type GuideJoin = {
   end?: GuideJoinRef;
 };
 
-type InsetLabeledFieldProps = {
-  label: string;
-  disabled?: boolean;
-  className?: string;
-  rightAdornment?: React.ReactNode;
-  rightAdornmentInteractive?: boolean;
-  adornmentClassName?: string;
-  children: React.ReactNode;
-};
+
 
 type Strap = {
   slantStyle?: SlantStyle;
@@ -114,9 +116,9 @@ const GUIDE_JOIN_MAX_SEAM_GAP_MM = 1.5;
 const GUIDE_JOIN_OPPOSED_DOT_MAX = -0.3;
 const FIT_MARGIN_MM = 12;
 const PALETTE = ['#5778A4', '#E49444', '#D1615D', '#85B6B2', '#6A9F58', '#E7CA60', '#A87C9F', '#F1A2A9', '#967662', '#B8B0AC'];
-const INSET_CONTROL_BASE = 'w-full border-0 rounded-none px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed';
-const INSET_CONTROL_MM = `${INSET_CONTROL_BASE} pr-10`;
-const INSET_CONTROL_WIDE = `${INSET_CONTROL_BASE} pr-14`;
+
+
+
 const INLINE_NUMERIC_INPUT = 'w-[76px] h-8 rounded-md border border-slate-300 pl-2 pr-7 text-sm text-indigo-600 tabular-nums';
 const INLINE_NUMERIC_INPUT_WIDE = 'w-[76px] h-8 rounded-md border border-slate-300 pl-2 pr-7 text-sm text-indigo-600 tabular-nums';
 const INLINE_RESET_BUTTON = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700';
@@ -801,23 +803,7 @@ const buildCompatibleJoinedGuideData = ({
 };
 
 
-function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, rightAdornmentInteractive = false, adornmentClassName = 'right-3', children }: InsetLabeledFieldProps) {
-  return (
-    <div className={`relative rounded-lg border border-slate-300 overflow-hidden ${disabled ? 'bg-slate-50' : 'bg-white'} ${className}`}>
-      <div className="absolute inset-x-0 top-0 h-5 bg-slate-50/80 border-b border-slate-300 px-3 flex items-center z-10 pointer-events-none">
-        <span className="text-[11px] font-medium text-slate-600">{label}</span>
-      </div>
-      <div className="relative pt-5">
-        {children}
-        {rightAdornment && (
-          <span className={`${rightAdornmentInteractive ? '' : 'pointer-events-none'} select-none absolute ${adornmentClassName} top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500`}>
-            {rightAdornment}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
+
 
 function circlePathD(r = 40) {
   return `M ${r} 0 A ${r} ${r} 0 1 1 ${-r} 0 A ${r} ${r} 0 1 1 ${r} 0 Z`;
@@ -1331,15 +1317,8 @@ export default function PathGuidesPage() {
     [baseCrossings, crossingOverrides, pairSlotsByCrossingId],
   );
 
-  const vb = useMemo(() => {
-    if (view === 'fullpage') return { minX: 0, minY: 0, vw: box.w, vh: box.h, str: `0 0 ${box.w} ${box.h}` };
-    const safeZoom = Math.max(0.35, zoom);
-    const vw = box.w / safeZoom;
-    const vh = box.h / safeZoom;
-    const minX = (box.w - vw) / 2 - pan.x;
-    const minY = (box.h - vh) / 2 - pan.y;
-    return { minX, minY, vw, vh, str: `${minX} ${minY} ${vw} ${vh}` };
-  }, [box.h, box.w, pan, view, zoom]);
+  const camera = useEditorCamera(svgRef, {x:0,y:0,w:box.w,h:box.h}, pointBounds(renderData.flatMap(r=>r.transformed),{x:0,y:0,w:box.w,h:box.h},20));
+  const vb = camera;
 
   function downloadSVG() {
     const svg = svgRef.current;
@@ -1741,14 +1720,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     requestScrubPaint();
   }, [markPresetDirty, requestScrubPaint]);
 
-  const applyViewPreset = (next: ViewMode) => {
-    setView(next);
-    if (next === 'autofit') {
-      setZoom(1.35);
-      setPan({ x: 0, y: 0 });
-    }
-    if (next === 'fullpage') setPan({ x: 0, y: 0 });
-  };
+  
 
   const onSvgPointerDown: React.PointerEventHandler<SVGSVGElement> = (e) => {
     if (e.button !== 0) return;
@@ -2255,79 +2227,35 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
   }, [activeId, markPresetDirty, straps]);
 
   return (
-    <main className="min-h-screen text-sm text-slate-900 relative pb-8">
-      <div className="fixed inset-0 -z-10 bg-slate-100" style={{ backgroundImage: 'none' }} />
-
-      <header className="px-4 sm:px-6 pt-6 pb-6">
-        <div className="max-w-[1440px] mx-auto">
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Calligraphy Tools <span className="text-indigo-600">— Custom Guideline Tool</span></h1>
-          <p className="mt-1 text-sm text-slate-600">Upload SVG paths and generate calligraphy guidelines that follow each path. Arrange and layer straps to plan interwoven layouts.</p>
-          <Link href="/woven" className="mt-3 inline-block rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50">Woven Calligraphy — start with an editable shape →</Link>
-        </div>
-      </header>
-
-      <div className="mx-auto grid max-w-[1488px] grid-cols-1 items-start gap-5 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-      <section aria-label="Guideline preview" className="min-w-0 lg:sticky lg:top-4">
-        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-3 sm:p-4">
-          <div className="flex flex-wrap items-start gap-3 mb-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="font-semibold text-slate-800">Preview</h3>
-              <select className="p-1.5 text-sm rounded-lg border border-slate-300" value={view} onChange={(e) => applyViewPreset(e.target.value as ViewMode)}>
-                <option value="autofit">Auto-fit straps</option>
-                <option value="fullpage">Full page</option>
-                <option value="custom">Custom</option>
-              </select>
-              <button aria-pressed={simplify} onClick={() => setSimplify((v) => !v)} className={`px-2 py-1 text-sm rounded-lg border ${simplify ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white'}`}>Simplify</button>
-              <button onClick={() => setShowCrossings((v) => !v)} className={`px-2 py-1 text-sm rounded-lg border ${showCrossings ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white'}`}>Crossings</button>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 ml-auto">
-              <button
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => { setView('custom'); setZoom((z) => Math.max(0.35, z * 0.9)); }}
-                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
-              >
-                –
-              </button>
-              <button
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => { setView('custom'); setZoom((z) => Math.min(6, z * 1.1)); }}
-                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
-              >
-                +
-              </button>
-              <button
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => applyViewPreset('autofit')}
-                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
-              >
-                Reset view
-              </button>
-              <button
+    <EditorWorkspace preview={<>
+<section aria-label="Guideline preview" className="min-w-0  ">
+        <div className="preview-panel bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-3 sm:p-4">
+          <PreviewToolbar camera={camera}><Button aria-pressed={simplify} onClick={() => setSimplify((v) => !v)} className={`px-2 py-1 text-sm rounded-lg border ${simplify ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white'}`}>Simplify</Button>
+<Button onClick={() => setShowCrossings((v) => !v)} className={`px-2 py-1 text-sm rounded-lg border ${showCrossings ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white'}`}>Crossings</Button>
+<Button
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={downloadSVG}
-                className="shrink-0 ml-2 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                className="shrink-0 ml-2   text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
                 SVG
-              </button>
-              <button
+              </Button>
+<Button
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={downloadPDF}
-                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                className="shrink-0   text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
                 PDF
-              </button>
-              <button
+              </Button>
+<Button
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={printToScale}
-                className="shrink-0 px-3 py-1.5 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                className="shrink-0   text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
                 Print
-              </button>
-            </div>
-          </div>
+              </Button></PreviewToolbar>
 
           {crossingPerformanceWarning && (
-            <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700">
+            <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50   text-amber-700">
               Too many points; increase step size.
             </div>
           )}
@@ -2336,7 +2264,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
             <svg
               ref={svgRef}
               viewBox={vb.str}
-              className={`block mx-auto w-full h-[34vh] sm:h-[44vh] lg:h-[min(66vh,760px)] touch-none ${isPanning ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
+              className="editor-svg"
               style={{ background: '#cbd5e1' }}
               onPointerDown={onSvgPointerDown}
               onPointerMove={onSvgPointerMove}
@@ -2649,9 +2577,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
           </div>
         </div>
       </section>
-
-      <aside aria-label="Path guideline settings" className="min-w-0 space-y-3">
-        <p className="px-1 text-xs text-slate-600">
+</>} inspector={<><p className="inspector-intro">Upload SVG paths and generate calligraphy guidelines that follow each path. Arrange and layer straps to plan interwoven layouts.</p>
+<aside aria-label="Path guideline settings" className="min-w-0 space-y-3">
+        <p className=" text-xs text-slate-600">
           {activeStrap ? `Editing strap #${straps.findIndex(strap => strap.id === activeStrap.id) + 1}` : 'No strap selected'}
         </p>
         <DisclosureSection title="Rotation & scale" defaultOpen>
@@ -2662,7 +2590,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                   <label className="font-medium text-slate-700 shrink-0">Rotation</label>
 
                   <div className="relative">
-                    <input
+                    <NumericInput
                       type="number"
                       className={INLINE_NUMERIC_INPUT}
                       min={-180}
@@ -2712,7 +2640,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     </span>
                   </div>
 
-                  <button
+                  <Button
                     type="button"
                     onClick={() => {
                       setRotationInputText('');
@@ -2723,9 +2651,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     aria-label="Reset rotation"
                   >
                     ↺
-                  </button>
+                  </Button>
 
-                  <input
+                  <Slider
                     type="range"
                     min={-180}
                     max={180}
@@ -2750,7 +2678,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                   <label className="font-medium text-slate-700 shrink-0">Scale</label>
 
                   <div className="relative">
-                    <input
+                    <NumericInput
                       type="number"
                       min={SCALE_MIN_PCT}
                       max={SCALE_MAX_PCT}
@@ -2787,7 +2715,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     </span>
                   </div>
 
-                  <button
+                  <Button
                     type="button"
                     onClick={() => {
                       setScaleInputText('');
@@ -2798,9 +2726,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     aria-label="Reset scale"
                   >
                     ↺
-                  </button>
+                  </Button>
 
-                  <input
+                  <Slider
                     type="range"
                     min={SCALE_MIN_PCT}
                     max={SCALE_MAX_PCT}
@@ -2827,7 +2755,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                 <label className="inline-flex items-center gap-2 text-sm text-slate-800 cursor-pointer select-none">
                   <span className="font-medium">Mirror path</span>
-                  <button
+                  <Button
                     type="button"
                     role="switch"
                     aria-checked={activeStrap.flip}
@@ -2842,12 +2770,12 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                         activeStrap.flip ? 'translate-x-6' : 'translate-x-1'
                       }`}
                     />
-                  </button>
+                  </Button>
                 </label>
 
                 <label className="inline-flex items-center gap-2 text-sm text-slate-800 cursor-pointer select-none">
                   <span className="font-medium">Invert guidelines</span>
-                  <button
+                  <Button
                     type="button"
                     role="switch"
                     aria-checked={activeStrap.invertGuides}
@@ -2862,7 +2790,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                         activeStrap.invertGuides ? 'translate-x-6' : 'translate-x-1'
                       }`}
                     />
-                  </button>
+                  </Button>
                 </label>
               </div>
           </div>}
@@ -2870,7 +2798,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
         <DisclosureSection title="Page & straps">
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <InsetLabeledField label="Paper size" className="sm:col-span-2">
-              <select
+              <Select
                 className={INSET_CONTROL_BASE}
                 value={paper}
                 onChange={(e) => {
@@ -2884,10 +2812,10 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 {Object.entries(PAPERS_MM).map(([id, p]) => (
                   <option key={id} value={id}>{p.label}</option>
                 ))}
-              </select>
+              </Select>
             </InsetLabeledField>
             <InsetLabeledField label="Orientation">
-              <select
+              <Select
                 className={INSET_CONTROL_BASE}
                 value={orientation}
                 onChange={(e) => {
@@ -2898,13 +2826,13 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               >
                 <option value="portrait">Portrait</option>
                 <option value="landscape">Landscape</option>
-              </select>
+              </Select>
             </InsetLabeledField>
           </div>
           <div className="mt-3">
             <label className="inline-flex items-center gap-3 text-sm font-medium text-slate-700 select-none">
               <span>High-contrast</span>
-              <button
+              <Button
                 type="button"
                 role="switch"
                 aria-checked={highContrastMode}
@@ -2917,12 +2845,12 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 <span
                   className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${highContrastMode ? 'translate-x-6' : 'translate-x-1'}`}
                 />
-              </button>
+              </Button>
             </label>
           </div>
           <div className="mt-3">
             <InsetLabeledField label="Presets:" className="w-full">
-              <select
+              <Select
                 className={INSET_CONTROL_BASE}
                 value={selectedPresetId}
                 onChange={(e) => {
@@ -2939,7 +2867,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 {PATH_GUIDES_PRESETS.map((preset) => (
                   <option key={preset.id} value={preset.id}>{preset.name}</option>
                 ))}
-              </select>
+              </Select>
             </InsetLabeledField>
           </div>
           <div className="mt-2 flex flex-wrap gap-2 items-end">
@@ -2947,39 +2875,39 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               label="Add shape"
               className="w-full min-w-0"
               rightAdornment={(
-                <button
+                <Button
                   type="button"
                   onClick={addShape}
-                  className="h-7 min-w-7 rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  className="h-7 min-w-7 rounded-md border border-slate-300 bg-white  text-sm font-semibold text-slate-700 hover:bg-slate-50"
                   aria-label="Add selected shape"
                   title="Add selected shape"
                 >
                   +
-                </button>
+                </Button>
               )}
               rightAdornmentInteractive
               adornmentClassName="right-1 top-[calc(50%+10px)]"
             >
-              <select className={INSET_CONTROL_WIDE} value={shapeKind} onChange={(e) => setShapeKind(e.target.value as ShapeKind)}>
+              <Select className={INSET_CONTROL_WIDE} value={shapeKind} onChange={(e) => setShapeKind(e.target.value as ShapeKind)}>
                 {SHAPE_OPTIONS.map((shape) => (
                   <option key={shape.kind} value={shape.kind}>{shape.label}</option>
                 ))}
-              </select>
+              </Select>
             </InsetLabeledField>
-            <label className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer">Upload SVG(s)
+            <label className="  text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer">Upload SVG(s)
               <input type="file" accept=".svg" multiple className="hidden" onChange={(e) => { parseUpload(e.target.files); }} />
             </label>
           </div>
           {error && <p className="mt-3 text-sm text-amber-700">{error}</p>}
           <div className="mt-5 border-t border-slate-200 pt-3">
-            <button onClick={exportPresetJson} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100">Export preset JSON (dev)</button>
+            <Button onClick={exportPresetJson} className="  text-sm rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100">Export preset JSON (dev)</Button>
           </div>
         </DisclosureSection>
         <DisclosureSection title="Script & guidelines">
           {!activeStrap && <p className="text-slate-500">Select a strap to edit its guidelines.</p>}
           {activeStrap && <div className="space-y-4">
               <InsetLabeledField label="Script">
-              <select
+              <Select
   className={INSET_CONTROL_BASE}
   value={activeStrap.script}
   onChange={(e) => {
@@ -2995,34 +2923,34 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
   }}
 >
                   {(Object.keys(SCRIPT_PROFILES) as ScriptId[]).map((id) => <option key={id} value={id}>{SCRIPT_PROFILES[id].label}</option>)}
-                </select>
+                </Select>
               </InsetLabeledField>
 
-              {activeStrap.script === 'InsularMajuscule' && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={activeStrap.showInsularGrid ?? false} onChange={e => updateStrap(activeStrap.id, { showInsularGrid: e.target.checked })} /> Show intermediate grid</label>}
+              {activeStrap.script === 'InsularMajuscule' && <label className="flex items-center gap-2 text-sm"><Toggle type="checkbox" checked={activeStrap.showInsularGrid ?? false} onChange={e => updateStrap(activeStrap.id, { showInsularGrid: e.target.checked })} /> Show intermediate grid</label>}
 
               {activeStrap.script === 'Copperplate' && <SlantStyleControl value={resolveSlantStyle(activeStrap.slantStyle)} onChange={slantStyle=>{setSimplify(false);updateStrap(activeStrap.id,{slantStyle});}} />}
               {activeStrap.script === 'Copperplate' ? (
                 <>
                   <div className="grid grid-cols-2 gap-2">
                     <InsetLabeledField label="X-height" rightAdornment="mm">
-                      <input type="number" min={0.5} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.xHeightMMText ?? '6'} onChange={(e) => updateStrap(activeStrap.id, { xHeightMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
+                      <NumericInput type="number" min={0.5} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.xHeightMMText ?? '6'} onChange={(e) => updateStrap(activeStrap.id, { xHeightMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
                     </InsetLabeledField>
                     <InsetLabeledField label="Guideline ratio">
-                      <select className={INSET_CONTROL_BASE} value={activeStrap.copperplateRatioPreset ?? '3:2:3'} onChange={(e) => updateStrap(activeStrap.id, { copperplateRatioPreset: e.target.value as CopperplateRatioPreset })}>
+                      <Select className={INSET_CONTROL_BASE} value={activeStrap.copperplateRatioPreset ?? '3:2:3'} onChange={(e) => updateStrap(activeStrap.id, { copperplateRatioPreset: e.target.value as CopperplateRatioPreset })}>
                         <option value="3:2:3">3 : 2 : 3</option><option value="2:1:2">2 : 1 : 2</option><option value="1:1:1">1 : 1 : 1</option><option value="custom">Custom</option>
-                      </select>
+                      </Select>
                     </InsetLabeledField>
                   </div>
                   {(activeStrap.copperplateRatioPreset ?? '3:2:3') === 'custom' && (
                     <div className="grid grid-cols-3 gap-2">
                       <InsetLabeledField label="Desc units">
-                        <input type="number" step="0.5" min={0} className={INSET_CONTROL_BASE} value={activeStrap.copperplateDescUnitsText ?? '3'} onChange={(e) => updateStrap(activeStrap.id, { copperplateDescUnitsText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.copperplateDescUnitsText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { copperplateDescUnitsText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.copperplateDescUnitsText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateStrap(activeStrap.id, { copperplateDescUnitsText: String(next) }); }} />
+                        <NumericInput type="number" step="0.5" min={0} className={INSET_CONTROL_BASE} value={activeStrap.copperplateDescUnitsText ?? '3'} onChange={(e) => updateStrap(activeStrap.id, { copperplateDescUnitsText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.copperplateDescUnitsText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { copperplateDescUnitsText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.copperplateDescUnitsText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateStrap(activeStrap.id, { copperplateDescUnitsText: String(next) }); }} />
                       </InsetLabeledField>
                       <InsetLabeledField label="X units">
-                        <input type="number" step="0.5" min={0.5} className={INSET_CONTROL_BASE} value={activeStrap.copperplateXUnitsText ?? '2'} onChange={(e) => updateStrap(activeStrap.id, { copperplateXUnitsText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.copperplateXUnitsText ?? '2') || 2; const next = Math.max(0.5, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { copperplateXUnitsText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.copperplateXUnitsText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0.5, snapHalf(parsed)) : 2; updateStrap(activeStrap.id, { copperplateXUnitsText: String(next) }); }} />
+                        <NumericInput type="number" step="0.5" min={0.5} className={INSET_CONTROL_BASE} value={activeStrap.copperplateXUnitsText ?? '2'} onChange={(e) => updateStrap(activeStrap.id, { copperplateXUnitsText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.copperplateXUnitsText ?? '2') || 2; const next = Math.max(0.5, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { copperplateXUnitsText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.copperplateXUnitsText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0.5, snapHalf(parsed)) : 2; updateStrap(activeStrap.id, { copperplateXUnitsText: String(next) }); }} />
                       </InsetLabeledField>
                       <InsetLabeledField label="Asc units">
-                        <input type="number" step="0.5" min={0} className={INSET_CONTROL_BASE} value={activeStrap.copperplateAscUnitsText ?? '3'} onChange={(e) => updateStrap(activeStrap.id, { copperplateAscUnitsText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.copperplateAscUnitsText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { copperplateAscUnitsText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.copperplateAscUnitsText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateStrap(activeStrap.id, { copperplateAscUnitsText: String(next) }); }} />
+                        <NumericInput type="number" step="0.5" min={0} className={INSET_CONTROL_BASE} value={activeStrap.copperplateAscUnitsText ?? '3'} onChange={(e) => updateStrap(activeStrap.id, { copperplateAscUnitsText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.copperplateAscUnitsText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { copperplateAscUnitsText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.copperplateAscUnitsText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateStrap(activeStrap.id, { copperplateAscUnitsText: String(next) }); }} />
                       </InsetLabeledField>
                     </div>
                   )}
@@ -3031,24 +2959,24 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <InsetLabeledField label="Nib size" rightAdornment="mm">
-                      <input type="number" min={0.2} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.nibMMText} onChange={(e) => updateStrap(activeStrap.id, { nibMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
+                      <NumericInput type="number" min={0.2} step="0.5" className={INSET_CONTROL_MM} value={activeStrap.nibMMText} onChange={(e) => updateStrap(activeStrap.id, { nibMMText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} />
                     </InsetLabeledField>
                     <InsetLabeledField label="x-height (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
-                      <input type="number" step="0.5" min={1} className={INSET_CONTROL_WIDE} value={activeStrap.xNibText ?? '5'} onChange={(e) => updateStrap(activeStrap.id, { xNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.xNibText ?? '5') || 5; const next = Math.max(1, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { xNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.xNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(1, snapHalf(parsed)) : 5; updateStrap(activeStrap.id, { xNibText: String(next) }); }} />
+                      <NumericInput type="number" step="0.5" min={1} className={INSET_CONTROL_WIDE} value={activeStrap.xNibText ?? '5'} onChange={(e) => updateStrap(activeStrap.id, { xNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.xNibText ?? '5') || 5; const next = Math.max(1, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { xNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.xNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(1, snapHalf(parsed)) : 5; updateStrap(activeStrap.id, { xNibText: String(next) }); }} />
                     </InsetLabeledField>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <InsetLabeledField label="Ascender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
-                      <input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.ascNibText ?? '3'} onChange={(e) => updateStrap(activeStrap.id, { ascNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.ascNibText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { ascNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.ascNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateStrap(activeStrap.id, { ascNibText: String(next) }); }} />
+                      <NumericInput type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.ascNibText ?? '3'} onChange={(e) => updateStrap(activeStrap.id, { ascNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.ascNibText ?? '3') || 3; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { ascNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.ascNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 3; updateStrap(activeStrap.id, { ascNibText: String(next) }); }} />
                     </InsetLabeledField>
                     <InsetLabeledField label="Descender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
-                      <input type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.descNibText ?? '2'} onChange={(e) => updateStrap(activeStrap.id, { descNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.descNibText ?? '2') || 2; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { descNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.descNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 2; updateStrap(activeStrap.id, { descNibText: String(next) }); }} />
+                      <NumericInput type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.descNibText ?? '2'} onChange={(e) => updateStrap(activeStrap.id, { descNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.descNibText ?? '2') || 2; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { descNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.descNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 2; updateStrap(activeStrap.id, { descNibText: String(next) }); }} />
                     </InsetLabeledField>
                   </div>
                   <InsetLabeledField label="Nib angle (°)">
-                    <select className={INSET_CONTROL_BASE} value={activeStrap.nibAngleDeg} onChange={(e) => updateStrap(activeStrap.id, { nibAngleDeg: Number(e.target.value) as 15 | 35 | 40 | 45 })}>
+                    <Select className={INSET_CONTROL_BASE} value={activeStrap.nibAngleDeg} onChange={(e) => updateStrap(activeStrap.id, { nibAngleDeg: Number(e.target.value) as 15 | 35 | 40 | 45 })}>
                       <option value={15}>15°</option><option value={35}>35°</option><option value={40}>40°</option><option value={45}>45°</option>
-                    </select>
+                    </Select>
                   </InsetLabeledField>
                   <div className="rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={activeStrap.script} value={activeStrap.constructionGuides} onChange={constructionGuides => updateStrap(activeStrap.id, { constructionGuides })} compact /></div>
                 </>
@@ -3066,18 +2994,17 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 setDragListId(null);
               }} className="rounded-lg border border-slate-200 p-2 flex flex-wrap items-center gap-2 cursor-move">
                 <span className="w-3 h-3 rounded-full" style={{ backgroundColor: strap.color }} />
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => setActiveId(strap.id)} className={`px-2 py-1 rounded border border-slate-300 ${activeId === strap.id ? 'border-indigo-300 text-indigo-700' : ''}`}>Select</button>
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => duplicateStrapById(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Duplicate strap" aria-label="Duplicate strap">⧉</button>
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapX(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Center on page" aria-label="Center on page">⌖</button>
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapY(strap.id)} className="px-2 py-1 rounded border border-slate-300" title="Center vertically" aria-label="Center vertically">↕</button>
-                <button onPointerDown={(e) => e.stopPropagation()} onClick={() => removeStrapById(strap.id)} disabled={straps.length <= 1} className="px-2 py-1 rounded border border-slate-300 disabled:opacity-40" title="Delete strap" aria-label="Delete strap">✕</button>
+                <Button onPointerDown={(e) => e.stopPropagation()} onClick={() => setActiveId(strap.id)} className={`px-2 py-1 rounded border border-slate-300 ${activeId === strap.id ? 'border-indigo-300 text-indigo-700' : ''}`}>Select</Button>
+                <Button onPointerDown={(e) => e.stopPropagation()} onClick={() => duplicateStrapById(strap.id)} className="  rounded border border-slate-300" title="Duplicate strap" aria-label="Duplicate strap">⧉</Button>
+                <Button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapX(strap.id)} className="  rounded border border-slate-300" title="Center on page" aria-label="Center on page">⌖</Button>
+                <Button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapY(strap.id)} className="  rounded border border-slate-300" title="Center vertically" aria-label="Center vertically">↕</Button>
+                <Button onPointerDown={(e) => e.stopPropagation()} onClick={() => removeStrapById(strap.id)} disabled={straps.length <= 1} className="  rounded border border-slate-300 disabled:opacity-40" title="Delete strap" aria-label="Delete strap">✕</Button>
                 <span className="text-xs text-slate-500 ml-auto">#{straps.findIndex((s) => s.id === strap.id) + 1}</span>
               </div>
             ))}
           </div>
         </DisclosureSection>
       </aside>
-      </div>
-    </main>
+</>}></EditorWorkspace>
   );
 }

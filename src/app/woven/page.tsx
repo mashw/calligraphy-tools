@@ -1,5 +1,12 @@
 "use client";
 
+import { NumericInput, Toggle, Button, Select } from '@/components/editor/Controls';
+
+import { useEditorCamera } from '@/components/editor/useEditorCamera';
+import PreviewToolbar from '@/components/editor/PreviewToolbar';
+
+import EditorWorkspace from '@/components/editor/EditorWorkspace';
+
 import SlantStyleControl from '@/components/guidelines/SlantStyleControl';
 import React, { useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -72,8 +79,8 @@ export default function WovenPage() {
     };
   }, [model]);
   const full = { x: -3, y: -3, w: model.page.w + 6, h: model.page.h + 6 };
-  const vb =
-    view === "custom" && custom ? custom : view === "fullpage" ? full : fit;
+  const camera = useEditorCamera(svgRef, {x:0,y:0,w:model.page.w,h:model.page.h}, fit);
+  const vb = camera;
   function update<K extends keyof Design>(key: K, value: Design[K]) {
     setDesign((d) => ({
       ...d,
@@ -97,13 +104,7 @@ export default function WovenPage() {
     else setCustom(null);
     setView(next);
   }
-  function zoom(factor: number) {
-    const w = vb.w * factor,
-      h = vb.h * factor;
-    if (w < 5 || w > model.page.w * 10) return;
-    setCustom({ x: vb.x + (vb.w - w) / 2, y: vb.y + (vb.h - h) / 2, w, h });
-    setView("custom");
-  }
+  
   function numeric(
     key: keyof typeof LIMITS,
     label: string,
@@ -116,7 +117,7 @@ export default function WovenPage() {
           {label}
           {unit && ` (${unit})`}
         </span>
-        <input
+        <NumericInput
           aria-label={label}
           className={field}
           type="number"
@@ -148,7 +149,7 @@ export default function WovenPage() {
   ) {
     return (
       <label className="flex min-h-10 items-center gap-2 text-sm" key={key}>
-        <input
+        <Toggle
           type="checkbox"
           className="accent-indigo-600"
           checked={design[key]}
@@ -247,111 +248,20 @@ export default function WovenPage() {
     if (!d.moved && d.crossing) flip(d.crossing);
   }
   return (
-    <main className="min-h-screen bg-slate-100 pb-8 text-slate-900">
-      <header className="mx-auto max-w-[1280px] px-4 pb-6 pt-6 sm:px-6 sm:pt-8">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          Calligraphy Tools{" "}
-          <span className="text-indigo-600">— Woven Calligraphy</span>
-        </h1>
-        <p className="mt-1 text-sm text-slate-600">
-          Build a flowing shape. Plan the crossings. Write it by hand.
-        </p>
-        <nav className="mt-4 flex flex-wrap gap-2" aria-label="Related tools">
-          <Link className={button} href="/calligram">
-            Calligram
-          </Link>
-          <Link className={button} href="/guidelines">
-            Guidelines
-          </Link>
-          <Link className={button} href="/path-guides">
-            Path Guides
-          </Link>
-          <button className={button} onClick={() => fileRef.current?.click()}>
-            Open design
-          </button>
-          <button
-            className={button}
-            onClick={() =>
-              download(
-                JSON.stringify(design, null, 2),
-                "application/json",
-                "woven-design.json",
-              )
-            }
-          >
-            Save design
-          </button>
-        </nav>
-      </header>
-      <input
-        ref={fileRef}
-        type="file"
-        accept=".json,application/json"
-        className="hidden"
-        aria-label="Open Woven Calligraphy design"
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          try {
-            if (file.size > 100000) throw Error("Design file is too large.");
-            setDesign(parseDesign(JSON.parse(await file.text())));
-            setSelected(null);
-            preset("autofit");
-            setStatus("Design opened.");
-          } catch (error) {
-            setStatus(
-              error instanceof Error ? error.message : "Could not open design.",
-            );
-          }
-          e.target.value = "";
-        }}
-      />
-      <div className="mx-auto max-w-[1280px] space-y-5 px-4 sm:px-6">
-        <section
-          className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6"
+    <EditorWorkspace preview={<>
+<section
+          className="preview-panel rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6"
           aria-label="Writing sheet preview"
         >
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-semibold text-slate-800">Preview</h2>
-              <select
-                aria-label="Preview view"
-                className={button}
-                value={view}
-                onChange={(e) => preset(e.target.value as View)}
-              >
-                <option value="autofit">Auto-fit design</option>
-                <option value="fullpage">Full page</option>
-                <option value="custom">Custom</option>
-              </select>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                className={button}
-                aria-label="Zoom out"
-                onClick={() => zoom(1.25)}
-              >
-                −
-              </button>
-              <button
-                className={button}
-                aria-label="Zoom in"
-                onClick={() => zoom(0.8)}
-              >
-                +
-              </button>
-              <button className={button} onClick={() => preset("autofit")}>
-                Reset view
-              </button>
-              <button
+          <PreviewToolbar camera={camera}><Button
                 className={button}
                 onClick={() =>
                   download(sceneSvg(scene), "image/svg+xml", "woven-guides.svg")
                 }
               >
                 SVG
-              </button>
-              <button
+              </Button>
+<Button
                 className={button}
                 onClick={() =>
                   download(
@@ -362,15 +272,13 @@ export default function WovenPage() {
                 }
               >
                 PDF
-              </button>
-              <button
+              </Button>
+<Button
                 className={`${button} !border-indigo-600 !bg-indigo-600 !text-white hover:!bg-indigo-700`}
                 onClick={print}
               >
                 Print
-              </button>
-            </div>
-          </div>
+              </Button></PreviewToolbar>
           <div
             className="overflow-hidden rounded-xl border border-slate-200 bg-slate-300"
             data-testid="preview-scroll"
@@ -380,7 +288,7 @@ export default function WovenPage() {
               role="img"
               aria-label={`${design.preset} calligraphy guideline preview`}
               viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
-              className="block h-[38vh] min-h-72 w-full touch-none cursor-grab active:cursor-grabbing sm:h-[44vh] md:h-[50vh]"
+              className="editor-svg"
               onPointerDown={pointerDown}
               onPointerMove={pointerMove}
               onPointerUp={pointerUp}
@@ -469,7 +377,57 @@ export default function WovenPage() {
             and footers off; check the 50 mm ruler.
           </p>
         </section>
-        <div role="status" aria-live="polite" className="space-y-2">
+</>} inspector={<>
+<nav className="mt-4 flex flex-wrap gap-2" aria-label="Related tools">
+          <Link className={button} href="/calligram">
+            Calligram
+          </Link>
+          <Link className={button} href="/guidelines">
+            Guidelines
+          </Link>
+          <Link className={button} href="/path-guides">
+            Path Guides
+          </Link>
+          <Button className={button} onClick={() => fileRef.current?.click()}>
+            Open design
+          </Button>
+          <Button
+            className={button}
+            onClick={() =>
+              download(
+                JSON.stringify(design, null, 2),
+                "application/json",
+                "woven-design.json",
+              )
+            }
+          >
+            Save design
+          </Button>
+        </nav>
+<input
+        ref={fileRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        aria-label="Open Woven Calligraphy design"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          try {
+            if (file.size > 100000) throw Error("Design file is too large.");
+            setDesign(parseDesign(JSON.parse(await file.text())));
+            setSelected(null);
+            preset("autofit");
+            setStatus("Design opened.");
+          } catch (error) {
+            setStatus(
+              error instanceof Error ? error.message : "Could not open design.",
+            );
+          }
+          e.target.value = "";
+        }}
+      />
+<div role="status" aria-live="polite" className="space-y-2">
           {status && (
             <p className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
               {status}
@@ -484,12 +442,12 @@ export default function WovenPage() {
             </p>
           ))}
         </div>
-        <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+<div className="grid items-start gap-4  ">
           <DisclosureSection title="Shape" defaultOpen>
             <div className="space-y-3">
               <label className="block space-y-1 text-sm">
                 Preset
-                <select
+                <Select
                   aria-label="Preset"
                   className={field}
                   value={design.preset}
@@ -499,7 +457,7 @@ export default function WovenPage() {
                 >
                   <option value="rosette">Six-loop rosette</option>
                   <option value="figure-eight">Figure-eight</option>
-                </select>
+                </Select>
               </label>
               {numeric("width", "Width", 1, "mm")}
               {numeric("height", "Height", 1, "mm")}
@@ -515,7 +473,7 @@ export default function WovenPage() {
             <div className="space-y-3">
               <label className="block space-y-1 text-sm">
                 Script
-                <select
+                <Select
                   aria-label="Script"
                   className={field}
                   value={design.script}
@@ -527,7 +485,7 @@ export default function WovenPage() {
                   <option value="Fraktur">Fraktur</option>
                   <option value="InsularMajuscule">Insular Majuscule</option>
                   <option value="Copperplate">Copperplate</option>
-                </select>
+                </Select>
               </label>
               {numeric(
                 "nib",
@@ -573,7 +531,7 @@ export default function WovenPage() {
                   {toggle("gridVertical", "Vertical divisions")}
                   <label className="block space-y-1 text-sm">
                     Grid width
-                    <select
+                    <Select
                       aria-label="Grid width"
                       className={field}
                       value={design.gridMode}
@@ -584,7 +542,7 @@ export default function WovenPage() {
                       <option value="effective">Stroke-width</option>
                       <option value="actual">Actual nib</option>
                       <option value="custom">Custom</option>
-                    </select>
+                    </Select>
                   </label>
                   {design.gridMode === "custom" &&
                     numeric("gridWidth", "Custom grid width", 0.1, "mm")}
@@ -609,7 +567,7 @@ export default function WovenPage() {
               {toggle("reverse", "Reverse writing direction")}
               <div className="flex flex-wrap gap-2">
                 {model.crossings.map((c, i) => (
-                  <button
+                  <Button
                     key={c.id}
                     aria-label={`Swap crossing ${i + 1}`}
                     aria-pressed={selected === c.id}
@@ -617,22 +575,22 @@ export default function WovenPage() {
                     onClick={() => flip(c.id)}
                   >
                     {i + 1}
-                  </button>
+                  </Button>
                 ))}
               </div>
-              <button
+              <Button
                 className={button}
                 onClick={() => update("overrides", {})}
               >
                 Restore alternating weave
-              </button>
+              </Button>
             </div>
           </DisclosureSection>
           <DisclosureSection title="Page & export" defaultOpen>
             <div className="space-y-3">
               <label className="block space-y-1 text-sm">
                 Paper
-                <select
+                <Select
                   aria-label="Paper"
                   className={field}
                   value={design.paper}
@@ -646,11 +604,11 @@ export default function WovenPage() {
                       {p.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               <label className="block space-y-1 text-sm">
                 Orientation
-                <select
+                <Select
                   aria-label="Orientation"
                   className={field}
                   value={design.orientation}
@@ -664,11 +622,11 @@ export default function WovenPage() {
                 >
                   <option value="portrait">Portrait</option>
                   <option value="landscape">Landscape</option>
-                </select>
+                </Select>
               </label>
               <label className="block space-y-1 text-sm">
                 Sheet contents
-                <select
+                <Select
                   aria-label="Sheet contents"
                   className={field}
                   value={design.annotated ? "plan" : "clean"}
@@ -678,12 +636,11 @@ export default function WovenPage() {
                 >
                   <option value="plan">Annotated writing plan</option>
                   <option value="clean">Clean guidelines</option>
-                </select>
+                </Select>
               </label>
             </div>
           </DisclosureSection>
         </div>
-      </div>
-    </main>
+</>}></EditorWorkspace>
   );
 }

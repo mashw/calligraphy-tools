@@ -1,4 +1,6 @@
 'use client';
+
+import { NumericInput, Select as ControlSelect, Toggle as ControlToggle } from '@/components/editor/Controls';
 import SlantStyleControl from '@/components/guidelines/SlantStyleControl';
 import ConstructionGuideControls from '@/components/guidelines/ConstructionGuideControls';
 import HorizontalGridAppearanceControls from '@/components/guidelines/HorizontalGridAppearanceControls';
@@ -12,9 +14,9 @@ import CustomCurveUpload from './CustomCurveUpload';
 const input='w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm',section='';
 const curves:[CurvePresetId|'custom',string][]=[['simpleArch','Simple Arch'],['highArch','High Arch'],['shallowArch','Shallow Arch'],['compoundArch','Compound Arch'],['zanerian','Zanerian Resolution'],['custom','Custom']];
 const scripts:[ScriptId,string][]=[['Copperplate','Copperplate'],['Fraktur','Fraktur'],['TexturaQuadrata','Textura Quadrata'],['InsularMajuscule','Insular Majuscule']];
-function Field({label,value,onChange,min,step=.5}:{label:string;value:number|string;onChange:(v:string)=>void;min?:number;step?:number}){return <label className="block space-y-1 text-xs font-medium text-slate-600">{label}<input className={input} type="number" value={value} min={min} step={step} onChange={e=>onChange(e.target.value)}/></label>}
-function Select<T extends string>({label,value,options,onChange}:{label:string;value:T;options:[T,string][];onChange:(v:T)=>void}){return <label className="block space-y-1 text-xs font-medium text-slate-600">{label}<select className={input} value={value} onChange={e=>onChange(e.target.value as T)}>{options.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>}
-function Toggle({label,checked,onChange}:{label:string;checked:boolean;onChange:(v:boolean)=>void}){return <label className="flex items-center justify-between gap-3 text-sm text-slate-700"><span>{label}</span><input type="checkbox" checked={checked} onChange={e=>onChange(e.target.checked)} className="accent-indigo-600"/></label>}
+function Field({label,value,onChange,min,step=.5}:{label:string;value:number|string;onChange:(v:string)=>void;min?:number;step?:number}){return <label className="block space-y-1 text-xs font-medium text-slate-600">{label}<NumericInput className={input} type="number" value={value} min={min} step={step} onChange={e=>onChange(e.target.value)}/></label>}
+function Select<T extends string>({label,value,options,onChange}:{label:string;value:T;options:[T,string][];onChange:(v:T)=>void}){return <label className="block space-y-1 text-xs font-medium text-slate-600">{label}<ControlSelect className={input} value={value} onChange={e=>onChange(e.target.value as T)}>{options.map(([v,l])=><option key={v} value={v}>{l}</option>)}</ControlSelect></label>}
+function Toggle({label,checked,onChange}:{label:string;checked:boolean;onChange:(v:boolean)=>void}){return <label className="flex items-center justify-between gap-3 text-sm text-slate-700"><span>{label}</span><ControlToggle type="checkbox" checked={checked} onChange={e=>onChange(e.target.checked)} className="accent-indigo-600"/></label>}
 
 export default function CurvedTitleSettingsPanel({value,box,paddingMM,onPaddingChange,onChange}:{value:CurvedTitleSettings;box:{w:number;h:number};paddingMM:number;onPaddingChange:(v:number)=>void;onChange:(v:CurvedTitleSettings)=>void}){
  const patch=<K extends keyof CurvedTitleSettings>(key:K,v:CurvedTitleSettings[K])=>onChange({...value,[key]:v});const model=buildCurvedTitleModel(box,value);
