@@ -4,7 +4,7 @@ export type Crossing = { id: string; point: Point; a: number; b: number; cosine:
 export type Interval = [number, number];
 export type Route = { points: Point[]; distances: number[]; length: number };
 
-export function makeRoute(preset: Preset, width: number, height: number, loop: number, rotation: number, reverse: boolean): Route {
+export function makeRoute(preset: Preset, width: number, height: number, loop: number, rotation: number, reverse: boolean, center = { x: 105, y: 148.5 }): Route {
   const count = 960;
   const raw = Array.from({ length: count }, (_, i) => {
     const t = i / count * Math.PI * 2;
@@ -18,7 +18,7 @@ export function makeRoute(preset: Preset, width: number, height: number, loop: n
   const points = raw.map(p => {
     const x = (p.x - (maxX + minX) / 2) / (maxX - minX) * width;
     const y = (p.y - (maxY + minY) / 2) / (maxY - minY) * height;
-    return { x: 105 + x * Math.cos(angle) - y * Math.sin(angle), y: 148.5 + x * Math.sin(angle) + y * Math.cos(angle) };
+    return { x: center.x + x * Math.cos(angle) - y * Math.sin(angle), y: center.y + x * Math.sin(angle) + y * Math.cos(angle) };
   });
   points.push({ ...points[0] });
   if (reverse) points.reverse();
@@ -114,3 +114,4 @@ export function minimumRadius(route: Route): number {
   });
   return radius;
 }
+

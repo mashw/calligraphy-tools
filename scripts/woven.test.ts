@@ -58,3 +58,64 @@ test('SVG and PDF export physical vector strokes with correct PDF xref offsets',
   assert.equal(pdf.slice(offset, offset + 4), 'xref');
   for (const [index, match] of [...pdf.matchAll(/(\d{10}) 00000 n/g)].entries()) assert.ok(pdf.slice(Number(match[1])).startsWith(`${index + 1} 0 obj`));
 });
+
+
+import { buildWovenModel } from '../src/lib/woven/model.ts';
+import { clipPassage, curvedSlant, routeFrame } from '../src/lib/woven/curved-guides.ts';
+import { pageSize } from '../src/lib/woven/design.ts';
+
+test('old version-1 designs receive new defaults without losing dimensions or overrides', () => {
+  const old = { version:1,preset:'figure-eight',width:165,height:165,loop:.32,rotation:0,reverse:false,script:'TexturaQuadrata',nib:.7,xNib:5,ascNib:2,descNib:2,start:3,gap:8,clearance:.6,fullGuides:true,annotated:true,overrides:{'crossing-0':'b'} };
+  const parsed=parseDesign(old);
+  assert.equal(parsed.width,165);assert.equal(parsed.overrides['crossing-0'],'b');
+  assert.equal(parsed.paper,'A4');assert.equal(parsed.slantAngle,55);assert.equal(parsed.gridMode,'effective');
+  assert.equal(parseDesign({...old,script:'InsularMajuscule'}).gridHorizontal,false);
+  for(const patch of [{paper:'Letter'},{gridMode:'bad'},{slantAngle:0},{construction:{upper:true,lower:false,color:'url(x)'}}]) assert.throws(()=>parseDesign({...old,...patch}));
+});
+
+test('passage clipping splits slants and markers at hidden intervals including the seam', () => {
+  assert.deepEqual(clipPassage([{x:0,y:0,s:0},{x:10,y:10,s:10}],[[0,4],[6,10]],10),[[{x:0,y:0},{x:4,y:4}],[{x:6,y:6},{x:10,y:10}]]);
+  assert.deepEqual(clipPassage([{x:0,y:0,s:5},{x:1,y:1,s:5}],[[0,4],[6,10]],10),[]);
+  assert.deepEqual(clipPassage([{x:0,y:0,s:98},{x:4,y:0,s:102}],[[1,99]],100),[[{x:0,y:0},{x:1,y:0}],[{x:3,y:0},{x:4,y:0}]]);
+});
+
+test('both presets render finite shared grid, construction and slant scenes after crossing edits', () => {
+  for(const preset of ['rosette','figure-eight'] as const) for(const script of ['TexturaQuadrata','InsularMajuscule','Copperplate'] as const) {
+    const design={...DEFAULT_DESIGN,preset,script,construction:{upper:true,lower:true,color:'#dc2626',upperAppearance:'x' as const,lowerAppearance:'dots' as const},secondSlant:true};
+    const model=buildWovenModel(design);
+    assert.ok(model.clean.strokes.length>20);
+    for(const stroke of model.clean.strokes) for(const p of stroke.points) assert.ok(Number.isFinite(p.x)&&Number.isFinite(p.y));
+    const changed=buildWovenModel({...design,overrides:{[model.crossings[0].id]:model.choices[model.crossings[0].id]==='a'?'b':'a'}});
+    assert.notDeepEqual(changed.clean.strokes,model.clean.strokes);
+    assert.ok(!sceneSvg(model.clean).includes('Start'));
+    assert.ok(!new TextDecoder().decode(scenePdf(model.clean)).includes('/Image'));
+  }
+});
+
+test('curved slants maintain the requested local angle through regular bends', () => {
+  for(const preset of ['rosette','figure-eight'] as const) {
+    const route=makeRoute(preset,165,165,.32,0,false);
+    for(const anchor of [route.length*.12,route.length*.33,route.length*.7]) {
+      const points=curvedSlant(route,anchor,-2,2,55);
+      assert.ok(points.length>20);
+      for(let i=1;i<points.length;i++) {
+        const a=points[i-1],b=points[i],f=routeFrame(route,(a.s+b.s)/2);
+        const dx=b.x-a.x,dy=b.y-a.y;
+        const angle=Math.atan2(Math.abs(dx*f.n.x+dy*f.n.y),Math.abs(dx*f.t.x+dy*f.t.y))*180/Math.PI;
+        assert.ok(Math.abs(angle-55)<3,`${preset}: ${angle}`);
+      }
+    }
+  }
+});
+
+test('paper sizes centre the shape and drive SVG and PDF dimensions in mm', () => {
+  for(const paper of ['A3','A4','A5','DL','C5','C6'] as const) for(const orientation of ['portrait','landscape'] as const) {
+    const design={...DEFAULT_DESIGN,paper,orientation,gridHorizontal:false,gridVertical:false};
+    const model=buildWovenModel(design),page=pageSize(design);
+    const xs=model.route.points.map(p=>p.x),ys=model.route.points.map(p=>p.y);
+    assert.ok(Math.abs((Math.min(...xs)+Math.max(...xs))/2-page.w/2)<.01);
+    assert.ok(Math.abs((Math.min(...ys)+Math.max(...ys))/2-page.h/2)<.01);
+    assert.ok(sceneSvg(model.clean).includes(`width="${page.w}mm" height="${page.h}mm"`));
+    assert.ok(new TextDecoder().decode(scenePdf(model.clean)).includes(`/MediaBox [0 0 ${(page.w*72/25.4).toFixed(3)} ${(page.h*72/25.4).toFixed(3)}]`));
+  }
+});
