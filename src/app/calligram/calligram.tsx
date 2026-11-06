@@ -14,7 +14,7 @@ import {
 import {
   clamp,
 } from '@/lib/line-widths';
-import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
+import { SCRIPT_PROFILES, type ScriptId as SharedScriptId } from '@/lib/scripts';
 import type { ScriptContext } from '@/lib/scripts/types';
 import { measureRun } from '@/lib/measure/measure-run';
 import { buildCopperplateContext } from '@/lib/copperplate/context';
@@ -22,6 +22,8 @@ import { buildGuideSet } from '@/lib/guides/guide-template';
 import GuideOverlay from '@/components/preview/GuideOverlay';
 import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 
+// This tool's selectors and preset tables currently support these three scripts.
+type ScriptId = Exclude<SharedScriptId, 'InsularMajuscule'>;
 type PaperId = keyof typeof PAPERS_MM;
 type Orientation = 'portrait' | 'landscape';
 type AlignMode = 'start' | 'center' | 'end';

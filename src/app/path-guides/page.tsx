@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 
 import DisclosureSection from '@/components/layout/DisclosureSection';
 import GuideOverlay from '@/components/preview/GuideOverlay';
@@ -2255,6 +2256,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
         <div className="max-w-[1440px] mx-auto">
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Calligraphy Tools <span className="text-indigo-600">— Custom Guideline Tool</span></h1>
           <p className="mt-1 text-sm text-slate-600">Upload SVG paths and generate calligraphy guidelines that follow each path. Arrange and layer straps to plan interwoven layouts.</p>
+          <Link href="/woven" className="mt-3 inline-block rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50">Woven Calligraphy — start with an editable shape →</Link>
         </div>
       </header>
 
