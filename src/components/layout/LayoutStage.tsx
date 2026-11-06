@@ -2,7 +2,7 @@
 
 import { Button, Toggle, Select } from '@/components/editor/Controls';
 
-import { useRef as useCameraRef } from 'react';
+
 import { pointBounds } from '@/lib/editor/camera';
 import { useEditorCamera } from '@/components/editor/useEditorCamera';
 import PreviewToolbar from '@/components/editor/PreviewToolbar';
@@ -23,10 +23,9 @@ import { buildPlotterExport, CRICUT_MATS, DEFAULT_PLOTTER_EXPORT_OPTIONS, getCri
 import { safeLayerId, type ExportLayering } from '@/lib/layout/plotter-svg';
 import ArtworkRenderer from './ArtworkRenderer';
 
-type ViewMode = 'autofit' | 'fullpage' | 'custom';
+
 type Interaction =
   | { mode: 'none' }
-  | { mode: 'pan'; pointerId: number; startClient: { x: number; y: number }; startPan: { x: number; y: number }; rect: DOMRect; vb: { w: number; h: number } }
   | { mode: 'move'; pointerId: number; elementId: string; startClient: { x: number; y: number }; original: Frame; visualOriginal: Frame; boundsOriginal:Frame; rect: DOMRect; vb: { w: number; h: number }; live: Frame; liveVisual: Frame; snap: SnapState }
   | { mode: 'resize'; pointerId: number; elementId: string; handle: ResizeHandle; startClient: { x: number; y: number }; original: Frame; visualOriginal: Frame; rect: DOMRect; vb: { w: number; h: number }; live: Frame; liveVisual: Frame; aspectMode: ResizeAspectMode; aspectRatio: number; rotationDeg:number }
   | {mode:'rotate';pointerId:number;elementId:string;original:Frame;live:Frame;rotationDeg:number;initialRotation:number;initialPointerAngle:number;centre:{x:number;y:number};rect:DOMRect;vb:{x:number;y:number;w:number;h:number}};
@@ -138,9 +137,9 @@ export default function LayoutStage({ elements, selectedId, textFitPlans, onSele
   const paintPending = useRef(false);
   const [livePaint, setLivePaint] = useState<{ id: string; frame: Frame; visual?: Frame; rotationDeg?:number } | null>(null);
   const [interactionActive, setInteractionActive] = useState(false);
-  const [view, setView] = useState<ViewMode>('autofit');
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
+
+
+
   const [simplify, setSimplify] = useState(false);
   const [cricutMat, setCricutMat] = useState<CricutMatId>('12x12');
   const [showCricutSafeArea, setShowCricutSafeArea] = useState(false);
@@ -163,6 +162,7 @@ export default function LayoutStage({ elements, selectedId, textFitPlans, onSele
   const pageRect = pageContentRect(page, pageElement.settings.margins);
   const camera = useEditorCamera(svgRef, {x:0,y:0,w:page.width,h:page.height}, pointBounds(elements.filter(e=>e.type!=="page").flatMap(e=>{const b=rotatedElementBounds(e);return [{x:b.x,y:b.y},{x:b.x+b.width,y:b.y+b.height}]}),{x:0,y:0,w:page.width,h:page.height},5));
   const vb = camera;
+  const zoom = camera.zoom;
   const begin = (e: React.PointerEvent<SVGElement>, element: LayoutElement, handle?: ResizeHandle) => {
     if (e.button !== 0) return; e.preventDefault(); e.stopPropagation(); onSelect(element.id);
     if (element.locked || !svgRef.current) return;
@@ -182,12 +182,6 @@ export default function LayoutStage({ elements, selectedId, textFitPlans, onSele
     interactionRef.current={mode:'rotate',pointerId:e.pointerId,elementId:element.id,original:element.frame,live:element.frame,rotationDeg,initialRotation:rotationDeg,initialPointerAngle:Math.atan2(py-centre.y,px-centre.x),centre,rect,vb};
     svgRef.current.setPointerCapture(e.pointerId);setInteractionActive(true);
   };
-  const onStageDown = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (e.button !== 0 || e.target !== e.currentTarget) return; e.preventDefault();
-    const rect = e.currentTarget.getBoundingClientRect();
-    interactionRef.current = { mode: 'pan', pointerId: e.pointerId, startClient: { x: e.clientX, y: e.clientY }, startPan: pan, rect, vb: { w: vb.w, h: vb.h } };
-    e.currentTarget.setPointerCapture(e.pointerId); setInteractionActive(true);
-  };
   const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
     const active = interactionRef.current; if (active.mode === 'none' || active.pointerId !== e.pointerId) return;
     if(active.mode==='rotate'){
@@ -198,7 +192,6 @@ export default function LayoutStage({ elements, selectedId, textFitPlans, onSele
     }
     const dx = (e.clientX - active.startClient.x) / active.rect.width * active.vb.w;
     const dy = (e.clientY - active.startClient.y) / active.rect.height * active.vb.h;
-    if (active.mode === 'pan') { setView('custom'); setPan({ x: active.startPan.x - dx, y: active.startPan.y - dy }); return; }
     if (active.mode === 'move') {
       const element=elements.find(item=>item.id===active.elementId);
       const internal=element?.type==='guidelines'&&!(element.rotationDeg??0)?element.settings.margins:{top:0,right:0,bottom:0,left:0};
@@ -243,7 +236,7 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     interactionRef.current = { mode: 'none' }; setLivePaint(null); setInteractionActive(false);
   };
-  const reset = (next: ViewMode = 'autofit') => { setView(next); setZoom(1); setPan({ x: 0, y: 0 }); };
+
   const exportClone = (layering:ExportLayering) => { if (!svgRef.current) return null; const clone = svgRef.current.cloneNode(true) as SVGSVGElement; clone.setAttribute('viewBox', `0 0 ${page.width} ${page.height}`); clone.setAttribute('width', `${page.width}mm`); clone.setAttribute('height', `${page.height}mm`); bakeExportStrokes(svgRef.current, clone, page.width); stripNoExport(clone); clone.querySelectorAll('[data-export-layer-id]').forEach(node=>{if(layering==='elements'){const draws=Array.from(node.querySelectorAll('path,line,polyline,polygon,rect,circle,ellipse,text')).some(item=>!item.closest('defs'));if(!draws){node.remove();return;}node.setAttribute('id',node.getAttribute('data-export-layer-id')!);node.setAttribute('data-name',node.getAttribute('data-export-layer-name')!);}node.removeAttribute('data-export-layer-id');node.removeAttribute('data-export-layer-name');}); return clone; };
   const exportSvg = () => { const clone = exportClone(exportLayering); if (!clone) return; download(new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' }), 'layout.svg'); };
   const raster = async () => { if (!svgRef.current) return null; const { wPx, hPx } = computeRasterPxPerMM(page.width, page.height); const clone = cloneSvgForRasterExport(svgRef.current, page.width, page.height, wPx, hPx, bakeExportStrokes, stripNoExport); return { data: await renderSvgCloneToJpegDataUrl(clone, wPx, hPx), wPx, hPx }; };
@@ -267,7 +260,7 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
 <label className="flex shrink-0 items-center gap-1 text-xs text-slate-700"><Toggle type="checkbox" checked={showCricutSafeArea} onChange={event => setShowCricutSafeArea(event.target.checked)} />Show Cricut safe area</label>
 <Button onClick={print} className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500">Print</Button></PreviewToolbar>
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-300">
-      <svg ref={svgRef} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="editor-svg" style={{ background: '#cbd5e1' }} onPointerDown={onStageDown} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}>
+      <svg ref={svgRef} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="editor-svg" style={{ background: '#cbd5e1' }} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}>
         <rect id="stage-bg" x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="#cbd5e1" pointerEvents="none" />
         <rect x="0" y="0" width={page.width} height={page.height} data-camera-interactive="true" fill={PAGE_BACKGROUND} stroke="#94a3b8" strokeWidth=".3" onPointerDown={e => { e.stopPropagation(); onSelect('page'); }} style={{ cursor: 'default' }} />
         {[...elements].reverse().filter(element => element.type !== 'page').map(element => {

@@ -27,7 +27,7 @@ import { insularMajusculeRowGapMM } from '@/lib/guides/straight/blackletter';
 
 type PaperId = keyof typeof PAPERS_MM;
 type Orientation = 'portrait' | 'landscape';
-type ViewMode = 'autofit' | 'fullpage' | 'custom';
+
 type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 
 type Pt = { x: number; y: number };
@@ -342,8 +342,8 @@ export default function GuidelinesPage() {
   // ---------- State ----------
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
-  
-  
+
+
 
 
   const [showBaselineIndicator, setShowBaselineIndicator] = useState(sharedDefaults.appearance.baselineIndicator);
@@ -521,25 +521,25 @@ const slantAngleDeg = useMemo(() => {
     previousRowGapScript.current = script;
   }, [script, nibMM, xNib, ascNib, descNib]);
 
-  
-  
-  
-  
-  
-  
 
-  
+
+
+
+
+
+
+
 
   const svgRef = useRef<SVGSVGElement | null>(null);
-  
 
-  
 
-  
+
+
+
 
 
   // Full-viewport paint layer to hide any layout decorations behind this route
-  
+
 
   // ---------- Page box (mm) ----------
   const raw = PAPERS_MM[paper];
@@ -676,7 +676,7 @@ const slantAngleDeg = useMemo(() => {
 
   }, [baselinePositions, margins.left, margins.right, box.w, guideTemplate, xMM, ascMM, descMM, script, effectiveNibMM, nibMM, gridWidthMode, customGridWidthMM]);
 
-  
+
 
   // ---------- ViewBox (includes stage margin so paper stands out) ----------
   const camera = useEditorCamera(svgRef, {x:0,y:0,w:box.w,h:box.h}, pointBounds(guideSets.flatMap(g=>[...g.ascLine,...g.waistLine,...g.baseLine,...g.descLine]),{x:0,y:0,w:box.w,h:box.h},2));
@@ -725,21 +725,21 @@ const slantAngleDeg = useMemo(() => {
   }
 
   /* ---------------- Pan handlers ---------------- */
-  
-
-  
-
-  
-
-  
-
-  
 
 
 
 
 
-  
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -826,7 +826,7 @@ const slantAngleDeg = useMemo(() => {
         {/* Step 1 */}
         <DisclosureSection title="Document & Appearance" defaultOpen>
           <div className="flex items-center gap-2">
-            
+
             <InfoTip side="right">Guidelines are spaced by x-height + ascender + descender.</InfoTip>
           </div>
 
@@ -1101,7 +1101,7 @@ const slantAngleDeg = useMemo(() => {
         {/* Step 2 */}
         <DisclosureSection title="Script & Dimensions" defaultOpen>
           <div className="flex items-center gap-2">
-            
+
             <InfoTip side="right">
               {script === 'Copperplate'
                 ? 'Copperplate uses x-height (mm) with optional calibration for lowercase scale and spacing.'

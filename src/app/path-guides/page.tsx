@@ -13,7 +13,7 @@ import EditorWorkspace from '@/components/editor/EditorWorkspace';
 import SlantStyleControl from '@/components/guidelines/SlantStyleControl';
 import { resolveSlantStyle, type SlantStyle } from '@/lib/guides/slant-paths';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
+
 
 import DisclosureSection from '@/components/layout/DisclosureSection';
 import GuideOverlay from '@/components/preview/GuideOverlay';
@@ -1101,7 +1101,7 @@ export default function PathGuidesPage() {
   const [view, setView] = useState<ViewMode>('fullpage');
   const [zoom, setZoom] = useState(1.35);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
+  const [, setIsPanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragListId, setDragListId] = useState<string | null>(null);
   const [groups, setGroups] = useState<StrapGroup[]>([]);
@@ -1368,12 +1368,12 @@ export default function PathGuidesPage() {
     () => buildGuideJoinCandidates({ straps, transformedById }),
     [straps, transformedById],
   );
-  
+
   const guideJoinChains = useMemo(
     () => buildGuideJoinChains(straps),
     [straps],
   );
-  
+
   const compatibleJoinedGuideData = useMemo(
     () => buildCompatibleJoinedGuideData({ chains: guideJoinChains, strapById, transformedById }),
     [guideJoinChains, strapById, transformedById],
@@ -1397,10 +1397,10 @@ export default function PathGuidesPage() {
     const asc0 = guideSet.ascLine;
     const desc0 = guideSet.descLine;
     if (!asc0?.length || !desc0?.length) return "";
-  
+
     const ascN0 = asc0.length;
     const descN0 = desc0.length;
-  
+
     // Detect "closed" by first ~= last (tiny tolerance in mm coords).
     const ascIsClosed =
       ascN0 > 2 &&
@@ -1408,26 +1408,26 @@ export default function PathGuidesPage() {
     const descIsClosed =
       descN0 > 2 &&
       Math.hypot(desc0[0].x - desc0[descN0 - 1].x, desc0[0].y - desc0[descN0 - 1].y) < 0.05;
-  
+
     // If closed, drop duplicate last point.
     const asc = ascIsClosed ? asc0.slice(0, -1) : asc0;
     const desc = descIsClosed ? desc0.slice(0, -1) : desc0;
-  
+
     const n = Math.min(asc.length, desc.length);
     if (n < 2) return "";
-  
+
     // segIdx comes from intersections; treat as point-ish index and clamp.
     const center = Math.max(0, Math.min(n - 1, segIdx));
-  
+
     const wrap = ascIsClosed && descIsClosed;
-  
+
     const dist = (i: number, j: number) =>
       Math.hypot(asc[i].x - asc[j].x, asc[i].y - asc[j].y);
-  
+
     // Walk backward/forward from center until we hit ~windowMM along the asc polyline.
     let left = center;
     let right = center;
-  
+
     // Backwards
     let acc = 0;
     while (acc < windowMM && (wrap ? acc < windowMM : left > 0)) {
@@ -1438,7 +1438,7 @@ export default function PathGuidesPage() {
       if (!wrap && left === 0) break;
       if (wrap && left === center) break;
     }
-  
+
     // Forwards
     acc = 0;
     while (acc < windowMM && (wrap ? acc < windowMM : right < n - 1)) {
@@ -1449,11 +1449,11 @@ export default function PathGuidesPage() {
       if (!wrap && right === n - 1) break;
       if (wrap && right === center) break;
     }
-  
+
     // Collect indices from left..right (wrap-aware)
     const ascPts: { x: number; y: number }[] = [];
     const descPts: { x: number; y: number }[] = [];
-  
+
     if (wrap && left > right) {
       // left..end, 0..right
       for (let i = left; i < n; i++) {
@@ -1470,9 +1470,9 @@ export default function PathGuidesPage() {
         descPts.push(desc[i]);
       }
     }
-  
+
     if (ascPts.length < 2 || descPts.length < 2) return "";
-  
+
     const a = ascPts.map((p) => `${p.x},${p.y}`).join(" L ");
     const d = descPts
       .slice()
@@ -1692,12 +1692,12 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     }
     const finalRot = Math.round(base.rotDeg + live.dRot);
     const finalScale = base.scalePct * live.dScale;
-    
+
     // If nothing actually changed, don't mark dirty and don't write state.
     // This avoids flipping presets back to "custom" on click-without-move.
     const rotChanged = finalRot !== base.rotDeg;
     const scaleChanged = Math.abs(finalScale - base.scalePct) > 1e-6;
-    
+
     if (!rotChanged && !scaleChanged) {
       scrubActiveRef.current = false;
       scrubStrapIdRef.current = null;
@@ -1706,7 +1706,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
       requestScrubPaint();
       return;
     }
-    
+
     markPresetDirty();
     setStraps((prev) =>
       normalizeGuideJoinLinks(
@@ -1715,7 +1715,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
         ),
       ),
     );
-    
+
     scrubActiveRef.current = false;
     scrubStrapIdRef.current = null;
     scrubBaseRef.current = null;
@@ -1723,7 +1723,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     requestScrubPaint();
   }, [markPresetDirty, requestScrubPaint]);
 
-  
+
 
   const onSvgPointerDown: React.PointerEventHandler<SVGSVGElement> = (e) => {
     if (e.button !== 0) return;
@@ -1742,7 +1742,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
   const beginStrapDrag =
   (strapId: string) =>
-  (e: React.PointerEvent<SVGPathElement | SVGLineElement | SVGPolylineElement>) => {    
+  (e: React.PointerEvent<SVGPathElement | SVGLineElement | SVGPolylineElement>) => {
     if (e.button !== 0) return;
     e.stopPropagation();
     const strap = straps.find((s) => s.id === strapId);
@@ -2306,15 +2306,15 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
           const overId = c.overId;
           const over = strapById.get(overId);
           if (!over?.guideSet) return null;
-          
+
           const overSeg = overId === c.aId ? c.aSeg : c.bSeg;
           const centerIdx = overSeg + 1;
           const windowMM = Math.max(12, over.metrics.bandWidthMM * 2.5);
-          
+
           const d0 = bandWindowDFromGuideSet(over.guideSet, centerIdx - 1, windowMM);
           const d1 = bandWindowDFromGuideSet(over.guideSet, centerIdx, windowMM);
           const d2 = bandWindowDFromGuideSet(over.guideSet, centerIdx + 1, windowMM);
-          
+
           return (
             <g key={`hole-${underId}-${c.id}`}>
               {d0 ? <path d={d0} fill="black" /> : null}

@@ -52,7 +52,7 @@ type PaperId = keyof typeof PAPERS_MM;
 type CurvePresetId = CurvedTitleCurveId;
 type Orientation = 'portrait' | 'landscape';
 type AlignMode = 'start' | 'center' | 'end';
-type ViewMode = 'autofit' | 'fullpage' | 'custom';
+
 type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 
 const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0.5);
@@ -305,8 +305,8 @@ export default function CurvedTitlePage() {
   // ---------- State ----------
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
-  
-  
+
+
 
   const snapHalf = (v: number) => Math.round(v * 2) / 2;
 
@@ -379,16 +379,14 @@ export default function CurvedTitlePage() {
   const [rotDeg, setRotDeg] = useState(0);
   const [scalePct, setScalePct] = useState(100);
 
-  const [isNarrow, setIsNarrow] = useState(() => (typeof window !== 'undefined'
-    ? window.matchMedia('(max-width: 640px)').matches
-    : false));
-  const DEFAULT_ZOOM = isNarrow ? 5 : 4;
-  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
-  
-  
 
-  
-  
+
+
+
+
+
+
+
 
   const [curveOffset, setCurveOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isCurveDragging, setIsCurveDragging] = useState(false);
@@ -404,7 +402,7 @@ export default function CurvedTitlePage() {
   } | null>(null);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
-  
+
 
   // Sticky centering: snap + hysteresis
   const snapStateRef = useRef<{ snapped: boolean }>({ snapped: true });
@@ -417,11 +415,11 @@ export default function CurvedTitlePage() {
   const CENTER_EPS_MM = 0.5; // considered "centered" for showing indicator
 
   // Full-viewport paint layer to hide any layout decorations behind this route
-  
 
-  
 
-  
+
+
+
 
   useEffect(() => {
     if (script !== 'Copperplate') {
@@ -967,11 +965,11 @@ export default function CurvedTitlePage() {
     );
   });
 
-  
 
-  
 
-  
+
+
+
 
   // ---------- ViewBox (includes stage margin so paper stands out) ----------
   const camera = useEditorCamera(svgRef, {x:0,y:0,w:box.w,h:box.h}, pointBounds([guideSet, ...(topBandEnabled ? [topGuideSet] : []), ...(bottomBandEnabled ? [bottomGuideSet] : [])].flatMap(g => [...g.ascLine, ...g.waistLine, ...g.baseLine, ...g.descLine]),{x:0,y:0,w:box.w,h:box.h},8));
@@ -1022,7 +1020,7 @@ export default function CurvedTitlePage() {
   }
 
   /* ---------------- Pan & Curve Drag handlers ---------------- */
-  
+
 
   function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
     if (!dragRef.current) return;
@@ -1086,14 +1084,14 @@ export default function CurvedTitlePage() {
     dragRef.current = null;
     setIsCurveDragging(false);
 
-    
+
   }
 
-  
 
-  
 
-  
+
+
+
 
 
   function defaultGuideOffset() {
@@ -1159,7 +1157,7 @@ export default function CurvedTitlePage() {
     if (!svg) return;
     svg.setPointerCapture(e.pointerId);
 
-    
+
 
     dragRef.current = {
       px: e.clientX,
@@ -1544,7 +1542,7 @@ export default function CurvedTitlePage() {
         {/* Step 1 */}
         <DisclosureSection title="Document & Script" defaultOpen>
           <div className="flex items-center gap-2">
-            
+
             <InfoTip side="right">Curve guide movement snaps to horizontal centre unless you pull far enough to release.</InfoTip>
           </div>
 
@@ -1641,7 +1639,7 @@ export default function CurvedTitlePage() {
         {/* Step 2 */}
         <DisclosureSection title="Script & Dimensions" defaultOpen>
           <div className="flex items-center gap-2">
-            
+
             <InfoTip side="right">
               {script === 'Copperplate'
                 ? 'Copperplate uses x-height (mm) with optional calibration for lowercase scale and spacing.'
@@ -2120,12 +2118,12 @@ export default function CurvedTitlePage() {
         {/* Step 3 */}
         <DisclosureSection title="Shape, Path & Guides" defaultOpen>
           <div className="flex items-center gap-2">
-            
+
             <InfoTip side="right">Rotate and scale the curve.</InfoTip>
           </div>
 
           <div className="grid grid-cols-1 gap-4 mt-3 select-none">
-          
+
 
 
             <div>

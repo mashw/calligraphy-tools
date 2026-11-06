@@ -41,7 +41,7 @@ import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrl
 type PaperId = keyof typeof PAPERS_MM;
 type Orientation = 'portrait' | 'landscape';
 type AlignMode = 'start' | 'center' | 'end';
-type ViewMode = 'autofit' | 'fullpage' | 'custom';
+
 type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 type BandId = 'main' | 'inner' | 'outer';
 
@@ -350,8 +350,8 @@ export default function CalligramPage() {
   // ---------- State ----------
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>('landscape');
-  
-  
+
+
 
   const snapHalf = (v: number) => Math.round(v * 2) / 2;
 
@@ -435,13 +435,13 @@ export default function CalligramPage() {
   const [highContrastMode, setHighContrastMode] = useState(false);
 
 
-  
-  
-  
-  
-  
 
-  const [isCurveDragging, setIsCurveDragging] = useState(false);
+
+
+
+
+
+  const [isCurveDragging] = useState(false);
 
   const isBlackletterScript = (scriptId: ScriptId) => scriptId !== 'Copperplate';
   const anyBlackletter = isBlackletterScript(script)
@@ -452,17 +452,17 @@ export default function CalligramPage() {
     && ((topBandEnabled && isBlackletterScript(topBandScript))
       || (bottomBandEnabled && isBlackletterScript(bottomBandScript)));
 
-  
+
 
   const svgRef = useRef<SVGSVGElement | null>(null);
-  
+
 
   // Full-viewport paint layer to hide any layout decorations behind this route
-  
 
-  
 
-  
+
+
+
 
   useEffect(() => {
     if (script !== 'Copperplate') {
@@ -518,7 +518,7 @@ export default function CalligramPage() {
     }
   }, [xHeightMM, script, useCalibration, calWordLowerMM, calWordDoubleMM, userScaleFactor, userSpaceFactor]);
 
-  
+
 
   // ---------- Page box (mm) ----------
   const raw = PAPERS_MM[paper];
@@ -811,7 +811,7 @@ const innerRadiusMaxMM = useMemo(
   [radiusMM, innerOffsetMinMM],
 );
 
-  
+
   const outerRadiusMM = useMemo(() => Math.max(1, radiusMM + clampedOuterOffsetMM), [radiusMM, clampedOuterOffsetMM]);
 
   const topBaseline = useMemo<Pt[]>(() => buildCircleBaseline(innerRadiusMM), [box, innerRadiusMM, startAngleRad, dirSign]);
@@ -1124,11 +1124,11 @@ const innerRadiusMaxMM = useMemo(
     );
   });
 
-  
 
-  
 
-  
+
+
+
 
   // ---------- ViewBox (includes stage margin so paper stands out) ----------
   const camera = useEditorCamera(svgRef, {x:0,y:0,w:box.w,h:box.h}, pointBounds([guideSet, ...(topBandEnabled ? [topGuideSet] : []), ...(bottomBandEnabled ? [bottomGuideSet] : [])].flatMap(g => [...g.ascLine, ...g.waistLine, ...g.baseLine, ...g.descLine]),{x:0,y:0,w:box.w,h:box.h},8));
@@ -1179,11 +1179,11 @@ const innerRadiusMaxMM = useMemo(
   }
 
   /* ---------------- Pan & Curve Drag handlers ---------------- */
-  
 
-  
 
-  
+
+
+
 
   const applyDefaultsForBand = (
     band: BandId,
@@ -1289,9 +1289,9 @@ const innerRadiusMaxMM = useMemo(
     applyDefaultsForBand('main', script, 'init');
   }, []);
 
-  
 
-  
+
+
 
 
   return (
@@ -1618,7 +1618,7 @@ const innerRadiusMaxMM = useMemo(
         {/* Step 1 */}
         <DisclosureSection title="Document & Script" defaultOpen>
           <div className="flex items-center gap-2">
-            
+
             <InfoTip side="right">Circle is fixed at page center.</InfoTip>
           </div>
 
@@ -1742,7 +1742,7 @@ const innerRadiusMaxMM = useMemo(
         {/* Step 2 */}
         <DisclosureSection title="Script & Dimensions" defaultOpen>
           <div className="flex items-center gap-2">
-            
+
             <InfoTip side="right">
               {script === 'Copperplate'
                 ? 'Copperplate uses x-height (mm).'
@@ -2171,7 +2171,7 @@ const innerRadiusMaxMM = useMemo(
         {/* Step 3 */}
         <DisclosureSection title="Text & Placement" defaultOpen>
           <div className="flex items-center gap-2">
-            
+
             <InfoTip side="right">Check text fit and preview overlays.</InfoTip>
           </div>
 

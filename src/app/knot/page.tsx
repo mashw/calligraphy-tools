@@ -10,11 +10,11 @@ import PreviewToolbar from '@/components/editor/PreviewToolbar';
 import DisclosureSection from '@/components/layout/DisclosureSection';
 import EditorWorkspace from '@/components/editor/EditorWorkspace';
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 
 type SymmetryMode = 'vertical' | 'horizontal' | 'rotational';
 type OverState = 'A' | 'B';
-type ViewMode = 'autofit' | 'fullpage' | 'custom';
+
 
 type Pt = { x: number; y: number };
 type Crossing = {
@@ -212,9 +212,7 @@ function mergeIntervals(intervals: Array<[number, number]>) {
   return out;
 }
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
+
 
 function KnotPage() {
   const [seed, setSeed] = useState(INITIAL_SETTINGS.seed);
@@ -229,10 +227,10 @@ function KnotPage() {
   const [crossings, setCrossings] = useState<Crossing[]>(() => detectCrossings(INITIAL_GENERATION.sampled));
   const [selectedCrossingId, setSelectedCrossingId] = useState<number | null>(null);
 
-  
-  
-  
-  
+
+
+
+
 
   const regenerate = (nextSeed: number, nextSymmetry: SymmetryMode, nextComplexity: number) => {
     const next = generateKnotSkeleton(nextSeed, nextSymmetry, nextComplexity);
@@ -304,17 +302,17 @@ function KnotPage() {
 
   const fullPolylinePath = useMemo(() => polylineToPath(sampledPolyline), [sampledPolyline]);
 
-  
 
-  
+
+
 
   const svgRef = useCameraRef<SVGSVGElement>(null);
 const camera = useEditorCamera(svgRef, {x:0,y:0,w:BOX.w,h:BOX.h}, pointBounds(sampledPolyline,{x:0,y:0,w:BOX.w,h:BOX.h},10));
   const svgViewBox = camera.str;
 
-  
 
-  
+
+
 
   const randomizeSeed = () => {
     const nextSeed = Math.floor(Math.random() * 1000000);
@@ -332,11 +330,11 @@ const camera = useEditorCamera(svgRef, {x:0,y:0,w:BOX.w,h:BOX.h}, pointBounds(sa
     );
   };
 
-  
 
-  
 
-  
+
+
+
 
   return (
     <EditorWorkspace preview={<>
@@ -433,7 +431,7 @@ const camera = useEditorCamera(svgRef, {x:0,y:0,w:BOX.w,h:BOX.h}, pointBounds(sa
 <section className=" ">
         <div className=" mx-auto grid grid-cols-1  gap-6">
           <DisclosureSection title="Shape & Generation" defaultOpen>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
               <label className="block">
                 <span className="font-medium text-slate-700">Seed</span>
@@ -492,7 +490,7 @@ const camera = useEditorCamera(svgRef, {x:0,y:0,w:BOX.w,h:BOX.h}, pointBounds(sa
           </DisclosureSection>
 
           <DisclosureSection title="Strap & Dimensions" defaultOpen>
-            
+
             <div className="mt-3 space-y-4">
               <label className="block">
                 <span className="font-medium text-slate-700">Strap width</span>
@@ -524,7 +522,7 @@ const camera = useEditorCamera(svgRef, {x:0,y:0,w:BOX.w,h:BOX.h}, pointBounds(sa
           </DisclosureSection>
 
           <DisclosureSection title="Layers & Crossings" defaultOpen>
-            
+
             <div className="mt-3 space-y-2 max-h-72 overflow-auto pr-1">
               {crossings.length === 0 ? (
                 <p className="text-sm text-slate-500">No crossings detected with the current shape.</p>

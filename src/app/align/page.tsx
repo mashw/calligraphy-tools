@@ -11,7 +11,7 @@ import PreviewToolbar from '@/components/editor/PreviewToolbar';
 import DisclosureSection from '@/components/layout/DisclosureSection';
 import EditorWorkspace from '@/components/editor/EditorWorkspace';
 
-import React, { useEffect, useMemo, useState, useLayoutEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import type { LineMetric, Alignment } from '@/lib/line-widths';
 import {
@@ -884,7 +884,7 @@ export default function Home() {
             {/* STEP 1 — Basics */}
             <DisclosureSection title="Document & Script" defaultOpen>
               <div className="flex items-center gap-2">
-                
+
                 <InfoTip side="right">Choose script + working sizes and alignment.</InfoTip>
               </div>
 
@@ -1077,7 +1077,7 @@ export default function Home() {
             {/* STEP 2 — Enter lines */}
             <DisclosureSection title="Text & Placement" defaultOpen>
               <div className="flex items-center gap-2">
-                
+
                 <InfoTip side="right">Type one line per row.</InfoTip>
               </div>
               <textarea
@@ -1095,7 +1095,7 @@ export default function Home() {
           <DisclosureSection title="Advanced Calibration" defaultOpen>
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
-                
+
                 <InfoTip side="right">
                   Write each reference exactly as shown at your chosen x-height, measure its total length in millimetres,
                   and enter the value. Calibration adjusts lowercase scale and spacing. Stored per x-height.
@@ -1272,7 +1272,7 @@ export default function Home() {
       )}
 <section className=" pb-8">
         <DisclosureSection title="Measurements & Results" defaultOpen>
-          
+
           <div className="overflow-x-auto">
             <table className="w-full text-sm border border-slate-200 rounded-lg overflow-hidden">
               <thead className="bg-slate-50">
