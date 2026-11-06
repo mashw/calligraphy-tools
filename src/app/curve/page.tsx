@@ -1,5 +1,16 @@
 'use client';
 
+import { Button, Select, Toggle, NumericInput, Slider } from '@/components/editor/Controls';
+
+import { InfoTip, InsetLabeledField, INSET_CONTROL_BASE, INSET_CONTROL_MM, INSET_CONTROL_WIDE } from '@/components/editor/Controls';
+
+import { pointBounds } from '@/lib/editor/camera';
+import { useEditorCamera } from '@/components/editor/useEditorCamera';
+import PreviewToolbar from '@/components/editor/PreviewToolbar';
+
+import DisclosureSection from '@/components/layout/DisclosureSection';
+import EditorWorkspace from '@/components/editor/EditorWorkspace';
+
 import SlantStyleControl from '@/components/guidelines/SlantStyleControl';
 import { type SlantStyle } from '@/lib/guides/slant-paths';
 import React, { useMemo, useRef, useState, useLayoutEffect, useEffect } from 'react';
@@ -41,7 +52,7 @@ type PaperId = keyof typeof PAPERS_MM;
 type CurvePresetId = CurvedTitleCurveId;
 type Orientation = 'portrait' | 'landscape';
 type AlignMode = 'start' | 'center' | 'end';
-type ViewMode = 'autofit' | 'fullpage' | 'custom';
+
 type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 
 const X_OPTIONS = Array.from({ length: (10 - 2) / 0.5 + 1 }, (_, i) => 2 + i * 0.5);
@@ -51,142 +62,18 @@ const CAL_STORAGE_KEY_PREFIX = 'ct_curveplanner_calibration_v2_xh_';
 const keyForXHeight = (x: number) => `${CAL_STORAGE_KEY_PREFIX}${x.toFixed(1)}`;
 
 /* ---------------- Reusable InfoTip ---------------- */
-type InfoTipProps = {
-  title?: string;
-  children: React.ReactNode;
-  className?: string;
-  side?: 'top' | 'right' | 'left' | 'bottom';
-};
-
-function InfoTip({ title, children, className = '', side = 'right' }: InfoTipProps) {
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-  const tipRef = useRef<HTMLDivElement | null>(null);
-  const [open, setOpen] = useState(false);
-  const [computedSide, setComputedSide] = useState<typeof side>(side);
-
-  useLayoutEffect(() => {
-    if (!open) return;
-    const wrap = wrapRef.current;
-    const tip = tipRef.current;
-    if (!wrap || !tip) return;
-
-    const gap = 8;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const wr = wrap.getBoundingClientRect();
-
-    tip.style.visibility = 'hidden';
-    tip.style.display = 'block';
-    const tr = tip.getBoundingClientRect();
-    tip.style.visibility = '';
-    tip.style.display = '';
-
-    const space = {
-      left: wr.left,
-      right: vw - wr.right,
-      top: wr.top,
-      bottom: vh - wr.bottom,
-    };
-
-    const fits = (s: typeof side) =>
-      (s === 'left' || s === 'right')
-        ? space[s] >= tr.width + gap
-        : (s === 'top' || s === 'bottom')
-          ? space[s] >= tr.height + gap
-          : false;
-
-    let next: typeof side = side;
-    if (!fits(side)) {
-      const order: Array<typeof side> = ['right', 'left', 'bottom', 'top'];
-      next = order.sort((a, b) => space[b] - space[a]).find(fits) ?? side;
-    }
-    setComputedSide(next);
-  }, [open, side]);
-
-  const pos =
-    computedSide === 'top'
-      ? 'bottom-full left-1/2 -translate-x-1/2 -mb-2'
-      : computedSide === 'left'
-        ? 'right-full top-1/2 -translate-y-1/2 -mr-2'
-        : computedSide === 'bottom'
-          ? 'top-full left-1/2 -translate-x-1/2 mt-2'
-          : 'left-full top-1/2 -translate-y-1/2 ml-2';
-
-  const arrow =
-    computedSide === 'top'
-      ? 'top-full left-1/2 -translate-x-1/2 border-t-slate-700'
-      : computedSide === 'left'
-        ? 'left-full top-1/2 -translate-y-1/2 border-l-slate-700'
-        : computedSide === 'bottom'
-          ? 'bottom-full left-1/2 -translate-x-1/2 border-b-slate-700'
-          : 'right-full top-1/2 -translate-y-1/2 border-r-slate-700';
-
-  return (
-    <div
-      ref={wrapRef}
-      className={`relative inline-flex ${className}`}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onTouchStart={() => setOpen(o => !o)}
-    >
-      <span
-        aria-hidden="true"
-        className="inline-flex items-center justify-center w-6 h-6 rounded-full border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 cursor-help"
-        title={title}
-      >
-        <span className="text-[11px] font-bold select-none">i</span>
-      </span>
-
-      <div
-        ref={tipRef}
-        role="tooltip"
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
-        className={`absolute ${pos} z-30
-          ${open ? 'visible opacity-100' : 'invisible opacity-0'}
-          transition-opacity duration-150
-          rounded-lg shadow-lg ring-1 ring-black/10 bg-slate-700 text-white text-[13px] leading-snug
-          px-3.5 py-2.5 whitespace-normal pointer-events-auto
-          min-w-[16rem] max-w-[34rem]`}
-      >
-        {children}
-        <span className={`absolute ${arrow} w-0 h-0 border-8 border-transparent`} aria-hidden="true" />
-      </div>
-    </div>
-  );
-}
-
-type InsetLabeledFieldProps = {
-  label: string;
-  disabled?: boolean;
-  className?: string;
-  rightAdornment?: React.ReactNode;
-  adornmentClassName?: string;
-  children: React.ReactNode;
-};
-
-function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, adornmentClassName = 'right-3', children }: InsetLabeledFieldProps) {
-  return (
-    <div className={`relative rounded-lg border border-slate-300 overflow-hidden ${disabled ? 'bg-slate-50' : 'bg-white'} ${className}`}>
-      <div className="absolute inset-x-0 top-0 h-5 bg-slate-50/80 border-b border-slate-300 px-3 flex items-center z-10 pointer-events-none">
-        <span className="text-[11px] font-medium text-slate-600">{label}</span>
-      </div>
-      <div className="relative pt-5">
-        {children}
-        {rightAdornment && (
-          <span className={`pointer-events-none select-none absolute ${adornmentClassName} top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500`}>
-            {rightAdornment}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
 
 
-const INSET_CONTROL_BASE = 'w-full border-0 rounded-none px-3 py-2 text-sm bg-transparent focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:text-slate-400 disabled:cursor-not-allowed';
-const INSET_CONTROL_MM = `${INSET_CONTROL_BASE} pr-10`;
-const INSET_CONTROL_WIDE = `${INSET_CONTROL_BASE} pr-14`;
+
+
+
+
+
+
+
+
+
+
 /* ---------------- Export helpers ---------------- */
 function stripNoExport(svg: SVGSVGElement) {
   // Remove any elements marked as non-export (green indicators etc.)
@@ -418,8 +305,8 @@ export default function CurvedTitlePage() {
   // ---------- State ----------
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
-  const [view, setView] = useState<ViewMode>('autofit');
-  const [customOrigin, setCustomOrigin] = useState<'autofit' | 'fullpage'>('autofit');
+
+
 
   const snapHalf = (v: number) => Math.round(v * 2) / 2;
 
@@ -492,16 +379,14 @@ export default function CurvedTitlePage() {
   const [rotDeg, setRotDeg] = useState(0);
   const [scalePct, setScalePct] = useState(100);
 
-  const [isNarrow, setIsNarrow] = useState(() => (typeof window !== 'undefined'
-    ? window.matchMedia('(max-width: 640px)').matches
-    : false));
-  const DEFAULT_ZOOM = isNarrow ? 5 : 4;
-  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
-  const DEFAULT_AUTOFIT_ZOOM = 4;
-  const [pan, setPan] = useState({ x: 0, y: 0 });
 
-  const [savedViewBeforeCurveDrag, setSavedViewBeforeCurveDrag] = useState<ViewMode | null>(null);
-  const [savedZoomBeforeCurveDrag, setSavedZoomBeforeCurveDrag] = useState<number | null>(null);
+
+
+
+
+
+
+
 
   const [curveOffset, setCurveOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isCurveDragging, setIsCurveDragging] = useState(false);
@@ -517,7 +402,7 @@ export default function CurvedTitlePage() {
   } | null>(null);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const [previewPxH, setPreviewPxH] = useState(0);
+
 
   // Sticky centering: snap + hysteresis
   const snapStateRef = useRef<{ snapped: boolean }>({ snapped: true });
@@ -530,61 +415,11 @@ export default function CurvedTitlePage() {
   const CENTER_EPS_MM = 0.5; // considered "centered" for showing indicator
 
   // Full-viewport paint layer to hide any layout decorations behind this route
-  useLayoutEffect(() => {
-    const html = document.documentElement;
-    const body = document.body;
 
-    const prevHtmlBg = html.style.backgroundImage;
-    const prevBodyBg = body.style.backgroundImage;
 
-    html.style.backgroundImage = 'none';
-    body.style.backgroundImage = 'none';
 
-    return () => {
-      html.style.backgroundImage = prevHtmlBg;
-      body.style.backgroundImage = prevBodyBg;
-    };
-  }, []);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(max-width: 640px)');
-    const update = () => setIsNarrow(mq.matches);
-    update();
-    if (mq.addEventListener) {
-      mq.addEventListener('change', update);
-    } else {
-      mq.addListener(update);
-    }
-    return () => {
-      if (mq.removeEventListener) {
-        mq.removeEventListener('change', update);
-      } else {
-        mq.removeListener(update);
-      }
-    };
-  }, []);
 
-  useEffect(() => {
-    const el = svgRef.current;
-    if (!el) return;
-
-    const update = () => {
-      const r = el.getBoundingClientRect();
-      setPreviewPxH(r.height);
-    };
-
-    update();
-
-    const ro = new ResizeObserver(() => update());
-    ro.observe(el);
-
-    window.addEventListener('resize', update);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', update);
-    };
-  }, []);
 
   useEffect(() => {
     if (script !== 'Copperplate') {
@@ -640,7 +475,7 @@ export default function CurvedTitlePage() {
     }
   }, [xHeightMM, script, useCalibration, calWordLowerMM, calWordDoubleMM, userScaleFactor, userSpaceFactor]);
 
-  const fs = (mm: number) => mm / Math.max(zoom, 0.001);
+  const fs = (mm: number) => mm / Math.max(camera.zoom, 0.001);
 
   // ---------- Page box (mm) ----------
   const raw = PAPERS_MM[paper];
@@ -1130,120 +965,15 @@ export default function CurvedTitlePage() {
     );
   });
 
-  const getGuideCenter = () => {
-    const pts = [
-      ...guideSet.ascLine,
-      ...guideSet.waistLine,
-      ...guideSet.baseLine,
-      ...guideSet.descLine,
-    ];
-    const xs = pts.map(p => p.x);
-    const ys = pts.map(p => p.y);
-    return {
-      cx: (Math.min(...xs) + Math.max(...xs)) / 2,
-      cy: (Math.min(...ys) + Math.max(...ys)) / 2,
-    };
-  };
 
-  const computeBaseViewFor = (
-    viewArg: ViewMode,
-    zoomArg: number,
-    originArg: 'autofit' | 'fullpage',
-  ) => {
-    const topPadPX = 30;
-    const padMode: 'autofit' | 'fullpage' =
-      viewArg === 'custom' ? originArg : (viewArg === 'fullpage' ? 'fullpage' : 'autofit');
 
-    const fitZoom = viewArg === 'autofit' ? DEFAULT_AUTOFIT_ZOOM : 1;
-    const zoomForView = viewArg === 'custom' ? zoomArg : fitZoom;
 
-    const fullPagePadPX = 5;
-    const stagePadMM =
-      padMode === 'fullpage'
-        ? (() => {
-          const pxH = Math.max(1, previewPxH);
-          const mmPerPx = box.h / pxH;
-          return fullPagePadPX * mmPerPx;
-        })()
-        : 22;
 
-    let minX: number;
-    let minY: number;
-    let vw: number;
-    let vh: number;
 
-    if (padMode === 'fullpage') {
-      if (viewArg === 'custom') {
-        vw = box.w / Math.max(1, zoomForView);
-        vh = box.h / Math.max(1, zoomForView);
-        minX = (box.w - vw) / 2;
-        minY = (box.h - vh) / 2;
-      } else {
-        vw = box.w;
-        vh = box.h;
-        minX = 0;
-        minY = 0;
-      }
-    } else {
-      const fitPad = 8;
-      const pts = [
-        ...guideSet.ascLine,
-        ...guideSet.waistLine,
-        ...guideSet.baseLine,
-        ...guideSet.descLine,
-      ];
-      const xs = pts.map(p => p.x);
-      const ys = pts.map(p => p.y);
-      const minX0 = Math.min(...xs) - fitPad;
-      const maxX0 = Math.max(...xs) + fitPad;
-      const minY0 = Math.min(...ys) - fitPad;
-      const maxY0 = Math.max(...ys) + fitPad;
-
-      const cx = (minX0 + maxX0) / 2;
-      const cy = (minY0 + maxY0) / 2;
-
-      vw = Math.max(1, maxX0 - minX0) / Math.max(1, zoomForView);
-      vh = Math.max(1, maxY0 - minY0) / Math.max(1, zoomForView);
-      minX = cx - vw / 2;
-      minY = cy - vh / 2;
-      minY = Math.min(minY, stagePadMM);
-    }
-
-    const baseVhMM = vh + stagePadMM * 2;
-    const mmPerPx = previewPxH > 0 ? baseVhMM / previewPxH : 0;
-    const extraTopMM = padMode === 'autofit' ? topPadPX * mmPerPx : 0;
-
-    return {
-      minX,
-      minY,
-      vw,
-      vh,
-      stagePadMM,
-      extraTopMM,
-    };
-  };
-
-  const computeBaseView = () => computeBaseViewFor(view, zoom, customOrigin);
 
   // ---------- ViewBox (includes stage margin so paper stands out) ----------
-  const vb = useMemo(() => {
-    const { minX, minY, vw, vh, stagePadMM, extraTopMM } = computeBaseView();
-
-    let minXc = minX + pan.x - stagePadMM;
-    let minYc = minY + pan.y - stagePadMM - extraTopMM;
-    let vwc = vw + stagePadMM * 2;
-    let vhc = vh + stagePadMM * 2;
-
-    if (view === 'autofit') {
-      const minVwc = box.w + stagePadMM * 2;
-      if (vwc < minVwc) {
-        vwc = minVwc;
-        minXc = -stagePadMM + pan.x;
-      }
-    }
-
-    return { minX: minXc, minY: minYc, vw: vwc, vh: vhc, str: `${minXc} ${minYc} ${vwc} ${vhc}` };
-  }, [view, box, guideSet, zoom, pan, previewPxH, DEFAULT_AUTOFIT_ZOOM, customOrigin]);
+  const camera = useEditorCamera(svgRef, {x:0,y:0,w:box.w,h:box.h}, pointBounds([guideSet, ...(topBandEnabled ? [topGuideSet] : []), ...(bottomBandEnabled ? [bottomGuideSet] : [])].flatMap(g => [...g.ascLine, ...g.waistLine, ...g.baseLine, ...g.descLine]),{x:0,y:0,w:box.w,h:box.h},8));
+  const vb = camera;
 
 
   /* ---------------- Export actions ---------------- */
@@ -1290,13 +1020,7 @@ export default function CurvedTitlePage() {
   }
 
   /* ---------------- Pan & Curve Drag handlers ---------------- */
-  function onPointerDown(e: React.PointerEvent<SVGSVGElement>) {
-    const svg = svgRef.current;
-    if (!svg) return;
-    svg.setPointerCapture(e.pointerId);
-    dragRef.current = { px: e.clientX, py: e.clientY, panX: pan.x, panY: pan.y, mode: 'pan' };
-    setIsCurveDragging(false);
-  }
+
 
   function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
     if (!dragRef.current) return;
@@ -1345,16 +1069,13 @@ export default function CurvedTitlePage() {
       return;
     }
 
-    // Pan stage
-    const nx = dragRef.current.panX - (e.clientX - dragRef.current.px) * mmPerPxX;
-    const ny = dragRef.current.panY - (e.clientY - dragRef.current.py) * mmPerPxY;
-    setPan({ x: nx, y: ny });
+
   }
 
   function onPointerUp(e: React.PointerEvent<SVGSVGElement>) {
     const svg = svgRef.current;
     if (!svg) return;
-    const wasCurve = dragRef.current?.mode === 'curve';
+
     try {
       svg.releasePointerCapture(e.pointerId);
     } catch {
@@ -1363,64 +1084,14 @@ export default function CurvedTitlePage() {
     dragRef.current = null;
     setIsCurveDragging(false);
 
-    if (wasCurve && savedViewBeforeCurveDrag) {
-      setView(savedViewBeforeCurveDrag);
-      setSavedViewBeforeCurveDrag(null);
 
-      if (savedZoomBeforeCurveDrag != null) {
-        setZoom(savedZoomBeforeCurveDrag);
-        setSavedZoomBeforeCurveDrag(null);
-      }
-
-      setPan({ x: 0, y: 0 });
-    }
   }
 
-  function applyViewPreset(nextView: ViewMode) {
-    setView(nextView);
-    setPan({ x: 0, y: 0 });
-  }
 
-  function resetView() {
-    applyViewPreset('autofit');
-    setZoom(DEFAULT_ZOOM);
-  }
 
-  function adjustZoom(direction: 'in' | 'out') {
-    const nextOrigin =
-      view === 'fullpage' ? 'fullpage' : (view === 'autofit' ? 'autofit' : customOrigin);
-    setCustomOrigin(nextOrigin);
 
-    const currentEffectiveZoom =
-      view === 'custom'
-        ? zoom
-        : view === 'autofit'
-          ? DEFAULT_AUTOFIT_ZOOM
-          : 1;
 
-    const step = view === 'autofit' ? 1.10 : 1.25;
 
-    const nextZoom =
-      direction === 'in'
-        ? currentEffectiveZoom * step
-        : currentEffectiveZoom / step;
-
-    const { cx, cy } = getGuideCenter();
-    const { minX, minY, vw, vh, stagePadMM, extraTopMM } = computeBaseViewFor(
-      'custom',
-      nextZoom,
-      nextOrigin,
-    );
-    const vwc = vw + stagePadMM * 2;
-    const vhc = vh + stagePadMM * 2;
-
-    const panX = (cx - vwc / 2) - (minX - stagePadMM);
-    const panY = (cy - vhc / 2) - (minY - stagePadMM - extraTopMM);
-
-    setView('custom');
-    setZoom(nextZoom);
-    setPan({ x: panX, y: panY });
-  }
 
 
   function defaultGuideOffset() {
@@ -1480,24 +1151,19 @@ export default function CurvedTitlePage() {
   }
 
   function onGuidePointerDown(e: React.PointerEvent<SVGPathElement | SVGLineElement>) {
+    camera.freeze();
     e.stopPropagation();
     const svg = svgRef.current;
     if (!svg) return;
     svg.setPointerCapture(e.pointerId);
 
-    if (view !== 'fullpage') {
-      setSavedViewBeforeCurveDrag(prev => (prev === null ? view : prev));
-      setSavedZoomBeforeCurveDrag(prev => (prev === null ? zoom : prev));
-      setView('fullpage');
-      setZoom(1);
-      setPan({ x: 0, y: 0 });
-    }
+
 
     dragRef.current = {
       px: e.clientX,
       py: e.clientY,
-      panX: pan.x,
-      panY: pan.y,
+      panX: 0,
+      panY: 0,
       mode: 'curve',
       ox: curveOffset.x,
       oy: curveOffset.y,
@@ -1537,114 +1203,48 @@ export default function CurvedTitlePage() {
 
 
   return (
-    <main className="min-h-screen text-sm text-slate-900 relative">
-      {/* FULL-VIEWPORT “PAINT OVER” LAYER */}
-      <div className="fixed inset-0 -z-10 bg-slate-100" style={{ backgroundImage: 'none' }} />
-
-      {/* Header */}
-      <header className="px-6 pt-8 pb-4">
-        <div className="max-w-[1120px] mx-auto">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Calligraphy Tools <span className="text-indigo-600">— Curved Title Planner</span>
-          </h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Plan curved headings (“resolutions”) for Copperplate and Textura Quadrata. Letters stay upright; guides follow the curve.
-          </p>
-        </div>
-      </header>
-
-      {/* Preview */}
-      <section className="px-6">
+    <EditorWorkspace preview={<>
+<section className="">
 
 
 
 
-        <div className="max-w-[1120px] mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4">
-          <div className="flex flex-wrap items-start gap-3 mb-2">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-slate-800">Preview</h3>
-                <InfoTip side="right">
-                  Drag anywhere to pan. Zoom with ±. Drag any guideline to move the curve guide (sticky centering on X).
-                </InfoTip>
-              </div>
-              <div className="flex items-center gap-2">
-  
-  <select
-    className="p-1.5 text-sm rounded-lg border border-slate-300"
-    value={view}
-    onChange={e => {
-      applyViewPreset(e.target.value as ViewMode);
-    }}
-  >
-    <option value="autofit">Auto-fit curve</option>
-    <option value="fullpage">Full page / envelope</option>
-    <option value="custom">Custom</option>
-  </select>
-</div>
-
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 ml-auto">
-              <button
-                onMouseDown={e => e.preventDefault()}
-                onClick={() => adjustZoom('out')}
-                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
-              >
-                –
-              </button>
-              <button
-                onMouseDown={e => e.preventDefault()}
-                onClick={() => adjustZoom('in')}
-                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
-              >
-                +
-              </button>
-              <button
-                onMouseDown={e => e.preventDefault()}
-                onClick={() => applyViewPreset('autofit')}
-                className="shrink-0 px-2 py-1 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
-              >
-                Reset view
-              </button>
-              <button
+        <div className="preview-panel  mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4">
+          <PreviewToolbar camera={camera}><Button
                 onMouseDown={e => e.preventDefault()}
                 onClick={resetGuidePlacement}
-                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                className="shrink-0   text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
                 Reset guide
-              </button>
-              <button
+              </Button>
+<Button
                 onMouseDown={e => e.preventDefault()}
                 onClick={centerCurveHorizontally}
-                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                className="shrink-0   text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
                 Center horizontally
-              </button>
-
-              <button
+              </Button>
+<Button
                 onMouseDown={e => e.preventDefault()}
                 onClick={downloadSVG}
-                className="shrink-0 ml-2 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                className="shrink-0 ml-2   text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
                 SVG
-              </button>
-              <button
+              </Button>
+<Button
                 onMouseDown={e => e.preventDefault()}
                 onClick={downloadPDF}
-                className="shrink-0 px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                className="shrink-0   text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
                 PDF
-              </button>
-              <button
+              </Button>
+<Button
                 onMouseDown={e => e.preventDefault()}
                 onClick={printToScale}
-                className="shrink-0 px-3 py-1.5 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
+                className="shrink-0   text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:outline-none transition"
               >
                 Print
-              </button>
-            </div>
-          </div>
+              </Button></PreviewToolbar>
 
 
           {/* Darker stage behind paper */}
@@ -1652,10 +1252,9 @@ export default function CurvedTitlePage() {
             <svg
               ref={svgRef}
               viewBox={vb.str}
-              className={`block mx-auto w-full h-[38vh] sm:h-[44vh] md:h-[50vh] touch-none ${isCurveDragging ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
+              className="editor-svg"
               style={{ background: '#cbd5e1' }}
-              preserveAspectRatio={(view === 'fullpage' || (view === 'custom' && customOrigin === 'fullpage')) ? 'xMidYMid meet' : 'xMidYMin meet'}
-              onPointerDown={onPointerDown}
+              preserveAspectRatio="xMidYMid meet"
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerLeave={onPointerUp}
@@ -1937,20 +1536,20 @@ export default function CurvedTitlePage() {
           </div>
         </div>
       </section>
-
-      {/* Controls */}
-      <section className="px-6 py-5 max-w-[1120px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+</>} inspector={<><p className="inspector-intro">Plan curved headings (“resolutions”) for Copperplate and Textura Quadrata. Letters stay upright; guides follow the curve.
+          </p>
+<section className="   mx-auto grid grid-cols-1  gap-6">
         {/* Step 1 */}
-        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+        <DisclosureSection title="Document & Script" defaultOpen>
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-slate-800">Step 1 — Basics</h2>
+
             <InfoTip side="right">Curve guide movement snaps to horizontal centre unless you pull far enough to release.</InfoTip>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
             <div className="sm:col-span-2">
               <InsetLabeledField label="Script">
-                <select className={INSET_CONTROL_BASE} value={script} onChange={e => {
+                <Select className={INSET_CONTROL_BASE} value={script} onChange={e => {
                    const next = e.target.value as ScriptId;
                    setScript(next);
                    if (next === 'InsularMajuscule') { setXNib(5); setAscNib(2); setDescNib(2); setPenAngleDeg(15); setShowInsularGrid(false); }
@@ -1960,21 +1559,21 @@ export default function CurvedTitlePage() {
                   <option value="Fraktur">Fraktur</option>
                   <option value="TexturaQuadrata">Textura Quadrata</option>
                    <option value="InsularMajuscule">Insular Majuscule</option>
-                </select>
+                </Select>
               </InsetLabeledField>
             </div>
-            {(script === 'InsularMajuscule' || (topBandEnabled && topBandScript === 'InsularMajuscule') || (bottomBandEnabled && bottomBandScript === 'InsularMajuscule')) && <label className="sm:col-span-2 inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={showInsularGrid} onChange={e => setShowInsularGrid(e.target.checked)} /> Show intermediate grid</label>}
+            {(script === 'InsularMajuscule' || (topBandEnabled && topBandScript === 'InsularMajuscule') || (bottomBandEnabled && bottomBandScript === 'InsularMajuscule')) && <label className="sm:col-span-2 inline-flex items-center gap-2 text-sm"><Toggle type="checkbox" checked={showInsularGrid} onChange={e => setShowInsularGrid(e.target.checked)} /> Show intermediate grid</label>}
 
             <div>
               <InsetLabeledField label="Paper size">
-                <select
+                <Select
                   className={INSET_CONTROL_BASE}
                   value={paper}
                   onChange={e => {
                     const id = e.target.value as PaperId;
                     setPaper(id);
                     setOrientation(PAPERS_MM[id].defaultOrientation);
-                    setPan({ x: 0, y: 0 });
+                    camera.fit('page');
                   }}
                 >
                   {Object.entries(PAPERS_MM).map(([id, p]) => (
@@ -1982,29 +1581,29 @@ export default function CurvedTitlePage() {
                       {p.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </InsetLabeledField>
             </div>
 
             <div>
               <InsetLabeledField label="Orientation">
-                <select className={INSET_CONTROL_BASE} value={orientation} onChange={e => setOrientation(e.target.value as Orientation)}>
+                <Select className={INSET_CONTROL_BASE} value={orientation} onChange={e => setOrientation(e.target.value as Orientation)}>
                   <option value="portrait">Portrait</option>
                   <option value="landscape">Landscape</option>
-                </select>
+                </Select>
               </InsetLabeledField>
             </div>
 
             <div className="sm:col-span-2">
               <InsetLabeledField label="Curve">
-                <select className={INSET_CONTROL_BASE} value={curve} onChange={e => setCurve(e.target.value as CurvePresetId)}>
+                <Select className={INSET_CONTROL_BASE} value={curve} onChange={e => setCurve(e.target.value as CurvePresetId)}>
                   <option value="simpleArch">Simple Arch</option>
                   <option value="highArch">High Arch</option>
                   <option value="shallowArch">Shallow Arch</option>
                   <option value="compoundArch">Compound Arch</option>
                   <option value="zanerian">Zanerian Resolution</option>
                   <option value="custom">Custom</option>
-                </select>
+                </Select>
               </InsetLabeledField>
               {curve === 'custom' && <CustomCurveUpload value={customCurve} onChange={setCustomCurve} />}
             </div>
@@ -2035,12 +1634,12 @@ export default function CurvedTitlePage() {
               </div>
             )}
           </div>
-        </div>
+        </DisclosureSection>
 
         {/* Step 2 */}
-        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+        <DisclosureSection title="Script & Dimensions" defaultOpen>
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-slate-800">Step 2 — Script Options</h2>
+
             <InfoTip side="right">
               {script === 'Copperplate'
                 ? 'Copperplate uses x-height (mm) with optional calibration for lowercase scale and spacing.'
@@ -2056,7 +1655,7 @@ export default function CurvedTitlePage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <InsetLabeledField label="X-height" rightAdornment="mm">
-                    <select
+                    <Select
                       className={INSET_CONTROL_MM}
                       value={xHeightMM}
                       onChange={(e) => setXHeightMM(parseFloat(e.target.value))}
@@ -2066,12 +1665,12 @@ export default function CurvedTitlePage() {
                           {v.toFixed(1)}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </InsetLabeledField>
                 </div>
                 <div>
                   <InsetLabeledField label="Capitals" disabled={useCalibration}>
-                    <select
+                    <Select
                       className={INSET_CONTROL_BASE}
                       value={capStyle}
                       onChange={(e) => setCapStyle(e.target.value as 'simple' | 'flourished')}
@@ -2079,7 +1678,7 @@ export default function CurvedTitlePage() {
                     >
                       <option value="simple">Simple (body widths)</option>
                       <option value="flourished">Flourished (full widths)</option>
-                    </select>
+                    </Select>
                   </InsetLabeledField>
                   {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
                 </div>
@@ -2087,7 +1686,7 @@ export default function CurvedTitlePage() {
 
               <div>
                 <InsetLabeledField label="Guideline ratio (desc : x : asc)">
-                <select
+                <Select
                   className={INSET_CONTROL_BASE}
                   value={copperplateRatioPreset}
                   onChange={(e) => setCopperplateRatioPreset(e.target.value as CopperplateRatioPreset)}
@@ -2096,7 +1695,7 @@ export default function CurvedTitlePage() {
                   <option value="3:2:3">3 : 2 : 3</option>
                   <option value="1:1:1">1 : 1 : 1</option>
                   <option value="custom">Custom…</option>
-                </select>
+                </Select>
                 </InsetLabeledField>
                 <p className="mt-1 text-[11px] text-slate-400">Ascender/descender scale from x-height.</p>
               </div>
@@ -2110,7 +1709,7 @@ export default function CurvedTitlePage() {
     </p>
   </div>
 
-  <button
+  <Button
     type="button"
     onMouseDown={(e) => e.preventDefault()}
     onClick={() =>
@@ -2132,7 +1731,7 @@ export default function CurvedTitlePage() {
       <span className="h-3 w-3 rounded-full bg-white shadow" />
     </span>
     {useCalibration ? 'Calibration: On' : 'Calibration: Off'}
-  </button>
+  </Button>
 </div>
 
               {useCalibration && (
@@ -2140,7 +1739,7 @@ export default function CurvedTitlePage() {
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                     <div className="flex flex-col gap-1">
                       <InsetLabeledField label={CAL_WORD} rightAdornment="mm">
-                        <input
+                        <NumericInput
                           type="number"
                           step="0.1"
                           min="0"
@@ -2154,7 +1753,7 @@ export default function CurvedTitlePage() {
 
                     <div className="flex flex-col gap-1">
                       <InsetLabeledField label={CAL_WORD_DOUBLE} rightAdornment="mm">
-                        <input
+                        <NumericInput
                           type="number"
                           step="0.1"
                           min="0"
@@ -2168,7 +1767,7 @@ export default function CurvedTitlePage() {
                   </div>
 
                   <div className="mt-3">
-                    <button
+                    <Button
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => setShowAdvanced((v) => !v)}
@@ -2176,7 +1775,7 @@ export default function CurvedTitlePage() {
                     >
                       <span className={`inline-block transform transition-transform ${showAdvanced ? 'rotate-90' : 'rotate-0'}`}>▶</span>
                       <span>Advanced tweaks</span>
-                    </button>
+                    </Button>
 
                     {showAdvanced && (
                       <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
@@ -2185,7 +1784,7 @@ export default function CurvedTitlePage() {
                             <span className="font-mono text-slate-500">×{userScaleFactor.toFixed(2)}</span>
                           </div>
                           <InsetLabeledField label="Overall scale">
-                            <input
+                            <NumericInput
                               type="number"
                               step="0.01"
                               min="0.7"
@@ -2202,7 +1801,7 @@ export default function CurvedTitlePage() {
                             <span className="font-mono text-slate-500">×{userSpaceFactor.toFixed(2)}</span>
                           </div>
                           <InsetLabeledField label="Spacing factor">
-                            <input
+                            <NumericInput
                               type="number"
                               step="0.01"
                               min="0.5"
@@ -2225,7 +1824,7 @@ export default function CurvedTitlePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <InsetLabeledField label="Desc units">
-                    <input
+                    <NumericInput
                       type="number"
                       min={0}
                       step="0.5"
@@ -2270,7 +1869,7 @@ export default function CurvedTitlePage() {
                   </div>
                   <div>
                     <InsetLabeledField label="X units">
-                    <input
+                    <NumericInput
                       type="number"
                       min={0.5}
                       step="0.5"
@@ -2315,7 +1914,7 @@ export default function CurvedTitlePage() {
                   </div>
                   <div>
                     <InsetLabeledField label="Asc units">
-                    <input
+                    <NumericInput
                       type="number"
                       min={0}
                       step="0.5"
@@ -2367,7 +1966,7 @@ export default function CurvedTitlePage() {
             <div className="grid grid-cols-2 gap-4 mt-3">
               <div>
                 <InsetLabeledField label="Nib size" rightAdornment="mm">
-                  <input
+                  <NumericInput
                     type="number"
                     step="any"
                     min={0.2}
@@ -2406,22 +2005,22 @@ export default function CurvedTitlePage() {
               </div>
               <div>
                 <InsetLabeledField label="x-height (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
-                  <input type="number" step={0.5} min={1} max={8} className={INSET_CONTROL_WIDE} value={xNib} onChange={e => setXNib(parseFloat(e.target.value || '5'))} />
+                  <NumericInput type="number" step={0.5} min={1} max={8} className={INSET_CONTROL_WIDE} value={xNib} onChange={e => setXNib(parseFloat(e.target.value || '5'))} />
                 </InsetLabeledField>
               </div>
               <div>
                 <InsetLabeledField label="Ascender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
-                  <input type="number" step={0.5} min={0} max={8} className={INSET_CONTROL_WIDE} value={ascNib} onChange={e => setAscNib(parseFloat(e.target.value || '3'))} />
+                  <NumericInput type="number" step={0.5} min={0} max={8} className={INSET_CONTROL_WIDE} value={ascNib} onChange={e => setAscNib(parseFloat(e.target.value || '3'))} />
                 </InsetLabeledField>
               </div>
               <div>
                 <InsetLabeledField label="Descender (nibs)" rightAdornment="nibs" adornmentClassName="right-2">
-                  <input type="number" step={0.5} min={0} max={8} className={INSET_CONTROL_WIDE} value={descNib} onChange={e => setDescNib(parseFloat(e.target.value || '2'))} />
+                  <NumericInput type="number" step={0.5} min={0} max={8} className={INSET_CONTROL_WIDE} value={descNib} onChange={e => setDescNib(parseFloat(e.target.value || '2'))} />
                 </InsetLabeledField>
               </div>
               <div className="col-span-2">
                 <InsetLabeledField label="Nib angle (°)">
-                <select
+                <Select
                   className={INSET_CONTROL_BASE}
                   value={penAngleDeg}
                   onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 15 | 35 | 40 | 45)}
@@ -2430,7 +2029,7 @@ export default function CurvedTitlePage() {
                    <option value={35}>35°</option>
                   <option value={40}>40°</option>
                   <option value={45}>45°</option>
-                </select>
+                </Select>
                 </InsetLabeledField>
               </div>
             </div>
@@ -2442,14 +2041,14 @@ export default function CurvedTitlePage() {
               <div className="flex items-center gap-2">
                 <div className="text-sm font-medium text-slate-700">Top band</div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" checked={topBandEnabled} onChange={e => setTopBandEnabled(e.target.checked)} aria-label="Top band" />
+                  <Toggle type="checkbox" className="sr-only peer" checked={topBandEnabled} onChange={e => setTopBandEnabled(e.target.checked)} aria-label="Top band" />
                   <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
                   <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
                 </label>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <InsetLabeledField label="Script" disabled={!topBandEnabled}>
-                  <select
+                  <Select
                     className={INSET_CONTROL_BASE}
                     value={topBandScript}
                     onChange={e => setTopBandScript(e.target.value as ScriptId)}
@@ -2459,10 +2058,10 @@ export default function CurvedTitlePage() {
                      <option value="InsularMajuscule">Insular Majuscule</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="Copperplate">Copperplate</option>
-                  </select>
+                  </Select>
                 </InsetLabeledField>
                 <InsetLabeledField label={topBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} disabled={!topBandEnabled} rightAdornment="mm">
-                    <input
+                    <NumericInput
                       type="number"
                       step="any"
                       min={0.2}
@@ -2480,14 +2079,14 @@ export default function CurvedTitlePage() {
               <div className="flex items-center gap-2">
                 <div className="text-sm font-medium text-slate-700">Bottom band</div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" checked={bottomBandEnabled} onChange={e => setBottomBandEnabled(e.target.checked)} aria-label="Bottom band" />
+                  <Toggle type="checkbox" className="sr-only peer" checked={bottomBandEnabled} onChange={e => setBottomBandEnabled(e.target.checked)} aria-label="Bottom band" />
                   <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
                   <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
                 </label>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <InsetLabeledField label="Script" disabled={!bottomBandEnabled}>
-                  <select
+                  <Select
                     className={INSET_CONTROL_BASE}
                     value={bottomBandScript}
                     onChange={e => setBottomBandScript(e.target.value as ScriptId)}
@@ -2497,10 +2096,10 @@ export default function CurvedTitlePage() {
                      <option value="InsularMajuscule">Insular Majuscule</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="Copperplate">Copperplate</option>
-                  </select>
+                  </Select>
                 </InsetLabeledField>
                 <InsetLabeledField label={bottomBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} disabled={!bottomBandEnabled} rightAdornment="mm">
-                    <input
+                    <NumericInput
                       type="number"
                       step="any"
                       min={0.2}
@@ -2513,37 +2112,37 @@ export default function CurvedTitlePage() {
               </div>
             </div>
           </div>
-        </div>
+        </DisclosureSection>
 
 
         {/* Step 3 */}
-        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+        <DisclosureSection title="Shape, Path & Guides" defaultOpen>
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-slate-800">Step 3 — Curve & Guides</h2>
+
             <InfoTip side="right">Rotate and scale the curve.</InfoTip>
           </div>
 
           <div className="grid grid-cols-1 gap-4 mt-3 select-none">
-          
+
 
 
             <div>
               <label className="font-medium text-slate-700">Rotation (°) <span className="text-indigo-600">{rotDeg}°</span></label>
-              <input type="range" min={-180} max={180} step={1} value={rotDeg} onChange={e => setRotDeg(parseInt(e.target.value, 10))} className="w-full" />
+              <Slider type="range" min={-180} max={180} step={1} value={rotDeg} onChange={e => setRotDeg(parseInt(e.target.value, 10))} className="w-full" />
             </div>
 
             <div>
               <label className="font-medium text-slate-700">Scale (%) <span className="text-indigo-600">{scalePct}%</span></label>
-              <input type="range" min={60} max={140} step={1} value={scalePct} onChange={e => setScalePct(parseInt(e.target.value, 10))} className="w-full" />
+              <Slider type="range" min={60} max={140} step={1} value={scalePct} onChange={e => setScalePct(parseInt(e.target.value, 10))} className="w-full" />
             </div>
 
 
             <div className="flex flex-wrap items-center gap-3">
-              <button onMouseDown={e => e.preventDefault()} onClick={resetTransform} className="px-3 py-1.5 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
+              <Button onMouseDown={e => e.preventDefault()} onClick={resetTransform} className="  text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
                 Reset rotation &amp; scale
-              </button>
+              </Button>
               <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-                <input
+                <Toggle
                   type="checkbox"
                   className="h-4 w-4 rounded border-slate-300 text-indigo-600"
                   checked={flipCurve}
@@ -2557,16 +2156,16 @@ export default function CurvedTitlePage() {
             <div className="my-3 border-t border-slate-200/70" />
               <div>
               <InsetLabeledField label="Text alignment">
-                <select className={INSET_CONTROL_BASE} value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
+                <Select className={INSET_CONTROL_BASE} value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
                 <option value="start">Start</option>
                 <option value="center">Centered</option>
                 <option value="end">End</option>
-              </select>
+              </Select>
               </InsetLabeledField>
             </div>
           <div className="mt-4 flex items-center gap-4">
             <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-              <input
+              <Toggle
                 type="checkbox"
                 className="h-4 w-4 rounded border-slate-300 text-indigo-600"
                 checked={showBoxes}
@@ -2576,7 +2175,7 @@ export default function CurvedTitlePage() {
             </label>
 
             <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-              <input
+              <Toggle
                 type="checkbox"
                 className="h-4 w-4 rounded border-slate-300 text-indigo-600"
                 checked={showSpanFill}
@@ -2585,8 +2184,8 @@ export default function CurvedTitlePage() {
               Title span fill
             </label>
           </div>
-        </div>
+        </DisclosureSection>
       </section>
-    </main>
+</>}></EditorWorkspace>
   );
 }

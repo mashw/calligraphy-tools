@@ -1,6 +1,17 @@
 'use client';
 
-import React, { useEffect, useMemo, useState, useLayoutEffect } from 'react';
+import { Select, NumericInput, Toggle, Button } from '@/components/editor/Controls';
+
+import { InfoTip } from '@/components/editor/Controls';
+
+import { useRef as useCameraRef } from 'react';
+import { useEditorCamera } from '@/components/editor/useEditorCamera';
+import PreviewToolbar from '@/components/editor/PreviewToolbar';
+
+import DisclosureSection from '@/components/layout/DisclosureSection';
+import EditorWorkspace from '@/components/editor/EditorWorkspace';
+
+import React, { useEffect, useMemo, useState } from 'react';
 
 import type { LineMetric, Alignment } from '@/lib/line-widths';
 import {
@@ -68,111 +79,9 @@ const NORMALIZE_PREVIEW_HEIGHT_STORAGE_KEY = 'ct_align_normalize_preview_height_
 
 /* ---------------- Reusable InfoTip ---------------- */
 
-type InfoTipProps = {
-  title?: string;
-  children: React.ReactNode;
-  className?: string;
-  side?: 'top' | 'right' | 'left' | 'bottom';
-};
 
-function InfoTip({ title, children, className = '', side = 'right' }: InfoTipProps) {
-  const wrapRef = React.useRef<HTMLDivElement | null>(null);
-  const tipRef = React.useRef<HTMLDivElement | null>(null);
-  const [open, setOpen] = useState(false);
-  const [computedSide, setComputedSide] = useState<typeof side>(side);
 
-  useLayoutEffect(() => {
-    if (!open) return;
-    const wrap = wrapRef.current;
-    const tip = tipRef.current;
-    if (!wrap || !tip) return;
 
-    const gap = 8;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const wr = wrap.getBoundingClientRect();
-
-    const prevVis = tip.style.visibility;
-    const prevDisp = tip.style.display;
-    tip.style.visibility = 'hidden';
-    tip.style.display = 'block';
-    const tr = tip.getBoundingClientRect();
-    tip.style.visibility = prevVis;
-    tip.style.display = prevDisp;
-
-    const space = {
-      left: wr.left,
-      right: vw - wr.right,
-      top: wr.top,
-      bottom: vh - wr.bottom,
-    };
-    const fits = (s: typeof side) =>
-      s === 'left' || s === 'right'
-        ? space[s] >= tr.width + gap
-        : s === 'top' || s === 'bottom'
-          ? space[s] >= tr.height + gap
-          : false;
-
-    let next: typeof side = side;
-    if (!fits(side)) {
-      const order: Array<typeof side> = ['right', 'left', 'bottom', 'top'];
-      next = order.sort((a, b) => space[b] - space[a]).find(fits) ?? side;
-    }
-    setComputedSide(next);
-  }, [open, side]);
-
-  const pos =
-    computedSide === 'top'
-      ? 'bottom-full left-1/2 -translate-x-1/2 -mb-2'
-      : computedSide === 'left'
-        ? 'right-full top-1/2 -translate-y-1/2 -mr-2'
-        : computedSide === 'bottom'
-          ? 'top-full left-1/2 -translate-x-1/2 mt-2'
-          : 'left-full top-1/2 -translate-x-1/2 ml-2';
-
-  const arrow =
-    computedSide === 'top'
-      ? 'top-full left-1/2 -translate-x-1/2 border-t-slate-700'
-      : computedSide === 'left'
-        ? 'left-full top-1/2 -translate-y-1/2 border-l-slate-700'
-        : computedSide === 'bottom'
-          ? 'bottom-full left-1/2 -translate-x-1/2 border-b-slate-700'
-          : 'right-full top-1/2 border-r-slate-700 -translate-y-1/2';
-
-  return (
-    <div
-      ref={wrapRef}
-      className={`relative inline-flex ${className}`}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onTouchStart={() => setOpen((o) => !o)}
-    >
-      <span
-        aria-hidden="true"
-        className="inline-flex items-center justify-center w-6 h-6 rounded-full border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 cursor-help select-none"
-        title={title}
-      >
-        <span className="text-[11px] font-bold select-none">i</span>
-      </span>
-
-      <div
-        ref={tipRef}
-        role="tooltip"
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
-        className={`absolute ${pos} z-20
-          ${open ? 'visible opacity-100' : 'invisible opacity-0'}
-          transition-opacity duration-150
-          rounded-lg shadow-lg ring-1 ring-black/10 bg-slate-700 text-white text-[13px] leading-snug
-          px-3.5 py-2.5 whitespace-normal pointer-events-auto
-          min-w-[16rem] max-w-[34rem]`}
-      >
-        {children}
-        <span className={`absolute ${arrow} w-0 h-0 border-8 border-transparent`} aria-hidden="true" />
-      </div>
-    </div>
-  );
-}
 
 /* ---------------------------- Line Preview SVG --------------------------- */
 
@@ -892,32 +801,15 @@ export default function Home() {
         ? 'text-orange-500'
         : 'text-slate-500';
 
-  return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
-      <style>{`
-        .ct-svg-text { font-size: clamp(12.5px, 1.35vw, 14.5px); }
-        @media (max-width: 700px) { .ct-svg-text { font-size: clamp(13px, 2.4vw, 14px); } }
-        @media (max-width: 500px) { .ct-svg-text { font-size: clamp(13.5px, 3.2vw, 14.5px); } }
-      `}</style>
-
-      <header className="px-6 pt-8 pb-6">
-        <div className="max-w-[1120px] mx-auto">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Calligraphy Tools <span className="text-indigo-600">— Line Planner</span>
-          </h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Plan exact start marks from a centerline or right edge. Copperplate uses join + entry/exit + word-space modelling.
-            Textura Quadrata uses nib-unit widths and spacing.
-          </p>
-        </div>
-      </header>
-
-      {/* PREVIEW */}
-      <section className="px-6">
-        <div className="max-w-[1120px] mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4">
+  const svgRef = useCameraRef<SVGSVGElement>(null);
+ const camera = useEditorCamera(svgRef, {x:0,y:0,w:stageFrame.widthPx,h:stageFrame.heightPx}, {x:0,y:0,w:stageFrame.widthPx,h:stageFrame.heightPx});
+ return (
+    <EditorWorkspace preview={<>
+<section className="">
+        <div className="preview-panel  mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-slate-800">Preview</h3>
+              <PreviewToolbar camera={camera} pageLabel="Fit lines" />
               <InfoTip side="right">
                 Copperplate: includes entry stroke before the first letter and (if ending on lowercase) an exit stroke after the last lowercase.
                 Word spaces include exit + gap + entry. Calibration adjusts lowercase scale + spacing.
@@ -927,9 +819,9 @@ export default function Home() {
           </div>
 
           <div className="overflow-x-auto">
-            <svg
-              viewBox={`0 0 ${stageFrame.widthPx} ${stageFrame.heightPx}`}
-              className="block mx-auto w-full h-auto"
+            <svg ref={svgRef}
+              viewBox={camera.str}
+              className="editor-svg"
               preserveAspectRatio="xMidYMid meet"
               shapeRendering="crispEdges"
             >
@@ -983,22 +875,23 @@ export default function Home() {
           </div>
         </div>
       </section>
-
-      {/* Step 1 + Step 2 */}
-      <section className="px-6 py-6">
-        <div className="max-w-[1120px] mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+</>} inspector={<><p className="inspector-intro">Plan exact start marks from a centerline or right edge. Copperplate uses join + entry/exit + word-space modelling.
+            Textura Quadrata uses nib-unit widths and spacing.
+          </p>
+<section className=" ">
+        <div className=" mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+          <div className="grid grid-cols-1  gap-6">
             {/* STEP 1 — Basics */}
-            <div>
+            <DisclosureSection title="Document & Script" defaultOpen>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold text-slate-800">Step 1 — Basics</h2>
+
                 <InfoTip side="right">Choose script + working sizes and alignment.</InfoTip>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-3">
                 <div>
                   <label className="font-medium text-slate-700">Script</label>
-                  <select
+                  <Select
                     className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={script}
                     onChange={(e) => {
@@ -1012,19 +905,19 @@ export default function Home() {
                     <option value="Fraktur">Fraktur</option>
                     <option value="TexturaQuadrata">Textura Quadrata</option>
                      <option value="InsularMajuscule">Insular Majuscule</option>
-                  </select>
+                  </Select>
                 </div>
 
                 <div>
                   <label className="font-medium text-slate-700">Alignment</label>
-                  <select
+                  <Select
                     className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={alignment}
                     onChange={(e) => setAlignment(e.target.value as Alignment)}
                   >
                     <option value="center">Center aligned</option>
                     <option value="right">Right aligned</option>
-                  </select>
+                  </Select>
                 </div>
 
                 {script === 'Copperplate' && alignment === 'right' && (
@@ -1064,7 +957,7 @@ export default function Home() {
                   <>
                     <div>
                       <label className="font-medium text-slate-700">X-height (mm)</label>
-                      <select
+                      <Select
                         className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         value={xHeight}
                         onChange={(e) => setXHeight(parseFloat(e.target.value))}
@@ -1074,11 +967,11 @@ export default function Home() {
                             {v.toFixed(1)}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     </div>
                     <div>
                       <label className="font-medium text-slate-700">Capitals</label>
-                      <select
+                      <Select
                         className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-400"
                         value={capStyle}
                         onChange={(e) => setCapStyle(e.target.value as 'simple' | 'flourished')}
@@ -1086,7 +979,7 @@ export default function Home() {
                       >
                         <option value="simple">Simple (body widths)</option>
                         <option value="flourished">Flourished (full widths)</option>
-                      </select>
+                      </Select>
                       {useCalibration && <p className="mt-1 text-[11px] text-slate-400">Disabled while calibration is enabled.</p>}
                     </div>
                   </>
@@ -1094,7 +987,7 @@ export default function Home() {
                   <>
                     <div>
                       <label className="font-medium text-slate-700">Nib size (mm)</label>
-                      <input
+                      <NumericInput
                         type="number"
                         step="any"
                         min={0.5}
@@ -1132,7 +1025,7 @@ export default function Home() {
 
                       <div className="mt-3">
                         <label className="font-medium text-slate-700">Pen angle (°)</label>
-                        <select
+                        <Select
                           className="mt-1 w-full p-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           value={penAngleDeg}
                           onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 15 | 35 | 40 | 45)}
@@ -1141,7 +1034,7 @@ export default function Home() {
                            <option value={35}>35°</option>
                           <option value={40}>40°</option>
                           <option value={45}>45°</option>
-                        </select>
+                        </Select>
                         <p className="mt-1 text-[11px] text-slate-400">
                           Converts nib units using effective downstroke width (nib × cos(angle)).
                         </p>
@@ -1151,11 +1044,11 @@ export default function Home() {
                     </div>
                   </>
                 )}
-                {script === 'InsularMajuscule' && <label className="sm:col-span-3 inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={showInsularGrid} onChange={e => setShowInsularGrid(e.target.checked)} /> Show intermediate grid</label>}
+                {script === 'InsularMajuscule' && <label className="sm:col-span-3 inline-flex items-center gap-2 text-sm"><Toggle type="checkbox" checked={showInsularGrid} onChange={e => setShowInsularGrid(e.target.checked)} /> Show intermediate grid</label>}
                  {script !== 'Copperplate' && <div className="sm:col-span-3 rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} compact /></div>}
 
                 <label className="inline-flex items-center gap-2 text-sm text-slate-800 sm:col-span-3">
-                  <input
+                  <Toggle
                     type="checkbox"
                     className="h-4 w-4 rounded border-slate-300 text-indigo-600"
                     checked={showLetterBoxes}
@@ -1166,7 +1059,7 @@ export default function Home() {
 
                 <div className="sm:col-span-3">
                   <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-                    <input
+                    <Toggle
                       type="checkbox"
                       className="h-4 w-4 rounded border-slate-300 text-indigo-600"
                       checked={normalizePreviewHeight}
@@ -1179,12 +1072,12 @@ export default function Home() {
                   </p>
                 </div>
               </div>
-            </div>
+            </DisclosureSection>
 
             {/* STEP 2 — Enter lines */}
-            <div>
+            <DisclosureSection title="Text & Placement" defaultOpen>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold text-slate-800">Step 2 — Enter lines</h2>
+
                 <InfoTip side="right">Type one line per row.</InfoTip>
               </div>
               <textarea
@@ -1193,33 +1086,31 @@ export default function Home() {
                 onChange={(e) => setLinesInput(e.target.value)}
                 placeholder="One line per row"
               />
-            </div>
+            </DisclosureSection>
           </div>
         </div>
       </section>
-
-      {/* Calibration (Copperplate only) */}
-      {script === 'Copperplate' && (
-        <section className="px-6 pb-6">
-          <div className="max-w-[1120px] mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
+{script === 'Copperplate' && (
+        <section className=" pb-6">
+          <DisclosureSection title="Advanced Calibration" defaultOpen>
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold text-slate-800">Calibration (optional)</h2>
+
                 <InfoTip side="right">
                   Write each reference exactly as shown at your chosen x-height, measure its total length in millimetres,
                   and enter the value. Calibration adjusts lowercase scale and spacing. Stored per x-height.
                 </InfoTip>
               </div>
               <div className="flex items-center gap-3">
-                <button
+                <Button
                   type="button"
                   onMouseDown={handleStepButtonMouseDown}
                   onClick={handleResetAllCalibration}
-                  className="px-3 py-1.5 text-xs rounded-full border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 transition select-none"
+                  className="  text-xs rounded-full border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 transition select-none"
                 >
                   Reset all calibration (this x-height)
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   onMouseDown={handleStepButtonMouseDown}
                   onClick={() => setUseCalibration((v) => !v)}
@@ -1236,11 +1127,11 @@ export default function Home() {
                     <span className="h-3 w-3 rounded-full bg-white shadow" />
                   </span>
                   {useCalibration ? 'Calibration: On' : 'Calibration: Off'}
-                </button>
+                </Button>
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="mt-4 grid grid-cols-1  gap-4">
               <div className="flex flex-col h-full">
                 <div className="mb-1">
                   <div className="font-medium text-slate-700">1. Lowercase word</div>
@@ -1250,7 +1141,7 @@ export default function Home() {
                   Write <span className="font-mono text-indigo-500">{CAL_WORD}</span> once and measure the total length.
                 </p>
                 <div className="mt-auto flex items-center gap-1 pt-2">
-                  <input
+                  <NumericInput
                     type="number"
                     step="0.1"
                     min="0"
@@ -1274,7 +1165,7 @@ export default function Home() {
                   between, and measure the total length including the space.
                 </p>
                 <div className="mt-auto flex items-center gap-1 pt-2">
-                  <input
+                  <NumericInput
                     type="number"
                     step="0.1"
                     min="0"
@@ -1290,7 +1181,7 @@ export default function Home() {
             </div>
 
             <div className="mt-4 border-t border-slate-200 pt-3">
-              <button
+              <Button
                 type="button"
                 onMouseDown={handleStepButtonMouseDown}
                 onClick={() => setShowAdvanced((v) => !v)}
@@ -1302,7 +1193,7 @@ export default function Home() {
                 </span>
                 <span>Advanced tweaks</span>
                 {!useCalibration && <span className="ml-1 text-[10px] text-slate-400">(enable calibration to adjust)</span>}
-              </button>
+              </Button>
 
               {showAdvanced && useCalibration && (
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
@@ -1313,30 +1204,30 @@ export default function Home() {
                     </div>
                     <p className="text-[11px] text-slate-500">Fine-tune length relative to the calibrated lowercase. 1.00 = no extra change.</p>
                     <div className="mt-1 inline-flex items-center gap-2">
-                      <button
+                      <Button
                         type="button"
                         onMouseDown={handleStepButtonMouseDown}
                         onClick={() => setUserScaleFactor((v) => clamp(v - 0.02, 0.7, 1.3))}
-                        className="px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-50 select-none"
+                        className="  rounded border border-slate-300 text-slate-700 hover:bg-slate-50 select-none"
                       >
                         –0.02
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
                         onMouseDown={handleStepButtonMouseDown}
                         onClick={() => setUserScaleFactor(1)}
-                        className="px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-50 select-none"
+                        className="  rounded border border-slate-300 text-slate-700 hover:bg-slate-50 select-none"
                       >
                         Reset
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
                         onMouseDown={handleStepButtonMouseDown}
                         onClick={() => setUserScaleFactor((v) => clamp(v + 0.02, 0.7, 1.3))}
-                        className="px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-50 select-none"
+                        className="  rounded border border-slate-300 text-slate-700 hover:bg-slate-50 select-none"
                       >
                         +0.02
-                      </button>
+                      </Button>
                     </div>
                   </div>
 
@@ -1347,43 +1238,41 @@ export default function Home() {
                     </div>
                     <p className="text-[11px] text-slate-500">Fine-tune joins and word spaces relative to the calibrated spacing. 1.00 = no extra change.</p>
                     <div className="mt-1 inline-flex items-center gap-2">
-                      <button
+                      <Button
                         type="button"
                         onMouseDown={handleStepButtonMouseDown}
                         onClick={() => setUserSpaceFactor((v) => clamp(v - 0.05, 0.5, 1.5))}
-                        className="px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-50 select-none"
+                        className="  rounded border border-slate-300 text-slate-700 hover:bg-slate-50 select-none"
                       >
                         –0.05
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
                         onMouseDown={handleStepButtonMouseDown}
                         onClick={() => setUserSpaceFactor(1)}
-                        className="px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-50 select-none"
+                        className="  rounded border border-slate-300 text-slate-700 hover:bg-slate-50 select-none"
                       >
                         Reset
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
                         onMouseDown={handleStepButtonMouseDown}
                         onClick={() => setUserSpaceFactor((v) => clamp(v + 0.05, 0.5, 1.5))}
-                        className="px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-50 select-none"
+                        className="  rounded border border-slate-300 text-slate-700 hover:bg-slate-50 select-none"
                       >
                         +0.05
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
               )}
             </div>
-          </div>
+          </DisclosureSection>
         </section>
       )}
+<section className=" pb-8">
+        <DisclosureSection title="Measurements & Results" defaultOpen>
 
-      {/* Results */}
-      <section className="px-6 pb-8">
-        <div className="max-w-[1120px] mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
-          <h2 className="text-lg font-semibold text-slate-800 mb-2">Results</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm border border-slate-200 rounded-lg overflow-hidden">
               <thead className="bg-slate-50">
@@ -1414,8 +1303,12 @@ export default function Home() {
               </tbody>
             </table>
           </div>
-        </div>
+        </DisclosureSection>
       </section>
-    </main>
+</>}><style>{`
+        .ct-svg-text { font-size: clamp(12.5px, 1.35vw, 14.5px); }
+        @media (max-width: 700px) { .ct-svg-text { font-size: clamp(13px, 2.4vw, 14px); } }
+        @media (max-width: 500px) { .ct-svg-text { font-size: clamp(13.5px, 3.2vw, 14.5px); } }
+      `}</style></EditorWorkspace>
   );
 }
