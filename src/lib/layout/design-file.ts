@@ -161,6 +161,10 @@ export function parseLayoutDesign(source: string): LayoutDesignSnapshot {
     if (settings.showInsularGrid === undefined && typeof settings.showCelticGrid === 'boolean') {
       settings.showInsularGrid = settings.showCelticGrid;
     }
+    if (element.type === 'curved-title' || element.type === 'calligram') {
+      if (settings.slantStyle !== undefined && settings.slantStyle !== 'classic' && settings.slantStyle !== 'flowing') fail('Invalid Copperplate slant style.');
+      settings.slantStyle ??= 'classic';
+    }
     delete settings.showCelticGrid;
   }
   const selectedElementId = typeof parsed.selectedElementId === 'string' && ids.has(parsed.selectedElementId)

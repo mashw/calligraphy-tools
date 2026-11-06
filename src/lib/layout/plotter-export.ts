@@ -86,6 +86,7 @@ type GuideLike = {
   baseLine: Pt[];
   descLine: Pt[];
   ticks?: { a: Pt; b: Pt }[];
+  slantGuides?: Pt[][];
   hGuides?: Pt[][];
   constructionGuides?: { kind: string; line: Pt[]; markerPoints: Pt[]; nibEdgeSegments: { a: Pt; b: Pt }[]; xSegments: { a: Pt; b: Pt }[]; appearance: ConstructionGuideAppearance; dotEvery: number }[];
 };
@@ -480,6 +481,7 @@ function guideSetPolylines(
     : null;
 
   if (options?.ticks !== false) {
+    (guide.slantGuides ?? []).forEach((points,index) => { const next=polyline(points,`${source}:slant-${index}`); if(next) result.push(...(bandRect?clipPolylineToRect(next,bandRect):[next])); });
     (guide.ticks ?? []).forEach((tick, index) => {
       const next = linePolyline(tick.a, tick.b, `${source}:tick-${index}`);
       if (!next) return;
@@ -653,7 +655,7 @@ function curvedTitlePolylines(element: Extract<LayoutElement, { type: 'curved-ti
   const model = buildCurvedTitleModel({ w: element.frame.width, h: element.frame.height }, element.settings);
   const result: PlotPolyline[] = [];
   const horizontalGridAppearance=resolveHorizontalGridAppearance(element.settings.horizontalGridAppearance);
-  const insularGrid=(script:typeof element.settings.script)=>options.constructionGrid && (script!=='InsularMajuscule' || !!element.settings.showInsularGrid);
+  const insularGrid=(script:typeof element.settings.script)=>script==='Copperplate'?options.slantGuides:options.constructionGrid && (script!=='InsularMajuscule' || !!element.settings.showInsularGrid);
   result.push(...guideSetPolylines(model.guideSet as GuideLike, `curved:${element.id}:main`, { ticks: insularGrid(element.settings.script), hGuides: insularGrid(element.settings.script), horizontalGridAppearance:element.settings.script==='Copperplate'?undefined:horizontalGridAppearance, dashedBaselineWaistline:options.dashedBaselineWaistline, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg }));
   if (options.midpointReferences && model.midAscPts) {
     const base = polyline(model.midAscPts, `curved:${element.id}:mid-asc`);
@@ -675,7 +677,7 @@ function curvedTitlePolylines(element: Extract<LayoutElement, { type: 'curved-ti
 function calligramPolylines(element: Extract<LayoutElement, { type: 'calligram' }>, options: PlotterExportOptions) {
   const model = buildCalligramModel({ w: element.frame.width, h: element.frame.height }, element.settings);
   const horizontalGridAppearance=resolveHorizontalGridAppearance(element.settings.horizontalGridAppearance);
-  const guideOptions=(script:typeof element.settings.script)=>({ ticks: options.constructionGrid && (script!=='InsularMajuscule'||!!element.settings.showInsularGrid), hGuides: options.constructionGrid && (script!=='InsularMajuscule'||!!element.settings.showInsularGrid), horizontalGridAppearance:script==='Copperplate'?undefined:horizontalGridAppearance, dashedBaselineWaistline:options.dashedBaselineWaistline, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg });
+  const guideOptions=(script:typeof element.settings.script)=>({ ticks: script==='Copperplate'?options.slantGuides:options.constructionGrid && (script!=='InsularMajuscule'||!!element.settings.showInsularGrid), hGuides: options.constructionGrid && (script!=='InsularMajuscule'||!!element.settings.showInsularGrid), horizontalGridAppearance:script==='Copperplate'?undefined:horizontalGridAppearance, dashedBaselineWaistline:options.dashedBaselineWaistline, constructionGuides: options.constructionGuides, nibAngleMarker: options.nibAngleMarker, nibAngleDeg: element.settings.penAngleDeg });
   const main = guideSetPolylines(model.main.guideSet as GuideLike, `calligram:${element.id}:main`, guideOptions(element.settings.script));
   const mainBand = polygonOccluder([
     ...model.main.guideSet.ascLine,

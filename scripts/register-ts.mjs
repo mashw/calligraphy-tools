@@ -18,7 +18,11 @@ registerHooks({
         try {
           return next(specifier + ".ts", context);
         } catch {
-          /* Preserve original resolution error. */
+          try {
+            return next(specifier + "/index.ts", context);
+          } catch {
+            /* Preserve original resolution error. */
+          }
         }
       }
       throw error;

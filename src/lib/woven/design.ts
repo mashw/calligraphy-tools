@@ -1,6 +1,8 @@
+import type { SlantStyle } from '../guides/slant-paths';
 import { PAPERS_MM } from "../curve-helpers";
 import type { ConstructionGuideSettings } from "../guides/guide-template";
 export type Design = {
+  slantStyle: SlantStyle;
   paper: keyof typeof PAPERS_MM;
   orientation: "portrait" | "landscape";
   penAngle: number;
@@ -37,6 +39,7 @@ export type Design = {
   overrides: Record<string, "a" | "b">;
 };
 export const DEFAULT_DESIGN: Design = {
+  slantStyle: "flowing",
   paper: "A4",
   orientation: "portrait",
   penAngle: 45,
@@ -206,6 +209,10 @@ export function parseDesign(input: unknown): Design {
     )
       throw new Error("Invalid marker spacing.");
     result.construction = { ...c };
+  }
+  if (obj.slantStyle !== undefined) {
+    if (obj.slantStyle !== 'classic' && obj.slantStyle !== 'flowing') throw new Error('Invalid slant style.');
+    result.slantStyle = obj.slantStyle;
   }
   return result;
 }

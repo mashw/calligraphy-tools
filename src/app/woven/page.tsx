@@ -1,5 +1,6 @@
 "use client";
 
+import SlantStyleControl from '@/components/guidelines/SlantStyleControl';
 import React, { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import DisclosureSection from "@/components/layout/DisclosureSection";
@@ -558,6 +559,7 @@ export default function WovenPage() {
               {design.script === "Copperplate" ? (
                 <>
                   {toggle("slants", "Show slant lines")}
+                    <SlantStyleControl value={design.slantStyle} onChange={v=>update("slantStyle",v)} />
                   {numeric("slantAngle", "Slant angle", 1, "°")}
                   {numeric("slantSpacing", "Slant spacing", 0.5, "mm")}
                   {numeric("slantContrast", "Slant contrast", 0.05)}

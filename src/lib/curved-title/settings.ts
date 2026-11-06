@@ -1,3 +1,4 @@
+import type { SlantStyle } from '@/lib/guides/slant-paths';
 import type { CurvePresetId } from '@/lib/curve-helpers';
 import type { ScriptId } from '@/lib/scripts';
 import type { CustomCurve } from './custom-curve';
@@ -8,6 +9,7 @@ export type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 
 export type CurvedTitleCurveId = CurvePresetId | 'custom';
 export type CurvedTitleSettings = {
+  slantStyle?: SlantStyle;
   script: ScriptId; curve: CurvedTitleCurveId; customCurve?: CustomCurve; flipCurve: boolean; align: CurvedTitleAlign; text: string;
   xHeightMM: number; capStyle: 'simple' | 'flourished'; nibText: string; penAngleDeg: 15 | 35 | 40 | 45;
   xNib: number; ascNib: number; descNib: number;
@@ -25,7 +27,7 @@ export type CurvedTitleSettings = {
 
 export function createDefaultCurvedTitleSettings(): CurvedTitleSettings {
   return {
-    script: 'TexturaQuadrata', curve: 'simpleArch', flipCurve: false, align: 'center', text: 'Merry Christmas',
+    slantStyle: 'classic', script: 'TexturaQuadrata', curve: 'simpleArch', flipCurve: false, align: 'center', text: 'Merry Christmas',
     xHeightMM: 6, capStyle: 'flourished', nibText: '2', penAngleDeg: 45,
     xNib: BLACKLETTER_GUIDE_DEFAULTS.xNib, ascNib: BLACKLETTER_GUIDE_DEFAULTS.ascNib, descNib: BLACKLETTER_GUIDE_DEFAULTS.descNib,
     copperplateRatioPreset: '2:1:2', copperplateDescUnitsText: '2', copperplateXUnitsText: '1', copperplateAscUnitsText: '2',

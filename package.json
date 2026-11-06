@@ -12,7 +12,8 @@
     "lint": "eslint",
     "test:layout-shapes": "node --experimental-strip-types --test scripts/layout-shape-geometry.test.ts",
     "test:custom-curves": "node --experimental-strip-types --test scripts/custom-curved-title.test.ts",
-    "test:insular": "node --experimental-strip-types --test src/lib/scripts/insular-majuscule.test.ts src/lib/guides/straight/insular-majuscule.test.ts src/lib/layout/design-file.test.ts"
+    "test:insular": "node --experimental-strip-types --test src/lib/scripts/insular-majuscule.test.ts src/lib/guides/straight/insular-majuscule.test.ts src/lib/layout/design-file.test.ts",
+    "test:slant-styles": "node --import ./scripts/register-ts.mjs --experimental-strip-types --test scripts/slant-styles.test.ts"
   },
   "dependencies": {
     "react": "19.2.0",

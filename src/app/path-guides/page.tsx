@@ -1,5 +1,7 @@
 'use client';
 
+import SlantStyleControl from '@/components/guidelines/SlantStyleControl';
+import { resolveSlantStyle, type SlantStyle } from '@/lib/guides/slant-paths';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 
@@ -45,6 +47,7 @@ type InsetLabeledFieldProps = {
 };
 
 type Strap = {
+  slantStyle?: SlantStyle;
   id: string;
   name: string;
   d: string;
@@ -750,6 +753,7 @@ const buildCompatibleJoinedGuideData = ({
       const item = strapById.get(m.strapId);
       if (!item) return false;
       if (item.strap.script !== first.strap.script) return false;
+      if (item.strap.script === 'Copperplate' && resolveSlantStyle(item.strap.slantStyle) !== resolveSlantStyle(first.strap.slantStyle)) return false;
       if (item.strap.invertGuides !== first.strap.invertGuides) return false;
       const constructionKey = (strap: Strap) => JSON.stringify({ upper: strap.constructionGuides?.upper ?? false, lower: strap.constructionGuides?.lower ?? false, color: strap.constructionGuides?.color ?? '#dc2626' });
       if (constructionKey(item.strap) !== constructionKey(first.strap)) return false;
@@ -769,6 +773,7 @@ const buildCompatibleJoinedGuideData = ({
     const guideSet = buildGuideSet(
       first.strap.script === 'Copperplate' ? 'copperplate' : 'blackletter',
       {
+        slantStyle: resolveSlantStyle(first.strap.slantStyle),
         baseline: virtual.baseline,
         xMM: first.metrics.xMM,
         ascMM: first.metrics.ascMM,
@@ -1253,6 +1258,7 @@ export default function PathGuidesPage() {
     const guideSet =
     ( transformed.length > 1 )
       ? buildGuideSet(strap.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
+          slantStyle: resolveSlantStyle(strap.slantStyle),
           baseline: transformed,
           xMM: metrics.xMM,
           ascMM: metrics.ascMM,
@@ -2271,7 +2277,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 <option value="fullpage">Full page</option>
                 <option value="custom">Custom</option>
               </select>
-              <button onClick={() => setSimplify((v) => !v)} className={`px-2 py-1 text-sm rounded-lg border ${simplify ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white'}`}>Simplify</button>
+              <button aria-pressed={simplify} onClick={() => setSimplify((v) => !v)} className={`px-2 py-1 text-sm rounded-lg border ${simplify ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white'}`}>Simplify</button>
               <button onClick={() => setShowCrossings((v) => !v)} className={`px-2 py-1 text-sm rounded-lg border ${showCrossings ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white'}`}>Crossings</button>
             </div>
             <div className="flex flex-wrap items-center gap-2 ml-auto">
@@ -2994,6 +3000,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
 
               {activeStrap.script === 'InsularMajuscule' && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={activeStrap.showInsularGrid ?? false} onChange={e => updateStrap(activeStrap.id, { showInsularGrid: e.target.checked })} /> Show intermediate grid</label>}
 
+              {activeStrap.script === 'Copperplate' && <SlantStyleControl value={resolveSlantStyle(activeStrap.slantStyle)} onChange={slantStyle=>{setSimplify(false);updateStrap(activeStrap.id,{slantStyle});}} />}
               {activeStrap.script === 'Copperplate' ? (
                 <>
                   <div className="grid grid-cols-2 gap-2">

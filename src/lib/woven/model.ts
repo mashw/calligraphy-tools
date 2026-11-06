@@ -1,9 +1,10 @@
+import { slantPath, clipSlantToBand } from "../guides/slant-paths";
 import { offset } from "@/lib/curve-helpers";
 import { buildGuideSet } from "@/lib/guides/guide-template";
 import { pageSize, type Design } from "./design";
 import { resolveBlackletterGridWidthMM } from "@/lib/guides/straight/blackletter";
 import { dashPolylinePoints } from "@/lib/guides/polyline-dash";
-import { clipPassage, curvedSlant, routeFrame } from "./curved-guides";
+import { clipPassage, routeFrame } from "./curved-guides";
 import {
   alternateWeave,
   atDistance,
@@ -89,28 +90,38 @@ export function buildWovenModel(design: Design) {
       points: sliceGuide(route, rail.points, interval),
     })),
   );
+  let slantBand: { x: number; y: number }[] | null = null;
   const addLocated = (
     points: { x: number; y: number; s: number }[],
     color: string,
     width: number,
   ) => {
     for (const piece of clipPassage(points, intervals, route.length))
-      if (piece.length > 1) strokes.push({ points: piece, color, width });
+      if (piece.length > 1) {
+        const parts = slantBand ? clipSlantToBand(piece, slantBand) : [piece];
+        for (const points of parts) strokes.push({ points, color, width });
+      }
   };
   const top = -x / 2 - (design.fullGuides ? asc : 0),
     bottom = x / 2 + (design.fullGuides ? desc : 0);
   if (design.script === "Copperplate" && design.slants) {
+    if (design.slantStyle === "classic")
+      slantBand = [
+        ...offset(route.points, top),
+        ...offset(route.points, bottom).reverse(),
+      ];
     for (const angle of [
       design.slantAngle,
       ...(design.secondSlant ? [design.secondAngle] : []),
     ])
       for (let s = 0; s < route.length; s += design.slantSpacing)
         addLocated(
-          curvedSlant(route, s, top, bottom, angle),
+          slantPath(route, s, top, bottom, angle, design.slantStyle),
           gray(design.slantContrast),
           design.gridThickness,
         );
   }
+  slantBand = null;
   // Shared ticks/markers are phased by baseline arc length. Map that phase back
   // to the original route so crossings cannot affect the other passage.
   const distances = [0];

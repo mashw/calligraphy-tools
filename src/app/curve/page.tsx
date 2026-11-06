@@ -1,5 +1,7 @@
 'use client';
 
+import SlantStyleControl from '@/components/guidelines/SlantStyleControl';
+import { type SlantStyle } from '@/lib/guides/slant-paths';
 import React, { useMemo, useRef, useState, useLayoutEffect, useEffect } from 'react';
 import {
   PAPERS_MM,
@@ -470,6 +472,7 @@ export default function CurvedTitlePage() {
     return Number.isFinite(v) ? v : nibMM;
   }, [bottomBandSizeText, nibMM]);
   const [penAngleDeg, setPenAngleDeg] = useState<15 | 35 | 40 | 45>(45);
+  const [slantStyle, setSlantStyle] = useState<SlantStyle>('classic');
   const [constructionGuides, setConstructionGuides] = useState(() => ({ upper: false, lower: false, color: '#dc2626', ...curvedTitleDefaults.constructionGuides }));
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
 
@@ -888,10 +891,10 @@ export default function CurvedTitlePage() {
         descMM,
         tickStepMM,
         tickAnchorS: span ? span.sStart : undefined,
-        actualNibMM: nibMM,
+        slantStyle, actualNibMM: nibMM,
         penAngleDeg, blackletterScript: script === 'Copperplate' ? undefined : script, constructionGuides,
       }),
-    [baseline, guideTemplate, xMM, ascMM, descMM, tickStepMM, nibMM, span, penAngleDeg, script, constructionGuides],
+    [baseline, guideTemplate, xMM, ascMM, descMM, tickStepMM, nibMM, span, penAngleDeg, script, constructionGuides, slantStyle],
   );
 
   const topBaseline = useMemo(() => guideSet.ascLine, [guideSet.ascLine]);
@@ -934,10 +937,10 @@ export default function CurvedTitlePage() {
       descMM: 0,
       tickStepMM: topTickStepMM,
       tickAnchorS: topSpan ? topSpan.sStart : undefined,
-      actualNibMM: topBandSizeMM,
+      slantStyle, actualNibMM: topBandSizeMM,
       penAngleDeg, blackletterScript: topBandScript === 'Copperplate' ? undefined : topBandScript, constructionGuides,
     }),
-    [topBandScript, topBaseline, topXMM, topAscMM, topTickStepMM, topSpan, topBandSizeMM, penAngleDeg, constructionGuides],
+    [topBandScript, topBaseline, topXMM, topAscMM, topTickStepMM, topSpan, topBandSizeMM, penAngleDeg, constructionGuides, slantStyle],
   );
 
   const bottomXMM = useMemo(
@@ -980,10 +983,10 @@ export default function CurvedTitlePage() {
       descMM: bottomDescMM,
       tickStepMM: bottomTickStepMM,
       tickAnchorS: bottomSpan ? bottomSpan.sStart : undefined,
-      actualNibMM: bottomBandSizeMM,
+      slantStyle, actualNibMM: bottomBandSizeMM,
       penAngleDeg, blackletterScript: bottomBandScript === 'Copperplate' ? undefined : bottomBandScript, constructionGuides,
     }),
-    [bottomBandScript, bottomBaseline, bottomXMM, bottomDescMM, bottomTickStepMM, bottomSpan, bottomBandSizeMM, penAngleDeg, constructionGuides],
+    [bottomBandScript, bottomBaseline, bottomXMM, bottomDescMM, bottomTickStepMM, bottomSpan, bottomBandSizeMM, penAngleDeg, constructionGuides, slantStyle],
   );
 
   const midAscPts = useMemo(() => {
@@ -2045,6 +2048,7 @@ export default function CurvedTitlePage() {
             </InfoTip>
           </div>
 
+          {(script === 'Copperplate' || (topBandEnabled && topBandScript === 'Copperplate') || (bottomBandEnabled && bottomBandScript === 'Copperplate')) && <SlantStyleControl value={slantStyle} onChange={setSlantStyle} />}
           {script !== 'Copperplate' && <div className="mt-3 rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} compact /></div>}
 
           {script === 'Copperplate' ? (

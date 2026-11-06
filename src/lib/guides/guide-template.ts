@@ -1,3 +1,4 @@
+import { flowingSlants, type SlantStyle } from './slant-paths';
 import { lengthPoly, offset, pointAt, pointAtExtended } from '@/lib/curve-helpers';
 import { blackletterConstructionDistances } from '@/lib/guides/construction-guide-offsets';
 import { BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/straight/blackletter';
@@ -18,6 +19,7 @@ export type GuideSet = {
   descLine: Pt[];
   // optional perpendicular ticks/markers (each tick is a line segment)
   ticks?: { a: Pt; b: Pt }[];
+  slantGuides?: Pt[][];
   hGuides?: Pt[][]; // NEW: curve-parallel intermediate rails
   constructionGuides?: ConstructionGuide[];
 };
@@ -34,6 +36,8 @@ export function constructionGuideDotPoints(guide: Pick<ConstructionGuide, 'marke
 export type GuideTemplateId = 'copperplate' | 'blackletter';
 
 export type GuideTemplateParams = {
+  slantStyle?: SlantStyle;
+  slantAngleDeg?: number;
   baseline: Pt[];
   xMM: number;
   ascMM: number;
@@ -247,7 +251,7 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
   const step = Math.max(0.5, tickStepMM ?? 100);
   const ticks: { a: Pt; b: Pt }[] = [];
   const arcLen = lengthPoly(baseline);
-  const cot = 1 / Math.tan((COPPERPLATE_SLANT_DEG * Math.PI) / 180);
+  const cot = 1 / Math.tan(((params.slantAngleDeg ?? COPPERPLATE_SLANT_DEG) * Math.PI) / 180);
   const topScalar = invertGuides ? ascMM : -(xMM + ascMM);
   const botScalar = invertGuides ? -(xMM + descMM) : descMM;
   const isClosed = (() => {
@@ -267,6 +271,8 @@ function buildCopperplateGuideSet(params: GuideTemplateParams): GuideSet {
 
   // Phase anchor: ticks at s = anchor + k * step, guaranteeing a tick at anchor.
   const anchor = Number.isFinite(tickAnchorS as number) ? (tickAnchorS as number) : 0;
+
+  if (params.slantStyle === 'flowing') return { ascLine, waistLine, baseLine, descLine, ticks: [], slantGuides: flowingSlants(baseline, topScalar * normalSign, botScalar * normalSign, step, anchor, params.slantAngleDeg ?? COPPERPLATE_SLANT_DEG) };
 
   if (isClosed) {
     const count = Math.max(1, Math.round(arcLen / step));
