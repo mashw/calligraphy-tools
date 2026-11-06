@@ -13,22 +13,25 @@
     "test:layout-shapes": "node --experimental-strip-types --test scripts/layout-shape-geometry.test.ts",
     "test:custom-curves": "node --experimental-strip-types --test scripts/custom-curved-title.test.ts",
     "test:insular": "node --experimental-strip-types --test src/lib/scripts/insular-majuscule.test.ts src/lib/guides/straight/insular-majuscule.test.ts src/lib/layout/design-file.test.ts",
-    "test:slant-styles": "node --import ./scripts/register-ts.mjs --experimental-strip-types --test scripts/slant-styles.test.ts"
+    "test:slant-styles": "node --import ./scripts/register-ts.mjs --experimental-strip-types --test scripts/slant-styles.test.ts",
+    "test:camera": "node --experimental-strip-types --test scripts/camera.test.ts",
+    "test:ui": "playwright test"
   },
   "dependencies": {
+    "next": "16.0.0",
     "react": "19.2.0",
-    "react-dom": "19.2.0",
-    "next": "16.0.0"
+    "react-dom": "19.2.0"
   },
   "devDependencies": {
-    "babel-plugin-react-compiler": "1.0.0",
-    "typescript": "^5",
+    "@playwright/test": "^1.65.0",
+    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4",
+    "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
-    "eslint-config-next": "16.0.0"
+    "eslint-config-next": "16.0.0",
+    "tailwindcss": "^4",
+    "typescript": "^5"
   }
 }

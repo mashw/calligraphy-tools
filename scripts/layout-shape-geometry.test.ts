@@ -200,7 +200,7 @@ test('overlapping elements warn without repositioning guideline text',()=>{
   const planning=readFileSync(new URL('../src/lib/layout/guidelines-text-fit.ts',import.meta.url),'utf8');
   const page=readFileSync(new URL('../src/app/layout/page.tsx',import.meta.url),'utf8');
   const panel=readFileSync(new URL('../src/components/guidelines/GuidelinesSettingsPanel.tsx',import.meta.url),'utf8');
-  assert.match(planning,/getCachedGuidelinesPlacementSpans[\s\S]*?avoidOccludingElements:false[\s\S]*?buildGuidelinesVisibleSpans/);
+  assert.match(planning,/getCachedGuidelinesPlacementSpans[\s\S]*?buildGuidelinesVisibleSpans\(\{\.\.\.element,\s*avoidOccludingElements:\s*false\},\s*page,\s*\[\]\)/);
   assert.match(planning,/buildGuidelinesCollisionSpans[\s\S]*?pageWaist[\s\S]*?pageBase/);
   assert.match(page,/collisionSpans=getCachedGuidelinesCollisionSpans[\s\S]*?placementSpans=getCachedGuidelinesPlacementSpans/);
   assert.match(page,/buildGuidelinesTextFitPlan\(item,placementSpans\)/);
