@@ -1,6 +1,10 @@
 "use client";
 
-import { NumericInput, Toggle, Button, Select } from '@/components/editor/Controls';
+import { NumericInput, Toggle, Button, Select, ActionGroup } from '@/components/editor/Controls';
+import NumericSlider from '@/components/editor/NumericSlider';
+import PreviewMeta from '@/components/editor/PreviewMeta';
+import CompactHelp from '@/components/editor/CompactHelp';
+import { scaleShape, uniformScaleLimits, type ShapeDimensions } from '@/lib/woven/shape-controls';
 
 import { useEditorCamera } from '@/components/editor/useEditorCamera';
 import PreviewToolbar from '@/components/editor/PreviewToolbar';
@@ -39,9 +43,10 @@ function download(content: BlobPart, type: string, name: string) {
 }
 export default function WovenPage() {
   const [design, setDesign] = useState<Design>(DEFAULT_DESIGN);
+  const [scaleBase, setScaleBase] = useState<ShapeDimensions>({ width: DEFAULT_DESIGN.width, height: DEFAULT_DESIGN.height });
   const [selected, setSelected] = useState<string | null>(null);
-  
-  
+
+
   const [status, setStatus] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -78,7 +83,7 @@ export default function WovenPage() {
       h: maxY - minY + 16,
     };
   }, [model]);
-  
+
   const camera = useEditorCamera(svgRef, {x:0,y:0,w:model.page.w,h:model.page.h}, fit);
   const vb = camera;
   function update<K extends keyof Design>(key: K, value: Design[K]) {
@@ -89,6 +94,13 @@ export default function WovenPage() {
     }));
     if (["preset", "loop", "reverse"].includes(key)) setSelected(null);
   }
+  function setDimension(key: 'width' | 'height', value: number) {
+    const next = { ...design, [key]: value };
+    setDesign(next);
+    setScaleBase({ width: next.width, height: next.height });
+  }
+  const scaleRange = uniformScaleLimits(scaleBase);
+  const shapeScale = design.width / scaleBase.width * 100;
   function flip(id: string) {
     setSelected(id);
     setDesign((d) => ({
@@ -100,7 +112,7 @@ export default function WovenPage() {
     }));
   }
   function preset(next: View) { camera.fit(next === 'autofit' ? 'content' : 'page'); }
-  
+
   function numeric(
     key: keyof typeof LIMITS,
     label: string,
@@ -356,25 +368,14 @@ export default function WovenPage() {
               </g>
             </svg>
           </div>
-          <div className="mt-3 flex flex-wrap justify-between gap-2 text-xs text-slate-600">
-            <p>
-              Drag to pan · click a crossing to swap over/under
-              {selected
-                ? ` · Crossing ${model.crossings.findIndex((c) => c.id === selected) + 1} selected`
-                : ""}
-            </p>
-            <span>
-              {model.page.w} × {model.page.h} mm · {model.crossings.length}{" "}
-              crossings · {Math.round(model.usableLength)} mm visible route
-            </span>
-          </div>
-          <p className="mt-2 text-xs text-slate-500">
-            Exports use the full page. Print at actual size / 100%, with headers
-            and footers off; check the 50 mm ruler.
-          </p>
+          <PreviewMeta help={<><p>Drag to pan; click a crossing to swap over/under.</p><p>Exports use the full page. Print at actual size / 100%, with headers and footers off; check the 50 mm ruler.</p></>}>
+            <span>{model.page.w} × {model.page.h} mm</span>
+            <span>{model.crossings.length} crossings · {Math.round(model.usableLength)} mm visible route</span>
+            {selected && <span>Crossing {model.crossings.findIndex(c => c.id === selected) + 1} selected</span>}
+          </PreviewMeta>
         </section>
 </>} inspector={<>
-<nav className="mt-4 flex flex-wrap gap-2" aria-label="Related tools">
+<div className="inspector-actions"><details><summary>Related tools</summary><nav aria-label="Related tools">
           <Link className={button} href="/calligram">
             Calligram
           </Link>
@@ -384,6 +385,7 @@ export default function WovenPage() {
           <Link className={button} href="/path-guides">
             Path Guides
           </Link>
+        </nav></details><ActionGroup label="Design files">
           <Button className={button} onClick={() => fileRef.current?.click()}>
             Open design
           </Button>
@@ -399,7 +401,7 @@ export default function WovenPage() {
           >
             Save design
           </Button>
-        </nav>
+        </ActionGroup></div>
 <input
         ref={fileRef}
         type="file"
@@ -411,7 +413,9 @@ export default function WovenPage() {
           if (!file) return;
           try {
             if (file.size > 100000) throw Error("Design file is too large.");
-            setDesign(parseDesign(JSON.parse(await file.text())));
+            const loaded = parseDesign(JSON.parse(await file.text()));
+            setDesign(loaded);
+            setScaleBase({ width: loaded.width, height: loaded.height });
             setSelected(null);
             preset("autofit");
             setStatus("Design opened.");
@@ -439,7 +443,7 @@ export default function WovenPage() {
           ))}
         </div>
 <div className="grid items-start gap-4  ">
-          <DisclosureSection title="Shape" defaultOpen>
+          <DisclosureSection title="Shape" defaultOpen headerAction={<CompactHelp label="Shape controls help" below><p>Type custom values or use the sliders. Scale changes width and height together, preserving their ratio.</p><p>Editing either dimension or opening a design sets the current size as the new 100% reference. Preset, loop depth and direction changes reset crossing choices.</p></CompactHelp>}>
             <div className="space-y-3">
               <label className="block space-y-1 text-sm">
                 Preset
@@ -455,14 +459,12 @@ export default function WovenPage() {
                   <option value="figure-eight">Figure-eight</option>
                 </Select>
               </label>
-              {numeric("width", "Width", 1, "mm")}
-              {numeric("height", "Height", 1, "mm")}
+              <NumericSlider label="Width" value={design.width} min={LIMITS.width[0]} max={LIMITS.width[1]} step={0.5} unit="mm" onChange={value => setDimension('width', value)} />
+              <NumericSlider label="Height" value={design.height} min={LIMITS.height[0]} max={LIMITS.height[1]} step={0.5} unit="mm" onChange={value => setDimension('height', value)} />
+              <NumericSlider label="Scale" value={shapeScale} min={scaleRange.min} max={scaleRange.max} step={0.1} unit="%" onChange={value => setDesign(current => ({ ...current, ...scaleShape(scaleBase, value) }))} />
               {design.preset === "rosette" &&
-                numeric("loop", "Loop depth", 0.01)}
-              {numeric("rotation", "Rotation", 1, "°")}
-              <p className="text-xs text-slate-500">
-                Preset, loop depth and direction changes reset crossing choices.
-              </p>
+                <NumericSlider label="Loop depth" value={design.loop} min={LIMITS.loop[0]} max={LIMITS.loop[1]} step={0.01} onChange={value => update('loop', value)} />}
+              <NumericSlider label="Rotation" value={design.rotation} min={LIMITS.rotation[0]} max={LIMITS.rotation[1]} step={1} unit="°" onChange={value => update('rotation', value)} />
             </div>
           </DisclosureSection>
           <DisclosureSection title="Writing guides" defaultOpen>

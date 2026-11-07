@@ -15,7 +15,8 @@
     "test:insular": "node --experimental-strip-types --test src/lib/scripts/insular-majuscule.test.ts src/lib/guides/straight/insular-majuscule.test.ts src/lib/layout/design-file.test.ts",
     "test:slant-styles": "node --import ./scripts/register-ts.mjs --experimental-strip-types --test scripts/slant-styles.test.ts",
     "test:camera": "node --experimental-strip-types --test scripts/camera.test.ts",
-    "test:ui": "playwright test"
+    "test:ui": "playwright test",
+    "test:woven-controls": "node --import ./scripts/register-ts.mjs --experimental-strip-types --test scripts/woven-shape-controls.test.ts"
   },
   "dependencies": {
     "next": "16.0.0",
