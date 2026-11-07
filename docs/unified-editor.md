@@ -40,3 +40,7 @@ Physical geometry, default document settings, parsers and export pipelines remai
 Review pointer dragging/resizing/rotation/snapping, imported/custom SVGs, multi-strap joins and crossing overrides with real designs; compare SVG/PDF/Cricut exports and physically print the calibration ruler at 100%. Review 1920 px, browser zoom, tablet touch, and shorter laptop heights. Existing tiny server/client floating-point hydration differences were observed in development previews; specialist renderer hydration should be checked separately. The connected browser's screenshot capture clipped emulated viewports, so saved screenshots are partial visual evidence, not a complete before/after gallery.
 
 Path Guides design files now optionally include a camera snapshot. Old design and preset data remain readable. View navigation is separate from geometry, and fit framing is frozen when specialist pointer edits begin.
+
+## Density refinement (7 November 2026)
+
+See [density-refinements.md](density-refinements.md) for the latest refinements and verification. The follow-up successfully runs Playwright and checks true 1920 px layouts, superseding the initial pass's browser-runner and viewport limitations.

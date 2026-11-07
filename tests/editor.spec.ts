@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { captureExportFiles, exportedText } from './export-file';
 const routes = ['guidelines', 'align', 'curve', 'calligram', 'path-guides', 'layout', 'woven', 'knot', 'borders/dev'];
 for (const route of routes) {
   test(`${route}: camera and responsive workspace`, async ({ page }) => {
@@ -26,16 +27,14 @@ for (const route of routes) {
   });
 }
 test('SVG export preserves physical page after camera navigation', async ({ page }) => {
+  await captureExportFiles(page);
   await page.goto('/guidelines');
   await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'SVG', exact: true }).click();
   const file = await download;
   expect(file.suggestedFilename()).toMatch(/\.svg$/);
-  const stream = await file.createReadStream();
-  const parts: Buffer[] = [];
-  for await (const part of stream!) parts.push(Buffer.from(part));
-  const svg = Buffer.concat(parts).toString();
+  const svg = await exportedText(page, 'image/svg+xml');
   expect(svg).toMatch(/width="210mm"/);
   expect(svg).toMatch(/height="297mm"/);
   expect(svg).toMatch(/viewBox="0 0 210 297"/);
