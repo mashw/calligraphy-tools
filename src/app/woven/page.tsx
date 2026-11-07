@@ -171,6 +171,7 @@ export default function WovenPage() {
     setDesign((d) => ({
       ...d,
       script,
+      nib: script === "Copperplate" ? 1 : d.nib,
       xNib:
         script === "InsularMajuscule"
           ? INSULAR_MAJUSCULE_DEFAULTS.xNib
@@ -368,6 +369,11 @@ export default function WovenPage() {
               </g>
             </svg>
           </div>
+          <div className="woven-status" role="status" aria-live="polite" aria-atomic="true" aria-label="Design status" tabIndex={0}>
+            {status && <p>{status}</p>}
+            {model.warnings.map(warning => <p key={warning} className="text-amber-900">{warning}</p>)}
+            {!status && model.warnings.length === 0 && <p>No geometry warnings.</p>}
+          </div>
           <PreviewMeta help={<><p>Drag to pan; click a crossing to swap over/under.</p><p>Exports use the full page. Print at actual size / 100%, with headers and footers off; check the 50 mm ruler.</p></>}>
             <span>{model.page.w} × {model.page.h} mm</span>
             <span>{model.crossings.length} crossings · {Math.round(model.usableLength)} mm visible route</span>
@@ -427,21 +433,6 @@ export default function WovenPage() {
           e.target.value = "";
         }}
       />
-<div role="status" aria-live="polite" className="space-y-2">
-          {status && (
-            <p className="rounded-lg border border-slate-200 bg-white p-3 text-sm">
-              {status}
-            </p>
-          )}
-          {model.warnings.map((w) => (
-            <p
-              key={w}
-              className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
-            >
-              {w}
-            </p>
-          ))}
-        </div>
 <div className="grid items-start gap-4  ">
           <DisclosureSection title="Shape" defaultOpen headerAction={<CompactHelp label="Shape controls help" below><p>Type custom values or use the sliders. Scale changes width and height together, preserving their ratio.</p><p>Editing either dimension or opening a design sets the current size as the new 100% reference. Preset, loop depth and direction changes reset crossing choices.</p></CompactHelp>}>
             <div className="space-y-3">
@@ -485,19 +476,14 @@ export default function WovenPage() {
                   <option value="Copperplate">Copperplate</option>
                 </Select>
               </label>
-              {numeric(
-                "nib",
-                design.script === "Copperplate" ? "Guide unit" : "Nib width",
-                0.05,
-                "mm",
-              )}
+              {design.script !== "Copperplate" && numeric("nib", "Nib width", 0.05, "mm")}
               {numeric("xNib", "X-height", 0.5, "units")}
               {numeric("ascNib", "Ascender above waist", 0.5, "units")}
               {numeric("descNib", "Descender below base", 0.5, "units")}
               <p className="text-xs text-slate-500">
-                X-height: {(design.nib * design.xNib).toFixed(2)} mm.{" "}
+                X-height: {((design.script === "Copperplate" ? 1 : design.nib) * design.xNib).toFixed(2)} mm.{" "}
                 {design.script === "Copperplate"
-                  ? "Guide units set proportions, not pointed-pen tip width."
+                  ? "Copperplate uses a fixed 1 mm unit for these proportions."
                   : "One unit equals one actual nib width."}
               </p>
               {toggle("fullGuides", "Show ascender and descender guides")}

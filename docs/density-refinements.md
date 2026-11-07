@@ -7,10 +7,16 @@ Continued from feature/unified-editor-ui at 82b752b. This is a targeted refineme
 - Removed the separate DESIGN WORKSPACE row. The settings toggle uses the existing tool-heading space.
 - Reduced stacked wrapper padding and toolbar gaps. Navigation help is now an inline keyboard/touch disclosure; Reset view uses a labelled compact icon on narrow screens.
 - Added PreviewMeta for compact statistics and retained detailed instructions in help disclosures. Woven's crossing/route statistics and print/calibration instructions no longer occupy three stacked footer rows.
-- Moved section help into disclosure headers and tool descriptions into an optional About this tool disclosure. Information remains accessible.
+- Moved section help into disclosure headers and tool descriptions into an About this tool popover accessed from the Settings heading. Information remains accessible without adding a row above controls.
 - Added ActionGroup layouts that do not collapse utility buttons into a single column at field breakpoints.
 
 ## Tool-specific changes
+
+The subsequent stability pass fixes Copperplate's Woven guide unit at 1 mm, removes its artificial numeric field, and retains editable X-height/ascender/descender proportions. Version-1 files still load; their former Copperplate `nib` value is normalized to 1, while broad-pen nib widths remain unchanged. Copperplate geometry also enforces the fixed unit for direct model callers.
+
+Woven geometry warnings and file/print feedback now live in a permanent 64 px scrolling status area beneath the preview. A polite live region announces changes; the area is keyboard scrollable and cannot move or overlap settings controls. All seven tools using InspectorIntro open their original description in a native, light-dismissible popover from the Settings heading, supporting mouse, keyboard, touch and Escape without changing layout.
+
+Stability verification: 140 unit tests, 21 browser tests, TypeScript and the production build pass. The browser checks include repeated pointer-held sweeps of Width, Height, Scale and Loop Depth through warning and clear states at 390 and 1440 px, asserting identical slider/status rectangles throughout. Help is checked across all seven routes at both widths and by touch at 360 px. Copperplate switching and legacy Save/Open are covered. Lint diagnostics are identical before/after: 52 existing errors and 96 warnings.
 
 Line Planner: removed the extra card and grid shells around the settings sections, removed redundant section wrappers, folded preview instructions into shared help and tightened calibration actions.
 

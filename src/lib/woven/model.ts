@@ -32,9 +32,10 @@ export function buildWovenModel(design: Design) {
   const crossings = findSelfCrossings(route);
   const alternate = alternateWeave(crossings);
   const choices = { ...alternate.choices, ...design.overrides };
-  const x = design.nib * design.xNib,
-    asc = design.nib * design.ascNib,
-    desc = design.nib * design.descNib;
+  const guideUnit = design.script === "Copperplate" ? 1 : design.nib;
+  const x = guideUnit * design.xNib,
+    asc = guideUnit * design.ascNib,
+    desc = guideUnit * design.descNib;
   const halfBand = x / 2 + Math.max(asc, desc);
   const baseline = offset(route.points, x / 2);
   const guides = buildGuideSet(
@@ -290,7 +291,7 @@ export function buildWovenModel(design: Design) {
   const warnings: string[] = [];
   if (minimumRadius(route) < halfBand * 1.5)
     warnings.push(
-      "Some bends are tight for this lettering size. Reduce the nib or enlarge the shape; inspect the inner guides before printing.",
+      "Some bends are tight for this lettering size. Reduce the lettering size or enlarge the shape; inspect the inner guides before printing.",
     );
   if (crossings.some((c) => c.sine < 0.25))
     warnings.push(
@@ -326,7 +327,7 @@ export function buildWovenModel(design: Design) {
   const usableLength = intervals.reduce((sum, [a, b]) => sum + b - a, 0);
   if (usableLength < route.length * 0.5)
     warnings.push(
-      "Crossing gaps occupy more than half the route. Try a smaller nib or less clearance.",
+      "Crossing gaps occupy more than half the route. Try smaller lettering or less clearance.",
     );
   return {
     page,

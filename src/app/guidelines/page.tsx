@@ -823,8 +823,8 @@ const slantAngleDeg = useMemo(() => {
           </PreviewMeta>
         </div>
       </section>
-</>} inspector={<><InspectorIntro>Generate printable guidelines for Copperplate, blackletter, and Insular Majuscule using straight baselines.
-          </InspectorIntro>
+</>} help={<InspectorIntro>Generate printable guidelines for Copperplate, blackletter, and Insular Majuscule using straight baselines.
+          </InspectorIntro>} inspector={<>
 <section className="    mx-auto grid grid-cols-1  items-start gap-6">
         {/* Step 1 */}
         <DisclosureSection title="Document & Appearance" defaultOpen headerAction={<InfoTip side="right">Guidelines are spaced by x-height + ascender + descender.</InfoTip>}>

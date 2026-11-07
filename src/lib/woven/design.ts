@@ -214,6 +214,9 @@ export function parseDesign(input: unknown): Design {
     if (obj.slantStyle !== 'classic' && obj.slantStyle !== 'flowing') throw new Error('Invalid slant style.');
     result.slantStyle = obj.slantStyle;
   }
+  // Keep version 1 files readable while retiring Copperplate's artificial unit.
+  // The editable proportions remain unchanged; broad-pen nib widths are retained.
+  if (result.script === "Copperplate") result.nib = 1;
   return result;
 }
 

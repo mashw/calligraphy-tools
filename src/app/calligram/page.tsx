@@ -1614,8 +1614,8 @@ const innerRadiusMaxMM = useMemo(
           </div>
         </div>
       </section>
-</>} inspector={<><InspectorIntro>Plan circular calligrams for Copperplate and Textura Quadrata. Letters stay upright; guides follow the circle.
-          </InspectorIntro>
+</>} help={<InspectorIntro>Plan circular calligrams for Copperplate and Textura Quadrata. Letters stay upright; guides follow the circle.
+          </InspectorIntro>} inspector={<>
 <section className="   mx-auto grid grid-cols-1  gap-6">
         {/* Step 1 */}
         <DisclosureSection title="Document & Script" defaultOpen headerAction={<InfoTip side="right">Circle is fixed at page center.</InfoTip>}>

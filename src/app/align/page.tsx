@@ -872,9 +872,9 @@ export default function Home() {
           </div>
         </div>
       </section>
-</>} inspector={<><InspectorIntro>Plan exact start marks from a centerline or right edge. Copperplate uses join + entry/exit + word-space modelling.
+</>} help={<InspectorIntro>Plan exact start marks from a centerline or right edge. Copperplate uses join + entry/exit + word-space modelling.
             Textura Quadrata uses nib-unit widths and spacing.
-          </InspectorIntro>
+          </InspectorIntro>} inspector={<>
 <div className="inspector-stack">
             {/* STEP 1 — Basics */}
             <DisclosureSection title="Document & Script" defaultOpen headerAction={<InfoTip side="right">Choose script + working sizes and alignment.</InfoTip>}>

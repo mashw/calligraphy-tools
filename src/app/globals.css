@@ -176,9 +176,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .editor-preview .preview-panel > div:not(:has(> svg.editor-svg)):not(.preview-toolbar) { flex: none; }
 .editor-preview .preview-panel.border-stage { overflow: hidden; }
 @media(max-width:799px) { .editor-preview .preview-panel { padding: 6px; } }
-.inspector-intro { color: var(--muted); font-size: 11px; line-height: 1.6; margin-bottom: 8px; }
-.inspector-intro summary { padding: 3px 0; width: fit-content; }
-.inspector-intro p { margin-top: 6px; }
+.inspector-heading { align-items: center; min-height: 28px; }
+.inspector-help-button { width: 28px; height: 28px; border-radius: 6px; color: var(--muted); font: italic 14px Georgia, serif; }
+.inspector-help-button:hover { background: var(--accent-soft); color: var(--accent); }
+.inspector-help-popover { position: fixed; inset: 0; margin: auto; width: min(340px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); background: white; color: var(--foreground); box-shadow: 0 6px 28px #20203028; font: 13px/1.6 var(--font-geist-sans),Arial,sans-serif; }
+.inspector-help-popover > button { display: block; margin-top: 10px; margin-left: auto; }
+.woven-status { flex: none; height: 64px; overflow: auto; padding: 5px 8px; border-top: 1px solid var(--line); background: #fafafa; font-size: 11px; line-height: 1.5; scrollbar-width: thin; }
+.woven-status p + p { margin-top: 4px; }
 .editor-inspector button { max-width: 100%; white-space: normal; }
 .editor-inspector .flex:has(> h2) { flex-wrap: wrap; }
 .editor-inspector > section > div { max-width: 100%; }

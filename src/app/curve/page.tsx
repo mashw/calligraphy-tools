@@ -1538,8 +1538,8 @@ export default function CurvedTitlePage() {
           </div>
         </div>
       </section>
-</>} inspector={<><InspectorIntro>Plan curved headings (“resolutions”) for Copperplate and Textura Quadrata. Letters stay upright; guides follow the curve.
-          </InspectorIntro>
+</>} help={<InspectorIntro>Plan curved headings (“resolutions”) for Copperplate and Textura Quadrata. Letters stay upright; guides follow the curve.
+          </InspectorIntro>} inspector={<>
 <section className="   mx-auto grid grid-cols-1  gap-6">
         {/* Step 1 */}
         <DisclosureSection title="Document & Script" defaultOpen headerAction={<InfoTip side="right">Curve guide movement snaps to horizontal centre unless you pull far enough to release.</InfoTip>}>

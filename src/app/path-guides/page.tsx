@@ -2582,7 +2582,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
           </div>
         </div>
       </section>
-</>} inspector={<><InspectorIntro>Upload SVG paths and generate calligraphy guidelines that follow each path. Arrange and layer straps to plan interwoven layouts.</InspectorIntro>
+</>} help={<InspectorIntro>Upload SVG paths and generate calligraphy guidelines that follow each path. Arrange and layer straps to plan interwoven layouts.</InspectorIntro>} inspector={<>
 <aside aria-label="Path guideline settings" className="min-w-0 space-y-3">
         <p className=" text-xs text-slate-600">
           {activeStrap ? `Editing strap #${straps.findIndex(strap => strap.id === activeStrap.id) + 1}` : 'No strap selected'}

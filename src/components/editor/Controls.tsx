@@ -28,7 +28,14 @@ export function ActionGroup({ label, columns, className = '', children }: { labe
 }
 
 export function InspectorIntro({ children }: { children: ReactNode }) {
-  return <details className="inspector-intro"><summary>About this tool</summary><p>{children}</p></details>;
+  const id = useId();
+  return <>
+    <button type="button" className="inspector-help-button" popoverTarget={id} aria-haspopup="dialog" aria-label="About this tool" title="About this tool">i</button>
+    <div id={id} popover="auto" role="dialog" aria-label="About this tool" className="inspector-help-popover">
+      <p>{children}</p>
+      <button type="button" className="ui-button" popoverTarget={id} popoverTargetAction="hide">Close</button>
+    </div>
+  </>;
 }
 
 export function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, rightAdornmentInteractive = false, adornmentClassName = 'right-3', children }: { label: string; disabled?: boolean; className?: string; rightAdornment?: ReactNode; rightAdornmentInteractive?: boolean; adornmentClassName?: string; children: ReactNode }) {
