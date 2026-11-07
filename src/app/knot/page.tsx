@@ -1,5 +1,7 @@
 'use client';
 
+import { InspectorIntro } from '@/components/editor/Controls';
+
 import { Toggle, NumericInput, Select, Button, Slider } from '@/components/editor/Controls';
 
 import { useRef as useCameraRef } from 'react';
@@ -426,8 +428,8 @@ const camera = useEditorCamera(svgRef, {x:0,y:0,w:BOX.w,h:BOX.h}, pointBounds(sa
           </div>
         </div>
       </section>
-</>} inspector={<><p className="inspector-intro">Generate a deterministic symmetric knot skeleton, tune strap settings, and edit crossing over/under states.
-          </p>
+</>} inspector={<><InspectorIntro>Generate a deterministic symmetric knot skeleton, tune strap settings, and edit crossing over/under states.
+          </InspectorIntro>
 <section className=" ">
         <div className=" mx-auto grid grid-cols-1  gap-6">
           <DisclosureSection title="Shape & Generation" defaultOpen>

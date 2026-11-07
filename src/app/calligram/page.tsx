@@ -1,5 +1,7 @@
 'use client';
 
+import { InspectorIntro } from '@/components/editor/Controls';
+
 import { Button, Select, Toggle, Slider, NumericInput } from '@/components/editor/Controls';
 
 import { InfoTip, InsetLabeledField, INSET_CONTROL_BASE, INSET_CONTROL_MM, INSET_CONTROL_WIDE } from '@/components/editor/Controls';
@@ -1612,15 +1614,12 @@ const innerRadiusMaxMM = useMemo(
           </div>
         </div>
       </section>
-</>} inspector={<><p className="inspector-intro">Plan circular calligrams for Copperplate and Textura Quadrata. Letters stay upright; guides follow the circle.
-          </p>
+</>} inspector={<><InspectorIntro>Plan circular calligrams for Copperplate and Textura Quadrata. Letters stay upright; guides follow the circle.
+          </InspectorIntro>
 <section className="   mx-auto grid grid-cols-1  gap-6">
         {/* Step 1 */}
-        <DisclosureSection title="Document & Script" defaultOpen>
-          <div className="flex items-center gap-2">
+        <DisclosureSection title="Document & Script" defaultOpen headerAction={<InfoTip side="right">Circle is fixed at page center.</InfoTip>}>
 
-            <InfoTip side="right">Circle is fixed at page center.</InfoTip>
-          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
             <div className="sm:col-span-2">
@@ -1740,15 +1739,12 @@ const innerRadiusMaxMM = useMemo(
         </DisclosureSection>
 
         {/* Step 2 */}
-        <DisclosureSection title="Script & Dimensions" defaultOpen>
-          <div className="flex items-center gap-2">
-
-            <InfoTip side="right">
+        <DisclosureSection title="Script & Dimensions" defaultOpen headerAction={<InfoTip side="right">
               {script === 'Copperplate'
                 ? 'Copperplate uses x-height (mm).'
                 : 'Heights are nibs × nib size (mm).'}
-            </InfoTip>
-          </div>
+            </InfoTip>}>
+
 
           {(script === 'Copperplate' || (topBandEnabled && topBandScript === 'Copperplate') || (bottomBandEnabled && bottomBandScript === 'Copperplate')) && <SlantStyleControl value={slantStyle} onChange={setSlantStyle} />}
           {script !== 'Copperplate' && <div className="mt-3 rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} compact /></div>}
@@ -2169,11 +2165,8 @@ const innerRadiusMaxMM = useMemo(
 
 
         {/* Step 3 */}
-        <DisclosureSection title="Text & Placement" defaultOpen>
-          <div className="flex items-center gap-2">
+        <DisclosureSection title="Text & Placement" defaultOpen headerAction={<InfoTip side="right">Check text fit and preview overlays.</InfoTip>}>
 
-            <InfoTip side="right">Check text fit and preview overlays.</InfoTip>
-          </div>
 
           <div className="grid grid-cols-1 gap-4 mt-3 select-none">
             <InsetLabeledField label="Title text">

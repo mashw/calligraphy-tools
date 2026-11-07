@@ -1,5 +1,7 @@
 'use client';
 
+import { InspectorIntro } from '@/components/editor/Controls';
+
 import { Select, NumericInput, Toggle, Button } from '@/components/editor/Controls';
 
 import { InfoTip } from '@/components/editor/Controls';
@@ -807,16 +809,11 @@ export default function Home() {
     <EditorWorkspace preview={<>
 <section className="">
         <div className="preview-panel  mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <PreviewToolbar camera={camera} pageLabel="Fit lines" />
-              <InfoTip side="right">
+          <PreviewToolbar camera={camera} pageLabel="Fit lines" help={<p>
                 Copperplate: includes entry stroke before the first letter and (if ending on lowercase) an exit stroke after the last lowercase.
                 Word spaces include exit + gap + entry. Calibration adjusts lowercase scale + spacing.
                 Textura: nib-based widths + spacing.
-              </InfoTip>
-            </div>
-          </div>
+              </p>} />
 
           <div className="overflow-x-auto">
             <svg ref={svgRef}
@@ -875,18 +872,13 @@ export default function Home() {
           </div>
         </div>
       </section>
-</>} inspector={<><p className="inspector-intro">Plan exact start marks from a centerline or right edge. Copperplate uses join + entry/exit + word-space modelling.
+</>} inspector={<><InspectorIntro>Plan exact start marks from a centerline or right edge. Copperplate uses join + entry/exit + word-space modelling.
             Textura Quadrata uses nib-unit widths and spacing.
-          </p>
-<section className=" ">
-        <div className=" mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-5">
-          <div className="grid grid-cols-1  gap-6">
+          </InspectorIntro>
+<div className="inspector-stack">
             {/* STEP 1 — Basics */}
-            <DisclosureSection title="Document & Script" defaultOpen>
-              <div className="flex items-center gap-2">
+            <DisclosureSection title="Document & Script" defaultOpen headerAction={<InfoTip side="right">Choose script + working sizes and alignment.</InfoTip>}>
 
-                <InfoTip side="right">Choose script + working sizes and alignment.</InfoTip>
-              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-3">
                 <div>
@@ -1075,11 +1067,8 @@ export default function Home() {
             </DisclosureSection>
 
             {/* STEP 2 — Enter lines */}
-            <DisclosureSection title="Text & Placement" defaultOpen>
-              <div className="flex items-center gap-2">
+            <DisclosureSection title="Text & Placement" defaultOpen headerAction={<InfoTip side="right">Type one line per row.</InfoTip>}>
 
-                <InfoTip side="right">Type one line per row.</InfoTip>
-              </div>
               <textarea
                 className="w-full h-36 p-3 mt-2 rounded-lg border border-slate-300 outline-none focus:ring-2 focus:ring-indigo-500"
                 value={linesInput}
@@ -1088,11 +1077,8 @@ export default function Home() {
               />
             </DisclosureSection>
           </div>
-        </div>
-      </section>
 {script === 'Copperplate' && (
-        <section className=" pb-6">
-          <DisclosureSection title="Advanced Calibration" defaultOpen>
+        <DisclosureSection title="Advanced Calibration" defaultOpen>
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
 
@@ -1101,14 +1087,14 @@ export default function Home() {
                   and enter the value. Calibration adjusts lowercase scale and spacing. Stored per x-height.
                 </InfoTip>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
                   onMouseDown={handleStepButtonMouseDown}
-                  onClick={handleResetAllCalibration}
+                  onClick={handleResetAllCalibration} title="Reset all calibration for this x-height" aria-label="Reset all calibration for this x-height"
                   className="  text-xs rounded-full border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 transition select-none"
                 >
-                  Reset all calibration (this x-height)
+                  Reset calibration
                 </Button>
                 <Button
                   type="button"
@@ -1268,10 +1254,8 @@ export default function Home() {
               )}
             </div>
           </DisclosureSection>
-        </section>
       )}
-<section className=" pb-8">
-        <DisclosureSection title="Measurements & Results" defaultOpen>
+<DisclosureSection title="Measurements & Results" defaultOpen>
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm border border-slate-200 rounded-lg overflow-hidden">
@@ -1304,7 +1288,6 @@ export default function Home() {
             </table>
           </div>
         </DisclosureSection>
-      </section>
 </>}><style>{`
         .ct-svg-text { font-size: clamp(12.5px, 1.35vw, 14.5px); }
         @media (max-width: 700px) { .ct-svg-text { font-size: clamp(13px, 2.4vw, 14px); } }

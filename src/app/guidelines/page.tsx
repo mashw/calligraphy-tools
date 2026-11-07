@@ -1,5 +1,8 @@
 'use client';
 
+import { InspectorIntro } from '@/components/editor/Controls';
+import PreviewMeta from '@/components/editor/PreviewMeta';
+
 import { Button, Select, NumericInput, Slider, Toggle } from '@/components/editor/Controls';
 
 import { InfoTip } from '@/components/editor/Controls';
@@ -812,23 +815,20 @@ const slantAngleDeg = useMemo(() => {
             </svg>
 
           </div>
-          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs leading-5 text-slate-600">
+          <PreviewMeta>
             <span>Baselines: {guideSets.length}</span>
             <span>Line height: {lineHeight.toFixed(1)} mm</span>
             <span>Row gap: {rowGapMM.toFixed(1)} mm</span>
             <span>Row step: {rowStepMM.toFixed(1)} mm</span>
-          </div>
+          </PreviewMeta>
         </div>
       </section>
-</>} inspector={<><p className="inspector-intro">Generate printable guidelines for Copperplate, blackletter, and Insular Majuscule using straight baselines.
-          </p>
+</>} inspector={<><InspectorIntro>Generate printable guidelines for Copperplate, blackletter, and Insular Majuscule using straight baselines.
+          </InspectorIntro>
 <section className="    mx-auto grid grid-cols-1  items-start gap-6">
         {/* Step 1 */}
-        <DisclosureSection title="Document & Appearance" defaultOpen>
-          <div className="flex items-center gap-2">
+        <DisclosureSection title="Document & Appearance" defaultOpen headerAction={<InfoTip side="right">Guidelines are spaced by x-height + ascender + descender.</InfoTip>}>
 
-            <InfoTip side="right">Guidelines are spaced by x-height + ascender + descender.</InfoTip>
-          </div>
 
           <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="sm:col-span-2">
@@ -1099,15 +1099,12 @@ const slantAngleDeg = useMemo(() => {
         </DisclosureSection>
 
         {/* Step 2 */}
-        <DisclosureSection title="Script & Dimensions" defaultOpen>
-          <div className="flex items-center gap-2">
-
-            <InfoTip side="right">
+        <DisclosureSection title="Script & Dimensions" defaultOpen headerAction={<InfoTip side="right">
               {script === 'Copperplate'
                 ? 'Copperplate uses x-height (mm) with optional calibration for lowercase scale and spacing.'
                 : 'Heights are nibs × nib size (mm).'}
-            </InfoTip>
-          </div>
+            </InfoTip>}>
+
 
           {/* Top controls */}
           <div className="mt-5 space-y-5">

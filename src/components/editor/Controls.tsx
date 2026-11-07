@@ -23,6 +23,14 @@ export function Slider({ className = '', ...props }: ComponentProps<'input'>) {
   return <input {...props} type="range" className={`ui-slider ${className}`} />;
 }
 
+export function ActionGroup({ label, columns, className = '', children }: { label: string; columns?: 2 | 3 | 6; className?: string; children: ReactNode }) {
+  return <div role="group" aria-label={label} data-columns={columns} className={`action-group ${className}`}>{children}</div>;
+}
+
+export function InspectorIntro({ children }: { children: ReactNode }) {
+  return <details className="inspector-intro"><summary>About this tool</summary><p>{children}</p></details>;
+}
+
 export function InsetLabeledField({ label, disabled = false, className = '', rightAdornment, rightAdornmentInteractive = false, adornmentClassName = 'right-3', children }: { label: string; disabled?: boolean; className?: string; rightAdornment?: ReactNode; rightAdornmentInteractive?: boolean; adornmentClassName?: string; children: ReactNode }) {
   const id = useId();
   return <div className={`editor-field ${className}`} data-disabled={disabled || undefined}>
@@ -46,4 +54,3 @@ export function InfoTip({ title = 'More information', children, className = '' }
     {position && createPortal(<span id={id} role="tooltip" className="editor-tooltip" style={{ left: position.left, top: position.above ? undefined : position.top, bottom: position.above ? 16 : undefined }}>{children}</span>, document.body)}
   </span>;
 }
-

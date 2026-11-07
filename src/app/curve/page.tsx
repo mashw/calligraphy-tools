@@ -1,5 +1,7 @@
 'use client';
 
+import { InspectorIntro } from '@/components/editor/Controls';
+
 import { Button, Select, Toggle, NumericInput, Slider } from '@/components/editor/Controls';
 
 import { InfoTip, InsetLabeledField, INSET_CONTROL_BASE, INSET_CONTROL_MM, INSET_CONTROL_WIDE } from '@/components/editor/Controls';
@@ -1536,15 +1538,12 @@ export default function CurvedTitlePage() {
           </div>
         </div>
       </section>
-</>} inspector={<><p className="inspector-intro">Plan curved headings (“resolutions”) for Copperplate and Textura Quadrata. Letters stay upright; guides follow the curve.
-          </p>
+</>} inspector={<><InspectorIntro>Plan curved headings (“resolutions”) for Copperplate and Textura Quadrata. Letters stay upright; guides follow the curve.
+          </InspectorIntro>
 <section className="   mx-auto grid grid-cols-1  gap-6">
         {/* Step 1 */}
-        <DisclosureSection title="Document & Script" defaultOpen>
-          <div className="flex items-center gap-2">
+        <DisclosureSection title="Document & Script" defaultOpen headerAction={<InfoTip side="right">Curve guide movement snaps to horizontal centre unless you pull far enough to release.</InfoTip>}>
 
-            <InfoTip side="right">Curve guide movement snaps to horizontal centre unless you pull far enough to release.</InfoTip>
-          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
             <div className="sm:col-span-2">
@@ -1637,15 +1636,12 @@ export default function CurvedTitlePage() {
         </DisclosureSection>
 
         {/* Step 2 */}
-        <DisclosureSection title="Script & Dimensions" defaultOpen>
-          <div className="flex items-center gap-2">
-
-            <InfoTip side="right">
+        <DisclosureSection title="Script & Dimensions" defaultOpen headerAction={<InfoTip side="right">
               {script === 'Copperplate'
                 ? 'Copperplate uses x-height (mm) with optional calibration for lowercase scale and spacing.'
                 : 'Heights are nibs × nib size (mm).'}
-            </InfoTip>
-          </div>
+            </InfoTip>}>
+
 
           {(script === 'Copperplate' || (topBandEnabled && topBandScript === 'Copperplate') || (bottomBandEnabled && bottomBandScript === 'Copperplate')) && <SlantStyleControl value={slantStyle} onChange={setSlantStyle} />}
           {script !== 'Copperplate' && <div className="mt-3 rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} compact /></div>}
@@ -2116,11 +2112,8 @@ export default function CurvedTitlePage() {
 
 
         {/* Step 3 */}
-        <DisclosureSection title="Shape, Path & Guides" defaultOpen>
-          <div className="flex items-center gap-2">
+        <DisclosureSection title="Shape, Path & Guides" defaultOpen headerAction={<InfoTip side="right">Rotate and scale the curve.</InfoTip>}>
 
-            <InfoTip side="right">Rotate and scale the curve.</InfoTip>
-          </div>
 
           <div className="grid grid-cols-1 gap-4 mt-3 select-none">
 

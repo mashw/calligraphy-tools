@@ -1,5 +1,7 @@
 'use client';
 
+import { InspectorIntro } from '@/components/editor/Controls';
+
 import EditorWorkspace from '@/components/editor/EditorWorkspace';
 
 import { useState } from 'react';
@@ -30,7 +32,7 @@ export default function BorderDevPage() {
   const upload = async (file: File) => { try { const imported = importGuidePaths(await file.text()).map(p => ({ ...p, name: `${file.name}: ${p.name}` })); setPaths([...BUILT_INS, ...imported]); setSelected(BUILT_INS.length); setMessage(imported.length > 1 ? `${imported.length} usable paths found. Choose one in Growth spine.` : 'SVG path loaded. Transforms and filled silhouette centreline extraction are not supported.'); } catch (e) { setMessage(e instanceof Error ? e.message : 'Could not read SVG.'); } };
   return <EditorWorkspace preview={<>
 <BorderDevStage d={paths[selected].d} closed={paths[selected].closed} reverse={reverse} options={options} showConstruction={construction} singleLeaf={paths[selected].name === 'Single leaf study'} componentStudy={paths[selected].name === 'Acanthus component study'} canonicalStudy={paths[selected].name === 'Canonical motif study'} />
-</>} inspector={<><p className="inspector-intro">Development geometry laboratory An experimental vector-first study of growth spine → roots → midribs → eyes → lobes → engraved detail. This is not the finished Border Creation Tool.</p>
+</>} inspector={<><InspectorIntro>Development geometry laboratory An experimental vector-first study of growth spine → roots → midribs → eyes → lobes → engraved detail. This is not the finished Border Creation Tool.</InspectorIntro>
 <BorderDevControls options={options} setOptions={setOptions} presets={paths} selected={selected} onSelect={selectGuide} reverse={reverse} onReverse={setReverse} construction={construction} onConstruction={setConstruction} onUpload={upload} message={message} /><details className="primitive-lab"><summary>Renaissance primitive laboratory</summary><RenaissancePrimitiveLab /></details>
 </>}></EditorWorkspace>;
 }

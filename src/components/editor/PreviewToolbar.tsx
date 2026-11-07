@@ -2,8 +2,9 @@
 
 import type { ReactNode } from 'react';
 import type { EditorCamera } from './useEditorCamera';
+import CompactHelp from './CompactHelp';
 
-export default function PreviewToolbar({ camera, children, pageLabel = 'Fit page' }: { camera: EditorCamera; children?: ReactNode; pageLabel?: string }) {
+export default function PreviewToolbar({ camera, children, pageLabel = 'Fit page', help }: { camera: EditorCamera; children?: ReactNode; pageLabel?: string; help?: ReactNode }) {
   return <div className="preview-toolbar">
     <div className="camera-controls" role="group" aria-label="Preview navigation">
       <button type="button" aria-pressed={camera.mode === 'page'} onClick={() => camera.fit('page')}>{pageLabel}</button>
@@ -11,9 +12,12 @@ export default function PreviewToolbar({ camera, children, pageLabel = 'Fit page
       <button type="button" aria-label="Zoom out" onClick={() => camera.zoomBy(1 / 1.2)}>−</button>
       <output aria-label="Preview zoom">{Math.round(camera.zoom * 100)}%</output>
       <button type="button" aria-label="Zoom in" onClick={() => camera.zoomBy(1.2)}>+</button>
-      <button type="button" onClick={() => camera.fit('page')}>Reset view</button>
+      <button type="button" aria-label="Reset view" title="Reset view" onClick={() => camera.fit('page')}><span className="toolbar-wide-label">Reset view</span><span className="toolbar-compact-label" aria-hidden="true">↺</span></button>
+      <CompactHelp label="Preview navigation help" below>
+        <p>Alt-drag or middle-drag to pan. Ctrl / ⌘ + mouse wheel zooms around the pointer.</p>
+        {help}
+      </CompactHelp>
     </div>
     {children && <div className="document-actions" role="group" aria-label="Document and export actions">{children}</div>}
-    <p className="camera-hint">Alt-drag / middle-drag to pan · Ctrl / ⌘ + wheel to zoom</p>
   </div>;
 }
