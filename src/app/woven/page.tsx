@@ -1,6 +1,6 @@
 "use client";
 
-import { NumericInput, Toggle, Button, Select, ActionGroup } from '@/components/editor/Controls';
+import { NumericInput, Button, Select, ActionGroup } from '@/components/editor/Controls';
 import NumericSlider from '@/components/editor/NumericSlider';
 import PreviewMeta from '@/components/editor/PreviewMeta';
 import CompactHelp from '@/components/editor/CompactHelp';
@@ -11,20 +11,20 @@ import PreviewToolbar from '@/components/editor/PreviewToolbar';
 
 import EditorWorkspace from '@/components/editor/EditorWorkspace';
 
-import SlantStyleControl from '@/components/guidelines/SlantStyleControl';
+import WovenSettings from '@/components/woven/WovenSettings';
 import React, { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import DisclosureSection from "@/components/layout/DisclosureSection";
-import ConstructionGuideControls from "@/components/guidelines/ConstructionGuideControls";
 import { PAPERS_MM } from "@/lib/curve-helpers";
-import { INSULAR_MAJUSCULE_DEFAULTS } from "@/lib/guides/straight/blackletter";
 import {
   DEFAULT_DESIGN,
   LIMITS,
   parseDesign,
   type Design,
 } from "@/lib/woven/design";
-import { buildWovenModel } from "@/lib/woven/model";
+import { WovenScene, WovenSimplified } from '@/components/woven/WovenRenderer';
+import { sliceGuide } from '@/lib/woven/geometry';
+import { buildWovenModel, buildWovenRouteModel } from "@/lib/woven/model";
 import { pointsD, scenePdf, sceneSvg } from "@/lib/woven/vector-export";
 
 const field =
@@ -32,7 +32,6 @@ const field =
 const button =
   "min-h-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-indigo-500";
 type View = "autofit" | "fullpage" | "custom";
-type Box = { x: number; y: number; w: number; h: number };
 function download(content: BlobPart, type: string, name: string) {
   const url = URL.createObjectURL(new Blob([content], { type }));
   const a = document.createElement("a");
@@ -47,42 +46,22 @@ export default function WovenPage() {
   const [selected, setSelected] = useState<string | null>(null);
 
 
+  const [simplify,setSimplify]=useState(false);
+  const [interacting,setInteracting]=useState(false);
+  const previewSimplify=simplify||interacting;
   const [status, setStatus] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
-  const drag = useRef<{
-    pointer: number;
-    x: number;
-    y: number;
-    box: Box;
-    scale: number;
-    crossing: string | null;
-    moved: boolean;
-  } | null>(null);
-  const model = useMemo(() => buildWovenModel(design), [design]);
-  const scene = design.annotated ? model.annotated : model.clean;
-  const fit = useMemo(() => {
-    const points = model.clean.strokes
-      .flatMap((s) => s.points)
-      .filter((p) => p.y > 25 && p.y < model.page.h - 27);
-    if (!points.length) return { x: 0, y: 0, w: model.page.w, h: model.page.h };
-    let minX = Infinity,
-      minY = Infinity,
-      maxX = -Infinity,
-      maxY = -Infinity;
-    for (const p of points) {
-      minX = Math.min(minX, p.x);
-      minY = Math.min(minY, p.y);
-      maxX = Math.max(maxX, p.x);
-      maxY = Math.max(maxY, p.y);
-    }
-    return {
-      x: minX - 8,
-      y: minY - 8,
-      w: maxX - minX + 16,
-      h: maxY - minY + 16,
-    };
-  }, [model]);
+  const drag = useRef<{pointer:number;x:number;y:number;inverse:DOMMatrix;origin:{x:number;y:number};center:{x:number;y:number};crossing:string|null;moved:boolean}|null>(null);
+  const routeModel=useMemo(()=>buildWovenRouteModel(design),[design]);
+  const fullModel=useMemo(()=>previewSimplify?null:buildWovenModel(design),[design,previewSimplify]);
+  const model={...routeModel,warnings:routeModel.warnings,usableLength:routeModel.intervals.reduce((sum,[a,b])=>sum+b-a,0)};
+  const scene=fullModel?(design.annotated?fullModel.annotated:fullModel.clean):null;
+  function exportScene(){const full=buildWovenModel(design);return design.annotated?full.annotated:full.clean;}
+  const fit=useMemo(()=>{
+    const xs=routeModel.route.points.map(p=>p.x),ys=routeModel.route.points.map(p=>p.y),pad=routeModel.halfBand+8;
+    return {x:Math.min(...xs)-pad,y:Math.min(...ys)-pad,w:Math.max(...xs)-Math.min(...xs)+pad*2,h:Math.max(...ys)-Math.min(...ys)+pad*2};
+  },[routeModel]);
 
   const camera = useEditorCamera(svgRef, {x:0,y:0,w:model.page.w,h:model.page.h}, fit);
   const vb = camera;
@@ -113,82 +92,6 @@ export default function WovenPage() {
   }
   function preset(next: View) { camera.fit(next === 'autofit' ? 'content' : 'page'); }
 
-  function numeric(
-    key: keyof typeof LIMITS,
-    label: string,
-    step = 1,
-    unit = "",
-  ) {
-    return (
-      <label className="block space-y-1 text-sm text-slate-700" key={key}>
-        <span>
-          {label}
-          {unit && ` (${unit})`}
-        </span>
-        <NumericInput
-          aria-label={label}
-          className={field}
-          type="number"
-          min={LIMITS[key][0]}
-          max={LIMITS[key][1]}
-          step={step}
-          value={design[key]}
-          onChange={(e) => {
-            const v = e.target.valueAsNumber;
-            if (Number.isFinite(v))
-              update(
-                key,
-                Math.max(LIMITS[key][0], Math.min(LIMITS[key][1], v)),
-              );
-          }}
-        />
-      </label>
-    );
-  }
-  function toggle(
-    key:
-      | "gridHorizontal"
-      | "gridVertical"
-      | "fullGuides"
-      | "reverse"
-      | "slants"
-      | "secondSlant",
-    label: string,
-  ) {
-    return (
-      <label className="flex min-h-10 items-center gap-2 text-sm" key={key}>
-        <Toggle
-          type="checkbox"
-          className="accent-indigo-600"
-          checked={design[key]}
-          onChange={(e) => update(key, e.target.checked)}
-        />
-        {label}
-      </label>
-    );
-  }
-  function selectScript(script: Design["script"]) {
-    setDesign((d) => ({
-      ...d,
-      script,
-      nib: script === "Copperplate" ? 1 : d.nib,
-      xNib:
-        script === "InsularMajuscule"
-          ? INSULAR_MAJUSCULE_DEFAULTS.xNib
-          : script === "TexturaQuadrata"
-            ? 5
-            : script === "Copperplate"
-              ? 4
-              : 4.5,
-      ascNib: script === "Copperplate" ? 6 : 2,
-      descNib: script === "Copperplate" ? 6 : 2,
-      penAngle:
-        script === "InsularMajuscule" ? 15 : script === "Fraktur" ? 40 : 45,
-      gridHorizontal: script !== "InsularMajuscule",
-      gridVertical: script !== "InsularMajuscule",
-      construction: { ...d.construction, upper: false, lower: false },
-    }));
-  }
   function print() {
     const frame = document.createElement("iframe");
     frame.title = "Print Woven Calligraphy";
@@ -201,7 +104,7 @@ export default function WovenPage() {
     }
     doc.open();
     doc.write(
-      `<!doctype html><html><head><title>Woven Calligraphy</title><style>@page{size:${model.page.w}mm ${model.page.h}mm;margin:0}html,body{margin:0;padding:0}svg{display:block;width:${model.page.w}mm;height:${model.page.h}mm}</style></head><body>${sceneSvg(scene)}</body></html>`,
+      `<!doctype html><html><head><title>Woven Calligraphy</title><style>@page{size:${model.page.w}mm ${model.page.h}mm;margin:0}html,body{margin:0;padding:0}svg{display:block;width:${model.page.w}mm;height:${model.page.h}mm}</style></head><body>${sceneSvg(exportScene())}</body></html>`,
     );
     doc.close();
     const win = frame.contentWindow;
@@ -214,47 +117,25 @@ export default function WovenPage() {
       "Print at 100% / actual size, with browser headers and footers off. Check the 50 mm ruler.",
     );
   }
-  function pointerDown(e: React.PointerEvent<SVGSVGElement>) {
-    if (e.button !== 0) return;
-    const matrix = svgRef.current?.getScreenCTM();
-    if (!matrix) return;
-    const crossing =
-      (e.target as Element)
-        .closest("[data-crossing]")
-        ?.getAttribute("data-crossing") ?? null;
-    drag.current = {
-      pointer: e.pointerId,
-      x: e.clientX,
-      y: e.clientY,
-      box: vb,
-      scale: matrix.a,
-      crossing,
-      moved: false,
-    };
-    e.currentTarget.setPointerCapture(e.pointerId);
+  function pointerDown(e:React.PointerEvent<SVGSVGElement>) {
+    if(e.button!==0||e.altKey||!(e.target as Element).closest('[data-woven-shape],[data-crossing]'))return;
+    const matrix=svgRef.current?.getScreenCTM();if(!matrix)return;
+    const inverse=matrix.inverse(),origin=new DOMPoint(e.clientX,e.clientY).matrixTransform(inverse);
+    camera.freeze();
+    drag.current={pointer:e.pointerId,x:e.clientX,y:e.clientY,inverse,origin,center:{x:design.centerX??model.page.w/2,y:design.centerY??model.page.h/2},crossing:(e.target as Element).closest('[data-crossing]')?.getAttribute('data-crossing')??null,moved:false};
+    e.currentTarget.setPointerCapture(e.pointerId);setInteracting(true);
   }
-  function pointerMove(e: React.PointerEvent<SVGSVGElement>) {
-    const d = drag.current;
-    if (!d || d.pointer !== e.pointerId) return;
-    const dx = e.clientX - d.x,
-      dy = e.clientY - d.y;
-    if (Math.hypot(dx, dy) > 4) d.moved = true;
-    if (d.moved) {
-
-      camera.setFrame({
-        ...d.box,
-        x: d.box.x - dx / d.scale,
-        y: d.box.y - dy / d.scale,
-      });
-    }
+  function pointerMove(e:React.PointerEvent<SVGSVGElement>) {
+    const d=drag.current;if(!d||d.pointer!==e.pointerId)return;
+    if(Math.hypot(e.clientX-d.x,e.clientY-d.y)>4)d.moved=true;
+    if(d.moved){const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(d.inverse);setDesign(current=>({...current,centerX:d.center.x+p.x-d.origin.x,centerY:d.center.y+p.y-d.origin.y}));}
   }
-  function pointerUp(e: React.PointerEvent<SVGSVGElement>) {
-    const d = drag.current;
-    if (!d || d.pointer !== e.pointerId) return;
-    drag.current = null;
-    if (e.currentTarget.hasPointerCapture(e.pointerId))
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    if (!d.moved && d.crossing) flip(d.crossing);
+  function pointerUp(e:React.PointerEvent<SVGSVGElement>) {
+    const d=drag.current;if(!d||d.pointer!==e.pointerId)return;
+    drag.current=null;setInteracting(false);
+    if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
+    if(e.type==='pointercancel'){setDesign(current=>({...current,centerX:d.center.x,centerY:d.center.y}));return;}
+    if(!d.moved&&d.crossing)flip(d.crossing);
   }
   return (
     <EditorWorkspace preview={<>
@@ -262,10 +143,10 @@ export default function WovenPage() {
           className="preview-panel rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-6"
           aria-label="Writing sheet preview"
         >
-          <PreviewToolbar camera={camera}><Button
+          <PreviewToolbar camera={camera}><Button className={button} aria-pressed={simplify} onClick={()=>setSimplify(value=>!value)}>Simplify</Button><Button
                 className={button}
                 onClick={() =>
-                  download(sceneSvg(scene), "image/svg+xml", "woven-guides.svg")
+                  download(sceneSvg(exportScene()), "image/svg+xml", "woven-guides.svg")
                 }
               >
                 SVG
@@ -274,7 +155,7 @@ export default function WovenPage() {
                 className={button}
                 onClick={() =>
                   download(
-                    new Uint8Array(scenePdf(scene)).buffer,
+                    new Uint8Array(scenePdf(exportScene())).buffer,
                     "application/pdf",
                     "woven-guides.pdf",
                   )
@@ -301,12 +182,8 @@ export default function WovenPage() {
               onPointerDown={pointerDown}
               onPointerMove={pointerMove}
               onPointerUp={pointerUp}
-              onPointerCancel={() => {
-                drag.current = null;
-              }}
-              onLostPointerCapture={() => {
-                drag.current = null;
-              }}
+              onPointerCancel={pointerUp}
+              onLostPointerCapture={()=>{drag.current=null;setInteracting(false);}}
             >
               <title>Woven Calligraphy writing sheet</title>
               <defs>
@@ -316,29 +193,11 @@ export default function WovenPage() {
               </defs>
               <rect width={model.page.w} height={model.page.h} fill="white" />
               <g clipPath="url(#woven-page)">
-                {scene.strokes.map((s, i) => (
-                  <path
-                    key={i}
-                    d={pointsD(s.points)}
-                    fill="none"
-                    stroke={s.color}
-                    strokeWidth={s.width}
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                  />
-                ))}
-                {scene.labels.map((l, i) => (
-                  <text
-                    key={i}
-                    x={l.point.x}
-                    y={l.point.y}
-                    fontSize={l.size}
-                    fill={l.color}
-                    fontFamily="Helvetica,Arial,sans-serif"
-                  >
-                    {l.text}
-                  </text>
-                ))}
+                {scene?<WovenScene scene={scene}/>:<WovenSimplified model={routeModel}/>}
+                <g data-woven-shape="true" data-camera-interactive="true" fill="none" stroke="transparent" strokeWidth={Math.max(5,routeModel.halfBand*2)} pointerEvents="stroke" style={{cursor:'move'}}>
+                  {routeModel.intervals.map((interval,i)=><path key={i} d={pointsD(sliceGuide(routeModel.route,routeModel.route.points,interval))}/>)}
+                </g>
+                {previewSimplify&&<rect x={fit.x+8} y={fit.y+8} width={fit.w-16} height={fit.h-16} fill="none" stroke="#818cf8" strokeWidth={.25} strokeDasharray="2 2" pointerEvents="none"/>}
                 {model.crossings.map((c, i) => (
                   <g
                     key={c.id}
@@ -374,7 +233,7 @@ export default function WovenPage() {
             {model.warnings.map(warning => <p key={warning} className="text-amber-900">{warning}</p>)}
             {!status && model.warnings.length === 0 && <p>No geometry warnings.</p>}
           </div>
-          <PreviewMeta help={<><p>Drag to pan; click a crossing to swap over/under.</p><p>Exports use the full page. Print at actual size / 100%, with headers and footers off; check the 50 mm ruler.</p></>}>
+          <PreviewMeta help={<><p>Drag the design to move it. Alt-drag or middle-drag to pan; click a crossing to swap over/under.</p><p>Exports use the full page. Print at actual size / 100%, with headers and footers off; check the 50 mm ruler.</p></>}>
             <span>{model.page.w} × {model.page.h} mm</span>
             <span>{model.crossings.length} crossings · {Math.round(model.usableLength)} mm visible route</span>
             {selected && <span>Crossing {model.crossings.findIndex(c => c.id === selected) + 1} selected</span>}
@@ -435,7 +294,9 @@ export default function WovenPage() {
       />
 <div className="grid items-start gap-4  ">
           <DisclosureSection title="Shape" defaultOpen headerAction={<CompactHelp label="Shape controls help" below><p>Type custom values or use the sliders. Scale changes width and height together, preserving their ratio.</p><p>Editing either dimension or opening a design sets the current size as the new 100% reference. Preset, loop depth and direction changes reset crossing choices.</p></CompactHelp>}>
-            <div className="space-y-3">
+            <div className="space-y-3" onPointerDownCapture={event=>{if((event.target as HTMLInputElement).type==='range'){camera.freeze();setInteracting(true);}}} onPointerUpCapture={()=>setInteracting(false)} onPointerCancelCapture={()=>setInteracting(false)} onFocusCapture={event=>{if((event.target as HTMLInputElement).type==='number'){camera.freeze();setInteracting(true);}}} onBlurCapture={()=>setInteracting(false)} onKeyDownCapture={event=>{if((event.target as HTMLInputElement).type==='range'&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){camera.freeze();setInteracting(true);}}} onKeyUpCapture={()=>setInteracting(false)}>
+              <div className="grid grid-cols-2 gap-2">{(['centerX','centerY'] as const).map((key,i)=><label key={key} className="text-sm">{i===0?'X position':'Y position'} (mm)<NumericInput className={field} aria-label={i===0?'X position':'Y position'} step="any" value={design[key]??(i===0?model.page.w:model.page.h)/2} onChange={event=>{if(Number.isFinite(event.target.valueAsNumber))update(key,event.target.valueAsNumber);}}/></label>)}</div>
+              <Button className={button} onClick={()=>setDesign(current=>({...current,centerX:model.page.w/2,centerY:model.page.h/2}))}>Centre on page</Button>
               <label className="block space-y-1 text-sm">
                 Preset
                 <Select
@@ -458,118 +319,7 @@ export default function WovenPage() {
               <NumericSlider label="Rotation" value={design.rotation} min={LIMITS.rotation[0]} max={LIMITS.rotation[1]} step={1} unit="°" onChange={value => update('rotation', value)} />
             </div>
           </DisclosureSection>
-          <DisclosureSection title="Writing guides" defaultOpen>
-            <div className="space-y-3">
-              <label className="block space-y-1 text-sm">
-                Script
-                <Select
-                  aria-label="Script"
-                  className={field}
-                  value={design.script}
-                  onChange={(e) =>
-                    selectScript(e.target.value as Design["script"])
-                  }
-                >
-                  <option value="TexturaQuadrata">Textura Quadrata</option>
-                  <option value="Fraktur">Fraktur</option>
-                  <option value="InsularMajuscule">Insular Majuscule</option>
-                  <option value="Copperplate">Copperplate</option>
-                </Select>
-              </label>
-              {design.script !== "Copperplate" && numeric("nib", "Nib width", 0.05, "mm")}
-              {numeric("xNib", "X-height", 0.5, "units")}
-              {numeric("ascNib", "Ascender above waist", 0.5, "units")}
-              {numeric("descNib", "Descender below base", 0.5, "units")}
-              <p className="text-xs text-slate-500">
-                X-height: {((design.script === "Copperplate" ? 1 : design.nib) * design.xNib).toFixed(2)} mm.{" "}
-                {design.script === "Copperplate"
-                  ? "Copperplate uses a fixed 1 mm unit for these proportions."
-                  : "One unit equals one actual nib width."}
-              </p>
-              {toggle("fullGuides", "Show ascender and descender guides")}
-            </div>
-          </DisclosureSection>
-          <DisclosureSection
-            title={
-              design.script === "Copperplate"
-                ? "Slant lines"
-                : "Grid & construction"
-            }
-            defaultOpen
-          >
-            <div className="space-y-3">
-              {design.script === "Copperplate" ? (
-                <>
-                  {toggle("slants", "Show slant lines")}
-                    <SlantStyleControl value={design.slantStyle} onChange={v=>update("slantStyle",v)} />
-                  {numeric("slantAngle", "Slant angle", 1, "°")}
-                  {numeric("slantSpacing", "Slant spacing", 0.5, "mm")}
-                  {numeric("slantContrast", "Slant contrast", 0.05)}
-                  {toggle("secondSlant", "Second slant angle")}
-                  {design.secondSlant &&
-                    numeric("secondAngle", "Second angle", 1, "°")}
-                </>
-              ) : (
-                <>
-                  {toggle("gridHorizontal", "Horizontal intermediate lines")}
-                  {toggle("gridVertical", "Vertical divisions")}
-                  <label className="block space-y-1 text-sm">
-                    Grid width
-                    <Select
-                      aria-label="Grid width"
-                      className={field}
-                      value={design.gridMode}
-                      onChange={(e) =>
-                        update("gridMode", e.target.value as Design["gridMode"])
-                      }
-                    >
-                      <option value="effective">Stroke-width</option>
-                      <option value="actual">Actual nib</option>
-                      <option value="custom">Custom</option>
-                    </Select>
-                  </label>
-                  {design.gridMode === "custom" &&
-                    numeric("gridWidth", "Custom grid width", 0.1, "mm")}
-                  {numeric("penAngle", "Pen angle", 1, "°")}
-                  {numeric("gridContrast", "Grid contrast", 0.05)}
-                  <ConstructionGuideControls
-                    script={design.script}
-                    value={design.construction}
-                    onChange={(v) => update("construction", v)}
-                    compact
-                  />
-                </>
-              )}
-              {numeric("gridThickness", "Guide grid thickness", 0.01, "mm")}
-            </div>
-          </DisclosureSection>
-          <DisclosureSection title="Route & crossings" defaultOpen>
-            <div className="space-y-3">
-              {numeric("start", "Start position", 0.5, "%")}
-              {numeric("gap", "Start/end gap", 0.5, "mm")}
-              {numeric("clearance", "Crossing clearance", 0.1, "mm")}
-              {toggle("reverse", "Reverse writing direction")}
-              <div className="flex flex-wrap gap-2">
-                {model.crossings.map((c, i) => (
-                  <Button
-                    key={c.id}
-                    aria-label={`Swap crossing ${i + 1}`}
-                    aria-pressed={selected === c.id}
-                    className={`${button} ${selected === c.id ? "!border-indigo-500 !bg-indigo-50" : ""}`}
-                    onClick={() => flip(c.id)}
-                  >
-                    {i + 1}
-                  </Button>
-                ))}
-              </div>
-              <Button
-                className={button}
-                onClick={() => update("overrides", {})}
-              >
-                Restore alternating weave
-              </Button>
-            </div>
-          </DisclosureSection>
+          <WovenSettings design={design} onChange={setDesign} model={model} selected={selected} onSelect={setSelected} />
           <DisclosureSection title="Page & export" defaultOpen>
             <div className="space-y-3">
               <label className="block space-y-1 text-sm">

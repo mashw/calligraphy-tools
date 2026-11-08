@@ -62,7 +62,7 @@ function artworkOccluder(element:Extract<LayoutElement,{type:'artwork'}>):Occlud
 }
 
 function unrotatedElementOccluders(element: LayoutElement): Occluder[] {
-  if(element.type==='page') return [];
+  if(element.type==='page'||element.visible===false) return [];
   if(element.type==='shape') return [shapeOccluder(element)];
   if(element.type==='guidelines') {
     if(!element.mask?.enabled)return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
@@ -73,6 +73,7 @@ function unrotatedElementOccluders(element: LayoutElement): Occluder[] {
     if((element.settings.textFitExclusion??'bounds')==='bounds')return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
     const occluder=artworkOccluder(element);return occluder?[occluder]:[];
   }
+  if(element.type==='woven')return [];
   if(element.type==='curved-title') {
     if(!(element.settings.transparentWhitespace??true)) return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
     return [];

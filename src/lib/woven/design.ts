@@ -2,6 +2,8 @@ import type { SlantStyle } from '../guides/slant-paths';
 import { PAPERS_MM } from "../curve-helpers";
 import type { ConstructionGuideSettings } from "../guides/guide-template";
 export type Design = {
+  centerX?: number;
+  centerY?: number;
   slantStyle: SlantStyle;
   paper: keyof typeof PAPERS_MM;
   orientation: "portrait" | "landscape";
@@ -217,6 +219,12 @@ export function parseDesign(input: unknown): Design {
   // Keep version 1 files readable while retiring Copperplate's artificial unit.
   // The editable proportions remain unchanged; broad-pen nib widths are retained.
   if (result.script === "Copperplate") result.nib = 1;
+  for (const key of ['centerX', 'centerY'] as const) {
+    if (obj[key] !== undefined) {
+      if (typeof obj[key] !== 'number' || !Number.isFinite(obj[key]) || Math.abs(obj[key]) > 10000) throw new Error('Invalid shape position.');
+      result[key] = obj[key];
+    }
+  }
   return result;
 }
 

@@ -12,11 +12,12 @@
     "lint": "eslint",
     "test:layout-shapes": "node --experimental-strip-types --test scripts/layout-shape-geometry.test.ts",
     "test:custom-curves": "node --experimental-strip-types --test scripts/custom-curved-title.test.ts",
-    "test:insular": "node --experimental-strip-types --test src/lib/scripts/insular-majuscule.test.ts src/lib/guides/straight/insular-majuscule.test.ts src/lib/layout/design-file.test.ts",
+    "test:insular": "node --import ./scripts/register-ts.mjs --experimental-strip-types --test src/lib/scripts/insular-majuscule.test.ts src/lib/guides/straight/insular-majuscule.test.ts src/lib/layout/design-file.test.ts",
     "test:slant-styles": "node --import ./scripts/register-ts.mjs --experimental-strip-types --test scripts/slant-styles.test.ts",
     "test:camera": "node --experimental-strip-types --test scripts/camera.test.ts",
     "test:ui": "playwright test",
-    "test:woven-controls": "node --import ./scripts/register-ts.mjs --experimental-strip-types --test scripts/woven-shape-controls.test.ts"
+    "test:woven-controls": "node --import ./scripts/register-ts.mjs --experimental-strip-types --test scripts/woven-shape-controls.test.ts",
+    "test:woven-layout": "node --import ./scripts/register-ts.mjs --experimental-strip-types --test scripts/woven-layout.test.ts"
   },
   "dependencies": {
     "next": "16.0.0",

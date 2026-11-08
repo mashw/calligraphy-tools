@@ -1,4 +1,6 @@
 'use client';
+import {LayoutWovenRenderer} from '@/components/woven/WovenRenderer';
+import {wovenLayoutPdf} from '@/lib/layout/woven-pdf';
 
 import { Button, Toggle, Select } from '@/components/editor/Controls';
 
@@ -8,7 +10,7 @@ import { useEditorCamera } from '@/components/editor/useEditorCamera';
 import PreviewToolbar from '@/components/editor/PreviewToolbar';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { bakeExportStrokes, cloneSvgForRasterExport, computeRasterPxPerMM, jpegDataUrlToPdf, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
+import { bakeExportStrokes, computeRasterPxPerMM, jpegDataUrlToPdf, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 import { inverseRotatePoint, normalizeDegrees, occupiedRect, pageContentRect, resizeFrame, rotatePoint, snapMove, type SnapState } from '@/lib/layout/geometry';
 import { elementRotationCenter, elementVisualFrame, rotatedElementBounds } from '@/lib/layout/element-transform';
 import { pageSize, resizeAspectMode, type Frame, type LayoutElement, type ResizeAspectMode, type ResizeHandle } from '@/lib/layout/types';
@@ -131,7 +133,7 @@ function constrainGuidelinesResize(frame: Frame, original: Frame, handle: Resize
 function stripNoExport(svg: SVGSVGElement) { svg.querySelectorAll('[data-no-export="true"], #stage-bg').forEach(node => node.remove()); }
 function download(blob: Blob, name: string) { const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url); }
 
-export default function LayoutStage({ elements, selectedId, textFitPlans, onSelect, onCommit,onPlannedLinePlacementChange }: { elements: LayoutElement[]; selectedId: string; textFitPlans: Record<string,GuidelinesTextFitEntry>; onSelect: (id: string) => void; onCommit: (id: string, frame: Frame, rotationDeg?:number) => void;onPlannedLinePlacementChange:(guidelinesId:string,lineId:string,customStartMM:number)=>void }) {
+export default function LayoutStage({ editingSnapshot, elements, selectedId, textFitPlans, onSelect, onCommit,onPlannedLinePlacementChange }: { editingSnapshot?:LayoutElement[]|null; elements: LayoutElement[]; selectedId: string; textFitPlans: Record<string,GuidelinesTextFitEntry>; onSelect: (id: string) => void; onCommit: (id: string, frame: Frame, rotationDeg?:number) => void;onPlannedLinePlacementChange:(guidelinesId:string,lineId:string,customStartMM:number)=>void }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const interactionRef = useRef<Interaction>({ mode: 'none' });
   const paintPending = useRef(false);
@@ -153,14 +155,14 @@ export default function LayoutStage({ elements, selectedId, textFitPlans, onSele
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [exportModal]);
-  const previewSimplify = simplify || interactionActive;
+  const previewSimplify = simplify || interactionActive || !!editingSnapshot;
   const selected = elements.find(element => element.id === selectedId);
   const pageElement = elements.find(element => element.type === 'page');
   if (!pageElement) throw new Error('Layout requires a Page element.');
   const page = pageSize(pageElement);
   const cricutSafeRect = getCricutSafeRect(page, cricutMat);
   const pageRect = pageContentRect(page, pageElement.settings.margins);
-  const camera = useEditorCamera(svgRef, {x:0,y:0,w:page.width,h:page.height}, pointBounds(elements.filter(e=>e.type!=="page").flatMap(e=>{const b=rotatedElementBounds(e);return [{x:b.x,y:b.y},{x:b.x+b.width,y:b.y+b.height}]}),{x:0,y:0,w:page.width,h:page.height},5));
+  const camera = useEditorCamera(svgRef, {x:0,y:0,w:page.width,h:page.height}, pointBounds(elements.filter(e=>e.type!=="page"&&e.visible!==false).flatMap(e=>{const b=rotatedElementBounds(e);return [{x:b.x,y:b.y},{x:b.x+b.width,y:b.y+b.height}]}),{x:0,y:0,w:page.width,h:page.height},5));
   const vb = camera;
   const zoom = camera.zoom;
   const begin = (e: React.PointerEvent<SVGElement>, element: LayoutElement, handle?: ResizeHandle) => {
@@ -220,28 +222,33 @@ export default function LayoutStage({ elements, selectedId, textFitPlans, onSele
       const actual=rotatePoint({x:active.liveVisual.x+active.liveVisual.width*anchorX,y:active.liveVisual.y+active.liveVisual.height*anchorY},newCentre,active.rotationDeg);
       const shift={x:desired.x-actual.x,y:desired.y-actual.y};active.live={...active.live,x:active.live.x+shift.x,y:active.live.y+shift.y};active.liveVisual={...active.liveVisual,x:active.liveVisual.x+shift.x,y:active.liveVisual.y+shift.y};
     }
-if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()=>{paintPending.current=false;setLivePaint({id:active.elementId,frame:active.live,visual:active.liveVisual});}); }
+if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()=>{paintPending.current=false;if(interactionRef.current===active)setLivePaint({id:active.elementId,frame:active.live,visual:active.liveVisual});}); }
   };
   const finish = (e: React.PointerEvent<SVGSVGElement>) => {
     const active = interactionRef.current; if (active.mode === 'none' || active.pointerId !== e.pointerId) return;
-    if (active.mode === 'move') onCommit(active.elementId, wholeFrame(active.live));
+    const woven=elements.find(element=>element.id===active.elementId)?.type==='woven';
+    if (active.mode === 'move') onCommit(active.elementId, woven?{...active.live}:wholeFrame(active.live));
     if(active.mode==='rotate')onCommit(active.elementId,active.live,active.rotationDeg);
     if (active.mode === 'resize') {
       const element = elements.find(item => item.id === active.elementId);
       const frame = element?.type === 'guidelines' && !element.allowPartialGuidelines && (active.handle.includes('n') || active.handle.includes('s'))
         ? constrainGuidelinesResize(active.live, active.original, active.handle, element.settings)
-        : ['curved-title','calligram'].includes(element?.type ?? '') ? wholeFrame(active.live) : committedResizeFrame(active);
+        : woven?{...active.live}:['curved-title','calligram'].includes(element?.type ?? '') ? wholeFrame(active.live) : committedResizeFrame(active);
       onCommit(active.elementId, frame);
     }
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     interactionRef.current = { mode: 'none' }; setLivePaint(null); setInteractionActive(false);
   };
 
-  const exportClone = (layering:ExportLayering) => { if (!svgRef.current) return null; const clone = svgRef.current.cloneNode(true) as SVGSVGElement; clone.setAttribute('viewBox', `0 0 ${page.width} ${page.height}`); clone.setAttribute('width', `${page.width}mm`); clone.setAttribute('height', `${page.height}mm`); bakeExportStrokes(svgRef.current, clone, page.width); stripNoExport(clone); clone.querySelectorAll('[data-export-layer-id]').forEach(node=>{if(layering==='elements'){const draws=Array.from(node.querySelectorAll('path,line,polyline,polygon,rect,circle,ellipse,text')).some(item=>!item.closest('defs'));if(!draws){node.remove();return;}node.setAttribute('id',node.getAttribute('data-export-layer-id')!);node.setAttribute('data-name',node.getAttribute('data-export-layer-name')!);}node.removeAttribute('data-export-layer-id');node.removeAttribute('data-export-layer-name');}); return clone; };
+  const exportClone = (layering:ExportLayering) => { if (!svgRef.current) return null; const clone = svgRef.current.cloneNode(true) as SVGSVGElement; clone.setAttribute('viewBox', `0 0 ${page.width} ${page.height}`); clone.setAttribute('width', `${page.width}mm`); clone.setAttribute('height', `${page.height}mm`); bakeExportStrokes(svgRef.current, clone, page.width); stripNoExport(clone); clone.querySelectorAll<SVGElement>('[data-full-detail]').forEach(node=>{node.style.removeProperty('display');node.removeAttribute('data-full-detail');}); clone.querySelectorAll('[data-export-layer-id]').forEach(node=>{if(layering==='elements'){const draws=Array.from(node.querySelectorAll('path,line,polyline,polygon,rect,circle,ellipse,text')).some(item=>!item.closest('defs'));if(!draws){node.remove();return;}node.setAttribute('id',node.getAttribute('data-export-layer-id')!);node.setAttribute('data-name',node.getAttribute('data-export-layer-name')!);}node.removeAttribute('data-export-layer-id');node.removeAttribute('data-export-layer-name');}); return clone; };
   const exportSvg = () => { const clone = exportClone(exportLayering); if (!clone) return; download(new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' }), 'layout.svg'); };
-  const raster = async () => { if (!svgRef.current) return null; const { wPx, hPx } = computeRasterPxPerMM(page.width, page.height); const clone = cloneSvgForRasterExport(svgRef.current, page.width, page.height, wPx, hPx, bakeExportStrokes, stripNoExport); return { data: await renderSvgCloneToJpegDataUrl(clone, wPx, hPx), wPx, hPx }; };
-  const exportPdf = async () => { const result = await raster(); if (result) download(jpegDataUrlToPdf(result.data, page.width, page.height, result.wPx, result.hPx), 'layout.pdf'); };
-  const print = async () => { const result = await raster(); if (result) printJpegDataUrlToScale(result.data, page.width, page.height); };
+  const raster = async () => { if (!svgRef.current) return null; const { wPx, hPx } = computeRasterPxPerMM(page.width, page.height); const clone = exportClone('combined')!; return { data: await renderSvgCloneToJpegDataUrl(clone, wPx, hPx), wPx, hPx }; };
+  const exportPdf = async () => { if(elements.some(e=>e.type==='woven'&&e.visible!==false)){const clone=exportClone('combined');if(clone)download(await wovenLayoutPdf(clone,elements,page),'layout.pdf');return;} const result = await raster(); if (result) download(jpegDataUrlToPdf(result.data, page.width, page.height, result.wPx, result.hPx), 'layout.pdf'); };
+  const print = () => {
+    const clone=exportClone('combined');if(!clone)return;
+    const win=window.open('','_blank');if(!win)return;
+    win.document.open();win.document.write(`<!doctype html><html><head><title>Layout</title><style>@page{size:${page.width}mm ${page.height}mm;margin:0}html,body{margin:0}svg{display:block;width:${page.width}mm;height:${page.height}mm}</style></head><body>${new XMLSerializer().serializeToString(clone)}</body></html>`);win.document.close();win.focus();win.print();
+  };
   const exportCricut = () => {
     const result = buildPlotterExport(elements, textFitPlans, cricutMat, {...cricutOptions,layering:exportLayering});
     if (result.safety.reasons.length > 0) {
@@ -263,16 +270,18 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
       <svg ref={svgRef} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="editor-svg" style={{ background: '#cbd5e1' }} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}>
         <rect id="stage-bg" x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="#cbd5e1" pointerEvents="none" />
         <rect x="0" y="0" width={page.width} height={page.height} data-camera-interactive="true" fill={PAGE_BACKGROUND} stroke="#94a3b8" strokeWidth=".3" onPointerDown={e => { e.stopPropagation(); onSelect('page'); }} style={{ cursor: 'default' }} />
-        {[...elements].reverse().filter(element => element.type !== 'page').map(element => {
+        {[...elements].reverse().filter((element):element is Exclude<LayoutElement,{type:'page'}> => element.type !== 'page'&&element.visible!==false).map(element => {
+          const detailElement=editingSnapshot?.find(item=>item.id===element.id)??element;
           const frame = livePaint?.id === element.id ? livePaint.frame : element.frame;
           const rotationDeg=livePaint?.id===element.id&&livePaint.rotationDeg!==undefined?livePaint.rotationDeg:element.rotationDeg??0;
           const centre=elementRotationCenter(element,frame);
           const occupied = occupiedRect(element.type==='calligram'&&!(element.settings.transparentWhitespace??true)?elementVisualFrame(element,frame):frame, element.paddingMM);
-          return <g key={element.id} transform={`rotate(${rotationDeg} ${centre.x} ${centre.y})`} data-camera-interactive="true" data-export-layer-id={safeLayerId(element.name,element.id)} data-export-layer-name={element.name} onPointerDown={e => begin(e, element)} style={{ cursor: element.locked ? 'pointer' : 'move' }}>
+          return <g key={element.id} transform={`rotate(${rotationDeg} ${centre.x} ${centre.y})`} data-camera-interactive="true" data-layout-id={element.id} data-export-layer-id={safeLayerId(element.name,element.id)} data-export-layer-name={element.name} onPointerDown={e => begin(e, element)} style={{ cursor: element.locked ? 'pointer' : 'move' }}>
             {element.type==='guidelines'&&element.mask?.enabled
               ? <path transform={`translate(${occupied.x} ${occupied.y})`} d={shapePathData(element.mask.kind,occupied.width,occupied.height,element.mask.cornerRadiusMM+Math.max(0,element.paddingMM))} fill={PAGE_BACKGROUND}/>
-              : element.type !== 'shape' && element.type !== 'artwork' && !((element.type==='curved-title'||element.type==='calligram')&&(element.settings.transparentWhitespace??true)) && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
-            <ElementVisual element={element} frame={frame} simplify={previewSimplify} selected={element.id === selectedId} textFitEntry={textFitPlans[element.id]??null} onPlannedLinePlacementChange={onPlannedLinePlacementChange} />
+              : element.type !== 'woven' && element.type !== 'shape' && element.type !== 'artwork' && !((element.type==='curved-title'||element.type==='calligram')&&(element.settings.transparentWhitespace??true)) && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
+            <g data-full-detail="true" style={{display:previewSimplify?'none':undefined}}><ElementVisual element={detailElement} frame={previewSimplify?detailElement.frame:frame} simplify={false} selected={element.id === selectedId} textFitEntry={textFitPlans[element.id]??null} onPlannedLinePlacementChange={onPlannedLinePlacementChange}/></g>
+            {previewSimplify&&<g data-no-export="true"><ElementVisual element={element} frame={frame} simplify selected={element.id===selectedId} textFitEntry={textFitPlans[element.id]??null} onPlannedLinePlacementChange={onPlannedLinePlacementChange}/></g>}
           </g>;
         })}
         {showCricutSafeArea && <g data-no-export="true" pointerEvents="none">
@@ -287,7 +296,7 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
           {pageElement.settings.centerLines.vertical&&<line x1={pageRect.x+pageRect.width/2} x2={pageRect.x+pageRect.width/2} y1={pageRect.y} y2={pageRect.y+pageRect.height} stroke="#818cf8" strokeWidth="1" strokeDasharray="5 4" strokeOpacity=".65" vectorEffect="non-scaling-stroke" />}
           {pageElement.settings.centerLines.horizontal&&<line x1={pageRect.x} x2={pageRect.x+pageRect.width} y1={pageRect.y+pageRect.height/2} y2={pageRect.y+pageRect.height/2} stroke="#818cf8" strokeWidth="1" strokeDasharray="5 4" strokeOpacity=".65" vectorEffect="non-scaling-stroke" />}
         </g>
-        {selected && selected.type !== 'page' && (() => { const baseFrame = livePaint?.id === selected.id ? livePaint.frame : selected.frame; const frame = livePaint?.id===selected.id&&livePaint.visual?livePaint.visual:elementVisualFrame(selected,baseFrame); const occupied = occupiedRect(baseFrame, selected.paddingMM);const rotationDeg=livePaint?.id===selected.id&&livePaint.rotationDeg!==undefined?livePaint.rotationDeg:selected.rotationDeg??0,centre={x:frame.x+frame.width/2,y:frame.y+frame.height/2},zone=10/Math.max(.001,zoom); return <g data-no-export="true" data-camera-interactive="true" transform={`rotate(${rotationDeg} ${centre.x} ${centre.y})`}>
+        {selected && selected.visible!==false && selected.type !== 'page' && (() => { const baseFrame = livePaint?.id === selected.id ? livePaint.frame : selected.frame; const frame = livePaint?.id===selected.id&&livePaint.visual?livePaint.visual:elementVisualFrame(selected,baseFrame); const occupied = occupiedRect(baseFrame, selected.paddingMM);const rotationDeg=livePaint?.id===selected.id&&livePaint.rotationDeg!==undefined?livePaint.rotationDeg:selected.rotationDeg??0,centre={x:frame.x+frame.width/2,y:frame.y+frame.height/2},zone=10/Math.max(.001,zoom); return <g data-no-export="true" data-camera-interactive="true" transform={`rotate(${rotationDeg} ${centre.x} ${centre.y})`}>
           {selected.type !== 'shape' && selected.type !== 'curved-title' && selected.type !== 'calligram' && selected.paddingMM > 0 && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill="none" stroke="#818cf8" strokeWidth="1" strokeDasharray="4 3" strokeOpacity=".55" vectorEffect="non-scaling-stroke" pointerEvents="none" />}
           <rect x={frame.x} y={frame.y} width={frame.width} height={frame.height} fill="none" stroke="#4f46e5" strokeWidth="1.25" strokeOpacity=".8" vectorEffect="non-scaling-stroke" pointerEvents="none" />
           {!selected.locked && handles.map(handle => { const x = frame.x + frame.width * handle.x; const y = frame.y + frame.height * handle.y; return <g key={handle.id} style={{ cursor: handle.cursor }} onPointerDown={e => begin(e, selected, handle.id)}><circle cx={x} cy={y} r="7" fill="transparent" vectorEffect="non-scaling-stroke" /><rect x={x - 1.8} y={y - 1.8} width="3.6" height="3.6" rx=".5" fill="white" stroke="#4f46e5" strokeWidth="1.2" vectorEffect="non-scaling-stroke" /></g>; })}
@@ -338,6 +347,7 @@ function LineLayoutOverlay({guidelinesId,entry,frame,onCommit}:{guidelinesId:str
 
 function ElementVisual({ element, frame, simplify, selected, textFitEntry,onPlannedLinePlacementChange }: { element: LayoutElement; frame: Frame; simplify: boolean; selected: boolean; textFitEntry: GuidelinesTextFitEntry | null;onPlannedLinePlacementChange:(guidelinesId:string,lineId:string,customStartMM:number)=>void }) {
   const common = { x: frame.x, y: frame.y, width: frame.width, height: frame.height };
+  if(element.type==='woven')return <LayoutWovenRenderer element={element} frame={frame} simplify={simplify}/>;
   if (element.type === 'shape') return <ShapeElementRenderer element={element} frame={frame} selected={selected} />;
   if (simplify) return element.type==='guidelines'&&element.mask?.enabled
     ? <g transform={`translate(${frame.x} ${frame.y})`}><ShapeGeometry kind={element.mask.kind} width={frame.width} height={frame.height} cornerRadiusMM={element.mask.cornerRadiusMM} fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5"/></g>

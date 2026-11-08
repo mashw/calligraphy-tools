@@ -11,15 +11,16 @@ type Props = {
   elements: LayoutElement[]; selectedId: string; onSelect: (id: string) => void;
   onAdd: (type: Exclude<ElementType, 'page'|'artwork'>) => void; onAddArtwork:(files:FileList)=>void; artworkMessage:string|null; onToggleLock: (id: string) => void;
   onMove: (id: string, direction: -1 | 1) => void; onDuplicate: (id: string) => void; onDelete: (id: string) => void;
+  onToggleVisibility:(id:string)=>void;
   onSaveDesign: () => void; onOpenDesign: (file: File) => void | Promise<void>; designMessage: DesignMessage | null;
 };
 
-const icons: Record<ElementType, string> = { page: '▱', guidelines: '☰', calligram: '◯', 'curved-title': '⌒', shape: '◇', artwork:'✧' };
+const icons: Record<ElementType, string> = { woven:'⋈', page: '▱', guidelines: '☰', calligram: '◯', 'curved-title': '⌒', shape: '◇', artwork:'✧' };
 const button = 'h-7 w-7 rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30';
 const fileButton = 'rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50';
 
-export default function LayersPanel({ className = '', elements, selectedId, onSelect, onAdd, onAddArtwork, artworkMessage, onToggleLock, onMove, onDuplicate, onDelete, onSaveDesign, onOpenDesign, designMessage }: Props) {
-  const additions: [Exclude<ElementType, 'page'|'artwork'>, string][] = [['guidelines', 'Guidelines'], ['calligram', 'Calligram'], ['curved-title', 'Curved title'], ['shape', 'Shape']];
+export default function LayersPanel({ className = '', elements, selectedId, onSelect, onAdd, onAddArtwork, artworkMessage, onToggleLock, onMove, onDuplicate, onDelete, onSaveDesign, onOpenDesign, designMessage, onToggleVisibility }: Props) {
+  const additions: [Exclude<ElementType, 'page'|'artwork'>, string][] = [['woven','Woven Calligraphy'], ['guidelines', 'Guidelines'], ['calligram', 'Calligram'], ['curved-title', 'Curved title'], ['shape', 'Shape']];
   return <section className={`flex min-h-0 flex-col rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 ${className}`}>
     <div className="flex items-center justify-between gap-3">
       <h2 className="font-semibold text-slate-800">Elements</h2>
@@ -36,6 +37,7 @@ export default function LayersPanel({ className = '', elements, selectedId, onSe
       return <div key={element.id} role="button" tabIndex={0} onClick={() => onSelect(element.id)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onSelect(element.id); }} className={`flex items-center gap-2 rounded-lg border px-2 py-2 ${selectedId === element.id ? 'border-indigo-400 bg-indigo-50' : 'border-transparent hover:bg-slate-50'}`}>
         <span aria-hidden className="w-5 text-center text-slate-500">{icons[element.type]}</span><span className="min-w-0 flex-1 truncate font-medium">{element.name}</span>
         <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+          <Button aria-label={element.visible===false?'Show element':'Hide element'} disabled={page} onClick={()=>onToggleVisibility(element.id)} className={button}>{element.visible===false?'○':'◉'}</Button>
           <Button title={element.locked ? 'Unlock' : 'Lock'} aria-label={element.locked ? 'Unlock' : 'Lock'} disabled={page} onClick={() => onToggleLock(element.id)} className={button}>{element.locked ? '🔒' : '♢'}</Button>
           <Button title="Move up" aria-label="Move up" disabled={page || index === 0} onClick={() => onMove(element.id, -1)} className={button}>↑</Button>
           <Button title="Move down" aria-label="Move down" disabled={page || elements[index + 1]?.type === 'page'} onClick={() => onMove(element.id, 1)} className={button}>↓</Button>
