@@ -1,3 +1,4 @@
+import {layoutWovenModel} from './woven';
 import { buildCalligramModel } from '@/lib/calligram/model';
 import { buildCurvedTitleModel } from '@/lib/curved-title/model';
 import { buildStraightSlantLines, calculateStraightGuidelines } from '@/lib/guides/straight/model';
@@ -355,7 +356,8 @@ function visualCalligramBounds(element: Extract<LayoutElement, { type: 'calligra
 }
 
 function unrotatedElementOccluders(element: LayoutElement): Occluder[] {
-  if (element.type === 'page') return [];
+  if (element.type === 'page'||element.visible===false) return [];
+  if(element.type==='woven')return [];
   if (element.type === 'shape') return [shapeOccluder(element)];
   if (element.type === 'guidelines') {
     if(!element.mask?.enabled)return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
@@ -802,12 +804,18 @@ function sampleArtwork(element: Extract<LayoutElement, { type: 'artwork' }>, war
   return result;
 }
 
+function wovenPolylines(element:Extract<LayoutElement,{type:'woven'}>,options:PlotterExportOptions):PlotPolyline[] {
+  const model=layoutWovenModel({...element,settings:{...element.settings,secondSlant:element.settings.secondSlant&&options.secondarySlantGuides}}),scene=element.settings.annotated&&options.textStartEndMarkers?model.annotated:model.clean;
+  return scene.strokes.filter(stroke=>stroke.role==='slant'?options.slantGuides:stroke.role==='grid'?options.constructionGrid:stroke.role==='construction'?options.constructionGuides:true).map(stroke=>({points:stroke.points.map(point=>({x:point.x+element.frame.x,y:point.y+element.frame.y})),source:'woven-guide'}));
+}
+
 function elementPolylines(element: LayoutElement, textFitEntry: GuidelinesTextFitEntry | null, warnings: string[], options: PlotterExportOptions) {
-  if (element.type === 'page') return [];
+  if (element.type === 'page'||element.visible===false) return [];
   const lines=element.type === 'guidelines'?straightGuidelinesPolylines(element, textFitEntry, options)
     :element.type === 'shape'?(options.shapeOutlines ? shapeBoundaryPolylines(element) : [])
     :element.type === 'curved-title'?curvedTitlePolylines(element, options)
     :element.type === 'calligram'?calligramPolylines(element, options)
+    :element.type==='woven'?wovenPolylines(element,options)
     :sampleArtwork(element, warnings);
   return rotateElementPolylines(lines,element);
 }

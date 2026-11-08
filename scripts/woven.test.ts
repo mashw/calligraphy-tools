@@ -64,6 +64,21 @@ import { buildWovenModel } from '../src/lib/woven/model.ts';
 import { clipPassage, curvedSlant, routeFrame } from '../src/lib/woven/curved-guides.ts';
 import { pageSize } from '../src/lib/woven/design.ts';
 
+test('Copperplate uses a fixed millimetre unit in legacy files and exported geometry', () => {
+  const legacy = { ...DEFAULT_DESIGN, script: 'Copperplate' as const, nib: 2.5, xNib: 4, ascNib: 6, descNib: 3 };
+  const loaded = parseDesign(JSON.parse(JSON.stringify(legacy)));
+  assert.equal(loaded.nib, 1);
+  assert.deepEqual([loaded.xNib, loaded.ascNib, loaded.descNib], [4, 6, 3]);
+  assert.deepEqual(parseDesign(JSON.parse(JSON.stringify(loaded))), loaded);
+  assert.deepEqual(buildWovenModel(legacy), buildWovenModel(loaded), 'even direct callers cannot change the Copperplate unit');
+  assert.notDeepEqual(buildWovenModel(loaded).clean, buildWovenModel({ ...loaded, xNib: 5 }).clean);
+  assert.notDeepEqual(buildWovenModel(loaded).clean, buildWovenModel({ ...loaded, ascNib: 4 }).clean);
+  assert.notDeepEqual(buildWovenModel(loaded).clean, buildWovenModel({ ...loaded, descNib: 5 }).clean);
+  const broadPen = { ...legacy, script: 'TexturaQuadrata' as const };
+  assert.equal(parseDesign(broadPen).nib, 2.5);
+  assert.notDeepEqual(buildWovenModel(broadPen).clean, buildWovenModel({ ...broadPen, nib: 1 }).clean);
+});
+
 test('old version-1 designs receive new defaults without losing dimensions or overrides', () => {
   const old = { version:1,preset:'figure-eight',width:165,height:165,loop:.32,rotation:0,reverse:false,script:'TexturaQuadrata',nib:.7,xNib:5,ascNib:2,descNib:2,start:3,gap:8,clearance:.6,fullGuides:true,annotated:true,overrides:{'crossing-0':'b'} };
   const parsed=parseDesign(old);

@@ -18,7 +18,8 @@ import {
 } from "./geometry";
 import type { Scene, Stroke } from "./vector-export";
 
-export function buildWovenModel(design: Design) {
+/** Route and crossing geometry only: safe to regenerate during pointer interactions. */
+export function buildWovenRouteModel(design: Design) {
   const page = pageSize(design);
   const route = makeRoute(
     design.preset,
@@ -27,15 +28,69 @@ export function buildWovenModel(design: Design) {
     design.loop,
     design.rotation,
     design.reverse,
-    { x: page.w / 2, y: page.h / 2 },
+    { x: design.centerX ?? page.w / 2, y: design.centerY ?? page.h / 2 },
   );
   const crossings = findSelfCrossings(route);
   const alternate = alternateWeave(crossings);
   const choices = { ...alternate.choices, ...design.overrides };
-  const x = design.nib * design.xNib,
-    asc = design.nib * design.ascNib,
-    desc = design.nib * design.descNib;
+  const guideUnit = design.script === "Copperplate" ? 1 : design.nib;
+  const x = guideUnit * design.xNib,
+    asc = guideUnit * design.ascNib,
+    desc = guideUnit * design.descNib;
   const halfBand = x / 2 + Math.max(asc, desc);
+  const start = (design.start / 100) * route.length;
+  const cuts = crossingCuts(crossings, choices, halfBand, design.clearance);
+  const intervals = visibleIntervals(route.length, [
+    ...cuts,
+    { center: start, half: design.gap / 2 },
+  ]);
+  const warnings: string[] = [];
+  if (minimumRadius(route) < halfBand * 1.5)
+    warnings.push(
+      "Some bends are tight for this lettering size. Reduce the lettering size or enlarge the shape; inspect the inner guides before printing.",
+    );
+  if (crossings.some((c) => c.sine < 0.25))
+    warnings.push(
+      "A shallow crossing needs a long gap. Adjust the shape or reduce the lettering size.",
+    );
+  if (
+    [-x / 2 - (design.fullGuides ? asc : 0), x / 2 + (design.fullGuides ? desc : 0)].some(distance =>
+      offset(route.points, distance).some(
+        (p) => p.x < 10 || p.x > page.w - 10 || p.y < 25 || p.y > page.h - 27,
+      ),
+    )
+  )
+    warnings.push(
+      "The guides extend outside the recommended printing area. Reduce the size or rotation.",
+    );
+  if (
+    cuts.some(
+      (c) =>
+        Math.min(
+          wrap(c.center - start, route.length),
+          wrap(start - c.center, route.length),
+        ) <
+        c.half + design.gap / 2,
+    )
+  )
+    warnings.push(
+      "The start/end gap overlaps a crossing. Move the start position to a clearer section.",
+    );
+  if (alternate.conflicts)
+    warnings.push(
+      "This route cannot use the suggested alternating weave everywhere. Review the crossing choices.",
+    );
+  const usableLength = intervals.reduce((sum, [a, b]) => sum + b - a, 0);
+  if (usableLength < route.length * 0.5)
+    warnings.push(
+      "Crossing gaps occupy more than half the route. Try smaller lettering or less clearance.",
+    );
+  return { page, route, crossings, alternate, choices, x, asc, desc, halfBand, start, cuts, intervals, warnings, usableLength };
+}
+
+export function buildWovenModel(design: Design, { furniture = true }: { furniture?: boolean } = {}) {
+  const page = pageSize(design);
+  const { route, crossings, choices, x, asc, desc, start, intervals, warnings, usableLength } = buildWovenRouteModel(design);
   const baseline = offset(route.points, x / 2);
   const guides = buildGuideSet(
     design.script === "Copperplate" ? "copperplate" : "blackletter",
@@ -57,13 +112,7 @@ export function buildWovenModel(design: Design) {
         design.script === "Copperplate" ? undefined : design.script,
     },
   );
-  const start = (design.start / 100) * route.length;
-  const cuts = crossingCuts(crossings, choices, halfBand, design.clearance);
-  const intervals = visibleIntervals(route.length, [
-    ...cuts,
-    { center: start, half: design.gap / 2 },
-  ]);
-  const rails = [
+  const rails: Stroke[] = [
     { points: guides.baseLine, color: "#52677c", width: 0.16 },
     { points: guides.waistLine, color: "#52677c", width: 0.16 },
     ...(design.fullGuides
@@ -83,14 +132,17 @@ export function buildWovenModel(design: Design) {
         points,
         color: gray(design.gridContrast),
         width: design.gridThickness,
+        role: 'grid',
       });
   const strokes: Stroke[] = rails.flatMap((rail) =>
     intervals.map((interval) => ({
       ...rail,
+      role: rail.role ?? 'primary',
       points: sliceGuide(route, rail.points, interval),
     })),
   );
   let slantBand: { x: number; y: number }[] | null = null;
+  let locatedRole: Stroke['role'] = 'slant';
   const addLocated = (
     points: { x: number; y: number; s: number }[],
     color: string,
@@ -99,7 +151,7 @@ export function buildWovenModel(design: Design) {
     for (const piece of clipPassage(points, intervals, route.length))
       if (piece.length > 1) {
         const parts = slantBand ? clipSlantToBand(piece, slantBand) : [piece];
-        for (const points of parts) strokes.push({ points, color, width });
+        for (const points of parts) strokes.push({ points, color, width, role: locatedRole });
       }
   };
   const top = -x / 2 - (design.fullGuides ? asc : 0),
@@ -122,6 +174,7 @@ export function buildWovenModel(design: Design) {
         );
   }
   slantBand = null;
+  locatedRole = 'grid';
   // Shared ticks/markers are phased by baseline arc length. Map that phase back
   // to the original route so crossings cannot affect the other passage.
   const distances = [0];
@@ -162,6 +215,7 @@ export function buildWovenModel(design: Design) {
         design.gridThickness,
       );
     }
+  locatedRole = 'construction';
   for (const guide of guides.constructionGuides ?? []) {
     if (guide.appearance === "dashed") {
       for (const interval of intervals)
@@ -239,12 +293,12 @@ export function buildWovenModel(design: Design) {
       },
     ],
     labels: [
-      {
+      ...(furniture ? [{
         point: { x: 15, y: 18 },
         text: "WOVEN CALLIGRAPHY - WRITING PLAN",
         size: 3,
         color: "#52677c",
-      },
+      }] : []),
       {
         point: { x: startPoint.x + 3, y: startPoint.y - 3 },
         text: "Start",
@@ -262,7 +316,7 @@ export function buildWovenModel(design: Design) {
     }),
   );
   // Include the ruler on both sheets so printed dimensions can be checked.
-  for (const scene of [clean, annotated]) {
+  if (furniture) for (const scene of [clean, annotated]) {
     scene.strokes.push({
       points: [
         { x: 15, y: page.h - 17 },
@@ -287,47 +341,6 @@ export function buildWovenModel(design: Design) {
       color: "#52677c",
     });
   }
-  const warnings: string[] = [];
-  if (minimumRadius(route) < halfBand * 1.5)
-    warnings.push(
-      "Some bends are tight for this lettering size. Reduce the nib or enlarge the shape; inspect the inner guides before printing.",
-    );
-  if (crossings.some((c) => c.sine < 0.25))
-    warnings.push(
-      "A shallow crossing needs a long gap. Adjust the shape or reduce the lettering size.",
-    );
-  if (
-    rails.some((rail) =>
-      rail.points.some(
-        (p) => p.x < 10 || p.x > page.w - 10 || p.y < 25 || p.y > page.h - 27,
-      ),
-    )
-  )
-    warnings.push(
-      "The guides extend outside the recommended printing area. Reduce the size or rotation.",
-    );
-  if (
-    cuts.some(
-      (c) =>
-        Math.min(
-          wrap(c.center - start, route.length),
-          wrap(start - c.center, route.length),
-        ) <
-        c.half + design.gap / 2,
-    )
-  )
-    warnings.push(
-      "The start/end gap overlaps a crossing. Move the start position to a clearer section.",
-    );
-  if (alternate.conflicts)
-    warnings.push(
-      "This route cannot use the suggested alternating weave everywhere. Review the crossing choices.",
-    );
-  const usableLength = intervals.reduce((sum, [a, b]) => sum + b - a, 0);
-  if (usableLength < route.length * 0.5)
-    warnings.push(
-      "Crossing gaps occupy more than half the route. Try a smaller nib or less clearance.",
-    );
   return {
     page,
     route,
