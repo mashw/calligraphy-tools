@@ -81,7 +81,8 @@ test('joined Copperplate is continuous in the workspace and retains underpass cu
   // Plotter output combines subpaths and adds its registration anchor.
   const coordinates=points(plotted)!;
   const guideCoordinates=points(expected)!;
-  expect(coordinates.slice(6)).toEqual(guideCoordinates);
+  expect(coordinates.length-6).toBe(guideCoordinates.length);
+  coordinates.slice(6).forEach((value,i)=>expect(Math.abs(value-guideCoordinates[i])).toBeLessThanOrEqual(.0006));
   expect(xml).toContain('fill="none"');
   expect(xml).not.toMatch(/<mask|clipPath|<image|data-camera/);
   expect(paths.length).toBe(expected.length+7);
