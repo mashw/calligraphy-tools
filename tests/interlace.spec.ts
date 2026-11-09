@@ -61,3 +61,22 @@ test('imports original Woven and multi-strap Path Guides downloads',async({page}
   expect(imported.strands).toHaveLength(2);expect(imported.overrides).toHaveLength(2);
   await page.goto('/layout');await expect(page.getByRole('heading',{name:'Layout Editor',exact:true}).first()).toBeVisible();
 });
+
+test('joined Copperplate is continuous in the workspace and retains underpass cuts in Cricut output',async({page})=>{
+  await page.goto('/interlace');
+  await page.locator('input[type=file]').setInputFiles('tests/fixtures/interlace-join.json');
+  await expect(page.locator('[role=status]')).toContainText('Composition opened');
+  await page.getByRole('button',{name:'Fit content',exact:true}).click();
+  await page.getByRole('button',{name:'Joins',exact:true}).click();
+  const join=page.getByRole('button',{name:'Copperplate left → Copperplate right',exact:true});
+  await expect(join).toHaveAttribute('aria-pressed','true');
+  const preview=page.locator('[data-woven-detail] path');
+  const paths=await preview.evaluateAll(nodes=>nodes.map(n=>n.getAttribute('d')));
+  const xml=await downloaded(page,'Cricut Draw');
+  const plotted=await page.evaluate(str=>Array.from(new DOMParser().parseFromString(str,'image/svg+xml').querySelectorAll('path'),p=>p.getAttribute('d')),xml);
+  expect(plotted).toEqual(paths);
+  const snapshot=await downloaded(page,'SVG');
+  await join.click();await expect(join).toHaveAttribute('aria-pressed','false');
+  expect(await downloaded(page,'SVG')).not.toBe(snapshot);
+  await join.click();expect(await downloaded(page,'SVG')).toBe(snapshot);
+});
