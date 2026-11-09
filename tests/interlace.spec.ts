@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 async function downloaded(page:Page, label:string) {
   const waiting=page.waitForEvent('download');
   await page.getByRole('button',{name:label,exact:true}).click();
+  if(label==='Cricut Draw') await page.getByRole('button',{name:'Export Cricut SVG',exact:true}).click();
   const path=await (await waiting).path();
   return readFile(path!,'utf8');
 }
@@ -29,12 +30,13 @@ test('mixed sheet retains full vector export across camera, Simplify and Save/Op
   const saved=await downloaded(page,'Save'), doc=JSON.parse(saved);
   expect(doc.strands).toHaveLength(2);expect(doc.overrides).toHaveLength(2);
   const svg=await downloaded(page,'SVG');
+  const cricut=await downloaded(page,'Cricut Draw');
   await page.getByRole('button',{name:'Simplify',exact:true}).click();
   expect(await downloaded(page,'SVG')).toEqual(svg);
   await page.getByRole('button',{name:'Zoom in',exact:true}).click();
   await page.keyboard.down('Alt');await page.mouse.move(at.x,at.y);await page.mouse.down();
   await page.mouse.move(at.x+20,at.y+12);await page.mouse.up();await page.keyboard.up('Alt');
-  expect(await downloaded(page,'Cricut Draw')).toEqual(svg);
+  expect(await downloaded(page,'Cricut Draw')).toEqual(cricut);
   await upload(page,'composition.json',saved);
   await expect(page.locator('[role=status]')).toContainText('Composition opened');
   expect(await downloaded(page,'SVG')).toEqual(svg);
@@ -74,7 +76,15 @@ test('joined Copperplate is continuous in the workspace and retains underpass cu
   const paths=await preview.evaluateAll(nodes=>nodes.map(n=>n.getAttribute('d')));
   const xml=await downloaded(page,'Cricut Draw');
   const plotted=await page.evaluate(str=>Array.from(new DOMParser().parseFromString(str,'image/svg+xml').querySelectorAll('path'),p=>p.getAttribute('d')),xml);
-  expect(plotted).toEqual(paths);
+  const expected=await page.evaluate(()=>Array.from(document.querySelectorAll('[data-woven-detail] path')).slice(0,-7).map(n=>n.getAttribute('d')));
+  const points=(values:(string|null)[])=>values.join(' ').match(/-?\\d+(?:\\.\\d+)?/g)?.map(Number);
+  // Plotter output combines subpaths and adds its registration anchor.
+  const coordinates=points(plotted)!;
+  const guideCoordinates=points(expected)!;
+  expect(coordinates.slice(6)).toEqual(guideCoordinates);
+  expect(xml).toContain('fill="none"');
+  expect(xml).not.toMatch(/<mask|clipPath|<image|data-camera/);
+  expect(paths.length).toBe(expected.length+7);
   const snapshot=await downloaded(page,'SVG');
   await join.click();await expect(join).toHaveAttribute('aria-pressed','false');
   expect(await downloaded(page,'SVG')).not.toBe(snapshot);

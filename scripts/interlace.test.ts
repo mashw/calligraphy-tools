@@ -69,3 +69,18 @@ test('page boundaries physically trim plot strokes',()=>{
   assert.ok(strokes.some(s=>s.role==='primary' && s.points[0].x===0));
   assert.ok(strokes.every(s=>s.points.every(p=>p.x>=0 && p.x<=210 && p.y>=0 && p.y<=297)));
 });
+
+test('Cricut uses physical centrelines, mat safety and an opt-in ruler', async()=>{
+  const {buildInterlacePlotterExport,DEFAULT_INTERLACE_PLOTTER_OPTIONS: defaults}=await import('../src/lib/interlace/plotter-export');
+  const sheet=fixture();
+  const clean=buildInterlacePlotterExport(sheet,'12x12');
+  const ruler=buildInterlacePlotterExport(sheet,'12x12',{...defaults,ruler:true});
+  assert.equal(clean.safety.reasons.length,0);
+  assert.equal(ruler.polylineCount,clean.polylineCount+7);
+  assert.match(clean.svg,/fill="none"/);
+  assert.doesNotMatch(clean.svg,/<mask|clipPath|<image/);
+  sheet.strands[0].design.centerX=5;
+  assert.ok(buildInterlacePlotterExport(sheet,'12x12').safety.unsafePolylineCount>0);
+  sheet.paper='A3';sheet.orientation='landscape';
+  assert.equal(buildInterlacePlotterExport(sheet,'12x12').safety.pageFitsPhysicalMat,false);
+});

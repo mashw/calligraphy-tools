@@ -155,7 +155,7 @@ export function canJoin(a:Entry,b:Entry) {
   const dx=end.x-prev.x,dy=end.y-prev.y,ex=next.x-start.x,ey=next.y-start.y;
   return dx*ex+dy*ey>.985*Math.hypot(dx,dy)*Math.hypot(ex,ey);
 }
-export function renderSheet(sheet:Sheet, graph=topology(sheet)) {
+export function renderSheet(sheet:Sheet, graph=topology(sheet), { ruler = true } = {}) {
   const {entries,hits}=graph, page=pageSize(sheet), scene:Scene={page,strokes:[],labels:[]};
   const byId=new Map(entries.map(e=>[e.s.id,e]));
   const next=new Map<string,string>(), previous=new Set<string>();
@@ -195,9 +195,11 @@ export function renderSheet(sheet:Sheet, graph=topology(sheet)) {
     const m=metrics(root.s);
     scene.strokes.push(...writingStrokes(root.s.design,route,visibleIntervals(route.length,clipped),m.x,m.asc,m.desc,root.s.invert,root.s.baselineSource?0:m.x/2));
   }
+  if (ruler) {
   const y=page.h-12;
   scene.strokes.push({points:[{x:12,y},{x:62,y}],width:.18,color:'#52677c'});
   for(let i=0;i<=5;i++) scene.strokes.push({points:[{x:12+i*10,y:y-1},{x:12+i*10,y:y+1}],width:.18,color:'#52677c'});
+  }
   const frame={x:0,y:0,width:page.w,height:page.h};
   scene.strokes=scene.strokes.flatMap(stroke=>{
     if(stroke.points.every(p=>p.x>=0 && p.x<=page.w && p.y>=0 && p.y<=page.h))return [stroke];

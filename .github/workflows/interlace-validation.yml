@@ -16,18 +16,15 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run test:interlace
+      - run: npm run test:woven
+      - run: npm run test:woven-controls
+      - run: npm run test:woven-layout
+      - run: npm run test:slant-styles
+      - run: npm run test:layout-shapes
       - run: npx tsc --noEmit
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:ui
-      - name: Compare the narrow Woven interaction against the PR base
-        if: always()
-        continue-on-error: true
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          git fetch --depth=1 origin "$BASE_SHA"
-          git worktree add --detach "$RUNNER_TEMP/interlace-base" "$BASE_SHA"
-          cd "$RUNNER_TEMP/interlace-base"
-          cp -al "$GITHUB_WORKSPACE/node_modules" node_modules
-          npx playwright test tests/woven-layout.spec.ts -g 'Woven movement.*390px' --repeat-each=2 --workers=1
+      - name: Repeat Woven interactions at both viewport widths
+        run: npx playwright test tests/woven-layout.spec.ts -g 'Woven movement' --repeat-each=5 --workers=1

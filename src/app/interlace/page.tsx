@@ -17,6 +17,9 @@ import { canJoin, initialSheet, renderSheet, rememberCrossing, sameCrossing, str
   type Choice, type Sheet, type Strand } from '@/lib/interlace/model';
 import { fromPath, importSvg, openSheet } from '@/lib/interlace/document';
 
+import { CRICUT_MATS, type CricutMatId } from '@/lib/layout/plotter-export';
+import { buildInterlacePlotterExport, DEFAULT_INTERLACE_PLOTTER_OPTIONS } from '@/lib/interlace/plotter-export';
+
 type Mode = 'Move'|'Crossings'|'Joins';
 const row='flex flex-wrap items-center gap-2';
 function download(data:BlobPart,type:string,name:string) {
@@ -34,6 +37,10 @@ export default function InterlaceStudio() {
   const [sheet,setSheet]=useState(initialSheet),[active,setActive]=useState('rosette');
   const [mode,setMode]=useState<Mode>('Move'),[simplify,setSimplify]=useState(false),[busy,setBusy]=useState(false);
   const [source,setSource]=useState('rosette'),[notice,setNotice]=useState(''),[picked,setPicked]=useState<Choice|null>(null);
+  const [plotOpen,setPlotOpen]=useState(false);
+  const [mat,setMat]=useState<CricutMatId>('12x12');
+  const [plotOptions,setPlotOptions]=useState(DEFAULT_INTERLACE_PLOTTER_OPTIONS);
+  const plot=useMemo(()=>plotOpen?buildInterlacePlotterExport(sheet,mat,plotOptions):null,[sheet,mat,plotOptions,plotOpen]);
   const svg=useRef<SVGSVGElement>(null),file=useRef<HTMLInputElement>(null);
   const drag=useRef<{sheet:Sheet;id:string;inverse:DOMMatrix;x:number;y:number;pointer:number}|null>(null);
   const current=sheet.strands.find(s=>s.id===active);
@@ -87,6 +94,7 @@ export default function InterlaceStudio() {
     setPicked(choice);commit({...sheet,overrides:[...sheet.overrides.filter(o=>!sameCrossing(o,c)),choice]});
   }
   function output(kind:'SVG'|'PDF'|'Cricut Draw'|'Print') {
+    if(kind==='Cricut Draw'){setPlotOpen(true);return;}
     const scene=renderSheet(sheet);
     if(kind==='PDF'){download(new Uint8Array(scenePdf(scene)).buffer,'application/pdf','interlace.pdf');return;}
     const xml=sceneSvg(scene).replace('Woven Calligraphy writing guides','Interlace Studio');
@@ -131,6 +139,24 @@ export default function InterlaceStudio() {
     [items[index],items[dest]]=[items[dest],items[index]];commit({...sheet,strands:items});
   }
   return <EditorWorkspace preview={<section className="preview-panel">
+    {plotOpen && plot && <section role="dialog" aria-label="Cricut Draw export" className="rounded border bg-white p-3 space-y-2">
+      <label>Mat <Select aria-label="Cricut mat" value={mat} onChange={e=>setMat(e.target.value as CricutMatId)}>
+        {Object.entries(CRICUT_MATS).map(([id,m])=><option key={id} value={id}>{m.label}</option>)}
+      </Select></label>
+      <p className="text-xs">Place the paper at the mat origin. Set the imported paths to Draw and attach them together in Design Space.</p>
+      {([
+        ['slants','Slant guides'],['secondarySlants','Secondary slants'],['grid','Construction grid'],
+        ['construction','Construction guides'],['ruler','Include 50 mm calibration ruler'],
+      ] as const).map(([key,label])=><label key={key} className="mr-3 inline-flex gap-1">
+        <input type="checkbox" checked={plotOptions[key]} onChange={e=>setPlotOptions({...plotOptions,[key]:e.target.checked})}/>{label}
+      </label>)}
+      <p className="text-xs">Safe drawing area {plot.safety.safeRect.width} × {plot.safety.safeRect.height} mm, starting at {plot.safety.safeRect.x} mm from the top and left.</p>
+      {[...plot.safety.reasons,...plot.warnings].map((message,i)=><p role="alert" key={i}>{message}</p>)}
+      <Button disabled={plot.safety.reasons.length>0 || plot.polylineCount<=1} onClick={()=>{
+        download(plot.svg,'image/svg+xml','interlace-draw.svg');setNotice('Cricut SVG exported.');setPlotOpen(false);
+      }}>Export Cricut SVG</Button>
+      <Button onClick={()=>setPlotOpen(false)}>Close export</Button>
+    </section>}
     <PreviewToolbar camera={camera}><Button aria-pressed={simplify} onClick={()=>setSimplify(!simplify)}>Simplify</Button>
       {(['SVG','PDF','Cricut Draw','Print'] as const).map(kind=><Button key={kind} onClick={()=>output(kind)}>{kind}</Button>)}
     </PreviewToolbar>

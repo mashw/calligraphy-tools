@@ -1,8 +1,22 @@
 import { test, expect, type Locator } from '@playwright/test';
 import { captureExportFiles, exportedText } from './export-file';
 
-async function point(path:Locator) {
-  return path.evaluate(node=>{const geometry=node as SVGPathElement,p=geometry.getPointAtLength(geometry.getTotalLength()*.45).matrixTransform(geometry.getScreenCTM()!);return{x:p.x,y:p.y,scale:geometry.getScreenCTM()!.a};});
+async function point(path: Locator) {
+  await path.scrollIntoViewIfNeeded();
+  return path.evaluate(node => {
+    const geometry = node as SVGPathElement;
+    const matrix = geometry.getScreenCTM()!;
+    const svg = geometry.ownerSVGElement!;
+    const bounds = svg.getBoundingClientRect();
+    for (let i = 1; i < 100; i++) {
+      const p = geometry.getPointAtLength(geometry.getTotalLength() * i / 100).matrixTransform(matrix);
+      if (p.x < Math.max(0, bounds.left) + 24 || p.x > Math.min(innerWidth, bounds.right) - 24 ||
+          p.y < Math.max(0, bounds.top) + 24 || p.y > Math.min(innerHeight, bounds.bottom) - 24) continue;
+      const hit = document.elementFromPoint(p.x, p.y);
+      if (hit === geometry) return { x: p.x, y: p.y, scale: Math.hypot(matrix.a, matrix.b) };
+    }
+    throw new Error('No visible, unobscured draggable path point');
+  });
 }
 for(const width of [390,1440]) {
   test(`Woven movement, panning, zoom, crossings and preview modes at ${width}px`,async({page})=>{
