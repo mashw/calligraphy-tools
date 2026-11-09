@@ -2,7 +2,12 @@ import { test, expect, type Locator } from '@playwright/test';
 import { captureExportFiles, exportedText } from './export-file';
 
 async function point(path: Locator) {
-  await path.scrollIntoViewIfNeeded();
+  if (await path.getAttribute('data-woven-hit') !== null) {
+    return path.evaluate(node=>{const geometry=node as SVGPathElement,p=geometry.getPointAtLength(geometry.getTotalLength()*.45).matrixTransform(geometry.getScreenCTM()!);return{x:p.x,y:p.y,scale:geometry.getScreenCTM()!.a};});
+  }
+  await path.locator('xpath=ancestor::svg').scrollIntoViewIfNeeded();
+  await path.evaluate(node=>node.ownerDocument.defaultView!.scrollBy(0, node.ownerSVGElement!.getBoundingClientRect().top - 150));
+  await path.page().waitForTimeout(200);
   return path.evaluate(node => {
     const geometry = node as SVGPathElement;
     const matrix = geometry.getScreenCTM()!;
@@ -13,9 +18,15 @@ async function point(path: Locator) {
       if (p.x < Math.max(0, bounds.left) + 24 || p.x > Math.min(innerWidth, bounds.right) - 24 ||
           p.y < Math.max(0, bounds.top) + 24 || p.y > Math.min(innerHeight, bounds.bottom) - 24) continue;
       const hit = document.elementFromPoint(p.x, p.y);
-      if (hit === geometry) return { x: p.x, y: p.y, scale: Math.hypot(matrix.a, matrix.b) };
+      if (hit?.closest('[data-woven-shape]')) return { x: p.x, y: p.y, scale: Math.hypot(matrix.a, matrix.b) };
     }
-    throw new Error('No visible, unobscured draggable path point');
+    throw new Error('No visible, unobscured draggable path point ' + JSON.stringify({
+      svg:{x:bounds.x,y:bounds.y,w:bounds.width,h:bounds.height},
+      sample: Array.from({length:10},(_,i)=>{
+        const p=geometry.getPointAtLength(geometry.getTotalLength()*i/10).matrixTransform(matrix);
+        return {x:p.x,y:p.y,hit:document.elementFromPoint(p.x,p.y)?.outerHTML.slice(0,150)};
+      })
+    }));
   });
 }
 for(const width of [390,1440]) {

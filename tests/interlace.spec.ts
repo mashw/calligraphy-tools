@@ -77,7 +77,7 @@ test('joined Copperplate is continuous in the workspace and retains underpass cu
   const xml=await downloaded(page,'Cricut Draw');
   const plotted=await page.evaluate(str=>Array.from(new DOMParser().parseFromString(str,'image/svg+xml').querySelectorAll('path'),p=>p.getAttribute('d')),xml);
   const expected=await page.evaluate(()=>Array.from(document.querySelectorAll('[data-woven-detail] path')).slice(0,-7).map(n=>n.getAttribute('d')));
-  const points=(values:(string|null)[])=>values.join(' ').match(/-?\\d+(?:\\.\\d+)?/g)?.map(Number);
+  const points=(values:(string|null)[])=>values.join(' ').match(/-?\d+(?:\.\d+)?/g)?.map(Number);
   // Plotter output combines subpaths and adds its registration anchor.
   const coordinates=points(plotted)!;
   const guideCoordinates=points(expected)!;
