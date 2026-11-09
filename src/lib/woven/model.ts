@@ -88,9 +88,9 @@ export function buildWovenRouteModel(design: Design) {
   return { page, route, crossings, alternate, choices, x, asc, desc, halfBand, start, cuts, intervals, warnings, usableLength };
 }
 
-export function buildWovenModel(design: Design, { furniture = true }: { furniture?: boolean } = {}) {
-  const page = pageSize(design);
-  const { route, crossings, choices, x, asc, desc, start, intervals, warnings, usableLength } = buildWovenRouteModel(design);
+/** Generate physical strokes for one writing passage. Intervals use its own arc length. */
+export function writingStrokes(design: Design, route: import('../guides/slant-paths').SlantRoute,
+  intervals: import('./geometry').Interval[], x: number, asc: number, desc: number): Stroke[] {
   const baseline = offset(route.points, x / 2);
   const guides = buildGuideSet(
     design.script === "Copperplate" ? "copperplate" : "blackletter",
@@ -148,7 +148,7 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
     color: string,
     width: number,
   ) => {
-    for (const piece of clipPassage(points, intervals, route.length))
+    for (const piece of clipPassage(points, intervals, route.length, route.closed ?? true))
       if (piece.length > 1) {
         const parts = slantBand ? clipSlantToBand(piece, slantBand) : [piece];
         for (const points of parts) strokes.push({ points, color, width, role: locatedRole });
@@ -265,6 +265,13 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
         });
     }
   }
+  return strokes;
+}
+
+export function buildWovenModel(design: Design, { furniture = true }: { furniture?: boolean } = {}) {
+  const page = pageSize(design);
+  const { route, crossings, choices, x, asc, desc, start, intervals, warnings, usableLength } = buildWovenRouteModel(design);
+  const strokes = writingStrokes(design, route, intervals, x, asc, desc);
   const clean: Scene = { strokes, labels: [], page };
   const startS = wrap(start + design.gap / 2, route.length);
   const startPoint = atDistance(route, startS);

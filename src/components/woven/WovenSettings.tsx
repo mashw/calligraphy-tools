@@ -8,12 +8,12 @@ import { LIMITS, type Design } from '@/lib/woven/design';
 import type { buildWovenRouteModel } from '@/lib/woven/model';
 const field='w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500';
 const button='min-h-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-indigo-500';
-export default function WovenSettings({design, onChange, model, selected, onSelect}: {design:Design;onChange:(design:Design)=>void;model:ReturnType<typeof buildWovenRouteModel>;selected?:string|null;onSelect?:(id:string|null)=>void}) {
+export default function WovenSettings({design, onChange, model, selected, onSelect}: {design:Design;onChange:(design:Design)=>void;model?:ReturnType<typeof buildWovenRouteModel>;selected?:string|null;onSelect?:(id:string|null)=>void}) {
   const setDesign=(fn:(design:Design)=>Design)=>onChange(fn(design));
   function update<K extends keyof Design>(key:K,value:Design[K]) {
     onChange({...design,[key]:value,...(['preset','loop','reverse'].includes(key)?{overrides:{}}:{})});
   }
-  function flip(id:string) {onSelect?.(id);update('overrides',{...design.overrides,[id]:model.choices[id]==='a'?'b':'a'});}
+  function flip(id:string) {if(!model)return;onSelect?.(id);update('overrides',{...design.overrides,[id]:model.choices[id]==='a'?'b':'a'});}
   function numeric(
     key: keyof typeof LIMITS,
     label: string,
@@ -176,7 +176,7 @@ export default function WovenSettings({design, onChange, model, selected, onSele
               {numeric("gridThickness", "Guide grid thickness", 0.01, "mm")}
             </div>
           </DisclosureSection>
-          <DisclosureSection title="Route & crossings" defaultOpen>
+{model && <DisclosureSection title="Route & crossings" defaultOpen>
             <div className="space-y-3">
               {numeric("start", "Start position", 0.5, "%")}
               {numeric("gap", "Start/end gap", 0.5, "mm")}
@@ -203,6 +203,6 @@ export default function WovenSettings({design, onChange, model, selected, onSele
                 Restore alternating weave
               </Button>
             </div>
-          </DisclosureSection>
+          </DisclosureSection>}
 </>;
 }
