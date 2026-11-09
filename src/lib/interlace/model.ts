@@ -14,7 +14,7 @@ export type Strand = {
   baselineSource?: boolean; locked: boolean; visible: boolean; color: string; group: string; invert: boolean;
 };
 export type Passage = { id: string; t: number };
-export type Choice = { a: Passage; b: Passage; over: 'a' | 'b' };
+export type Choice = { a: Passage; b: Passage; over: 'a' | 'b'; handedness?: number; reach?: number };
 export type Hit = Choice & { point: Point; sine: number; cosine: number };
 export type Sheet = Pick<Design,'paper'|'orientation'> & {
   format: 'calligraphy-tools/interlace'; version: 1; strands: Strand[]; overrides: Choice[];
@@ -71,7 +71,8 @@ function detect(entries: Entry[]) {
       const dx=other.q.x-other.p.x,dy=other.q.y-other.p.y,ex=segment.q.x-segment.p.x,ey=segment.q.y-segment.p.y;
       const product=Math.hypot(dx,dy)*Math.hypot(ex,ey);
       const upper=other.layer>segment.layer?other:segment;
-      hits.push({a,b,point:{x:hit.x,y:hit.y},sine:Math.abs(dx*ey-dy*ex)/product,
+      const handedness=Math.sign((dx*ey-dy*ex)*(a===first?1:-1));
+      hits.push({a,b,handedness,point:{x:hit.x,y:hit.y},sine:Math.abs(dx*ey-dy*ex)/product,
         cosine:Math.abs(dx*ex+dy*ey)/product,over:same || upper.entry.s.id===a.id?'a':'b'});
     }
     active.push(segment);
@@ -106,12 +107,22 @@ function alternate(hits:Hit[], entries:Entry[]) {
 export function sameCrossing(a:Choice,b:Choice,tolerance=1e-7) {
   return a.a.id===b.a.id && a.b.id===b.b.id && Math.abs(a.a.t-b.a.t)<tolerance && Math.abs(a.b.t-b.b.t)<tolerance;
 }
+/** Keep the search radius within half the distance to a competing passage pair. */
+export function rememberCrossing(hit:Hit, hits:Hit[]):Choice {
+  let reach=.025;
+  for(const other of hits) {
+    if(other===hit || other.a.id!==hit.a.id || other.b.id!==hit.b.id) continue;
+    reach=Math.min(reach,Math.max(Math.abs(other.a.t-hit.a.t),Math.abs(other.b.t-hit.b.t))/2);
+  }
+  return {a:hit.a,b:hit.b,over:hit.over,handedness:hit.handedness,reach:Math.max(1e-7,reach)};
+}
 export function resolveChoices(hits:Hit[],choices:Choice[]) {
-  const matches=choices.map(c=>hits.filter(h=>sameCrossing(h,c,.025)));
+  const matches=choices.map(c=>hits.filter(h=>sameCrossing(h,c,c.reach??.025) &&
+    (c.handedness===undefined || c.handedness===h.handedness)));
   const kept:Choice[]=[];
   matches.forEach((list,i)=>{
     if(list.length!==1 || matches.some((other,j)=>j!==i && other.includes(list[0]))) return;
-    const hit=list[0]; hit.over=choices[i].over; kept.push({a:hit.a,b:hit.b,over:hit.over});
+    const hit=list[0]; hit.over=choices[i].over; kept.push(rememberCrossing(hit,hits));
   });
   return kept;
 }

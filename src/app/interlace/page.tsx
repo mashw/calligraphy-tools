@@ -13,7 +13,7 @@ import { pointBounds } from '@/lib/editor/camera';
 import { SHAPE_OPTIONS, shapePathD, type ShapeKind } from '@/lib/paths/presets';
 import { pageSize, type Design } from '@/lib/woven/design';
 import { pointsD, scenePdf, sceneSvg } from '@/lib/woven/vector-export';
-import { canJoin, initialSheet, renderSheet, sameCrossing, strand, strandRoute, topology, warnings,
+import { canJoin, initialSheet, renderSheet, rememberCrossing, sameCrossing, strand, strandRoute, topology, warnings,
   type Choice, type Sheet, type Strand } from '@/lib/interlace/model';
 import { fromPath, importSvg, openSheet } from '@/lib/interlace/document';
 
@@ -81,7 +81,9 @@ export default function InterlaceStudio() {
     } catch(e) {setNotice(e instanceof Error?e.message:'Could not read file.');}
   }
   function flip(c:Choice) {
-    const choice:Choice={a:c.a,b:c.b,over:c.over==='a'?'b':'a'};
+    const hit=graph?.hits.find(h=>sameCrossing(c,h));
+    if(!hit || !graph)return;
+    const choice:Choice={...rememberCrossing(hit,graph.hits),over:c.over==='a'?'b':'a'};
     setPicked(choice);commit({...sheet,overrides:[...sheet.overrides.filter(o=>!sameCrossing(o,c)),choice]});
   }
   function output(kind:'SVG'|'PDF'|'Cricut Draw'|'Print') {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { initialSheet, strand, topology, renderSheet, resolveChoices, sameCrossing, canJoin } from '../src/lib/interlace/model';
+import { initialSheet, strand, topology, renderSheet, rememberCrossing, resolveChoices, sameCrossing, canJoin } from '../src/lib/interlace/model';
 import { openSheet } from '../src/lib/interlace/document';
 import { scenePdf, sceneSvg } from '../src/lib/woven/vector-export';
 import { DEFAULT_DESIGN } from '../src/lib/woven/design';
@@ -35,6 +35,8 @@ test('mixed composition preserves explicit choices across reorder and JSON round
 test('ambiguous and missing passages drop overrides',()=>{
   const h=topology(fixture()).hits[0];
   assert.deepEqual(resolveChoices([], [h]),[]);
+  const saved=rememberCrossing(h,[h]);
+  assert.deepEqual(resolveChoices([{...h,handedness:-h.handedness!}], [saved]),[]);
   assert.deepEqual(resolveChoices([h,{...h,a:{...h.a,t:h.a.t+.005}}],[h]),[]);
 });
 test('Copperplate endpoint seam carries rails and slant phase through beside a physical crossing cut',()=>{

@@ -104,7 +104,7 @@ export function openSheet(value:unknown):{sheet:Sheet; notice:string} {
     const ids=new Set(sheet.strands.map(s=>s.id)); if(ids.size!==sheet.strands.length) throw Error('Duplicate strand ID.');
     const id=(v:unknown)=>{const s=string(v);if(!ids.has(s))throw Error('Missing strand reference.');return s;};
     const passage=(v:unknown)=>{const p=record(v);return {id:id(p.id),t:num(p.t,0,1)};};
-    sheet.overrides=array(obj.overrides,10000).map(v=>{const c=record(v);if(c.over!=='a' && c.over!=='b')throw Error('Invalid crossing.');return {a:passage(c.a),b:passage(c.b),over:c.over};});
+    sheet.overrides=array(obj.overrides,10000).map(v=>{const c=record(v);if(c.over!=='a' && c.over!=='b')throw Error('Invalid crossing.');return {a:passage(c.a),b:passage(c.b),over:c.over,handedness:c.handedness===undefined?undefined:num(c.handedness,-1,1),reach:c.reach===undefined?undefined:num(c.reach,1e-7,.025)};});
     sheet.joins=array(obj.joins,100).map(v=>{const j=record(v);return {from:id(j.from),to:id(j.to)};});
     sheet.snap=bool(obj.snap); return {sheet,notice:'Composition opened.'};
   }
