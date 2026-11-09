@@ -29,10 +29,10 @@ export function initialSheet(): Sheet {
 }
 export function strandRoute(s: Strand, sheet: Sheet) {
   const d = s.design, page = pageSize(sheet);
-  const points = s.source.kind === 'path'
-    ? s.source.points.map(p=>({x:p.x * d.width / (s.source.kind === 'path' && s.source.width || 1),
-      y:p.y * d.height / (s.source.kind === 'path' && s.source.height || 1)}))
-    : makeRoute(s.source.kind,d.width,d.height,d.loop,0,false,{x:0,y:0}).points;
+  const source = s.source;
+  const points = source.kind === 'path'
+    ? source.points.map(p=>({x:p.x * d.width / source.width, y:p.y * d.height / source.height}))
+    : makeRoute(source.kind,d.width,d.height,d.loop,0,false,{x:0,y:0}).points;
   return makeSlantRoute(transformPolyline(points, {scalePct:s.scale, rotDeg:d.rotation, flipX:s.mirror,
     offset:{x:d.centerX ?? page.w/2, y:d.centerY ?? page.h/2}}));
 }
