@@ -212,7 +212,7 @@ function clipSegmentToRect(a: Pt, b: Pt, rect: Frame): [Pt, Pt] | null {
   return [lerp(a, b, t0), lerp(a, b, t1)];
 }
 
-function clipPolylineToRect(input: PlotPolyline, rect: Frame) {
+export function clipPolylineToRect(input: PlotPolyline, rect: Frame) {
   const out: PlotPolyline[] = [];
   let current: Pt[] = [];
   const flush = () => {

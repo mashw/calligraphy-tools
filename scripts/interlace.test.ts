@@ -59,3 +59,11 @@ test('Woven import resolves original manual crossing on the same passage, includ
     assert.ok(hit);assert.equal(sheet.overrides.length,1);assert.equal(hit.over,reverse?'a':'b');
   }
 });
+
+test('page boundaries physically trim plot strokes',()=>{
+  const sheet=fixture();sheet.strands=sheet.strands.slice(0,1);sheet.joins=[];
+  sheet.strands[0].design.centerX=5;
+  const strokes=renderSheet(sheet).strokes;
+  assert.ok(strokes.some(s=>s.role==='primary' && s.points[0].x===0));
+  assert.ok(strokes.every(s=>s.points.every(p=>p.x>=0 && p.x<=210 && p.y>=0 && p.y<=297)));
+});

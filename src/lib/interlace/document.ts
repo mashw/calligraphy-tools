@@ -93,7 +93,7 @@ function readStrand(value:unknown):Strand {
     source={kind:'path',d:string(src.d),points,width:num(src.width,.00001,10000),height:num(src.height,.00001,10000),closed:bool(src.closed)};
   } else throw Error('Unsupported strand source.');
   if(!/^#[a-f0-9]{6}$/i.test(String(s.color))) throw Error('Invalid strand colour.');
-  return {...strand(string(s.id),string(s.name),source,design),color:string(s.color),group:string(s.group),
+  return {...strand(string(s.id),string(s.name),source,design),color:string(s.color),group:string(s.group),baselineSource:s.baselineSource===true,
     visible:bool(s.visible),mirror:bool(s.mirror),locked:bool(s.locked),invert:bool(s.invert),scale:num(s.scale,.01,1000)};
 }
 export function openSheet(value:unknown):{sheet:Sheet; notice:string} {
@@ -119,7 +119,7 @@ export function openSheet(value:unknown):{sheet:Sheet; notice:string} {
       const copper=p.script==='Copperplate',x=Number(copper?p.xHeightMMText??6:p.xNibText??5);
       const ratio=p.copperplateRatioPreset==='custom'?[p.copperplateDescUnitsText,p.copperplateXUnitsText,p.copperplateAscUnitsText].map(Number):
         String(p.copperplateRatioPreset??'3:2:3').split(':').map(Number);
-      return readStrand({...s,id:p.id,color:p.color??s.color,scale,mirror:!!p.flip,invert:!!p.invertGuides,
+      return readStrand({...s,baselineSource:true,id:p.id,color:p.color??s.color,scale,mirror:!!p.flip,invert:!!p.invertGuides,
         design:{...s.design,script:p.script,slantStyle:p.slantStyle??'classic',construction:p.constructionGuides??s.design.construction,
           centerX:centroid.x+offset.x+dx*Math.cos(angle)-dy*Math.sin(angle),centerY:centroid.y+offset.y+dx*Math.sin(angle)+dy*Math.cos(angle),
           rotation,penAngle:p.nibAngleDeg,nib:copper?1:Number(p.nibMMText),xNib:x,ascNib:copper?x*ratio[2]/ratio[1]:Number(p.ascNibText??3),

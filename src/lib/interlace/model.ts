@@ -1,3 +1,4 @@
+import { clipPolylineToRect } from '../layout/plotter-export';
 import { makeSlantRoute } from '../guides/slant-paths';
 import { transformPolyline } from '../paths/transform';
 import { segmentIntersection } from '../paths/intersections';
@@ -10,7 +11,7 @@ export type Source = { kind: 'rosette' | 'figure-eight' } |
   { kind: 'path'; d: string; points: Point[]; width: number; height: number; closed: boolean };
 export type Strand = {
   id: string; name: string; source: Source; design: Design; scale: number; mirror: boolean;
-  locked: boolean; visible: boolean; color: string; group: string; invert: boolean;
+  baselineSource?: boolean; locked: boolean; visible: boolean; color: string; group: string; invert: boolean;
 };
 export type Passage = { id: string; t: number };
 export type Choice = { a: Passage; b: Passage; over: 'a' | 'b' };
@@ -124,16 +125,17 @@ function distance(route:Route,t:number) {
   const index=t*(route.points.length-1), lo=Math.min(route.points.length-2,Math.floor(index));
   return route.distances[lo]+(index-lo)*(route.distances[lo+1]-route.distances[lo]);
 }
-function metrics(d:Design) {
+function metrics(s:Strand) {
+  const d=s.design;
   const unit=d.script==='Copperplate'?1:d.nib;
   return {x:d.xNib*unit,asc:d.ascNib*unit,desc:d.descNib*unit,
-    band:unit*(d.xNib/2+(d.fullGuides?Math.max(d.ascNib,d.descNib):0))};
+    band:unit*((s.baselineSource?d.xNib:d.xNib/2)+(d.fullGuides?Math.max(d.ascNib,d.descNib):0))};
 }
 function directed(e:Entry) {
   return e.s.design.reverse ? [...e.route.points].reverse() : e.route.points;
 }
 export function canJoin(a:Entry,b:Entry) {
-  if(a===b || a.s.invert!==b.s.invert || a.route.closed || b.route.closed) return false;
+  if(a===b || a.s.invert!==b.s.invert || !!a.s.baselineSource!==!!b.s.baselineSource || a.route.closed || b.route.closed) return false;
   const da=a.s.design, db=b.s.design;
   const keys: (keyof Design)[]=['script','nib','xNib','ascNib','descNib','fullGuides','slants','slantStyle','slantAngle','slantSpacing','secondSlant','secondAngle','gridMode','gridWidth','penAngle','construction','gridHorizontal','gridVertical','gridContrast','gridThickness','slantContrast'];
   if(keys.some(k=>JSON.stringify(da[k])!==JSON.stringify(db[k]))) return false;
@@ -158,7 +160,7 @@ export function renderSheet(sheet:Sheet, graph=topology(sheet)) {
     let current:Entry|undefined=root;
     const points:Point[]=[],cuts:{center:number;half:number}[]=[]; let length=0;
     while(current && !rendered.has(current.s.id)) {
-      const {s,route}=current, m=metrics(s.design), reverse=s.design.reverse;
+      const {s,route}=current, m=metrics(s), reverse=s.design.reverse;
       rendered.add(s.id);
       const path=directed(current);
       if(points.length) {
@@ -168,8 +170,8 @@ export function renderSheet(sheet:Sheet, graph=topology(sheet)) {
       for(const h of hits) {
         const under=h.over==='a'?h.b:h.a;
         if(under.id!==s.id) continue;
-        const at=distance(route,under.t), over=metrics(byId.get(h[h.over].id)!.s.design);
-        cuts.push({center:length+(reverse?route.length-at:at),half:(over.band+m.band*h.cosine+s.design.clearance)/Math.max(.05,h.sine)});
+        const at=distance(route,under.t), over=metrics(byId.get(h[h.over].id)!.s);
+        cuts.push({center:length+(reverse?route.length-at:at),half:(over.band+m.band*h.cosine+s.design.clearance)/Math.max(1e-8,h.sine)});
       }
       if(route.closed && s.design.gap>0) cuts.push({center:length+route.length*s.design.start/100,half:s.design.gap/2});
       length+=route.length; current=byId.get(next.get(s.id)??'');
@@ -179,19 +181,29 @@ export function renderSheet(sheet:Sheet, graph=topology(sheet)) {
       const a=Math.max(0,c.center-c.half),b=Math.min(route.length,c.center+c.half);
       return {center:(a+b)/2,half:(b-a)/2};
     });
-    const m=metrics(root.s.design);
-    scene.strokes.push(...writingStrokes(root.s.design,route,visibleIntervals(route.length,clipped),m.x,m.asc,m.desc,root.s.invert));
+    const m=metrics(root.s);
+    scene.strokes.push(...writingStrokes(root.s.design,route,visibleIntervals(route.length,clipped),m.x,m.asc,m.desc,root.s.invert,root.s.baselineSource?0:m.x/2));
   }
   const y=page.h-12;
   scene.strokes.push({points:[{x:12,y},{x:62,y}],width:.18,color:'#52677c'});
   for(let i=0;i<=5;i++) scene.strokes.push({points:[{x:12+i*10,y:y-1},{x:12+i*10,y:y+1}],width:.18,color:'#52677c'});
+  const frame={x:0,y:0,width:page.w,height:page.h};
+  scene.strokes=scene.strokes.flatMap(stroke=>{
+    if(stroke.points.every(p=>p.x>=0 && p.x<=page.w && p.y>=0 && p.y<=page.h))return [stroke];
+    return clipPolylineToRect({points:stroke.points,source:'interlace'},frame).map(piece=>({...stroke,points:piece.points}));
+  });
   return scene;
 }
 export function warnings(sheet:Sheet,g:ReturnType<typeof topology>) {
   const out:string[]=[];
+  const page=pageSize(sheet);
+  if(g.entries.some(({route,s})=>{
+    const pad=metrics(s).band;
+    return route.points.some(p=>p.x-pad<0||p.y-pad<0||p.x+pad>page.w||p.y+pad>page.h);
+  }))out.push('Guides may extend beyond the paper. Export clips them to the page edge.');
   if(g.conflict) out.push('Some visits cannot alternate consistently.');
   if(g.hits.some(h=>h.sine<.25)) out.push('Shallow crossing: inspect the underpass gap.');
-  if(g.entries.some(e=>e.route.closed && minimumRadius(e.route)<1.5*metrics(e.s.design).band)) out.push('Tight bend for the selected writing size.');
+  if(g.entries.some(e=>e.route.closed && minimumRadius(e.route)<1.5*metrics(e.s).band)) out.push('Tight bend for the selected writing size.');
   for(const j of sheet.joins) {
     const a=g.entries.find(e=>e.s.id===j.from),b=g.entries.find(e=>e.s.id===j.to);
     if(a && b && !canJoin(a,b)) out.push('A join is inactive. Align the endpoints and writing settings.');

@@ -90,8 +90,8 @@ export function buildWovenRouteModel(design: Design) {
 
 /** Generate physical strokes for one writing passage. Intervals use its own arc length. */
 export function writingStrokes(design: Design, route: import('../guides/slant-paths').SlantRoute,
-  intervals: import('./geometry').Interval[], x: number, asc: number, desc: number, invertGuides = false): Stroke[] {
-  const baseline = offset(route.points, x / 2);
+  intervals: import('./geometry').Interval[], x: number, asc: number, desc: number, invertGuides = false, baselineOffset = x / 2): Stroke[] {
+  const baseline = baselineOffset === 0 ? route.points : offset(route.points, baselineOffset);
   const guides = buildGuideSet(
     design.script === "Copperplate" ? "copperplate" : "blackletter",
     {
@@ -156,8 +156,8 @@ export function writingStrokes(design: Design, route: import('../guides/slant-pa
       }
   };
   const direction = invertGuides ? -1 : 1;
-  const top = direction * (-x / 2 - (design.fullGuides ? asc : 0));
-  const bottom = direction * (x / 2 + (design.fullGuides ? desc : 0));
+  const top = baselineOffset - x / 2 + direction * (-x / 2 - (design.fullGuides ? asc : 0));
+  const bottom = baselineOffset - x / 2 + direction * (x / 2 + (design.fullGuides ? desc : 0));
   if (design.script === "Copperplate" && design.slants) {
     if (design.slantStyle === "classic")
       slantBand = [

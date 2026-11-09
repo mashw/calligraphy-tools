@@ -37,6 +37,7 @@ export default function InterlaceStudio() {
   const svg=useRef<SVGSVGElement>(null),file=useRef<HTMLInputElement>(null);
   const drag=useRef<{sheet:Sheet;id:string;inverse:DOMMatrix;x:number;y:number;pointer:number}|null>(null);
   const current=sheet.strands.find(s=>s.id===active);
+  const closed=current && (current.source.kind!=='path' || current.source.closed);
   const page=pageSize(sheet),frame={x:0,y:0,w:page.w,h:page.h};
   const entries=useMemo(()=>sheet.strands.filter(s=>s.visible).map(s=>({s,route:strandRoute(s,sheet)})),[sheet]);
   const graph=useMemo(()=>busy?null:topology(sheet),[sheet,busy]);
@@ -137,6 +138,8 @@ export default function InterlaceStudio() {
       <defs><clipPath id="interlace-paper"><rect width={page.w} height={page.h}/></clipPath></defs>
       <rect width={page.w} height={page.h} fill="white"/>
       <g clipPath="url(#interlace-paper)">{full && <WovenScene scene={full}/>}
+        {full && mode==='Move' && entries.filter(e=>e.s.id===active).map(({s,route})=><path key={s.id}
+          d={pointsD(route.points)} fill="none" stroke={s.color} strokeWidth={.28} strokeDasharray="1 2" pointerEvents="none"/>)}
         {entries.map(({s,route})=><path key={s.id} data-camera-interactive="" aria-label={s.name} d={pointsD(route.points)} fill="none"
           stroke={s.color} strokeWidth={full?7:1} strokeOpacity={full?0:1} pointerEvents={mode==='Move'?'stroke':'none'}
           style={{cursor:s.locked?'default':'move'}} onPointerDown={e=>start(e,s)}/>)}
@@ -188,8 +191,8 @@ export default function InterlaceStudio() {
         <WovenSettings design={current.design} onChange={d=>patch({design:d})}/>
         <DisclosureSection title="Writing direction & crossings"><div className="space-y-2 text-sm">
           <Button aria-pressed={current.design.reverse} onClick={()=>design({reverse:!current.design.reverse})}>Reverse direction</Button>
-          {measure('Start (%)',current.design.start,v=>design({start:v}),0,100,.5)}
-          {measure('Start gap (mm)',current.design.gap,v=>design({gap:v}),0,40,.5)}
+          {closed && measure('Start (%)',current.design.start,v=>design({start:v}),0,100,.5)}
+          {closed && measure('Start gap (mm)',current.design.gap,v=>design({gap:v}),0,40,.5)}
           {measure('Clearance (mm)',current.design.clearance,v=>design({clearance:v}),0,4,.1)}
         </div></DisclosureSection>
       </fieldset>}
