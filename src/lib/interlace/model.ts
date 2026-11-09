@@ -39,28 +39,43 @@ export function strandRoute(s: Strand, sheet: Sheet) {
 type Entry = { s: Strand; route: ReturnType<typeof strandRoute> };
 function detect(entries: Entry[]) {
   const hits: Hit[] = [];
-  for (let i=0;i<entries.length;i++) for (let j=i;j<entries.length;j++) {
-    const [first,second] = [entries[i], entries[j]].sort((a,b)=>a.s.id.localeCompare(b.s.id));
-    const a=first.route.points, b=second.route.points;
-    for(let k=0;k<a.length-1;k++) for(let l=i===j?k+2:0;l<b.length-1;l++) {
-      if(i===j && first.route.closed && k===0 && l===b.length-2) continue;
-      const p=a[k], q=a[k+1], r=b[l], u=b[l+1];
-      if(Math.max(p.x,q.x)<Math.min(r.x,u.x)||Math.max(r.x,u.x)<Math.min(p.x,q.x)||
-        Math.max(p.y,q.y)<Math.min(r.y,u.y)||Math.max(r.y,u.y)<Math.min(p.y,q.y)) continue;
-      const hit=segmentIntersection(p,q,r,u);
-      if(!hit) continue;
-      const parameter=(v:number,count:number,closed?:boolean)=>closed && v>count-1e-7 ? 0 : v/count;
-      const ta=parameter(k+hit.t,a.length-1,first.route.closed), tb=parameter(l+hit.u,b.length-1,second.route.closed);
-      if ((!first.route.closed && (ta<1e-7 || ta>1-1e-7)) || (!second.route.closed && (tb<1e-7 || tb>1-1e-7))) continue;
-      const sides=[{id:first.s.id,t:ta},{id:second.s.id,t:tb}];
-      if(i===j) sides.sort((x,y)=>x.t-y.t);
-      if(hits.some(h=>h.a.id===sides[0].id && h.b.id===sides[1].id &&
-        Math.abs(h.a.t-sides[0].t)<1e-6 && Math.abs(h.b.t-sides[1].t)<1e-6)) continue;
-      const dx=q.x-p.x,dy=q.y-p.y,ex=u.x-r.x,ey=u.y-r.y,product=Math.hypot(dx,dy)*Math.hypot(ex,ey);
-      hits.push({a:sides[0],b:sides[1],point:{x:hit.x,y:hit.y},sine:Math.abs(dx*ey-dy*ex)/product,
-        cosine:Math.abs(dx*ex+dy*ey)/product,over:entries[j].s.id===sides[1].id && i!==j?'b':'a'});
-    }
+  // Sweep bounds in page space, retaining segment indices in canonical source order.
+  const segments=entries.flatMap((entry,layer)=>entry.route.points.slice(1).map((q,k)=>{
+    const p=entry.route.points[k];
+    return {entry,layer,k,p,q,left:Math.min(p.x,q.x),right:Math.max(p.x,q.x),top:Math.min(p.y,q.y),bottom:Math.max(p.y,q.y)};
+  })).sort((a,b)=>a.left-b.left);
+  type Segment=typeof segments[number];
+  let active:Segment[]=[];
+  function passage(s:Segment,at:number) {
+    const count=s.entry.route.points.length-1, fraction=(s.k+at)/count;
+    return {id:s.entry.s.id,t:s.entry.route.closed && fraction>1-1e-8?0:fraction};
   }
+  const seen=new Set<string>();
+  for(const segment of segments) {
+    active=active.filter(s=>s.right+1e-8>=segment.left);
+    for(const other of active) {
+      if(other.bottom<segment.top || segment.bottom<other.top)continue;
+      const same=other.entry===segment.entry;
+      const gap=Math.abs(other.k-segment.k);
+      if(same && (gap<=1 || (segment.entry.route.closed && gap===segment.entry.route.points.length-2)))continue;
+      const hit=segmentIntersection(other.p,other.q,segment.p,segment.q);
+      if(!hit)continue;
+      const first=passage(other,hit.t), second=passage(segment,hit.u);
+      if((!other.entry.route.closed && (first.t<1e-7 || first.t>1-1e-7)) ||
+         (!segment.entry.route.closed && (second.t<1e-7 || second.t>1-1e-7)))continue;
+      const [a,b]=[first,second].sort((x,y)=>x.id.localeCompare(y.id)||x.t-y.t);
+      const key=JSON.stringify([a.id,a.t.toFixed(6),b.id,b.t.toFixed(6)]);
+      if(seen.has(key))continue;
+      seen.add(key);
+      const dx=other.q.x-other.p.x,dy=other.q.y-other.p.y,ex=segment.q.x-segment.p.x,ey=segment.q.y-segment.p.y;
+      const product=Math.hypot(dx,dy)*Math.hypot(ex,ey);
+      const upper=other.layer>segment.layer?other:segment;
+      hits.push({a,b,point:{x:hit.x,y:hit.y},sine:Math.abs(dx*ey-dy*ex)/product,
+        cosine:Math.abs(dx*ex+dy*ey)/product,over:same || upper.entry.s.id===a.id?'a':'b'});
+    }
+    active.push(segment);
+  }
+  hits.sort((a,b)=>a.a.id.localeCompare(b.a.id)||a.b.id.localeCompare(b.b.id)||a.a.t-b.a.t||a.b.t-b.b.t);
   return hits;
 }
 // Each edge constrains two successive visits to have opposite over/under states.
@@ -115,10 +130,10 @@ function metrics(d:Design) {
     band:unit*(d.xNib/2+(d.fullGuides?Math.max(d.ascNib,d.descNib):0))};
 }
 function directed(e:Entry) {
-  return e.s.design.reverse!==e.s.invert ? [...e.route.points].reverse() : e.route.points;
+  return e.s.design.reverse ? [...e.route.points].reverse() : e.route.points;
 }
 export function canJoin(a:Entry,b:Entry) {
-  if(a===b || a.route.closed || b.route.closed) return false;
+  if(a===b || a.s.invert!==b.s.invert || a.route.closed || b.route.closed) return false;
   const da=a.s.design, db=b.s.design;
   const keys: (keyof Design)[]=['script','nib','xNib','ascNib','descNib','fullGuides','slants','slantStyle','slantAngle','slantSpacing','secondSlant','secondAngle','gridMode','gridWidth','penAngle','construction','gridHorizontal','gridVertical','gridContrast','gridThickness','slantContrast'];
   if(keys.some(k=>JSON.stringify(da[k])!==JSON.stringify(db[k]))) return false;
@@ -143,7 +158,7 @@ export function renderSheet(sheet:Sheet, graph=topology(sheet)) {
     let current:Entry|undefined=root;
     const points:Point[]=[],cuts:{center:number;half:number}[]=[]; let length=0;
     while(current && !rendered.has(current.s.id)) {
-      const {s,route}=current, m=metrics(s.design), reverse=s.design.reverse!==s.invert;
+      const {s,route}=current, m=metrics(s.design), reverse=s.design.reverse;
       rendered.add(s.id);
       const path=directed(current);
       if(points.length) {
@@ -165,7 +180,7 @@ export function renderSheet(sheet:Sheet, graph=topology(sheet)) {
       return {center:(a+b)/2,half:(b-a)/2};
     });
     const m=metrics(root.s.design);
-    scene.strokes.push(...writingStrokes(root.s.design,route,visibleIntervals(route.length,clipped),m.x,m.asc,m.desc));
+    scene.strokes.push(...writingStrokes(root.s.design,route,visibleIntervals(route.length,clipped),m.x,m.asc,m.desc,root.s.invert));
   }
   const y=page.h-12;
   scene.strokes.push({points:[{x:12,y},{x:62,y}],width:.18,color:'#52677c'});

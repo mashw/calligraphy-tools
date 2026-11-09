@@ -97,3 +97,37 @@ export function findCrossingsForStraps(straps: { id: string; pts: Pt[] }[], epsM
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
 }
+
+const centroid = (pts: Pt[]) => {
+  if (!pts.length) return { x: 0, y: 0 };
+  const sum = pts.reduce((acc, pt) => ({ x: acc.x + pt.x, y: acc.y + pt.y }), { x: 0, y: 0 });
+  return { x: sum.x / pts.length, y: sum.y / pts.length };
+};
+
+export const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) => {
+  const ca = centroid(aPts);
+  const cb = centroid(bPts);
+  const dx = cb.x - ca.x;
+  const dy = cb.y - ca.y;
+  const len = Math.hypot(dx, dy);
+  const u = len > 1e-6 ? { x: dx / len, y: dy / len } : { x: 1, y: 0 };
+  const v = { x: -u.y, y: u.x };
+  const mid = { x: (ca.x + cb.x) / 2, y: (ca.y + cb.y) / 2 };
+
+  return crossingsForPair
+    .map((crossing) => {
+      const rx = crossing.x - mid.x;
+      const ry = crossing.y - mid.y;
+      return {
+        crossing,
+        t: rx * u.x + ry * u.y,
+        s: rx * v.x + ry * v.y,
+      };
+    })
+    .sort((left, right) => (
+      right.t - left.t
+      || left.s - right.s
+      || left.crossing.id.localeCompare(right.crossing.id)
+    ))
+    .map((entry) => entry.crossing.id);
+};

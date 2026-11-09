@@ -16,9 +16,10 @@ test('mixed sheet retains full vector export across camera, Simplify and Save/Op
   await page.getByRole('button',{name:'Crossings',exact:true}).click();
   const markers=page.locator('svg[aria-label="Interlace writing sheet"] g[data-camera-interactive]');
   expect(await markers.count()).toBeGreaterThan(6);
-  await markers.first().click();
+  await page.locator('[data-crossing-kind=self]').first().click();
+  await page.locator('[data-crossing-kind=between]').first().click();
   const saved=await downloaded(page,'Save'), doc=JSON.parse(saved);
-  expect(doc.strands).toHaveLength(2);expect(doc.overrides).toHaveLength(1);
+  expect(doc.strands).toHaveLength(2);expect(doc.overrides).toHaveLength(2);
   const svg=await downloaded(page,'SVG');
   await page.getByRole('button',{name:'Simplify',exact:true}).click();
   expect(await downloaded(page,'SVG')).toEqual(svg);
@@ -40,10 +41,13 @@ test('imports original Woven and multi-strap Path Guides downloads',async({page}
   expect(JSON.parse(await downloaded(page,'Save')).overrides).toHaveLength(1);
   await page.goto('/path-guides');
   const menu=page.locator('select').filter({has:page.locator('option[value="woven-double-circle"]')});
-  await menu.selectOption('woven-double-circle');
+  const panel=page.getByRole('button',{name:'Page & straps',exact:true});
+  if(await panel.getAttribute('aria-expanded')==='false')await panel.click();
+  await menu.selectOption('fraktur-scurve-weave-2');
   const preset=await downloaded(page,'Export preset JSON (dev)');
   await page.goto('/interlace');await upload(page,'preset.json',preset);
   await expect(page.locator('[role=status]')).toContainText('Imported paths');
-  expect(JSON.parse(await downloaded(page,'Save')).strands).toHaveLength(2);
+  const imported=JSON.parse(await downloaded(page,'Save'));
+  expect(imported.strands).toHaveLength(2);expect(imported.overrides).toHaveLength(2);
   await page.goto('/layout');await expect(page.getByRole('heading',{name:'Layout Editor',exact:true}).first()).toBeVisible();
 });

@@ -116,7 +116,7 @@ export default function InterlaceStudio() {
     drag.current=null;setBusy(false);if(e.type==='pointercancel')setSheet(d.sheet);else commit(sheet);
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
   }
-  const joins=mode!=='Joins'?[]:entries.flatMap(a=>entries.filter(b=>canJoin(a,b)).map(b=>({from:a.s,to:b.s,point:(a.s.design.reverse!==a.s.invert?a.route.points[0]:a.route.points.at(-1))!})));
+  const joins=mode!=='Joins'?[]:entries.flatMap(a=>entries.filter(b=>canJoin(a,b)).map(b=>({from:a.s,to:b.s,point:(a.s.design.reverse?a.route.points[0]:a.route.points.at(-1))!})));
   function toggleJoin(from:string,to:string) {
     const active=sheet.joins.some(j=>j.from===from&&j.to===to);
     const others=sheet.joins.filter(j=>j.from!==from&&j.to!==to);
@@ -140,7 +140,7 @@ export default function InterlaceStudio() {
         {entries.map(({s,route})=><path key={s.id} data-camera-interactive="" aria-label={s.name} d={pointsD(route.points)} fill="none"
           stroke={s.color} strokeWidth={full?7:1} strokeOpacity={full?0:1} pointerEvents={mode==='Move'?'stroke':'none'}
           style={{cursor:s.locked?'default':'move'}} onPointerDown={e=>start(e,s)}/>)}
-        {mode==='Crossings' && graph?.hits.map((h,i)=><g key={i} data-camera-interactive="" onClick={()=>flip(h)}>
+        {mode==='Crossings' && graph?.hits.map((h,i)=><g key={i} data-camera-interactive="" data-crossing-kind={h.a.id===h.b.id?'self':'between'} onClick={()=>flip(h)}>
           <circle cx={h.point.x} cy={h.point.y} r={2.8} fill={picked&&sameCrossing(picked,h,.025)?'#4f46e5':'white'} stroke="#334155" strokeWidth={.35}/>
           <text x={h.point.x} y={h.point.y+.8} textAnchor="middle" fontSize={2.2} fill={picked&&sameCrossing(picked,h,.025)?'white':'black'}>{i+1}</text></g>)}
         {mode==='Joins' && joins.map(j=><circle key={j.from.id+j.to.id} cx={j.point.x} cy={j.point.y} r={2.4}

@@ -1,8 +1,9 @@
+import { findCrossingsForStraps, slotOrderForPair } from '../paths/intersections';
 import { samplePathDToPolyline } from '../paths/sample-svg-path';
 import { PAPERS_MM } from '../curve-helpers';
 import { parseDesign, DEFAULT_DESIGN, pageSize, type Design } from '../woven/design';
 import { findSelfCrossings, makeRoute, type Point } from '../woven/geometry';
-import { initialSheet, strand, strandRoute, topology, type Source, type Strand, type Sheet } from './model';
+import { canJoin, initialSheet, strand, strandRoute, topology, type Source, type Strand, type Sheet } from './model';
 
 function record(v:unknown): Record<string,unknown> {
   if(!v || typeof v!=='object' || Array.isArray(v)) throw Error('Expected a design object.');
@@ -125,7 +126,32 @@ export function openSheet(value:unknown):{sheet:Sheet; notice:string} {
           descNib:copper?x*ratio[0]/ratio[1]:Number(p.descNibText??2)}});
     });
     for(const v of array(state.groups??[],100)){const g=record(v);for(const s of sheet.strands) if(array(g.strapIds,100).includes(s.id)) s.group=string(g.name);}
-    return {sheet,notice:'Imported paths and writing dimensions. Review crossings and joins. Legacy camera, snap, contrast and grid display choices were omitted.'};
+    const graph=topology(sheet);
+    const routes=new Map(graph.entries.map(e=>[e.s.id,e]));
+    const originalHits=findCrossingsForStraps(graph.entries.map(e=>({id:e.s.id,pts:e.route.points})),1.2);
+    const legacyChoices=record(state.crossingOverrides??{});
+    for(const [key,values] of Object.entries(legacyChoices)) {
+      const pair=originalHits.filter(h=>[h.aId,h.bId].sort().join('|')===key);
+      if(!pair.length) continue;
+      const first=pair[0],a=routes.get(first.aId)!,b=routes.get(first.bId)!;
+      const ordered=slotOrderForPair(pair,a.route.points,b.route.points);
+      for(const [slot,over] of Object.entries(record(values))) {
+        const h=pair.find(hit=>hit.id===ordered[Number(slot)]);
+        if(!h || (over!==h.aId && over!==h.bId))continue;
+        const matches=graph.hits.filter(v=>[v.a.id,v.b.id].sort().join('|')===key && Math.hypot(v.point.x-h.x,v.point.y-h.y)<.05);
+        if(matches.length===1) sheet.overrides.push({a:matches[0].a,b:matches[0].b,over:matches[0].a.id===over?'a':'b'});
+      }
+    }
+    for(const raw of array(state.straps,100)) {
+      const p=record(raw),end=p.guideJoin && record(p.guideJoin).end;
+      if(!end)continue;
+      const link=record(end),a=routes.get(string(p.id)),b=routes.get(string(link.otherId));
+      if(a && b && link.otherSide==='start' && canJoin(a,b))sheet.joins.push({from:a.s.id,to:b.s.id});
+    }
+    const expected=Object.values(legacyChoices).reduce<number>((n,choice)=>n+Object.keys(record(choice)).length,0);
+    const missing=expected-sheet.overrides.length;
+    return {sheet,notice:'Imported paths, writing dimensions and '+sheet.overrides.length+' crossing choices.'+
+      (missing?' '+missing+' unmatched choices omitted.':'')+' Only compatible end-to-start joins are carried over.'};
   }
   const d=parseDesign(obj); Object.assign(sheet,header(d)); const s=strand('woven',d.preset,{kind:d.preset},{...d,overrides:{}});
   sheet.strands=[s];

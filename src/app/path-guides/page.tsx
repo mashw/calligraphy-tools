@@ -25,7 +25,7 @@ import type { ConstructionGuideSettings } from '@/lib/guides/guide-template';
 import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
 import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 import { buildGuideSet } from '@/lib/guides/guide-template';
-import { findCrossingsForStraps, type Crossing, type Pt } from '@/lib/paths/intersections';
+import { slotOrderForPair, findCrossingsForStraps, type Crossing, type Pt } from '@/lib/paths/intersections';
 import { samplePathDToPolyline } from '@/lib/paths/sample-svg-path';
 import { transformPolyline } from '@/lib/paths/transform';
 import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
@@ -416,35 +416,6 @@ type GuideJoinChain = {
   id: string;
   members: GuideJoinChainMember[];
   closed: boolean;
-};
-
-
-const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) => {
-  const ca = centroid(aPts);
-  const cb = centroid(bPts);
-  const dx = cb.x - ca.x;
-  const dy = cb.y - ca.y;
-  const len = Math.hypot(dx, dy);
-  const u = len > 1e-6 ? { x: dx / len, y: dy / len } : { x: 1, y: 0 };
-  const v = { x: -u.y, y: u.x };
-  const mid = { x: (ca.x + cb.x) / 2, y: (ca.y + cb.y) / 2 };
-
-  return crossingsForPair
-    .map((crossing) => {
-      const rx = crossing.x - mid.x;
-      const ry = crossing.y - mid.y;
-      return {
-        crossing,
-        t: rx * u.x + ry * u.y,
-        s: rx * v.x + ry * v.y,
-      };
-    })
-    .sort((left, right) => (
-      right.t - left.t
-      || left.s - right.s
-      || left.crossing.id.localeCompare(right.crossing.id)
-    ))
-    .map((entry) => entry.crossing.id);
 };
 
 
