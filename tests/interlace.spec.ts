@@ -11,8 +11,16 @@ async function upload(page:Page,name:string,content:string) {
 }
 test('mixed sheet retains full vector export across camera, Simplify and Save/Open',async({page})=>{
   await page.goto('/interlace');
-  await upload(page,'curve.svg','<svg xmlns="http://www.w3.org/2000/svg" width="150mm" height="40mm" viewBox="0 0 150 40"><path id="curve" d="M0 10 Q70 50 150 10"/></svg>');
+  await upload(page,'curve.svg','<svg xmlns="http://www.w3.org/2000/svg" width="198mm" height="40mm" viewBox="0 0 198 40"><path id="curve" d="M0 10 Q99 50 198 10"/></svg>');
   await expect(page.locator('[role=status]')).toContainText('SVG paths added');
+  const path=page.locator('path[aria-label="curve"]');
+  const at=await path.evaluate(node=>{
+    const p=node as SVGPathElement, loc=p.getPointAtLength(p.getTotalLength()*.5).matrixTransform(p.getScreenCTM()!);
+    return {x:loc.x,y:loc.y};
+  });
+  await page.mouse.move(at.x,at.y);await page.mouse.down();await page.mouse.move(at.x+8,at.y+8,{steps:4});
+  await expect(page.locator('[data-woven-detail]')).toHaveCount(0);
+  await page.mouse.up();await expect(page.locator('[data-woven-detail]')).toBeVisible();
   await page.getByRole('button',{name:'Crossings',exact:true}).click();
   const markers=page.locator('svg[aria-label="Interlace writing sheet"] g[data-camera-interactive]');
   expect(await markers.count()).toBeGreaterThan(6);
@@ -23,7 +31,9 @@ test('mixed sheet retains full vector export across camera, Simplify and Save/Op
   const svg=await downloaded(page,'SVG');
   await page.getByRole('button',{name:'Simplify',exact:true}).click();
   expect(await downloaded(page,'SVG')).toEqual(svg);
-  await page.getByRole('button',{name:'Fit content',exact:true}).click();
+  await page.getByRole('button',{name:'Zoom in',exact:true}).click();
+  await page.keyboard.down('Alt');await page.mouse.move(at.x,at.y);await page.mouse.down();
+  await page.mouse.move(at.x+20,at.y+12);await page.mouse.up();await page.keyboard.up('Alt');
   expect(await downloaded(page,'Cricut Draw')).toEqual(svg);
   await upload(page,'composition.json',saved);
   await expect(page.locator('[role=status]')).toContainText('Composition opened');
@@ -34,7 +44,7 @@ test('mixed sheet retains full vector export across camera, Simplify and Save/Op
 });
 test('imports original Woven and multi-strap Path Guides downloads',async({page})=>{
   await page.goto('/woven');
-  await page.getByRole('button',{name:'Swap crossing 1',exact:true}).click();
+  await page.locator('button[aria-label="Swap crossing 1"]').click();
   const woven=await downloaded(page,'Save design');
   await page.goto('/interlace');await upload(page,'woven.json',woven);
   await expect(page.locator('[role=status]')).toContainText('Imported Woven');
