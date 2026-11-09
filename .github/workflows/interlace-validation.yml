@@ -20,13 +20,14 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:ui
-      - name: Compare narrow Woven interaction against the PR base on failure
-        if: failure()
+      - name: Compare the narrow Woven interaction against the PR base
+        if: always()
+        continue-on-error: true
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           git fetch --depth=1 origin "$BASE_SHA"
           git worktree add --detach "$RUNNER_TEMP/interlace-base" "$BASE_SHA"
           cd "$RUNNER_TEMP/interlace-base"
-          ln -s "$GITHUB_WORKSPACE/node_modules" node_modules
-          npx playwright test tests/woven-layout.spec.ts -g 'Woven movement.*390px'
+          cp -al "$GITHUB_WORKSPACE/node_modules" node_modules
+          npx playwright test tests/woven-layout.spec.ts -g 'Woven movement.*390px' --repeat-each=2 --workers=1
