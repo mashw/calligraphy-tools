@@ -95,7 +95,7 @@ test('joined Copperplate is continuous in the workspace and retains underpass cu
 test('import preserves transformed millimetres, spacing, closure and document geometry',async({page})=>{
   await page.goto('/interlace');
   await upload(page,'group.svg','<svg xmlns="http://www.w3.org/2000/svg" width="80mm" height="40mm" viewBox="0 0 160 80"><g transform="translate(10 5) scale(2)"><path id="open" d="M0 0H20"/><path id="ring" d="M40 0h10v10h-10z"/></g></svg>');
-  await expect(page.getByRole('status')).toContainText('SVG paths added');
+  await expect(page.locator('[role=status]')).toContainText('SVG paths added');
   const saved=await downloaded(page,'Save'),doc=JSON.parse(saved);
   const [,open,ring]=doc.strands;
   expect(open.source.closed).toBe(false);expect(ring.source.closed).toBe(true);
