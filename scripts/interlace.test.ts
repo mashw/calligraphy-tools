@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { initialSheet, strand, topology, renderSheet, rememberCrossing, resolveChoices, sameCrossing, canJoin } from '../src/lib/interlace/model';
+import { alignEndpoint, initialSheet, strand, topology, renderSheet, rememberCrossing, resolveChoices, sameCrossing, canJoin } from '../src/lib/interlace/model';
 import { openSheet } from '../src/lib/interlace/document';
 import { scenePdf, sceneSvg } from '../src/lib/woven/vector-export';
 import { DEFAULT_DESIGN } from '../src/lib/woven/design';
@@ -124,4 +124,14 @@ test('curved self-crossings retain physical plotter breaks after changing the ov
     assert.doesNotMatch(after,/NaN|Infinity|<mask|clipPath/);
     assert.equal(after,buildInterlacePlotterExport(openSheet(JSON.parse(JSON.stringify(sheet))).sheet,'12x12').svg);
   }
+});
+
+test('endpoint alignment restores compatible seam placement without adding a crossing or join',()=>{
+  const sheet=fixture(),left=sheet.strands[0];
+  sheet.joins=[];left.design.centerX!-=4;
+  const aligned=alignEndpoint(sheet,left)!;
+  assert.ok(aligned);assert.equal(aligned.joins.length,0);
+  const graph=topology(aligned);
+  assert.ok(canJoin(graph.entries[0],graph.entries[1]));
+  assert.equal(graph.hits.length,topology(fixture()).hits.length);
 });

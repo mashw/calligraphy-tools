@@ -13,7 +13,7 @@ import { pointBounds } from '@/lib/editor/camera';
 import { SHAPE_OPTIONS, shapePathD, type ShapeKind } from '@/lib/paths/presets';
 import { pageSize, type Design } from '@/lib/woven/design';
 import { pointsD, scenePdf, sceneSvg } from '@/lib/woven/vector-export';
-import { canJoin, initialSheet, renderSheet, rememberCrossing, sameCrossing, strand, strandRoute, topology, warnings,
+import { alignEndpoint, canJoin, initialSheet, renderSheet, rememberCrossing, sameCrossing, strand, strandRoute, topology, warnings,
   type Choice, type Sheet, type Strand } from '@/lib/interlace/model';
 import { fromPath, importSvg, openSheet } from '@/lib/interlace/document';
 
@@ -264,6 +264,10 @@ export default function InterlaceStudio() {
         {graph.hits.filter(h=>picked && sameCrossing(h,picked,.025)).map((h,i)=><Button key={i} onClick={()=>flip(h)}>Flip · {sheet.strands.find(s=>s.id===h[h.over].id)?.name} over ({h.over.toUpperCase()})</Button>)}
         <Button onClick={()=>commit({...sheet,overrides:[]})}>Restore alternating weave</Button></DisclosureSection>}
       {mode==='Joins' && <DisclosureSection title="Endpoint joins" defaultOpen><p className="text-xs">Align the end of one open strand with the start of another using the same writing settings.</p>
+        {current && !closed && <Button disabled={current.locked} onClick={()=>{
+          const next=alignEndpoint(sheet,current);
+          if(next)commit(next);else setNotice('No compatible writing endpoint within 10 mm.');
+        }}>Align nearest endpoint</Button>}
         {joins.map(j=><Button key={j.from.id+j.to.id} aria-pressed={sheet.joins.some(k=>k.from===j.from.id&&k.to===j.to.id)} onClick={()=>toggleJoin(j.from.id,j.to.id)}>{j.from.name} → {j.to.name}</Button>)}
         {sheet.joins.filter(j=>!joins.some(k=>k.from.id===j.from&&k.to.id===j.to)).map(j=><Button key={j.from+j.to} onClick={()=>toggleJoin(j.from,j.to)}>Remove inactive join</Button>)}
       </DisclosureSection>}

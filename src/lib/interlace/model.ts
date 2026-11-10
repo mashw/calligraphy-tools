@@ -22,7 +22,7 @@ export type Sheet = Pick<Design,'paper'|'orientation'> & {
   joins: { from: string; to: string }[]; snap: boolean;
 };
 export function strand(id: string, name: string, source: Source, design = DEFAULT_DESIGN): Strand {
-  return { id, name, source, design: {...design}, scale: 100, mirror: false, locked: false,
+  return { id, name, source, baselineSource:false, design: {...design}, scale: 100, mirror: false, locked: false,
     visible: true, color: '#526b93', group: '', invert: false };
 }
 export function initialSheet(): Sheet {
@@ -156,6 +156,34 @@ export function canJoin(a:Entry,b:Entry) {
   const dx=end.x-prev.x,dy=end.y-prev.y,ex=next.x-start.x,ey=next.y-start.y;
   return dx*ex+dy*ey>.985*Math.hypot(dx,dy)*Math.hypot(ex,ey);
 }
+/** Translate the selected strand (and its unlocked group) to meet a nearby writing endpoint. */
+export function alignEndpoint(sheet: Sheet, selected: Strand): Sheet | null {
+  if(selected.locked)return null;
+  const moving={s:selected,route:strandRoute(selected,sheet)};
+  if(moving.route.closed)return null;
+  const page=pageSize(sheet);
+  let best:{dx:number;dy:number;distance:number}|undefined;
+  for(const target of sheet.strands){
+    if(target.id===selected.id || !target.visible || (selected.group && selected.group===target.group))continue;
+    const fixed={s:target,route:strandRoute(target,sheet)};
+    if(fixed.route.closed)continue;
+    const sourcePoints=directed(moving),targetPoints=directed(fixed);
+    for(const end of [false,true]){
+      const p=end?sourcePoints.at(-1)!:sourcePoints[0],q=end?targetPoints[0]:targetPoints.at(-1)!;
+      const dx=q.x-p.x,dy=q.y-p.y,distance=Math.hypot(dx,dy);
+      if(distance>10 || (best && distance>=best.distance))continue;
+      const translated={...moving,route:{...moving.route,points:moving.route.points.map(p=>({x:p.x+dx,y:p.y+dy}))}};
+      if(end?canJoin(translated,fixed):canJoin(fixed,translated))best={dx,dy,distance};
+    }
+  }
+  if(!best)return null;
+  const {dx,dy}=best;
+  return {...sheet,strands:sheet.strands.map(s=>{
+    if(s.locked || (s.id!==selected.id && (!selected.group || s.group!==selected.group)))return s;
+    return {...s,design:{...s.design,centerX:(s.design.centerX??page.w/2)+dx,centerY:(s.design.centerY??page.h/2)+dy}};
+  })};
+}
+
 // Partition by visits in source order so clipping an underpass never cuts the
 // other visit of a self-crossing. Closed passages can straddle the source seam.
 function passageIntervals(entry: Entry, passage: Passage, hits: Hit[]): Interval[] {

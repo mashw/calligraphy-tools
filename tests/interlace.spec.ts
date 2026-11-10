@@ -103,6 +103,7 @@ test('import preserves transformed millimetres, spacing, closure and document ge
   expect(ring.design.width).toBeCloseTo(10,3);
   expect(ring.design.centerX-open.design.centerX).toBeCloseTo(35,3);
   await upload(page,'restore.json',saved);
+  await expect(page.locator('[role=status]')).toContainText('Composition opened');
   expect(JSON.parse(await downloaded(page,'Save')).strands).toEqual(doc.strands);
 });
 
