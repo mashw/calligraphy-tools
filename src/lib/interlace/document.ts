@@ -42,7 +42,7 @@ export function importSvg(xml:string,sheet:Sheet):Strand[] {
   const doc=new DOMParser().parseFromString(xml,'image/svg+xml'), root=doc.documentElement;
   if(root.localName!=='svg'||doc.querySelector('parsererror')) throw Error('Invalid SVG document.');
   const paths=[...root.querySelectorAll('path')].filter(p=>!p.closest('defs,clipPath,mask,symbol'));
-  if(root.querySelector('[clip-path],[mask],[filter],[display="none"],[visibility="hidden"],[style],foreignObject'))
+  if(root.querySelector('[clip-path],[mask],[filter],[display="none"],[visibility="hidden"],[style*="display"],[style*="visibility"],[style*="clip-path"],[style*="mask"],foreignObject'))
     throw Error('Remove hidden artwork and expand clipping, masks and styles to plain SVG paths before importing.');
   if(!paths.length || paths.length>100 || root.querySelector('use, image, rect:not(defs rect), circle, ellipse, line, polygon, polyline, text, style, [style*="transform"]')) throw Error('Convert artwork to SVG paths before importing.');
   // Only geometry attributes enter the measuring SVG. Never insert uploaded markup.

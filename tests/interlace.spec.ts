@@ -91,3 +91,35 @@ test('joined Copperplate is continuous in the workspace and retains underpass cu
   expect(await downloaded(page,'SVG')).not.toBe(snapshot);
   await join.click();expect(await downloaded(page,'SVG')).toBe(snapshot);
 });
+
+test('import preserves transformed millimetres, spacing, closure and document geometry',async({page})=>{
+  await page.goto('/interlace');
+  await upload(page,'group.svg','<svg xmlns="http://www.w3.org/2000/svg" width="80mm" height="40mm" viewBox="0 0 160 80"><g transform="translate(10 5) scale(2)"><path id="open" d="M0 0H20"/><path id="ring" d="M40 0h10v10h-10z"/></g></svg>');
+  await expect(page.getByRole('status')).toContainText('SVG paths added');
+  const saved=await downloaded(page,'Save'),doc=JSON.parse(saved);
+  const [,open,ring]=doc.strands;
+  expect(open.source.closed).toBe(false);expect(ring.source.closed).toBe(true);
+  expect(open.design.width).toBeCloseTo(20,3);
+  expect(ring.design.width).toBeCloseTo(10,3);
+  expect(ring.design.centerX-open.design.centerX).toBeCloseTo(35,3);
+  await upload(page,'restore.json',saved);
+  expect(JSON.parse(await downloaded(page,'Save')).strands).toEqual(doc.strands);
+});
+
+for(const preset of ['fraktur-scurve-weave-2','woven-double-circle']){
+  test('composition matches Path Guides preset '+preset,async({page})=>{
+    await page.goto('/path-guides');
+    const panel=page.getByRole('button',{name:'Page & straps',exact:true});
+    if(await panel.getAttribute('aria-expanded')==='false')await panel.click();
+    await page.locator('select').filter({has:page.locator('option[value="woven-double-circle"]')}).selectOption(preset);
+    const legacy=await downloaded(page,'Export preset JSON (dev)');
+    await page.goto('/interlace');
+    page.once('dialog',d=>d.accept());
+    await page.getByLabel('Composition preset').selectOption(preset);
+    const direct=JSON.parse(await downloaded(page,'Save'));
+    expect(direct.strands.length).toBe(2);
+    const svg=await downloaded(page,'SVG');
+    await upload(page,'legacy.json',legacy);
+    expect(await downloaded(page,'SVG')).toBe(svg);
+  });
+}

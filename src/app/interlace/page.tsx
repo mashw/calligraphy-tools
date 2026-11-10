@@ -43,6 +43,7 @@ export default function InterlaceStudio() {
   const [mat,setMat]=useState<CricutMatId>('12x12');
   const [plotOptions,setPlotOptions]=useState(DEFAULT_INTERLACE_PLOTTER_OPTIONS);
   const plot=useMemo(()=>plotOpen?buildInterlacePlotterExport(sheet,mat,plotOptions):null,[sheet,mat,plotOptions,plotOpen]);
+  const [contrast,setContrast]=useState(false);
   const upload=useRef<HTMLInputElement>(null);
   const [onlySelected,setOnlySelected]=useState(false);
   const svg=useRef<SVGSVGElement>(null),file=useRef<HTMLInputElement>(null);
@@ -87,7 +88,7 @@ export default function InterlaceStudio() {
       else {
         const raw=JSON.parse(text),result=openSheet(raw); setSheet(result.sheet);
         setActive(result.sheet.strands.find(s=>s.id===raw.editor?.active)?.id??result.sheet.strands[0]?.id??'');
-        setSimplify(raw.editor?.simplify===true);setPicked(null);setMode('Move');camera.restore(raw.editor?.camera);setNotice(result.notice);
+        setContrast(raw.editor?.contrast===true);setSimplify(raw.editor?.simplify===true);setPicked(null);setMode('Move');camera.restore(raw.editor?.camera);setNotice(result.notice);
       }
     } catch(e) {setNotice(e instanceof Error?e.message:'Could not read file.');}
   }
@@ -137,8 +138,8 @@ export default function InterlaceStudio() {
     const others=sheet.joins.filter(j=>j.from!==from&&j.to!==to);
     commit({...sheet,joins:active?others:[...others,{from,to}]});
   }
-  function reorder(delta:number) {
-    const items=[...sheet.strands],index=items.findIndex(s=>s.id===active),dest=index+delta;
+  function reorder(id:string,delta:number) {
+    const items=[...sheet.strands],index=items.findIndex(s=>s.id===id),dest=index+delta;
     if(index<0||dest<0||dest>=items.length)return;
     [items[index],items[dest]]=[items[dest],items[index]];commit({...sheet,strands:items});
   }
@@ -169,7 +170,7 @@ export default function InterlaceStudio() {
       onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={()=>{if(drag.current){setSheet(drag.current.sheet);drag.current=null;setBusy(false);}}}>
       <defs><clipPath id="interlace-paper"><rect width={page.w} height={page.h}/></clipPath></defs>
       <rect width={page.w} height={page.h} fill="white"/>
-      <g clipPath="url(#interlace-paper)">{full && <WovenScene scene={full}/>}
+      <g clipPath="url(#interlace-paper)">{full && <g style={contrast?{filter:"contrast(220%)"}:undefined}><WovenScene scene={full}/></g>}
         {full && mode==='Move' && entries.filter(e=>e.s.id===active).map(({s,route})=><path key={s.id}
           d={pointsD(route.points)} fill="none" stroke={s.color} strokeWidth={.28} strokeDasharray="1 2" pointerEvents="none"/>)}
         {entries.map(({s,route})=><path key={s.id} data-camera-interactive="" aria-label={s.name} d={pointsD(route.points)} fill="none"
@@ -186,7 +187,7 @@ export default function InterlaceStudio() {
       <DisclosureSection title="Composition" defaultOpen><div className={row}>
         <Select aria-label="Paper" value={sheet.paper} onChange={e=>commit({...sheet,paper:e.target.value as Sheet['paper']})}>{Object.keys(PAPERS_MM).map(p=><option key={p}>{p}</option>)}</Select>
         <Select aria-label="Orientation" value={sheet.orientation} onChange={e=>commit({...sheet,orientation:e.target.value as Sheet['orientation']})}><option>portrait</option><option>landscape</option></Select>
-        <Button onClick={()=>download(JSON.stringify({...sheet,editor:{active,simplify,camera:camera.snapshot}},null,2),'application/json','interlace.json')}>Save</Button>
+        <Button onClick={()=>download(JSON.stringify({...sheet,editor:{active,simplify,contrast,camera:camera.snapshot}},null,2),'application/json','interlace.json')}>Save</Button>
         <Button onClick={()=>file.current?.click()}>Open design</Button><input hidden type="file" ref={file} accept=".json" onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)void open(f);}}/>
         <Select aria-label="Composition preset" value="" onChange={e=>{
           const preset=compositionPresets.find(p=>p.id===e.target.value);
@@ -209,28 +210,41 @@ export default function InterlaceStudio() {
         }}/>
       </div></DisclosureSection>
       <DisclosureSection title="Strands" defaultOpen><div className="space-y-1">
-        {[...sheet.strands].reverse().map(s=><div className={row} key={s.id}><input aria-label={'Show '+s.name} type="checkbox" checked={s.visible} onChange={()=>commit({...sheet,strands:sheet.strands.map(v=>v.id===s.id?{...s,visible:!s.visible}:v)})}/>
-          <Button aria-pressed={s.id===active} style={{borderLeft:'3px solid '+s.color}} onClick={()=>setActive(s.id)}>{s.name}</Button><Button aria-label={'Toggle lock '+s.name} aria-pressed={s.locked} onClick={()=>commit({...sheet,strands:sheet.strands.map(v=>v.id===s.id?{...v,locked:!v.locked}:v)})}>{s.locked?'🔒':'🔓'}</Button></div>)}
+        {[...sheet.strands].reverse().map((s,index)=><div key={s.id}
+          className={'flex items-center gap-1 rounded px-1 text-sm '+(active===s.id?'bg-indigo-50':'')}>
+          <input type="checkbox" title="Visibility" aria-label={'Show '+s.name} checked={s.visible}
+            onChange={()=>commit({...sheet,strands:sheet.strands.map(v=>v.id===s.id?{...v,visible:!v.visible}:v)})}/>
+          <button className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left" aria-pressed={active===s.id} onClick={()=>setActive(s.id)}>
+            <span className="h-3 w-1 shrink-0 rounded" style={{background:s.color}}/><span className="truncate">{s.name}</span>
+          </button>
+          <button title={s.locked?'Unlock':'Lock'} aria-label={'Toggle lock '+s.name} aria-pressed={s.locked}
+            onClick={()=>commit({...sheet,strands:sheet.strands.map(v=>v.id===s.id?{...v,locked:!v.locked}:v)})}>{s.locked?'🔒':'🔓'}</button>
+          <button className="px-1 disabled:opacity-30" title="Raise" aria-label={'Raise '+s.name} disabled={s.locked||index===0} onClick={()=>reorder(s.id,1)}>↑</button>
+          <button className="px-1 disabled:opacity-30" title="Lower" aria-label={'Lower '+s.name} disabled={s.locked||index===sheet.strands.length-1} onClick={()=>reorder(s.id,-1)}>↓</button>
+        </div>)}
         {current && <div className={row}>
           <Button onClick={()=>add([{...current,id:crypto.randomUUID(),name:current.name+' copy',locked:false,group:'',design:{...current.design,centerX:(current.design.centerX??page.w/2)+5}}])}>Duplicate</Button>
           <Button disabled={current.locked} onClick={()=>{const rest=sheet.strands.filter(s=>s.id!==active);commit({...sheet,strands:rest,joins:sheet.joins.filter(j=>j.from!==active&&j.to!==active),overrides:sheet.overrides.filter(o=>o.a.id!==active&&o.b.id!==active)});setActive(rest.at(-1)?.id??'');}}>Delete</Button>
-          <Button disabled={current.locked} onClick={()=>reorder(1)}>Raise</Button><Button disabled={current.locked} onClick={()=>reorder(-1)}>Lower</Button></div>}
+          </div>}
       </div></DisclosureSection>
     </div>} inspector={<>
+      <DisclosureSection title="Preview appearance"><label><input type="checkbox" checked={contrast} onChange={e=>setContrast(e.target.checked)}/> High contrast</label></DisclosureSection>
       <details><summary>Notices {warn.length? '('+warn.length+')':''}</summary>{warn.map((w,i)=><p key={i}>{w}</p>)}</details>
       <div role="status" className="text-xs max-h-12 overflow-auto">{notice}</div>
       {current && <fieldset disabled={current.locked} className="min-w-0">
-        <DisclosureSection title="Strand & transform" defaultOpen><div className="space-y-2 text-sm">
+        <DisclosureSection title="Strand properties"><div className="space-y-2 text-sm">
           <label>Name <input value={current.name} onChange={e=>patch({name:e.target.value})}/></label>
           <label>Group <input value={current.group} placeholder="Group name" onChange={e=>patch({group:e.target.value})}/></label>
           <label>Editing colour <input type="color" value={current.color} onChange={e=>patch({color:e.target.value})}/></label>
+        </div></DisclosureSection>
+        <DisclosureSection title="Position & transform" defaultOpen><div className="space-y-2 text-sm">
           <div onPointerDown={()=>setBusy(true)} onPointerUp={()=>setBusy(false)} onPointerCancel={()=>setBusy(false)} onBlur={()=>setBusy(false)}>
           {measure('X (mm)',current.design.centerX??page.w/2,v=>design({centerX:v}),-10000,10000,.5)}
           {measure('Y (mm)',current.design.centerY??page.h/2,v=>design({centerY:v}),-10000,10000,.5)}
           {measure('Width (mm)',current.design.width,v=>design({width:v}),.01,10000,.5)}
           {measure('Height (mm)',current.design.height,v=>design({height:v}),.01,10000,.5)}
           {measure('Scale (%)',current.scale,v=>patch({scale:v}),.01,1000)}
-          {measure('Rotation (°)',current.design.rotation,v=>design({rotation:v}),-180,180)}
+          <input type="range" aria-label="Rotate strand" min={-180} max={180} step={1} value={current.design.rotation} onChange={e=>design({rotation:Number(e.target.value)})}/>{measure('Rotation (°)',current.design.rotation,v=>design({rotation:v}),-180,180)}
           {current.source.kind==='rosette' && measure('Loop depth',current.design.loop,v=>design({loop:v}),.22,.42,.01)}</div>
           <div className={row}><Button onClick={()=>design({centerX:page.w/2})}>Centre X</Button><Button onClick={()=>design({centerY:page.h/2})}>Centre Y</Button>
             <Button aria-pressed={current.mirror} onClick={()=>patch({mirror:!current.mirror})}>Mirror</Button>
