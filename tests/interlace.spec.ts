@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 async function downloaded(page:Page, label:string) {
   const waiting=page.waitForEvent('download');
@@ -106,18 +106,37 @@ test('import preserves transformed millimetres, spacing, closure and document ge
   expect(JSON.parse(await downloaded(page,'Save')).strands).toEqual(doc.strands);
 });
 
+async function sampledRoutes(paths: Locator) {
+  return paths.evaluateAll(nodes=>nodes.map(node=>{
+    const path=node as SVGPathElement;
+    return Array.from({length:21},(_,i)=>{
+      const p=path.getPointAtLength(path.getTotalLength()*i/20);
+      return {x:p.x,y:p.y};
+    });
+  }));
+}
+
 for(const preset of ['fraktur-scurve-weave-2','woven-double-circle']){
   test('composition matches Path Guides preset '+preset,async({page})=>{
     await page.goto('/path-guides');
     const panel=page.getByRole('button',{name:'Page & straps',exact:true});
     if(await panel.getAttribute('aria-expanded')==='false')await panel.click();
     await page.locator('select').filter({has:page.locator('option[value="woven-double-circle"]')}).selectOption(preset);
+    const simplify=page.getByRole('button',{name:'Simplify',exact:true});
+    if(await simplify.getAttribute('aria-pressed')==='true')await simplify.click();
+    const originals=await sampledRoutes(page.locator('svg.editor-svg path[stroke-width="0.9"][vector-effect="non-scaling-stroke"]'));
+    expect(originals.length).toBe(2);
     const legacy=await downloaded(page,'Export preset JSON (dev)');
     await page.goto('/interlace');
     page.once('dialog',d=>d.accept());
     await page.getByLabel('Composition preset').selectOption(preset);
     const direct=JSON.parse(await downloaded(page,'Save'));
     expect(direct.strands.length).toBe(2);
+    const studio=await sampledRoutes(page.locator('svg.editor-svg path[aria-label][data-camera-interactive]'));
+    studio.forEach((route,index)=>route.forEach((p,k)=>{
+      const q=originals[index][k];
+      expect(Math.hypot(p.x-q.x,p.y-q.y)).toBeLessThan(.03);
+    }));
     const svg=await downloaded(page,'SVG');
     await upload(page,'legacy.json',legacy);
     expect(await downloaded(page,'SVG')).toBe(svg);
