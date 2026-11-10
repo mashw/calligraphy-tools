@@ -9,6 +9,8 @@ jobs:
     if: github.head_ref == 'feature/interlace-studio'
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      PLAYWRIGHT_PRODUCTION: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
