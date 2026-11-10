@@ -20,6 +20,8 @@ import { fromPath, importSvg, openSheet } from '@/lib/interlace/document';
 import { CRICUT_MATS, type CricutMatId } from '@/lib/layout/plotter-export';
 import { buildInterlacePlotterExport, DEFAULT_INTERLACE_PLOTTER_OPTIONS } from '@/lib/interlace/plotter-export';
 
+import { compositionPresets } from '@/lib/paths/composition-presets';
+
 type Mode = 'Move'|'Crossings'|'Joins';
 const row='flex flex-wrap items-center gap-2';
 function download(data:BlobPart,type:string,name:string) {
@@ -41,6 +43,8 @@ export default function InterlaceStudio() {
   const [mat,setMat]=useState<CricutMatId>('12x12');
   const [plotOptions,setPlotOptions]=useState(DEFAULT_INTERLACE_PLOTTER_OPTIONS);
   const plot=useMemo(()=>plotOpen?buildInterlacePlotterExport(sheet,mat,plotOptions):null,[sheet,mat,plotOptions,plotOpen]);
+  const upload=useRef<HTMLInputElement>(null);
+  const [onlySelected,setOnlySelected]=useState(false);
   const svg=useRef<SVGSVGElement>(null),file=useRef<HTMLInputElement>(null);
   const drag=useRef<{sheet:Sheet;id:string;inverse:DOMMatrix;x:number;y:number;pointer:number}|null>(null);
   const current=sheet.strands.find(s=>s.id===active);
@@ -171,7 +175,7 @@ export default function InterlaceStudio() {
         {entries.map(({s,route})=><path key={s.id} data-camera-interactive="" aria-label={s.name} d={pointsD(route.points)} fill="none"
           stroke={s.color} strokeWidth={full?7:1} strokeOpacity={full?0:1} pointerEvents={mode==='Move'?'stroke':'none'}
           style={{cursor:s.locked?'default':'move'}} onPointerDown={e=>start(e,s)}/>)}
-        {mode==='Crossings' && graph?.hits.map((h,i)=><g key={i} data-camera-interactive="" data-crossing-kind={h.a.id===h.b.id?'self':'between'} onClick={()=>flip(h)}>
+        {mode==='Crossings' && graph?.hits.map((h,i)=>(!onlySelected||h.a.id===active||h.b.id===active)&&<g key={i} data-camera-interactive="" data-crossing-kind={h.a.id===h.b.id?'self':'between'} onClick={()=>flip(h)}>
           <circle cx={h.point.x} cy={h.point.y} r={2.8} fill={picked&&sameCrossing(picked,h,.025)?'#4f46e5':'white'} stroke="#334155" strokeWidth={.35}/>
           <text x={h.point.x} y={h.point.y+.8} textAnchor="middle" fontSize={2.2} fill={picked&&sameCrossing(picked,h,.025)?'white':'black'}>{i+1}</text></g>)}
         {mode==='Joins' && joins.map(j=><circle key={j.from.id+j.to.id} cx={j.point.x} cy={j.point.y} r={2.4}
@@ -183,14 +187,31 @@ export default function InterlaceStudio() {
         <Select aria-label="Paper" value={sheet.paper} onChange={e=>commit({...sheet,paper:e.target.value as Sheet['paper']})}>{Object.keys(PAPERS_MM).map(p=><option key={p}>{p}</option>)}</Select>
         <Select aria-label="Orientation" value={sheet.orientation} onChange={e=>commit({...sheet,orientation:e.target.value as Sheet['orientation']})}><option>portrait</option><option>landscape</option></Select>
         <Button onClick={()=>download(JSON.stringify({...sheet,editor:{active,simplify,camera:camera.snapshot}},null,2),'application/json','interlace.json')}>Save</Button>
-        <Button onClick={()=>file.current?.click()}>Open / import</Button><input hidden type="file" ref={file} accept=".svg,.json" onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)void open(f);}}/>
+        <Button onClick={()=>file.current?.click()}>Open design</Button><input hidden type="file" ref={file} accept=".json" onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)void open(f);}}/>
+        <Select aria-label="Composition preset" value="" onChange={e=>{
+          const preset=compositionPresets.find(p=>p.id===e.target.value);
+          if(!preset || (sheet.strands.length && !window.confirm('Replace the current composition with '+preset.name+'?')))return;
+          try {
+            const result=openSheet({version:1,format:'calligraphy-tools/path-guides-preset',state:preset.state});
+            setSheet(result.sheet);setActive(preset.state.activeId);setPicked(null);setMode('Move');camera.restore(undefined);setNotice(result.notice);
+          }catch(error){setNotice(String(error));}
+        }}><option value="">Composition presets…</option>{compositionPresets.map(p=><option value={p.id} key={p.id}>{p.name}</option>)}</Select>
       </div></DisclosureSection>
-      <DisclosureSection title="Strands" defaultOpen><div className="space-y-2"><div className={row}>
+      <DisclosureSection title="Add strand" defaultOpen><div className={row}>
         <Select aria-label="Strand source" value={source} onChange={e=>setSource(e.target.value)}><option value="rosette">Six-loop rosette</option><option value="figure-eight">Figure-eight</option>
-          {SHAPE_OPTIONS.map(v=><option key={v.kind} value={v.kind}>{v.label}</option>)}</Select><Button onClick={addSource}>Add strand</Button></div>
+          {SHAPE_OPTIONS.map(v=><option key={v.kind} value={v.kind}>{v.label}</option>)}</Select><Button onClick={addSource}>Add strand</Button>
+        <Button onClick={()=>upload.current?.click()}>Import SVG</Button>
+        <input hidden type="file" aria-label="Import SVG files" ref={upload} accept=".svg" multiple onChange={async e=>{
+          const files=Array.from(e.target.files??[]);e.target.value='';
+          try {const imported=(await Promise.all(files.map(async f=>importSvg(await f.text(),sheet)))).flat();
+            if(imported.length){add(imported);setNotice('SVG paths added.');}
+          }catch(error){setNotice(String(error));}
+        }}/>
+      </div></DisclosureSection>
+      <DisclosureSection title="Strands" defaultOpen><div className="space-y-1">
         {[...sheet.strands].reverse().map(s=><div className={row} key={s.id}><input aria-label={'Show '+s.name} type="checkbox" checked={s.visible} onChange={()=>commit({...sheet,strands:sheet.strands.map(v=>v.id===s.id?{...s,visible:!s.visible}:v)})}/>
-          <Button aria-pressed={s.id===active} style={{borderLeft:'3px solid '+s.color}} onClick={()=>setActive(s.id)}>{s.name}{s.locked?' 🔒':''}</Button></div>)}
-        {current && <div className={row}><Button onClick={()=>patch({locked:!current.locked})}>{current.locked?'Unlock':'Lock'}</Button>
+          <Button aria-pressed={s.id===active} style={{borderLeft:'3px solid '+s.color}} onClick={()=>setActive(s.id)}>{s.name}</Button><Button aria-label={'Toggle lock '+s.name} aria-pressed={s.locked} onClick={()=>commit({...sheet,strands:sheet.strands.map(v=>v.id===s.id?{...v,locked:!v.locked}:v)})}>{s.locked?'🔒':'🔓'}</Button></div>)}
+        {current && <div className={row}>
           <Button onClick={()=>add([{...current,id:crypto.randomUUID(),name:current.name+' copy',locked:false,group:'',design:{...current.design,centerX:(current.design.centerX??page.w/2)+5}}])}>Duplicate</Button>
           <Button disabled={current.locked} onClick={()=>{const rest=sheet.strands.filter(s=>s.id!==active);commit({...sheet,strands:rest,joins:sheet.joins.filter(j=>j.from!==active&&j.to!==active),overrides:sheet.overrides.filter(o=>o.a.id!==active&&o.b.id!==active)});setActive(rest.at(-1)?.id??'');}}>Delete</Button>
           <Button disabled={current.locked} onClick={()=>reorder(1)}>Raise</Button><Button disabled={current.locked} onClick={()=>reorder(-1)}>Lower</Button></div>}
@@ -221,11 +242,11 @@ export default function InterlaceStudio() {
           <Button aria-pressed={current.design.reverse} onClick={()=>design({reverse:!current.design.reverse})}>Reverse direction</Button>
           {closed && measure('Start (%)',current.design.start,v=>design({start:v}),0,100,.5)}
           {closed && measure('Start gap (mm)',current.design.gap,v=>design({gap:v}),0,40,.5)}
-          {measure('Clearance (mm)',current.design.clearance,v=>design({clearance:v}),0,4,.1)}
+          <Button aria-pressed={current.design.clearance===0} onClick={()=>design({clearance:0})}>Tight / Flush</Button><input aria-label="Extra clearance" type="range" min={0} max={4} step={.1} value={current.design.clearance} onChange={e=>design({clearance:Number(e.target.value)})}/>{measure('Clearance (mm)',current.design.clearance,v=>design({clearance:v}),0,4,.1)}
         </div></DisclosureSection>
       </fieldset>}
       {mode==='Crossings' && graph && <DisclosureSection title="Crossing order" defaultOpen>
-        <div className={row}>{graph.hits.map((h,i)=><Button key={i} aria-pressed={!!picked&&sameCrossing(picked,h,.025)} onClick={()=>setPicked(h)}>{i+1}</Button>)}</div>
+        <label><input type="checkbox" checked={onlySelected} onChange={e=>setOnlySelected(e.target.checked)}/> Selected strand only</label><div className={row}>{graph.hits.map((h,i)=>(!onlySelected||h.a.id===active||h.b.id===active)&&<Button key={i} aria-pressed={!!picked&&sameCrossing(picked,h,.025)} onClick={()=>setPicked(h)}>{i+1}</Button>)}</div>
         {graph.hits.filter(h=>picked && sameCrossing(h,picked,.025)).map((h,i)=><Button key={i} onClick={()=>flip(h)}>Flip · {sheet.strands.find(s=>s.id===h[h.over].id)?.name} over ({h.over.toUpperCase()})</Button>)}
         <Button onClick={()=>commit({...sheet,overrides:[]})}>Restore alternating weave</Button></DisclosureSection>}
       {mode==='Joins' && <DisclosureSection title="Endpoint joins" defaultOpen><p className="text-xs">Align the end of one open strand with the start of another using the same writing settings.</p>

@@ -6,7 +6,7 @@ async function point(path: Locator) {
     return path.evaluate(node=>{const geometry=node as SVGPathElement,p=geometry.getPointAtLength(geometry.getTotalLength()*.45).matrixTransform(geometry.getScreenCTM()!);return{x:p.x,y:p.y,scale:geometry.getScreenCTM()!.a};});
   }
   await path.locator('xpath=ancestor::svg').scrollIntoViewIfNeeded();
-  await path.evaluate(node=>node.ownerDocument.defaultView!.scrollBy(0, node.ownerSVGElement!.getBoundingClientRect().top - 150));
+  await path.evaluate(node=>node.ownerDocument.defaultView!.scrollBy(0, (node as SVGPathElement).ownerSVGElement!.getBoundingClientRect().top - 150));
   await path.page().waitForTimeout(200);
   return path.evaluate(node => {
     const geometry = node as SVGPathElement;

@@ -8,7 +8,7 @@ async function downloaded(page:Page, label:string) {
   return readFile(path!,'utf8');
 }
 async function upload(page:Page,name:string,content:string) {
-  await page.locator('input[type=file]').setInputFiles({name,mimeType:name.endsWith('.json')?'application/json':'image/svg+xml',buffer:Buffer.from(content)});
+  await page.locator(name.endsWith('.svg')?'input[accept=".svg"]':'input[accept=".json"]').setInputFiles({name,mimeType:name.endsWith('.json')?'application/json':'image/svg+xml',buffer:Buffer.from(content)});
 }
 test('mixed sheet retains full vector export across camera, Simplify and Save/Open',async({page})=>{
   await page.goto('/interlace');
@@ -66,7 +66,7 @@ test('imports original Woven and multi-strap Path Guides downloads',async({page}
 
 test('joined Copperplate is continuous in the workspace and retains underpass cuts in Cricut output',async({page})=>{
   await page.goto('/interlace');
-  await page.locator('input[type=file]').setInputFiles('tests/fixtures/interlace-join.json');
+  await page.locator('input[accept=".json"]').setInputFiles('tests/fixtures/interlace-join.json');
   await expect(page.locator('[role=status]')).toContainText('Composition opened');
   await page.getByRole('button',{name:'Fit content',exact:true}).click();
   await page.getByRole('button',{name:'Joins',exact:true}).click();
