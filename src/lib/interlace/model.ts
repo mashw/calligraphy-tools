@@ -56,11 +56,11 @@ function detect(entries: Entry[]) {
   for(const segment of segments) {
     active=active.filter(s=>s.right+1e-8>=segment.left);
     for(const other of active) {
-      if(other.bottom<segment.top || segment.bottom<other.top)continue;
+      if(other.bottom+1e-8<segment.top || segment.bottom+1e-8<other.top)continue;
       const same=other.entry===segment.entry;
       const gap=Math.abs(other.k-segment.k);
       if(same && (gap<=1 || (segment.entry.route.closed && gap===segment.entry.route.points.length-2)))continue;
-      const hit=segmentIntersection(other.p,other.q,segment.p,segment.q);
+      const hit=segmentIntersection(other.p,other.q,segment.p,segment.q,1e-8);
       if(!hit)continue;
       const first=passage(other,hit.t), second=passage(segment,hit.u);
       if((!other.entry.route.closed && (first.t<1e-7 || first.t>1-1e-7)) ||

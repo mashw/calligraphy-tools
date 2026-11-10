@@ -1,7 +1,7 @@
 import { findCrossingsForStraps, slotOrderForPair } from '../paths/intersections';
 import { samplePathDToPolyline } from '../paths/sample-svg-path';
 import { PAPERS_MM } from '../curve-helpers';
-import { parseDesign, DEFAULT_DESIGN, pageSize, type Design } from '../woven/design';
+import { parseDesign, DEFAULT_DESIGN, pageSize } from '../woven/design';
 import { findSelfCrossings, makeRoute, type Point } from '../woven/geometry';
 import { canJoin, initialSheet, strand, strandRoute, topology, type Source, type Strand, type Sheet } from './model';
 
@@ -124,7 +124,7 @@ export function openSheet(value:unknown):{sheet:Sheet; notice:string} {
       const ratio=p.copperplateRatioPreset==='custom'?[p.copperplateDescUnitsText,p.copperplateXUnitsText,p.copperplateAscUnitsText].map(Number):
         String(p.copperplateRatioPreset??'3:2:3').split(':').map(Number);
       return readStrand({...s,baselineSource:true,id:p.id,color:p.color??s.color,scale,mirror:!!p.flip,invert:!!p.invertGuides,
-        design:{...s.design,script:p.script,slantStyle:p.slantStyle??'classic',construction:p.constructionGuides??s.design.construction,
+        design:{...s.design,...(p.script==='InsularMajuscule'?{gridHorizontal:!!p.showInsularGrid,gridVertical:!!p.showInsularGrid}:{}),script:p.script,slantStyle:p.slantStyle??'classic',construction:p.constructionGuides??s.design.construction,
           centerX:centroid.x+offset.x+dx*Math.cos(angle)-dy*Math.sin(angle),centerY:centroid.y+offset.y+dx*Math.sin(angle)+dy*Math.cos(angle),
           rotation,penAngle:p.nibAngleDeg,nib:copper?1:Number(p.nibMMText),xNib:x,ascNib:copper?x*ratio[2]/ratio[1]:Number(p.ascNibText??3),
           descNib:copper?x*ratio[0]/ratio[1]:Number(p.descNibText??2)}});

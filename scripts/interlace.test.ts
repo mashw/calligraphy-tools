@@ -77,6 +77,10 @@ test('Cricut uses physical centrelines, mat safety and an opt-in ruler', async()
   const ruler=buildInterlacePlotterExport(sheet,'12x12',{...defaults,ruler:true});
   assert.equal(clean.safety.reasons.length,0);
   assert.equal(ruler.polylineCount,clean.polylineCount+7);
+  const size=/width="([^"]+)in" height="([^"]+)in" viewBox="([^"]+)"/.exec(clean.svg)!;
+  const box=size[3].split(' ').map(Number);
+  assert.ok(Math.abs(Number(size[1])*25.4-box[2])<.0001);
+  assert.ok(Math.abs(Number(size[2])*25.4-box[3])<.0001);
   assert.match(clean.svg,/fill="none"/);
   assert.doesNotMatch(clean.svg,/<mask|clipPath|<image/);
   sheet.strands[0].design.centerX=5;
@@ -104,5 +108,20 @@ test('flush and extra clearance end each underpassing rail at the rotated upper 
       const normalDistance=Math.abs(-(end.x-100)*Math.sin(rad)+(end.y-100)*Math.cos(rad));
       assert.ok(Math.abs(normalDistance-4-clearance)<1e-6);
     }
+  }
+});
+
+test('curved self-crossings retain physical plotter breaks after changing the overpass', async()=>{
+  const {buildInterlacePlotterExport}=await import('../src/lib/interlace/plotter-export');
+  for(const kind of ['rosette','figure-eight'] as const){
+    const sheet=initialSheet(),item=sheet.strands[0];
+    item.source={kind};item.design.clearance=0;
+    const graph=topology(sheet),hit=graph.hits[0];
+    const before=buildInterlacePlotterExport(sheet,'12x12').svg;
+    sheet.overrides=[{...rememberCrossing(hit,graph.hits),over:hit.over==='a'?'b':'a'}];
+    const after=buildInterlacePlotterExport(sheet,'12x12').svg;
+    assert.notEqual(before,after);
+    assert.doesNotMatch(after,/NaN|Infinity|<mask|clipPath/);
+    assert.equal(after,buildInterlacePlotterExport(openSheet(JSON.parse(JSON.stringify(sheet))).sheet,'12x12').svg);
   }
 });

@@ -17,7 +17,7 @@ type RawCrossing = Omit<Crossing, 'id' | 'overId'>;
 
 const PARALLEL_EPS = 1e-8;
 
-export function segmentIntersection(a0: Pt, a1: Pt, b0: Pt, b1: Pt): { x: number; y: number; t: number; u: number } | null {
+export function segmentIntersection(a0: Pt, a1: Pt, b0: Pt, b1: Pt, endpointTolerance = 0): { x: number; y: number; t: number; u: number } | null {
   const r = { x: a1.x - a0.x, y: a1.y - a0.y };
   const s = { x: b1.x - b0.x, y: b1.y - b0.y };
   const denom = r.x * s.y - r.y * s.x;
@@ -28,13 +28,13 @@ export function segmentIntersection(a0: Pt, a1: Pt, b0: Pt, b1: Pt): { x: number
   const t = (qp.x * s.y - qp.y * s.x) / denom;
   const u = (qp.x * r.y - qp.y * r.x) / denom;
 
-  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+  if (t < -endpointTolerance || t > 1+endpointTolerance || u < -endpointTolerance || u > 1+endpointTolerance) return null;
 
   return {
     x: a0.x + t * r.x,
     y: a0.y + t * r.y,
-    t,
-    u,
+    t: Math.min(1,Math.max(0,t)),
+    u: Math.min(1,Math.max(0,u)),
   };
 }
 

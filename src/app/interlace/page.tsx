@@ -88,7 +88,7 @@ export default function InterlaceStudio() {
       else {
         const raw=JSON.parse(text),result=openSheet(raw); setSheet(result.sheet);
         setActive(result.sheet.strands.find(s=>s.id===raw.editor?.active)?.id??result.sheet.strands[0]?.id??'');
-        setContrast(raw.editor?.contrast===true);setSimplify(raw.editor?.simplify===true);setPicked(null);setMode('Move');camera.restore(raw.editor?.camera);setNotice(result.notice);
+        setContrast(raw.editor?.contrast===true || raw.state?.highContrastMode===true);setSimplify(raw.editor?.simplify===true);setPicked(null);setMode('Move');camera.restore(raw.editor?.camera);setNotice(result.notice);
       }
     } catch(e) {setNotice(e instanceof Error?e.message:'Could not read file.');}
   }
@@ -122,9 +122,11 @@ export default function InterlaceStudio() {
     const d=drag.current;if(!d||d.pointer!==e.pointerId)return;
     const p=point(e,d.inverse),member=d.sheet.strands.find(s=>s.id===d.id)!;
     const snap=(v:number)=>d.sheet.snap?Math.round(v*2)/2:v;
+    const cx=member.design.centerX??page.w/2,cy=member.design.centerY??page.h/2;
+    const dx=snap(cx+p.x-d.x)-cx,dy=snap(cy+p.y-d.y)-cy;
     setSheet({...d.sheet,strands:d.sheet.strands.map(s=>{
       if(s.locked || (s.id!==member.id && (!member.group || member.group!==s.group))) return s;
-      return {...s,design:{...s.design,centerX:snap((s.design.centerX??page.w/2)+p.x-d.x),centerY:snap((s.design.centerY??page.h/2)+p.y-d.y)}};
+      return {...s,design:{...s.design,centerX:(s.design.centerX??page.w/2)+dx,centerY:(s.design.centerY??page.h/2)+dy}};
     })});
   }
   function finish(e:PointerEvent<SVGSVGElement>) {
@@ -171,8 +173,6 @@ export default function InterlaceStudio() {
       <defs><clipPath id="interlace-paper"><rect width={page.w} height={page.h}/></clipPath></defs>
       <rect width={page.w} height={page.h} fill="white"/>
       <g clipPath="url(#interlace-paper)">{full && <g style={contrast?{filter:"contrast(220%)"}:undefined}><WovenScene scene={full}/></g>}
-        {full && mode==='Move' && entries.filter(e=>e.s.id===active).map(({s,route})=><path key={s.id}
-          d={pointsD(route.points)} fill="none" stroke={s.color} strokeWidth={.28} strokeDasharray="1 2" pointerEvents="none"/>)}
         {entries.map(({s,route})=><path key={s.id} data-camera-interactive="" aria-label={s.name} d={pointsD(route.points)} fill="none"
           stroke={s.color} strokeWidth={full?7:1} strokeOpacity={full?0:1} pointerEvents={mode==='Move'?'stroke':'none'}
           style={{cursor:s.locked?'default':'move'}} onPointerDown={e=>start(e,s)}/>)}
