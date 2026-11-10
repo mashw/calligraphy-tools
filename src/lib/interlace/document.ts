@@ -42,10 +42,14 @@ export function importSvg(xml:string,sheet:Sheet):Strand[] {
   const doc=new DOMParser().parseFromString(xml,'image/svg+xml'), root=doc.documentElement;
   if(root.localName!=='svg'||doc.querySelector('parsererror')) throw Error('Invalid SVG document.');
   const paths=[...root.querySelectorAll('path')].filter(p=>!p.closest('defs,clipPath,mask,symbol'));
+  if(root.querySelector('[clip-path],[mask],[filter],[display="none"],[visibility="hidden"],[style],foreignObject'))
+    throw Error('Remove hidden artwork and expand clipping, masks and styles to plain SVG paths before importing.');
   if(!paths.length || paths.length>100 || root.querySelector('use, image, rect:not(defs rect), circle, ellipse, line, polygon, polyline, text, style, [style*="transform"]')) throw Error('Convert artwork to SVG paths before importing.');
   // Only geometry attributes enter the measuring SVG. Never insert uploaded markup.
   const viewport=document.createElementNS(NS,'svg');
   const view=root.getAttribute('viewBox')?.trim().split(/[\s,]+/).map(Number);
+  if(view && (view.length!==4 || view.some(n=>!Number.isFinite(n)) || view[2]<=0 || view[3]<=0))
+    throw Error('SVG viewBox must have a positive width and height.');
   function mm(attr:string,fallback:number) {
     const raw=root.getAttribute(attr); if(!raw || raw.endsWith('%')) return fallback*25.4/96;
     const m=/^\s*(\d+(?:\.\d+)?)\s*(mm|cm|in|pt|px)?\s*$/.exec(raw);

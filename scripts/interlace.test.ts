@@ -84,3 +84,25 @@ test('Cricut uses physical centrelines, mat safety and an opt-in ruler', async()
   sheet.paper='A3';sheet.orientation='landscape';
   assert.equal(buildInterlacePlotterExport(sheet,'12x12').safety.pageFitsPhysicalMat,false);
 });
+
+test('flush and extra clearance end each underpassing rail at the rotated upper band edge',()=>{
+  for(const angle of [90,22]) for(const clearance of [0,1.5]){
+    const sheet=initialSheet();
+    const line={kind:'path' as const,d:'M-55 0H55',width:110,height:1,closed:false,points:[{x:-55,y:0},{x:55,y:0}]};
+    const under=strand('under','Under',line,{...DEFAULT_DESIGN,script:'Copperplate',centerX:100,centerY:100,width:110,height:1,xNib:4,fullGuides:false,gap:0,clearance});
+    const over=strand('over','Over',line,{...under.design,xNib:8,rotation:angle});
+    sheet.strands=[under,over];
+    const hit=topology(sheet).hits[0];
+    sheet.overrides=[{...hit,over:hit.a.id==='over'?'a':'b'}];
+    const strokes=renderSheet(sheet,undefined,{ruler:false}).strokes.filter(s=>s.role==='primary');
+    const horizontal=strokes.filter(s=>Math.abs(s.points[0].y-s.points.at(-1)!.y)<1e-6);
+    assert.equal(horizontal.length,4);
+    const rad=angle*Math.PI/180;
+    for(const rail of horizontal){
+      const end=rail.points.find(p=>p.x>46 && p.x<154)!;
+      assert.ok(end);
+      const normalDistance=Math.abs(-(end.x-100)*Math.sin(rad)+(end.y-100)*Math.cos(rad));
+      assert.ok(Math.abs(normalDistance-4-clearance)<1e-6);
+    }
+  }
+});

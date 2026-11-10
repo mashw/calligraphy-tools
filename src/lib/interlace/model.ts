@@ -1,9 +1,10 @@
 import { clipPolylineToRect } from '../layout/plotter-export';
-import { makeSlantRoute } from '../guides/slant-paths';
+import { offset } from "../curve-helpers";
+import { clipSlantToBand, makeSlantRoute } from '../guides/slant-paths';
 import { transformPolyline } from '../paths/transform';
 import { segmentIntersection } from '../paths/intersections';
 import { DEFAULT_DESIGN, pageSize, type Design } from '../woven/design';
-import { makeRoute, minimumRadius, visibleIntervals, type Point, type Route } from '../woven/geometry';
+import { makeRoute, minimumRadius, sliceGuide, visibleIntervals, type Interval, type Point, type Route } from '../woven/geometry';
 import { writingStrokes } from '../woven/model';
 import type { Scene } from '../woven/vector-export';
 
@@ -155,6 +156,33 @@ export function canJoin(a:Entry,b:Entry) {
   const dx=end.x-prev.x,dy=end.y-prev.y,ex=next.x-start.x,ey=next.y-start.y;
   return dx*ex+dy*ey>.985*Math.hypot(dx,dy)*Math.hypot(ex,ey);
 }
+// Partition by visits in source order so clipping an underpass never cuts the
+// other visit of a self-crossing. Closed passages can straddle the source seam.
+function passageIntervals(entry: Entry, passage: Passage, hits: Hit[]): Interval[] {
+  const route = entry.route;
+  const visits = hits.flatMap(h=>[h.a,h.b]).filter(p=>p.id===passage.id)
+    .map(p=>distance(route,p.t)).sort((a,b)=>a-b);
+  const at = distance(route,passage.t), i = visits.indexOf(at), len = route.length;
+  const left = i ? (at+visits[i-1])/2 : route.closed ? (at+visits[visits.length-1]-len)/2 : 0;
+  const right = i+1<visits.length ? (at+visits[i+1])/2 : route.closed ? (at+visits[0]+len)/2 : len;
+  const parts: Interval[] = [];
+  if(left<0)parts.push([left+len,len]);
+  parts.push([Math.max(left,0),Math.min(right,len)]);
+  if(right>len)parts.push([0,right-len]);
+  return parts;
+}
+
+function bandFootprint(entry: Entry, passage: Passage, hits: Hit[], clearance: number) {
+  const {s,route}=entry, {x,asc,desc}=metrics(s);
+  const sign=s.design.reverse?-1:1;
+  const baseline=s.baselineSource?route.points:offset(route.points,sign*x/2);
+  const top=-x-(s.design.fullGuides?(s.invert?desc:asc):0)-clearance;
+  const bottom=(s.design.fullGuides?(s.invert?asc:desc):0)+clearance;
+  const intervals=passageIntervals(entry,passage,hits);
+  const rail=(amount:number)=>{const edge=offset(baseline,amount*sign);return intervals.flatMap(i=>sliceGuide(route,edge,i));};
+  return [...rail(top),...rail(bottom).reverse()];
+}
+
 export function renderSheet(sheet:Sheet, graph=topology(sheet), { ruler = true } = {}) {
   const {entries,hits}=graph, page=pageSize(sheet), scene:Scene={page,strokes:[],labels:[]};
   const byId=new Map(entries.map(e=>[e.s.id,e]));
@@ -169,9 +197,10 @@ export function renderSheet(sheet:Sheet, graph=topology(sheet), { ruler = true }
   for(const root of [...entries.filter(e=>!previous.has(e.s.id)),...entries]) {
     if(rendered.has(root.s.id)) continue;
     let current:Entry|undefined=root;
+    const masks:{interval:Interval; polygon:Point[]}[]=[];
     const points:Point[]=[],cuts:{center:number;half:number}[]=[]; let length=0;
     while(current && !rendered.has(current.s.id)) {
-      const {s,route}=current, m=metrics(s), reverse=s.design.reverse;
+      const {s,route}=current, reverse=s.design.reverse;
       rendered.add(s.id);
       const path=directed(current);
       if(points.length) {
@@ -181,8 +210,10 @@ export function renderSheet(sheet:Sheet, graph=topology(sheet), { ruler = true }
       for(const h of hits) {
         const under=h.over==='a'?h.b:h.a;
         if(under.id!==s.id) continue;
-        const at=distance(route,under.t), over=metrics(byId.get(h[h.over].id)!.s);
-        cuts.push({center:length+(reverse?route.length-at:at),half:(over.band+m.band*h.cosine+s.design.clearance)/Math.max(1e-8,h.sine)});
+        const over=h[h.over];
+        const polygon=bandFootprint(byId.get(over.id)!,over,hits,s.design.clearance);
+        for(const [start,end] of passageIntervals(current,under,hits))
+          masks.push({interval:reverse?[length+route.length-end,length+route.length-start]:[length+start,length+end],polygon});
       }
       if(route.closed && s.design.gap>0) cuts.push({center:length+route.length*s.design.start/100,half:s.design.gap/2});
       length+=route.length; current=byId.get(next.get(s.id)??'');
@@ -193,7 +224,17 @@ export function renderSheet(sheet:Sheet, graph=topology(sheet), { ruler = true }
       return {center:(a+b)/2,half:(b-a)/2};
     });
     const m=metrics(root.s);
-    scene.strokes.push(...writingStrokes(root.s.design,route,visibleIntervals(route.length,clipped),m.x,m.asc,m.desc,root.s.invert,root.s.baselineSource?0:m.x/2));
+    for(const [start,end] of visibleIntervals(route.length,clipped)) {
+      const boundaries=[...new Set([start,end,...masks.flatMap(mask=>mask.interval).filter(v=>v>start && v<end)])].sort((a,b)=>a-b);
+      for(let i=1;i<boundaries.length;i++) {
+        const from=boundaries[i-1],to=boundaries[i],mid=(from+to)/2;
+        let strokes=writingStrokes(root.s.design,route,[[from,to]],m.x,m.asc,m.desc,root.s.invert,root.s.baselineSource?0:m.x/2);
+        for(const mask of masks.filter(m=>mid>=m.interval[0] && mid<=m.interval[1])) {
+          strokes=strokes.flatMap(stroke=>clipSlantToBand(stroke.points,mask.polygon,false).map(points=>({...stroke,points})));
+        }
+        scene.strokes.push(...strokes);
+      }
+    }
   }
   if (ruler) {
   const y=page.h-12;

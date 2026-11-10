@@ -229,6 +229,7 @@ export function writingStrokes(design: Design, route: import('../guides/slant-pa
           strokes.push({
             points,
             color: guide.color,
+            role: 'construction',
             width: design.gridThickness,
           });
     } else {
