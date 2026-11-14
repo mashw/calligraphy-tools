@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "test:interlace": "node --import ./scripts/register-ts.mjs --experimental-strip-types --test scripts/interlace.test.ts",
+    "test:interlace": "node --import ./scripts/register-ts.mjs --experimental-strip-types --test scripts/interlace.test.ts scripts/interlace-integration.test.ts",
     "test:woven": "node --import ./scripts/register-ts.mjs --experimental-strip-types --test scripts/woven.test.ts",
     "generate:renaissance": "node scripts/generate-renaissance-primitives.ts",
     "prebuild": "npm run generate:renaissance",

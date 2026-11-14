@@ -23,6 +23,8 @@ jobs:
       - run: npm run test:woven-controls
       - run: npm run test:woven-layout
       - run: npm run test:slant-styles
+      - run: npm run test:insular
+      - run: npm run test:custom-curves
       - run: npm run test:layout-shapes
       - run: npm run test:camera
       - run: npx tsc --noEmit
