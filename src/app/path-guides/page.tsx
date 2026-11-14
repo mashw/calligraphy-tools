@@ -1,5 +1,7 @@
 'use client';
 
+import { compositionPresets } from '@/lib/paths/composition-presets';
+import { circlePathD, SHAPE_OPTIONS, shapePathD, type ShapeKind } from '@/lib/paths/presets';
 import { InspectorIntro } from '@/components/editor/Controls';
 
 import { Button, NumericInput, Slider, Select, Toggle } from '@/components/editor/Controls';
@@ -24,7 +26,7 @@ import type { ConstructionGuideSettings } from '@/lib/guides/guide-template';
 import { PAPERS_MM, pathD } from '@/lib/curve-helpers';
 import { cloneSvgForRasterExport, computeRasterPxPerMM, mmToPt, printJpegDataUrlToScale, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 import { buildGuideSet } from '@/lib/guides/guide-template';
-import { findCrossingsForStraps, type Crossing, type Pt } from '@/lib/paths/intersections';
+import { slotOrderForPair, findCrossingsForStraps, type Crossing, type Pt } from '@/lib/paths/intersections';
 import { samplePathDToPolyline } from '@/lib/paths/sample-svg-path';
 import { transformPolyline } from '@/lib/paths/transform';
 import { SCRIPT_PROFILES, type ScriptId } from '@/lib/scripts';
@@ -418,35 +420,6 @@ type GuideJoinChain = {
 };
 
 
-const slotOrderForPair = (crossingsForPair: Crossing[], aPts: Pt[], bPts: Pt[]) => {
-  const ca = centroid(aPts);
-  const cb = centroid(bPts);
-  const dx = cb.x - ca.x;
-  const dy = cb.y - ca.y;
-  const len = Math.hypot(dx, dy);
-  const u = len > 1e-6 ? { x: dx / len, y: dy / len } : { x: 1, y: 0 };
-  const v = { x: -u.y, y: u.x };
-  const mid = { x: (ca.x + cb.x) / 2, y: (ca.y + cb.y) / 2 };
-
-  return crossingsForPair
-    .map((crossing) => {
-      const rx = crossing.x - mid.x;
-      const ry = crossing.y - mid.y;
-      return {
-        crossing,
-        t: rx * u.x + ry * u.y,
-        s: rx * v.x + ry * v.y,
-      };
-    })
-    .sort((left, right) => (
-      right.t - left.t
-      || left.s - right.s
-      || left.crossing.id.localeCompare(right.crossing.id)
-    ))
-    .map((entry) => entry.crossing.id);
-};
-
-
 const endpointKey = (strapId: string, side: EndpointSide) => `${strapId}:${side}`;
 
 const isOpenPolyline = (pts: Pt[]) => {
@@ -808,177 +781,12 @@ const buildCompatibleJoinedGuideData = ({
 
 
 
-function circlePathD(r = 40) {
-  return `M ${r} 0 A ${r} ${r} 0 1 1 ${-r} 0 A ${r} ${r} 0 1 1 ${r} 0 Z`;
-}
-
-const SHAPE_OPTIONS = [
-  { kind: 'circle', label: 'Circle' },
-  { kind: 'rounded-square', label: 'Rounded square' },
-  { kind: 'rounded-right-angle', label: 'Rounded right angle' },
-  { kind: 'hard-right-angle', label: 'Hard right angle' },
-  { kind: 'hard-square', label: 'Hard square' },
-  { kind: 'curved-arch', label: 'Curved arch' },
-  { kind: 'horseshoe', label: 'Horseshoe' },
-  { kind: 'shallow-s-curve', label: 'Shallow S curve' },
-  { kind: 'diamond', label: 'Diamond' },
-  { kind: 'kite', label: 'Kite' },
-  { kind: 'hard-zigzag', label: 'Hard zigzag' },
-  { kind: 'curved-zigzag', label: 'Curved zigzag' },
-  { kind: 'rectangle', label: 'Rectangle' },
-] as const;
-
-type ShapeKind = typeof SHAPE_OPTIONS[number]['kind'];
-
 const assignDistinctColors = (straps: Strap[]): Strap[] => straps.map((strap, idx) => ({
   ...strap,
   color: PALETTE[idx % PALETTE.length],
 }));
 
-const shapePathD = (kind: ShapeKind): string => {
-  switch (kind) {
-    case 'circle': return circlePathD(45);
-    case 'rounded-square': return 'M -45 -30 Q -45 -45 -30 -45 L 30 -45 Q 45 -45 45 -30 L 45 30 Q 45 45 30 45 L -30 45 Q -45 45 -45 30 Z';
-    case 'rounded-right-angle': return 'M -40 -35 L -40 35 Q -40 45 -30 45 L 20 45 Q 35 45 35 30 L 35 20 L 15 20 L 15 25 Q 15 30 10 30 L -20 30 Q -25 30 -25 25 L -25 -35 Z';
-    case 'hard-right-angle': return 'M -40 -35 L -40 40 L 10 40 L 10 15 L 35 15 L 35 -35 Z';
-    case 'hard-square': return 'M -45 -45 L 45 -45 L 45 45 L -45 45 Z';
-    case 'curved-arch': return 'M -50 35 Q 0 -45 50 35';
-    case 'horseshoe': return 'M -38 -40 L -38 15 Q 0 55 38 15 L 38 -40';
-    case 'shallow-s-curve': return 'M -48 -20 C -18 -50 18 10 48 -20 C 18 10 -18 50 -48 20';
-    case 'diamond': return 'M 0 -50 L 45 0 L 0 50 L -45 0 Z';
-    case 'kite': return 'M 0 -55 L 32 0 L 0 50 L -32 0 Z';
-    case 'hard-zigzag': return 'M -50 25 L -25 -25 L 0 25 L 25 -25 L 50 25';
-    case 'curved-zigzag': return 'M -50 20 Q -38 -22 -25 20 Q -12 55 0 20 Q 12 -22 25 20 Q 38 55 50 20';
-    case 'rectangle': return 'M -60 -30 L 60 -30 L 60 30 L -60 30 Z';
-    default: return circlePathD(45);
-  }
-};
-
-const PATH_GUIDES_PRESETS: PathGuidesPresetV1[] = [
-
-  {
-    id: 'fraktur-scurve-weave-2',
-    name: 'Fraktur S-curve weave (2 straps)',
-    state: {
-      paper: 'A4',
-      orientation: 'portrait',
-      view: 'custom',
-      zoom: 1.1153276421780445,
-      pan: { x: 6.869062493103284, y: 3.4364911042410142 },
-      simplify: false,
-      showCrossings: true,
-      activeCrossingId:
-        'strap-21f24596-a745-4fd4-97c6-769e53aa9acb|strap-8d1a8810-e85d-4281-85af-b1979c496a13|1021|2161',
-      crossingsFilter: 'all',
-      showAllCrossings: false,
-      crossingOverrides: {
-        'strap-21f24596-a745-4fd4-97c6-769e53aa9acb|strap-8d1a8810-e85d-4281-85af-b1979c496a13': {
-          1: 'strap-21f24596-a745-4fd4-97c6-769e53aa9acb',
-          3: 'strap-21f24596-a745-4fd4-97c6-769e53aa9acb',
-        },
-      },
-      groups: [],
-      straps: [
-        {
-          id: 'strap-8d1a8810-e85d-4281-85af-b1979c496a13',
-          name: 'scurve 1',
-          d: 'M248.76,160.95c-29.87,0-54.08,24.21-54.08,54.08s24.21,54.08,54.08,54.08h.02c83.85,0,151.82,67.98,151.82,151.83s-67.97,151.82-151.82,151.83v.02c-29.87,0-54.08,24.21-54.08,54.08s24.21,54.08,54.08,54.08',
-          color: '#5778A4',
-          script: 'Fraktur',
-          nibMMText: '3.8',
-          nibAngleDeg: 40,
-          xHeightMMText: '6',
-          copperplateRatioPreset: '3:2:3',
-          offset: { x: -207.68742293228425, y: -272.5880849181708 },
-          scalePct: 44.62499345265998,
-          rotDeg: 0,
-          flip: true,
-          snapped: false,
-          invertGuides: false,
-          xNibText: '4.5',
-          ascNibText: '2',
-          descNibText: '2',
-        },
-        {
-          id: 'strap-21f24596-a745-4fd4-97c6-769e53aa9acb',
-          name: 'scurve2 1',
-          d: 'M346.52,680.95c29.87,0,54.08-24.21,54.08-54.08s-24.21-54.08-54.08-54.08h-.02c-83.85,0-151.82-67.98-151.82-151.83s67.97-151.82,151.82-151.83v-.02c29.87,0,54.08-24.21,54.08-54.08s-24.21-54.08-54.08-54.08',
-          color: '#E49444',
-          script: 'Fraktur',
-          nibMMText: '3.8',
-          nibAngleDeg: 40,
-          xHeightMMText: '6',
-          copperplateRatioPreset: '3:2:3',
-          offset: { x: -182.94658644083785, y: -272.6014905214777 },
-          scalePct: 44.62499476212782,
-          rotDeg: 0,
-          flip: true,
-          snapped: false,
-          invertGuides: false,
-          xNibText: '4.5',
-          ascNibText: '2',
-          descNibText: '2',
-        },
-      ],
-      activeId: 'strap-8d1a8810-e85d-4281-85af-b1979c496a13',
-    },
-  },
-  {
-    id: 'woven-double-circle',
-    name: 'Woven double circle',
-    state: {
-      paper: 'A4',
-      orientation: 'portrait',
-      view: 'autofit',
-      zoom: 1.35,
-      pan: { x: 0, y: 0 },
-      simplify: true,
-      showCrossings: true,
-      activeCrossingId: null,
-      crossingsFilter: 'all',
-      showAllCrossings: false,
-      crossingOverrides: {},
-      groups: [],
-      straps: [
-        {
-          id: 'preset-strap-1',
-          name: 'Circle A',
-          d: circlePathD(40),
-          color: '#1d4ed8',
-          script: 'Copperplate',
-          nibMMText: '2.5',
-          nibAngleDeg: 45,
-          xHeightMMText: '6',
-          copperplateRatioPreset: '3:2:3',
-          offset: { x: 90, y: 140 },
-          scalePct: 100,
-          rotDeg: 0,
-          flip: false,
-          snapped: false,
-          invertGuides: false,
-        },
-        {
-          id: 'preset-strap-2',
-          name: 'Circle B',
-          d: circlePathD(40),
-          color: '#ea580c',
-          script: 'Copperplate',
-          nibMMText: '2.5',
-          nibAngleDeg: 45,
-          xHeightMMText: '6',
-          copperplateRatioPreset: '3:2:3',
-          offset: { x: 120, y: 155 },
-          scalePct: 100,
-          rotDeg: 0,
-          flip: false,
-          snapped: false,
-          invertGuides: false,
-        },
-      ],
-      activeId: 'preset-strap-2',
-    },
-  },
-];
+const PATH_GUIDES_PRESETS = compositionPresets as unknown as PathGuidesPresetV1[];
 
 function uid(prefix: string) {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return `${prefix}-${crypto.randomUUID()}`;

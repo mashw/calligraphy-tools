@@ -8,6 +8,7 @@ export function clipPassage(
   points: LocatedPoint[],
   intervals: Interval[],
   length: number,
+  closed = true,
 ): Point[][] {
   const pieces: Point[][] = [];
   for (let i = 1; i < points.length; i++) {
@@ -16,8 +17,8 @@ export function clipPassage(
     const lo = Math.min(a.s, b.s),
       hi = Math.max(a.s, b.s);
     for (
-      let turn = Math.floor(lo / length);
-      turn <= Math.floor(hi / length);
+      let turn = closed ? Math.floor(lo / length) : 0;
+      turn <= (closed ? Math.floor(hi / length) : 0);
       turn++
     ) {
       for (const [start, end] of intervals) {

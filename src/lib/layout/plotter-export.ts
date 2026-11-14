@@ -212,7 +212,7 @@ function clipSegmentToRect(a: Pt, b: Pt, rect: Frame): [Pt, Pt] | null {
   return [lerp(a, b, t0), lerp(a, b, t1)];
 }
 
-function clipPolylineToRect(input: PlotPolyline, rect: Frame) {
+export function clipPolylineToRect(input: PlotPolyline, rect: Frame) {
   const out: PlotPolyline[] = [];
   let current: Pt[] = [];
   const flush = () => {
@@ -929,14 +929,25 @@ export function buildPlotterExport(
 
   // Occlusion is computed in Layout-panel order (topmost first). SVG groups are then
   // serialized bottom-to-top, matching SVG paint order and the on-canvas stack.
+  return buildPlotterGeometryExport([...drawingLayers].reverse(), page, matId, options.layering, warnings);
+}
+
+/** Serialize already resolved page-space centrelines in SVG paint order. */
+export function buildPlotterGeometryExport(
+  drawingLayers: {elementId:string;name:string;lines:{points:Pt[];source:string}[]}[],
+  page: {width:number;height:number},
+  matId: CricutMatId,
+  layering: ExportLayering = 'combined',
+  warnings: string[] = [],
+): PlotterExportResult {
   const drawing=drawingLayers.flatMap(layer=>layer.lines);
   const safety = analyzeSafety(drawing, page, matId);
   const anchors=anchorPolylines(page),allLines=[...anchors,...drawing];
   const viewport=drawableGeometryBounds(allLines);
   if(!viewport)warnings.push('No drawable plotter geometry was produced.');
   else if(viewport.width<=EPS||viewport.height<=EPS)warnings.push('Drawable plotter geometry has no two-dimensional export bounds.');
-  const layers:PlotterSvgLayer[]=[...drawingLayers].reverse().map(layer=>({elementId:layer.elementId,name:layer.name,pathData:polylinesToPathD(layer.lines)}));
-  const svg=serializePlotterSvg({viewport:viewport&&viewport.width>EPS&&viewport.height>EPS?viewport:{x:0,y:0,width:1,height:1},strokeWidth:CRICUT_PEN_STROKE_MM,anchorPath:polylinesToPathD(anchors),layers,layering:options.layering,format:fmt});
+  const layers:PlotterSvgLayer[]=[...drawingLayers].map(layer=>({elementId:layer.elementId,name:layer.name,pathData:polylinesToPathD(layer.lines)}));
+  const svg=serializePlotterSvg({viewport:viewport&&viewport.width>EPS&&viewport.height>EPS?viewport:{x:0,y:0,width:1,height:1},strokeWidth:CRICUT_PEN_STROKE_MM,anchorPath:polylinesToPathD(anchors),layers,layering,format:fmt});
 
   return { svg, warnings, safety, polylineCount: allLines.length };
 }

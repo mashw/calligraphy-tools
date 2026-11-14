@@ -88,14 +88,15 @@ export function buildWovenRouteModel(design: Design) {
   return { page, route, crossings, alternate, choices, x, asc, desc, halfBand, start, cuts, intervals, warnings, usableLength };
 }
 
-export function buildWovenModel(design: Design, { furniture = true }: { furniture?: boolean } = {}) {
-  const page = pageSize(design);
-  const { route, crossings, choices, x, asc, desc, start, intervals, warnings, usableLength } = buildWovenRouteModel(design);
-  const baseline = offset(route.points, x / 2);
+/** Generate physical strokes for one writing passage. Intervals use its own arc length. */
+export function writingStrokes(design: Design, route: import('../guides/slant-paths').SlantRoute,
+  intervals: import('./geometry').Interval[], x: number, asc: number, desc: number, invertGuides = false, baselineOffset = x / 2): Stroke[] {
+  const baseline = baselineOffset === 0 ? route.points : offset(route.points, baselineOffset);
   const guides = buildGuideSet(
     design.script === "Copperplate" ? "copperplate" : "blackletter",
     {
       baseline,
+      invertGuides,
       xMM: x,
       ascMM: asc,
       descMM: desc,
@@ -113,8 +114,8 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
     },
   );
   const rails: Stroke[] = [
-    { points: guides.baseLine, color: "#52677c", width: 0.16 },
-    { points: guides.waistLine, color: "#52677c", width: 0.16 },
+    { points: guides.baseLine, color: "#52677c", width: 0.16, guide:"baseline" },
+    { points: guides.waistLine, color: "#52677c", width: 0.16, guide:"waist" },
     ...(design.fullGuides
       ? [
           { points: guides.ascLine, color: "#9aa7b3", width: 0.12 },
@@ -148,14 +149,15 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
     color: string,
     width: number,
   ) => {
-    for (const piece of clipPassage(points, intervals, route.length))
+    for (const piece of clipPassage(points, intervals, route.length, route.closed ?? true))
       if (piece.length > 1) {
         const parts = slantBand ? clipSlantToBand(piece, slantBand) : [piece];
         for (const points of parts) strokes.push({ points, color, width, role: locatedRole });
       }
   };
-  const top = -x / 2 - (design.fullGuides ? asc : 0),
-    bottom = x / 2 + (design.fullGuides ? desc : 0);
+  const direction = invertGuides ? -1 : 1;
+  const top = baselineOffset - x / 2 + direction * (-x / 2 - (design.fullGuides ? asc : 0));
+  const bottom = baselineOffset - x / 2 + direction * (x / 2 + (design.fullGuides ? desc : 0));
   if (design.script === "Copperplate" && design.slants) {
     if (design.slantStyle === "classic")
       slantBand = [
@@ -227,6 +229,7 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
           strokes.push({
             points,
             color: guide.color,
+            role: 'construction',
             width: design.gridThickness,
           });
     } else {
@@ -265,6 +268,13 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
         });
     }
   }
+  return strokes;
+}
+
+export function buildWovenModel(design: Design, { furniture = true }: { furniture?: boolean } = {}) {
+  const page = pageSize(design);
+  const { route, crossings, choices, x, asc, desc, start, intervals, warnings, usableLength } = buildWovenRouteModel(design);
+  const strokes = writingStrokes(design, route, intervals, x, asc, desc);
   const clean: Scene = { strokes, labels: [], page };
   const startS = wrap(start + design.gap / 2, route.length);
   const startPoint = atDistance(route, startS);

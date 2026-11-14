@@ -1,8 +1,25 @@
 import { test, expect, type Locator } from '@playwright/test';
 import { captureExportFiles, exportedText } from './export-file';
 
-async function point(path:Locator) {
-  return path.evaluate(node=>{const geometry=node as SVGPathElement,p=geometry.getPointAtLength(geometry.getTotalLength()*.45).matrixTransform(geometry.getScreenCTM()!);return{x:p.x,y:p.y,scale:geometry.getScreenCTM()!.a};});
+async function point(path: Locator) {
+  if (await path.getAttribute('data-woven-hit') !== null) {
+    return path.evaluate(node=>{const geometry=node as SVGPathElement,p=geometry.getPointAtLength(geometry.getTotalLength()*.45).matrixTransform(geometry.getScreenCTM()!);return{x:p.x,y:p.y,scale:geometry.getScreenCTM()!.a};});
+  }
+  const shape=path.locator('..');
+  await shape.scrollIntoViewIfNeeded();
+  return shape.evaluate(group=>{
+    for(const geometry of group.querySelectorAll('path')) {
+      const matrix=geometry.getScreenCTM()!;
+      const length=geometry.getTotalLength();
+      for(let i=1;i<20;i++){
+        const p=geometry.getPointAtLength(length*i/20).matrixTransform(matrix);
+        if(p.x<1||p.y<1||p.x+22>=innerWidth||p.y+12>=innerHeight)continue;
+        if(document.elementFromPoint(p.x,p.y)===geometry)
+          return {x:p.x,y:p.y,scale:Math.hypot(matrix.a,matrix.b)};
+      }
+    }
+    throw Error('No visible draggable portion of the Woven shape.');
+  });
 }
 for(const width of [390,1440]) {
   test(`Woven movement, panning, zoom, crossings and preview modes at ${width}px`,async({page})=>{

@@ -1,0 +1,35 @@
+name: Interlace branch validation
+on:
+  pull_request:
+    branches: [feature/unified-editor-ui]
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.head_ref == 'feature/interlace-studio'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PLAYWRIGHT_PRODUCTION: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:interlace
+      - run: npm run test:woven
+      - run: npm run test:woven-controls
+      - run: npm run test:woven-layout
+      - run: npm run test:slant-styles
+      - run: npm run test:insular
+      - run: npm run test:custom-curves
+      - run: npm run test:layout-shapes
+      - run: npm run test:camera
+      - run: npx tsc --noEmit
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:ui
+      - name: Repeat Woven interactions at both viewport widths
+        run: npx playwright test tests/woven-layout.spec.ts -g 'Woven movement' --repeat-each=5 --workers=1

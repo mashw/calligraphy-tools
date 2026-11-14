@@ -1,5 +1,5 @@
 import type { Point } from './geometry';
-export type Stroke = { points: Point[]; color: string; width: number; role?: 'primary'|'grid'|'slant'|'construction'|'annotation' };
+export type Stroke = { points: Point[]; color: string; width: number; role?: 'primary'|'grid'|'slant'|'construction'|'annotation'; guide?:'baseline'|'waist' };
 export type Label = { point: Point; text: string; size: number; color: string };
 export type Scene = { strokes: Stroke[]; labels: Label[]; page?: { w: number; h: number } };
 const n = (value: number) => value.toFixed(3);
