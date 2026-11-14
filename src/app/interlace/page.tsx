@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import EditorWorkspace from '@/components/editor/EditorWorkspace';
 import PreviewToolbar from '@/components/editor/PreviewToolbar';
 import { useEditorCamera } from '@/components/editor/useEditorCamera';
@@ -22,6 +22,10 @@ import { buildInterlacePlotterExport, DEFAULT_INTERLACE_PLOTTER_OPTIONS } from '
 
 import { compositionPresets } from '@/lib/paths/composition-presets';
 
+import { exportForLayout } from '@/lib/interlace/layout-source';
+import { textFit } from '@/lib/interlace/text-fit';
+import { highContrastScene, textEstimateScene } from '@/lib/interlace/preview';
+import TextFitPanel from '@/components/interlace/TextFitPanel';
 type Mode = 'Move'|'Crossings'|'Joins';
 const row='flex flex-wrap items-center gap-2';
 function download(data:BlobPart,type:string,name:string) {
@@ -37,13 +41,15 @@ function measure(label:string,value:number,change:(v:number)=>void,min:number,ma
 }
 export default function InterlaceStudio() {
   const [sheet,setSheet]=useState(initialSheet),[active,setActive]=useState('rosette');
-  const [mode,setMode]=useState<Mode>('Move'),[simplify,setSimplify]=useState(false),[busy,setBusy]=useState(false);
+  const [mode,setMode]=useState<Mode>('Move'),[simplify,setSimplify]=useState(false),[busy,setBusyState]=useState(false);
   const [source,setSource]=useState('rosette'),[notice,setNotice]=useState(''),[picked,setPicked]=useState<Choice|null>(null);
   const [plotOpen,setPlotOpen]=useState(false);
   const [mat,setMat]=useState<CricutMatId>('12x12');
   const [plotOptions,setPlotOptions]=useState(DEFAULT_INTERLACE_PLOTTER_OPTIONS);
   const plot=useMemo(()=>plotOpen?buildInterlacePlotterExport(sheet,mat,plotOptions):null,[sheet,mat,plotOptions,plotOpen]);
   const [contrast,setContrast]=useState(false);
+  const [heldWarnings,setHeldWarnings]=useState<string[]>([]),[includeText,setIncludeText]=useState(false);
+  useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(''),20000);return ()=>clearTimeout(timer);},[notice]);
   const upload=useRef<HTMLInputElement>(null);
   const [onlySelected,setOnlySelected]=useState(false);
   const svg=useRef<SVGSVGElement>(null),file=useRef<HTMLInputElement>(null);
@@ -55,7 +61,12 @@ export default function InterlaceStudio() {
   const graph=useMemo(()=>busy?null:topology(sheet),[sheet,busy]);
   const full=useMemo(()=>graph && !simplify?renderSheet(sheet,graph):null,[sheet,graph,simplify]);
   const camera=useEditorCamera(svg,frame,pointBounds(entries.flatMap(e=>e.route.points),frame,10));
-  const warn=graph?warnings(sheet,graph):[];
+  const fits=useMemo(()=>graph?sheet.strands.filter(s=>s.visible&&s.textPlan?.text).map(s=>({id:s.id,name:s.name,fit:textFit(sheet,s,graph)})):[],[sheet,graph]);
+  const fit=fits.find(f=>f.id===active)?.fit??null;
+  const previewScene=useMemo(()=>full&&contrast?highContrastScene(full):full,[full,contrast]);
+  const estimate=useMemo(()=>fit&&current?.textPlan?.preview?textEstimateScene(fit):null,[fit,current]);
+  const warn=busy?heldWarnings:[...(graph?warnings(sheet,graph):[]),...fits.filter(f=>!f.fit.fits).map(f=>f.name+': Text needs a longer continuous writing interval.')];
+  function setBusy(value:boolean){if(value)setHeldWarnings(warn);setBusyState(value);}
   function commit(next:Sheet) {
     if(next.overrides.length) {
       const g=topology(next),hidden=new Set(next.strands.filter(s=>!s.visible).map(s=>s.id));
@@ -98,9 +109,13 @@ export default function InterlaceStudio() {
     const choice:Choice={...rememberCrossing(hit,graph.hits),over:c.over==='a'?'b':'a'};
     setPicked(choice);commit({...sheet,overrides:[...sheet.overrides.filter(o=>!sameCrossing(o,c)),choice]});
   }
-  function output(kind:'SVG'|'PDF'|'Cricut Draw'|'Print') {
+  function output(kind:'SVG'|'PDF'|'Cricut Draw'|'Print'|'Export for Layout') {
+    try {
+    if(kind==='Export for Layout'){download(exportForLayout(sheet),'image/svg+xml','interlace-layout.svg');setNotice('Editable SVG exported for Layout at its physical size.');return;}
     if(kind==='Cricut Draw'){setPlotOpen(true);return;}
     const scene=renderSheet(sheet);
+    if(includeText)for(const s of sheet.strands.filter(s=>s.visible&&s.textPlan?.text)){const estimate=textEstimateScene(textFit(sheet,s));scene.strokes.push(...estimate.strokes);}
+    setNotice(kind+' export prepared.');
     if(kind==='PDF'){download(new Uint8Array(scenePdf(scene)).buffer,'application/pdf','interlace.pdf');return;}
     const xml=sceneSvg(scene).replace('Woven Calligraphy writing guides','Interlace Studio');
     if(kind!=='Print'){download(xml,'image/svg+xml',kind==='SVG'?'interlace.svg':'interlace-draw.svg');return;}
@@ -109,6 +124,7 @@ export default function InterlaceStudio() {
     if(!doc||!win){frame.remove();setNotice('Print preview unavailable.');return;}
     doc.open();doc.write('<style>@page{size:'+page.w+'mm '+page.h+'mm;margin:0}body{margin:0}svg{display:block}</style>'+xml);doc.close();
     win.onafterprint=()=>frame.remove();win.focus();win.print();
+    }catch(error){setNotice(error instanceof Error?error.message:'Export failed.');}
   }
   function point(e:PointerEvent, inverse:DOMMatrix){return new DOMPoint(e.clientX,e.clientY).matrixTransform(inverse);}
   function start(e:PointerEvent<SVGPathElement>,s:Strand) {
@@ -165,16 +181,22 @@ export default function InterlaceStudio() {
       <Button onClick={()=>setPlotOpen(false)}>Close export</Button>
     </section>}
     <PreviewToolbar camera={camera}><Button aria-pressed={simplify} onClick={()=>setSimplify(!simplify)}>Simplify</Button>
-      {(['SVG','PDF','Cricut Draw','Print'] as const).map(kind=><Button key={kind} onClick={()=>output(kind)}>{kind}</Button>)}
+      {(['SVG','PDF','Cricut Draw','Print','Export for Layout'] as const).map(kind=><Button key={kind} onClick={()=>output(kind)}>{kind}</Button>)}
+      <Button aria-pressed={contrast} onClick={()=>setContrast(!contrast)}>High contrast</Button>
+      <Button className="min-w-28" popoverTarget="interlace-warnings" aria-haspopup="dialog">Warnings ({warn.length})</Button>
+      <div id="interlace-warnings" popover="auto" role="dialog" aria-label="Design warnings" className="m-auto w-80 max-w-[90vw] rounded border bg-white p-3 shadow-lg"><h2 className="font-semibold">Design warnings</h2>{warn.length?<ul className="space-y-2 text-sm">{warn.map(w=><li key={w}>{w}</li>)}</ul>:<p>No design warnings.</p>}<Button popoverTarget="interlace-warnings" popoverTargetAction="hide">Close warnings</Button></div>
+      <Button popoverTarget="interlace-export-options" aria-haspopup="dialog">Export options</Button>
+      <div id="interlace-export-options" popover="auto" role="dialog" aria-label="Export options" className="m-auto w-80 max-w-[90vw] rounded border bg-white p-3 shadow-lg"><label><input type="checkbox" checked={includeText} onChange={e=>setIncludeText(e.target.checked)}/> Include text-position boxes in SVG / PDF / Print</label><p className="text-xs">Layout and Cricut exports always contain writing guides only. High contrast is preview only.</p><Button popoverTarget="interlace-export-options" popoverTargetAction="hide">Close options</Button></div>
     </PreviewToolbar>
+    <div role="status" aria-label="Action notification" aria-live="polite" aria-atomic="true" className={notice?'fixed bottom-4 right-4 z-50 flex w-80 max-w-[90vw] items-start gap-2 rounded border bg-white p-3 text-sm shadow-lg':'sr-only'}>{notice}{notice&&<Button aria-label="Dismiss notification" onClick={()=>setNotice('')}>×</Button>}</div>
     <div className={row}>{(['Move','Crossings','Joins'] as const).map(v=><Button key={v} aria-pressed={mode===v} onClick={()=>setMode(v)}>{v}</Button>)}</div>
     <svg ref={svg} className="editor-svg bg-slate-200" viewBox={camera.str} aria-label="Interlace writing sheet"
       onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={()=>{if(drag.current){setSheet(drag.current.sheet);drag.current=null;setBusy(false);}}}>
       <defs><clipPath id="interlace-paper"><rect width={page.w} height={page.h}/></clipPath></defs>
       <rect width={page.w} height={page.h} fill="white"/>
-      <g clipPath="url(#interlace-paper)">{full && <g style={contrast?{filter:"contrast(220%)"}:undefined}><WovenScene scene={full}/></g>}
+      <g clipPath="url(#interlace-paper)">{previewScene&&<WovenScene scene={previewScene}/>}{estimate&&!busy&&!simplify&&<g data-text-estimate="" pointerEvents="none"><WovenScene scene={estimate}/>{fit?.lines.flatMap((line,i)=>line.placements.filter(p=>p.sMid<=line.available+p.w/2).map((p,j)=><text key={i+':'+j} transform={`translate(${p.point.x} ${p.point.y}) rotate(${Math.atan2(p.tangent.y,p.tangent.x)*180/Math.PI})`} y={-p.h*.3} textAnchor="middle" fontSize={Math.max(1.5,p.h*.55)} fill={p.collision?'#b91c1c':'#312e81'}>{p.ch}</text>))}</g>}
         {entries.map(({s,route})=><path key={s.id} data-camera-interactive="" aria-label={s.name} d={pointsD(route.points)} fill="none"
-          stroke={s.color} strokeWidth={full?7:1} strokeOpacity={full?0:1} pointerEvents={mode==='Move'?'stroke':'none'}
+          stroke={contrast?(s.id===active?'#1e40af':'#111827'):s.color} strokeWidth={full?7:contrast?1.4:1} strokeOpacity={full?0:1} pointerEvents={mode==='Move'?'stroke':'none'}
           style={{cursor:s.locked?'default':'move'}} onPointerDown={e=>start(e,s)}/>)}
         {mode==='Crossings' && graph?.hits.map((h,i)=>(!onlySelected||h.a.id===active||h.b.id===active)&&<g key={i} data-camera-interactive="" data-crossing-kind={h.a.id===h.b.id?'self':'between'} onClick={()=>flip(h)}>
           <circle cx={h.point.x} cy={h.point.y} r={2.8} fill={picked&&sameCrossing(picked,h,.025)?'#4f46e5':'white'} stroke="#334155" strokeWidth={.35}/>
@@ -187,7 +209,7 @@ export default function InterlaceStudio() {
       <DisclosureSection title="Composition" defaultOpen><div className={row}>
         <Select aria-label="Paper" value={sheet.paper} onChange={e=>commit({...sheet,paper:e.target.value as Sheet['paper']})}>{Object.keys(PAPERS_MM).map(p=><option key={p}>{p}</option>)}</Select>
         <Select aria-label="Orientation" value={sheet.orientation} onChange={e=>commit({...sheet,orientation:e.target.value as Sheet['orientation']})}><option>portrait</option><option>landscape</option></Select>
-        <Button onClick={()=>download(JSON.stringify({...sheet,editor:{active,simplify,contrast,camera:camera.snapshot}},null,2),'application/json','interlace.json')}>Save</Button>
+        <Button onClick={()=>{download(JSON.stringify({...sheet,editor:{active,simplify,contrast,camera:camera.snapshot}},null,2),'application/json','interlace.json');setNotice('Design saved.');}}>Save</Button>
         <Button onClick={()=>file.current?.click()}>Open design</Button><input hidden type="file" ref={file} accept=".json" onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)void open(f);}}/>
         <Select aria-label="Composition preset" value="" onChange={e=>{
           const preset=compositionPresets.find(p=>p.id===e.target.value);
@@ -228,9 +250,6 @@ export default function InterlaceStudio() {
           </div>}
       </div></DisclosureSection>
     </div>} inspector={<>
-      <DisclosureSection title="Preview appearance"><label><input type="checkbox" checked={contrast} onChange={e=>setContrast(e.target.checked)}/> High contrast</label></DisclosureSection>
-      <details><summary>Notices {warn.length? '('+warn.length+')':''}</summary>{warn.map((w,i)=><p key={i}>{w}</p>)}</details>
-      <div role="status" className="text-xs max-h-12 overflow-auto">{notice}</div>
       {current && <fieldset disabled={current.locked} className="min-w-0">
         <DisclosureSection title="Strand properties"><div className="space-y-2 text-sm">
           <label>Name <input value={current.name} onChange={e=>patch({name:e.target.value})}/></label>
@@ -251,6 +270,7 @@ export default function InterlaceStudio() {
             <Button aria-pressed={current.invert} onClick={()=>patch({invert:!current.invert})}>Invert guides</Button>
             <Button aria-pressed={sheet.snap} onClick={()=>commit({...sheet,snap:!sheet.snap})}>Snap 0.5 mm</Button></div>
         </div></DisclosureSection>
+        <TextFitPanel value={current.textPlan} result={fit} copperplate={current.design.script==='Copperplate'} onChange={textPlan=>patch({textPlan})}/>
         <WovenSettings design={current.design} onChange={d=>patch({design:d})}/>
         <DisclosureSection title="Writing direction & crossings"><div className="space-y-2 text-sm">
           <Button aria-pressed={current.design.reverse} onClick={()=>design({reverse:!current.design.reverse})}>Reverse direction</Button>

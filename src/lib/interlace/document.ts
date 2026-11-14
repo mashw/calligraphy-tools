@@ -1,3 +1,4 @@
+import { readTextPlan } from './text-fit';
 import { findCrossingsForStraps, slotOrderForPair } from '../paths/intersections';
 import { samplePathDToPolyline } from '../paths/sample-svg-path';
 import { PAPERS_MM } from '../curve-helpers';
@@ -97,7 +98,7 @@ function readStrand(value:unknown):Strand {
     source={kind:'path',d:string(src.d),points,width:num(src.width,.00001,10000),height:num(src.height,.00001,10000),closed:bool(src.closed)};
   } else throw Error('Unsupported strand source.');
   if(!/^#[a-f0-9]{6}$/i.test(String(s.color))) throw Error('Invalid strand colour.');
-  return {...strand(string(s.id),string(s.name),source,design),color:string(s.color),group:string(s.group),baselineSource:s.baselineSource===true,
+  return {...strand(string(s.id),string(s.name),source,design),...(s.textPlan===undefined?{}:{textPlan:readTextPlan(s.textPlan)}),color:string(s.color),group:string(s.group),baselineSource:s.baselineSource===true,
     visible:bool(s.visible),mirror:bool(s.mirror),locked:bool(s.locked),invert:bool(s.invert),scale:num(s.scale,.01,1000)};
 }
 export function openSheet(value:unknown):{sheet:Sheet; notice:string} {

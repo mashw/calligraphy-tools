@@ -114,8 +114,8 @@ export function writingStrokes(design: Design, route: import('../guides/slant-pa
     },
   );
   const rails: Stroke[] = [
-    { points: guides.baseLine, color: "#52677c", width: 0.16 },
-    { points: guides.waistLine, color: "#52677c", width: 0.16 },
+    { points: guides.baseLine, color: "#52677c", width: 0.16, guide:"baseline" },
+    { points: guides.waistLine, color: "#52677c", width: 0.16, guide:"waist" },
     ...(design.fullGuides
       ? [
           { points: guides.ascLine, color: "#9aa7b3", width: 0.12 },

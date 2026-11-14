@@ -1,0 +1,19 @@
+'use client';
+import DisclosureSection from '../layout/DisclosureSection';
+import { NumericInput, Select } from '../editor/Controls';
+import { DEFAULT_TEXT_PLAN, type TextPlan, type textFit } from '@/lib/interlace/text-fit';
+export default function TextFitPanel({value=DEFAULT_TEXT_PLAN,result,onChange,copperplate}:{value?:TextPlan;result:ReturnType<typeof textFit>|null;onChange:(v:TextPlan)=>void;copperplate:boolean}) {
+  const patch=(v:Partial<TextPlan>)=>onChange({...value,...v});
+  const field=(label:string,key:'startMM'|'startGapMM'|'endGapMM'|'spacing'|'lowerMM'|'doubleMM',max=10000,min=0)=><label className="flex items-center justify-between gap-2">{label}<NumericInput aria-label={label} type="number" className="w-24" value={value[key]} min={min} max={max} step={.1} onChange={e=>{const n=e.target.valueAsNumber;if(Number.isFinite(n)&&n>=min&&n<=max)patch({[key]:n});}}/></label>;
+  return <DisclosureSection title="Text & Fit"><div className="space-y-2 text-xs">
+    <label className="block">Text to plan<textarea aria-label="Text to plan" className="block w-full rounded border p-2" rows={3} maxLength={10000} value={value.text} onChange={e=>patch({text:e.target.value})}/></label>
+    <p>Each line uses the next continuous interval that fits. Widths and letter boxes are estimates.</p>
+    <label className="flex justify-between">Route<Select aria-label="Text route" value={value.connected?'joined':'strand'} onChange={e=>patch({connected:e.target.value==='joined'})}><option value="strand">Selected strand</option><option value="joined">Connected writing route</option></Select></label>
+    <label className="flex justify-between">Alignment<Select aria-label="Text alignment" value={value.align} onChange={e=>patch({align:e.target.value as TextPlan['align']})}><option value="start">Start</option><option value="center">Centre</option><option value="end">End</option></Select></label>
+    {field('Text start (mm)','startMM')}{field('Start margin (mm)','startGapMM')}{field('End margin (mm)','endGapMM')}{field('Letter spacing','spacing',3,.1)}
+    <label className="block"><input type="checkbox" checked={value.reverse} onChange={e=>patch({reverse:e.target.checked})}/> Reverse text direction</label>
+    <label className="block"><input type="checkbox" checked={value.preview} onChange={e=>patch({preview:e.target.checked})}/> Show text estimate</label>
+    {copperplate && <details><summary>Copperplate measurement</summary><label>Capitals<Select aria-label="Capital style" value={value.capStyle} onChange={e=>patch({capStyle:e.target.value as TextPlan['capStyle']})}><option value="simple">Simple</option><option value="flourished">Flourished</option></Select></label><label className="block"><input type="checkbox" checked={value.calibration} onChange={e=>patch({calibration:e.target.checked})}/> Use personal calibration</label>{value.calibration && <>{field('overpainting (mm)','lowerMM')}{field('overpainting overpainting (mm)','doubleMM')}<p>Measure these words in your own hand at this X-height.</p></>}</details>}
+    {result && value.text && <div data-text-fit="" className={result.fits?'text-emerald-800':'text-red-800'}><strong>{result.fits?'Fits':'Does not fit'}</strong><p>Estimated text: {result.needed.toFixed(1)} mm · Usable: {result.available.toFixed(1)} mm</p><p>Path: {result.total.toFixed(1)} mm · {result.spans.length} continuous intervals · {Number.isFinite(result.percent)?result.percent.toFixed(0):'—'}% used</p><details><summary>Continuous writing lengths</summary><p>{result.spans.map(s=>(s.end-s.start).toFixed(1)+' mm').join(' · ')||'None'}</p></details>{result.lines.map((line,i)=><p key={i}>Line {i+1}: {line.remaining>=0?line.remaining.toFixed(1)+' mm remaining':(-line.remaining).toFixed(1)+' mm overflow'}</p>)}{!result.fits && <p>Reduce X-height, enlarge the route, or split the text across more continuous intervals.</p>}</div>}
+  </div></DisclosureSection>;
+}

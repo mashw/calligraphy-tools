@@ -1,3 +1,4 @@
+import type { TextPlan } from './text-fit';
 import { clipPolylineToRect } from '../layout/plotter-export';
 import { offset } from "../curve-helpers";
 import { clipSlantToBand, makeSlantRoute } from '../guides/slant-paths';
@@ -12,7 +13,7 @@ export type Source = { kind: 'rosette' | 'figure-eight' } |
   { kind: 'path'; d: string; points: Point[]; width: number; height: number; closed: boolean };
 export type Strand = {
   id: string; name: string; source: Source; design: Design; scale: number; mirror: boolean;
-  baselineSource?: boolean; locked: boolean; visible: boolean; color: string; group: string; invert: boolean;
+  baselineSource?: boolean; textPlan?:TextPlan; locked: boolean; visible: boolean; color: string; group: string; invert: boolean;
 };
 export type Passage = { id: string; t: number };
 export type Choice = { a: Passage; b: Passage; over: 'a' | 'b'; handedness?: number; reach?: number };
@@ -137,7 +138,7 @@ function distance(route:Route,t:number) {
   const index=t*(route.points.length-1), lo=Math.min(route.points.length-2,Math.floor(index));
   return route.distances[lo]+(index-lo)*(route.distances[lo+1]-route.distances[lo]);
 }
-function metrics(s:Strand) {
+export function metrics(s:Strand) {
   const d=s.design;
   const unit=d.script==='Copperplate'?1:d.nib;
   return {x:d.xNib*unit,asc:d.ascNib*unit,desc:d.descNib*unit,
@@ -211,8 +212,9 @@ function bandFootprint(entry: Entry, passage: Passage, hits: Hit[], clearance: n
   return [...rail(top),...rail(bottom).reverse()];
 }
 
-export function renderSheet(sheet:Sheet, graph=topology(sheet), { ruler = true } = {}) {
-  const {entries,hits}=graph, page=pageSize(sheet), scene:Scene={page,strokes:[],labels:[]};
+export function writingRoutes(sheet:Sheet, graph=topology(sheet)) {
+  const {entries,hits}=graph;
+  const routes:{root:Strand;ids:string[];route:ReturnType<typeof makeSlantRoute>;regions:{interval:Interval;polygons:Point[][]}[]}[]=[];
   const byId=new Map(entries.map(e=>[e.s.id,e]));
   const next=new Map<string,string>(), previous=new Set<string>();
   for(const join of sheet.joins) {
@@ -225,11 +227,12 @@ export function renderSheet(sheet:Sheet, graph=topology(sheet), { ruler = true }
   for(const root of [...entries.filter(e=>!previous.has(e.s.id)),...entries]) {
     if(rendered.has(root.s.id)) continue;
     let current:Entry|undefined=root;
+    const ids:string[]=[];
     const masks:{interval:Interval; polygon:Point[]}[]=[];
     const points:Point[]=[],cuts:{center:number;half:number}[]=[]; let length=0;
     while(current && !rendered.has(current.s.id)) {
       const {s,route}=current, reverse=s.design.reverse;
-      rendered.add(s.id);
+      rendered.add(s.id);ids.push(s.id);
       const path=directed(current);
       if(points.length) {
         const end=points.at(-1)!, start=path[0]; length+=Math.hypot(start.x-end.x,start.y-end.y);
@@ -251,17 +254,26 @@ export function renderSheet(sheet:Sheet, graph=topology(sheet), { ruler = true }
       const a=Math.max(0,c.center-c.half),b=Math.min(route.length,c.center+c.half);
       return {center:(a+b)/2,half:(b-a)/2};
     });
-    const m=metrics(root.s);
+    const regions:{interval:Interval;polygons:Point[][]}[]=[];
     for(const [start,end] of visibleIntervals(route.length,clipped)) {
       const boundaries=[...new Set([start,end,...masks.flatMap(mask=>mask.interval).filter(v=>v>start && v<end)])].sort((a,b)=>a-b);
       for(let i=1;i<boundaries.length;i++) {
         const from=boundaries[i-1],to=boundaries[i],mid=(from+to)/2;
-        let strokes=writingStrokes(root.s.design,route,[[from,to]],m.x,m.asc,m.desc,root.s.invert,root.s.baselineSource?0:m.x/2);
-        for(const mask of masks.filter(m=>mid>=m.interval[0] && mid<=m.interval[1])) {
-          strokes=strokes.flatMap(stroke=>clipSlantToBand(stroke.points,mask.polygon,false).map(points=>({...stroke,points})));
-        }
-        scene.strokes.push(...strokes);
+        regions.push({interval:[from,to],polygons:masks.filter(m=>mid>=m.interval[0] && mid<=m.interval[1]).map(m=>m.polygon)});
       }
+    }
+    routes.push({root:root.s,ids,route,regions});
+  }
+  return routes;
+}
+export function renderSheet(sheet:Sheet, graph=topology(sheet), { ruler = true } = {}) {
+  const page=pageSize(sheet),scene:Scene={page,strokes:[],labels:[]};
+  for(const {root,route,regions} of writingRoutes(sheet,graph)){
+    const m=metrics(root);
+    for(const {interval,polygons} of regions){
+      let strokes=writingStrokes(root.design,route,[interval],m.x,m.asc,m.desc,root.invert,root.baselineSource?0:m.x/2);
+      for(const polygon of polygons)strokes=strokes.flatMap(stroke=>clipSlantToBand(stroke.points,polygon,false).map(points=>({...stroke,points})));
+      scene.strokes.push(...strokes);
     }
   }
   if (ruler) {
