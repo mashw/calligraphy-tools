@@ -728,7 +728,18 @@ function sampleArtwork(element: Extract<LayoutElement, { type: 'artwork' }>, war
   root.setAttribute('height', '100');
   root.style.cssText = 'position:fixed;left:-10000px;top:-10000px;width:100px;height:100px;pointer-events:none;overflow:visible';
   const geometries: SVGGeometryElement[] = [];
-  element.document.nodes.forEach(node => appendArtworkNode(node, root, geometries));
+  for (const node of element.document.nodes) {
+    const d = node.attrs.d?.trim();
+    // Interlace packs clipped strokes into independent, absolute SVG subpaths.
+    // Measure them individually so a pen never bridges the gap between strokes.
+    if (element.interlaceSource && node.tag === 'path' && node.attrs.fill === 'none' && d?.startsWith('M') && !d.includes('m')) {
+      for (const subpath of d.split(/(?=M)/)) {
+        appendArtworkNode({ ...node, attrs: { ...node.attrs, d: subpath } }, root, geometries);
+      }
+    } else {
+      appendArtworkNode(node, root, geometries);
+    }
+  }
   document.body.appendChild(root);
 
   const result: PlotPolyline[] = [];

@@ -87,6 +87,7 @@ test('joined Copperplate is continuous in the workspace and retains underpass cu
   expect(xml).not.toMatch(/<mask|clipPath|<image|data-camera/);
   expect(paths.length).toBe(expected.length+7);
   const snapshot=await downloaded(page,'SVG');
+  await expect(page.locator('[role=status]')).toContainText('SVG export prepared');
   await join.click();await expect(join).toHaveAttribute('aria-pressed','false');
   expect(await downloaded(page,'SVG')).not.toBe(snapshot);
   await join.click();expect(await downloaded(page,'SVG')).toBe(snapshot);

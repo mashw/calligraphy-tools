@@ -7,7 +7,7 @@ import { exportForLayout, validateInterlaceSource, INTERLACE_SOURCE_FORMAT } fro
 import { DEFAULT_TEXT_PLAN, textFit, writingSpace } from '../src/lib/interlace/text-fit';
 import { highContrastScene, textEstimateScene } from '../src/lib/interlace/preview';
 import { DEFAULT_DESIGN } from '../src/lib/woven/design';
-import { sceneSvg, scenePdf } from '../src/lib/woven/vector-export';
+import { pointsD, sceneSvg, scenePdf } from '../src/lib/woven/vector-export';
 import { parseLayoutDesign, serializeLayoutDesign } from '../src/lib/layout/design-file';
 import { pageElement, type ArtworkElement } from '../src/lib/layout/types';
 import { measureRun } from '../src/lib/measure/measure-run';
@@ -17,9 +17,16 @@ const fixture=()=>openSheet(JSON.parse(readFileSync(new URL('../tests/fixtures/i
 function lineSheet(){const sheet=initialSheet();sheet.strands=[strand('line','Line',{kind:'path',d:'M-50 0H50',width:100,height:1,closed:false,points:[{x:-50,y:0},{x:50,y:0}]},{...DEFAULT_DESIGN,script:'Copperplate',xNib:4,centerX:100,centerY:100,width:100,height:1,gap:0,fullGuides:false})];return sheet;}
 test('Layout SVG has tight physical bounds, transparent clipped vectors and escaped editable source',()=>{
   const sheet=fixture();sheet.strands.push(strand('rose','<script>alert("x")</script>',{kind:'rosette'},{...DEFAULT_DESIGN,width:60,height:60}));
-  const hit=topology(sheet).hits[0];sheet.overrides=[{...hit,over:hit.over==='a'?'b':'a'}];sheet.strands[0].textPlan={...DEFAULT_TEXT_PLAN,text:'a & b < c',connected:true};
+  const hit=topology(sheet).hits[0];sheet.overrides=[{...hit,over:hit.over==='a'?'b':'a'}];sheet.strands[0].textPlan={...DEFAULT_TEXT_PLAN,text:'a & b < c $&',connected:true};
   const svg=exportForLayout(sheet),scene=renderSheet(sheet,undefined,{ruler:false});assert.doesNotMatch(svg,/<rect|<script|<text|<mask|clipPath|data-camera/);assert.match(svg,/&lt;script&gt;/);
-  assert.equal((svg.match(/<path /g)??[]).length,scene.strokes.length);
+  const left=Math.min(...scene.strokes.map(s=>Math.min(...s.points.map(p=>p.x-s.width/2))));
+  const top=Math.min(...scene.strokes.map(s=>Math.min(...s.points.map(p=>p.y-s.width/2))));
+  const paths=[...svg.matchAll(/<path d="([^"]+)" fill="none" stroke="([^"]+)" stroke-width="([^"]+)"/g)];
+  assert.ok(paths.length<scene.strokes.length);
+  const subpaths=paths.flatMap(([,d,color,width])=>d.split(/ (?=M)/).map(d=>({d,color,width:Number(width)})));
+  assert.deepEqual(subpaths,scene.strokes.map(s=>({
+    d:pointsD(s.points.map(p=>({x:p.x-left,y:p.y-top}))),color:s.color,width:s.width,
+  })));
   const size=/width="([^"]+)mm" height="([^"]+)mm" viewBox="0 0 ([^"]+)"/.exec(svg)!;assert.ok(size);assert.deepEqual(size[3].split(' ').map(Number),[Number(size[1]),Number(size[2])]);assert.ok(Number(size[2])<200);
   const json=svg.match(/<metadata[^>]*>(.*?)<\/metadata>/s)![1].replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
   const source=validateInterlaceSource(JSON.parse(json));assert.deepEqual(source.document,openSheet(sheet).sheet);assert.equal(sceneSvg(renderSheet(source.document)),sceneSvg(renderSheet(sheet)));

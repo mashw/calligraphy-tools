@@ -16,10 +16,10 @@ export function exportForLayout(sheet:Sheet) {
   if(!scene.strokes.length)throw Error('No visible writing guides to export.');
   let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
   for(const s of scene.strokes)for(const p of s.points){left=Math.min(left,p.x-s.width/2);top=Math.min(top,p.y-s.width/2);right=Math.max(right,p.x+s.width/2);bottom=Math.max(bottom,p.y+s.width/2);}
-  const xml=sceneSvg({...scene,page:{w:right-left,h:bottom-top},strokes:scene.strokes.map(s=>({...s,points:s.points.map(p=>({x:p.x-left,y:p.y-top}))}))});
+  const xml=sceneSvg({...scene,page:{w:right-left,h:bottom-top},strokes:scene.strokes.map(s=>({...s,points:s.points.map(p=>({x:p.x-left,y:p.y-top}))}))},{combineAdjacentStrokes:true});
   const data=JSON.stringify(source).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const result=xml.replace('</svg>',`<metadata id="${INTERLACE_SOURCE_FORMAT}">${data}</metadata></svg>`);
-  if(new TextEncoder().encode(result).length>2_000_000||scene.strokes.length>2000)throw Error('This design exceeds Layout’s 2 MB / 2000 vector element import limit. Reduce the guide density.');
+  const result=xml.replace('</svg>',()=>`<metadata id="${INTERLACE_SOURCE_FORMAT}">${data}</metadata></svg>`);
+  if(new TextEncoder().encode(result).length>2_000_000||(xml.match(/<path /g)?.length??0)>2000)throw Error('This design exceeds Layout’s 2 MB / 2000 vector element import limit. Reduce the guide density.');
   return result;
 }
 export function readInterlaceSource(xml:string) {
