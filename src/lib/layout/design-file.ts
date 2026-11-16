@@ -1,3 +1,4 @@
+import {validateWovenSettings} from './woven';
 import type { LayoutElement } from './types';
 
 export const LAYOUT_DESIGN_FORMAT = 'calligraphy-tools-layout';
@@ -10,7 +11,7 @@ export type LayoutDesignSnapshot = {
 
 type JsonObject = Record<string, unknown>;
 
-const ELEMENT_TYPES = new Set(['page', 'guidelines', 'calligram', 'curved-title', 'shape', 'artwork']);
+const ELEMENT_TYPES = new Set(['page', 'guidelines', 'calligram', 'curved-title', 'shape', 'artwork', 'woven']);
 const ARTWORK_TAGS = new Set(['g', 'path', 'rect', 'circle', 'ellipse', 'polygon', 'polyline', 'line']);
 const LINE_ALIGNMENTS = new Set(['left', 'center', 'right', 'custom']);
 const PAPER_IDS = new Set(['A3', 'A4', 'A5', 'DL', 'C5', 'C6', 'Custom']);
@@ -109,6 +110,8 @@ function validateArtwork(value: JsonObject) {
 function validateElement(value: unknown, index: number): asserts value is LayoutElement {
   if (!isObject(value)) fail(`Element ${index + 1} is invalid.`);
   validateBaseElement(value, index);
+  if(value.visible!==undefined&&typeof value.visible!=='boolean')fail('Invalid element visibility.');
+  if(value.type==='woven'){value.settings=validateWovenSettings(value.settings);return;}
   if (value.type === 'page') return validatePage(value);
   if (value.type === 'guidelines') return validateGuidelines(value);
   if (value.type === 'artwork') return validateArtwork(value);

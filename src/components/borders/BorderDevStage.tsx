@@ -1,5 +1,10 @@
 'use client';
 
+import { useRef as useCameraRef } from 'react';
+import type { Bounds } from '@/lib/editor/camera';
+import { useEditorCamera } from '@/components/editor/useEditorCamera';
+import PreviewToolbar from '@/components/editor/PreviewToolbar';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { generateAcanthus, generateComponentStudy, generateSingleLeaf } from '@/lib/borders/acanthus/generate';
 import { canonicalAnchors, canonicalSkeletonPath, generateCanonicalMotif } from '@/lib/borders/acanthus/canonical';
@@ -16,12 +21,24 @@ export default function BorderDevStage({ d, closed, reverse, options, showConstr
     const count = Math.min(70, Math.ceil(guide.length / 8));
     return Array.from({ length: count }, (_, i) => frameAt(guide, guide.length * i / Math.max(1, count - (guide.closed ? 0 : 1))));
   }, [guide]);
-  return <div className="relative min-h-[650px] overflow-hidden rounded-xl border border-slate-300 bg-[#fffef9] shadow-inner">
-    <svg className="h-full min-h-[650px] w-full" viewBox="0 0 600 430" aria-label="Procedural acanthus geometry preview">
+  const svgRef = useCameraRef<SVGSVGElement>(null);
+ const contentRef = useRef<SVGGElement>(null);
+ const [contentBounds, setContentBounds] = useState<Bounds>({x:0,y:0,w:600,h:430});
+ useEffect(() => {
+   const bounds = contentRef.current?.getBBox();
+   if (bounds && bounds.width > 0 && bounds.height > 0) {
+     // Synchronize the browser's measured SVG geometry with the camera adapter.
+     // eslint-disable-next-line react-hooks/set-state-in-effect
+     setContentBounds({x:bounds.x,y:bounds.y,w:bounds.width,h:bounds.height});
+   }
+ }, [geometry]);
+ const camera = useEditorCamera(svgRef, {x:0,y:0,w:600,h:430}, contentBounds);
+ return <div className="preview-panel border-stage relative overflow-hidden rounded-xl border border-slate-300 bg-[#fffef9] shadow-inner">
+    <PreviewToolbar camera={camera} /><svg ref={svgRef} className="editor-svg" viewBox={camera.str} aria-label="Procedural acanthus geometry preview">
       <path ref={pathRef} d={d} fill="none" stroke="none" />
       {canonicalStudy && <text x="205" y="115" fill="#475569" fontSize="13">A. Plate 18 broad fan — canonical</text>}
-      {geometry?.strokes.map((stroke, i) => <path key={i} d={stroke.d} fill="none" stroke={stroke.role === 'shading' ? '#42403b' : '#111'} strokeWidth={stroke.motifKind === 'stem' ? (stroke.motif === -1 ? 1.7 : .55) : stroke.role === 'outline' ? 1.15 : stroke.role === 'shading' ? .52 : .72} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />)}
-      {showConstruction && <g fill="none" vectorEffect="non-scaling-stroke">
+      <g ref={contentRef}>{geometry?.strokes.map((stroke, i) => <path key={i} d={stroke.d} fill="none" stroke={stroke.role === 'shading' ? '#42403b' : '#111'} strokeWidth={stroke.motifKind === 'stem' ? (stroke.motif === -1 ? 1.7 : .55) : stroke.role === 'outline' ? 1.15 : stroke.role === 'shading' ? .52 : .72} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />)}
+      </g>{showConstruction && <g fill="none" vectorEffect="non-scaling-stroke">
         {!singleLeaf && !componentStudy && !canonicalStudy && <path d={d} stroke="#e11d48" strokeWidth="1.2" strokeDasharray="4 3" />}
         {!componentStudy && !canonicalStudy && stations.map((f, i) => <g key={i}><circle cx={f.point.x} cy={f.point.y} r="1.25" fill={Math.abs(f.curvature) > .055 ? '#f97316' : '#2563eb'} /><path d={`M ${f.point.x} ${f.point.y} l ${f.tangent.x * 6} ${f.tangent.y * 6}`} stroke="#2563eb" strokeWidth=".65"/><path d={`M ${f.point.x} ${f.point.y} l ${f.normal.x * 4} ${f.normal.y * 4}`} stroke="#10b981" strokeWidth=".55"/></g>)}
         {!canonicalStudy && guide?.corners.map(s => { const f = frameAt(guide, s); return <circle key={s} cx={f.point.x} cy={f.point.y} r="5" stroke="#f97316" strokeWidth="1.3" />; })}
@@ -36,3 +53,4 @@ export default function BorderDevStage({ d, closed, reverse, options, showConstr
     {showConstruction && <div className="absolute bottom-3 left-3 rounded bg-white/90 px-3 py-2 text-[11px] text-slate-600 shadow"><b>Construction:</b> red spine/direction · blue stations/tangents · green normals · purple roots/axes · orange bends · red tight regions</div>}
   </div>;
 }
+

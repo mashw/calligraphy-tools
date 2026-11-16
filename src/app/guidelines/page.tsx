@@ -1,6 +1,20 @@
 'use client';
 
-import React, { useMemo, useRef, useState, useLayoutEffect, useEffect } from 'react';
+import { InspectorIntro } from '@/components/editor/Controls';
+import PreviewMeta from '@/components/editor/PreviewMeta';
+
+import { Button, Select, NumericInput, Slider, Toggle } from '@/components/editor/Controls';
+
+import { InfoTip } from '@/components/editor/Controls';
+
+import { pointBounds } from '@/lib/editor/camera';
+import { useEditorCamera } from '@/components/editor/useEditorCamera';
+import PreviewToolbar from '@/components/editor/PreviewToolbar';
+
+import DisclosureSection from '@/components/layout/DisclosureSection';
+import EditorWorkspace from '@/components/editor/EditorWorkspace';
+
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import {PAPERS_MM } from '@/lib/curve-helpers';
 
 import {
@@ -16,7 +30,7 @@ import { insularMajusculeRowGapMM } from '@/lib/guides/straight/blackletter';
 
 type PaperId = keyof typeof PAPERS_MM;
 type Orientation = 'portrait' | 'landscape';
-type ViewMode = 'autofit' | 'fullpage' | 'custom';
+
 type CopperplateRatioPreset = '2:1:2' | '3:2:3' | '1:1:1' | 'custom';
 
 type Pt = { x: number; y: number };
@@ -151,110 +165,9 @@ strokeOpacity={highContrastMode ? 1 : slantLineContrast}
 
 
 /* ---------------- Reusable InfoTip ---------------- */
-type InfoTipProps = {
-  title?: string;
-  children: React.ReactNode;
-  className?: string;
-  side?: 'top' | 'right' | 'left' | 'bottom';
-};
 
-function InfoTip({ title, children, className = '', side = 'right' }: InfoTipProps) {
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-  const tipRef = useRef<HTMLDivElement | null>(null);
-  const [open, setOpen] = useState(false);
-  const [computedSide, setComputedSide] = useState<typeof side>(side);
 
-  useLayoutEffect(() => {
-    if (!open) return;
-    const wrap = wrapRef.current;
-    const tip = tipRef.current;
-    if (!wrap || !tip) return;
 
-    const gap = 8;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const wr = wrap.getBoundingClientRect();
-
-    tip.style.visibility = 'hidden';
-    tip.style.display = 'block';
-    const tr = tip.getBoundingClientRect();
-    tip.style.visibility = '';
-    tip.style.display = '';
-
-    const space = {
-      left: wr.left,
-      right: vw - wr.right,
-      top: wr.top,
-      bottom: vh - wr.bottom,
-    };
-
-    const fits = (s: typeof side) =>
-      (s === 'left' || s === 'right')
-        ? space[s] >= tr.width + gap
-        : (s === 'top' || s === 'bottom')
-          ? space[s] >= tr.height + gap
-          : false;
-
-    let next: typeof side = side;
-    if (!fits(side)) {
-      const order: Array<typeof side> = ['right', 'left', 'bottom', 'top'];
-      next = order.sort((a, b) => space[b] - space[a]).find(fits) ?? side;
-    }
-    setComputedSide(next);
-  }, [open, side]);
-
-  const pos =
-    computedSide === 'top'
-      ? 'bottom-full left-1/2 -translate-x-1/2 -mb-2'
-      : computedSide === 'left'
-        ? 'right-full top-1/2 -translate-y-1/2 -mr-2'
-        : computedSide === 'bottom'
-          ? 'top-full left-1/2 -translate-x-1/2 mt-2'
-          : 'left-full top-1/2 -translate-y-1/2 ml-2';
-
-  const arrow =
-    computedSide === 'top'
-      ? 'top-full left-1/2 -translate-x-1/2 border-t-slate-700'
-      : computedSide === 'left'
-        ? 'left-full top-1/2 -translate-y-1/2 border-l-slate-700'
-        : computedSide === 'bottom'
-          ? 'bottom-full left-1/2 -translate-x-1/2 border-b-slate-700'
-          : 'right-full top-1/2 -translate-y-1/2 border-r-slate-700';
-
-  return (
-    <div
-      ref={wrapRef}
-      className={`relative inline-flex ${className}`}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onTouchStart={() => setOpen(o => !o)}
-    >
-      <span
-        aria-hidden="true"
-        className="inline-flex items-center justify-center w-6 h-6 rounded-full border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 cursor-help"
-        title={title}
-      >
-        <span className="text-[11px] font-bold select-none">i</span>
-      </span>
-
-      <div
-        ref={tipRef}
-        role="tooltip"
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
-        className={`absolute ${pos} z-30
-          ${open ? 'visible opacity-100' : 'invisible opacity-0'}
-          transition-opacity duration-150
-          rounded-lg shadow-lg ring-1 ring-black/10 bg-slate-700 text-white text-[13px] leading-snug
-          px-3.5 py-2.5 whitespace-normal pointer-events-auto
-          min-w-[16rem] max-w-[34rem]`}
-      >
-        {children}
-        <span className={`absolute ${arrow} w-0 h-0 border-8 border-transparent`} aria-hidden="true" />
-      </div>
-    </div>
-  );
-}
 
 /* ---------------- Export helpers ---------------- */
 function stripNoExport(svg: SVGSVGElement) {
@@ -432,8 +345,8 @@ export default function GuidelinesPage() {
   // ---------- State ----------
   const [paper, setPaper] = useState<PaperId>('A4');
   const [orientation, setOrientation] = useState<Orientation>(PAPERS_MM.A4.defaultOrientation);
-  const [view, setView] = useState<ViewMode>('autofit');
-  const [customOrigin, setCustomOrigin] = useState<'autofit' | 'fullpage'>('autofit');
+
+
 
 
   const [showBaselineIndicator, setShowBaselineIndicator] = useState(sharedDefaults.appearance.baselineIndicator);
@@ -611,82 +524,25 @@ const slantAngleDeg = useMemo(() => {
     previousRowGapScript.current = script;
   }, [script, nibMM, xNib, ascNib, descNib]);
 
-  const [isNarrow, setIsNarrow] = useState(() => (typeof window !== 'undefined'
-    ? window.matchMedia('(max-width: 640px)').matches
-    : false));
-  const DEFAULT_ZOOM = isNarrow ? 5 : 4;
-  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
-  const DEFAULT_AUTOFIT_ZOOM = 4;
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isPanning, setIsPanning] = useState(false);
 
-  const dragRef = useRef<{
-    px: number;
-    py: number;
-    panX: number;
-    panY: number;
-  } | null>(null);
+
+
+
+
+
+
+
 
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const [previewPxH, setPreviewPxH] = useState(0);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(max-width: 640px)');
-    const update = () => setIsNarrow(mq.matches);
-    update();
-    if (mq.addEventListener) {
-      mq.addEventListener('change', update);
-    } else {
-      mq.addListener(update);
-    }
-    return () => {
-      if (mq.removeEventListener) {
-        mq.removeEventListener('change', update);
-      } else {
-        mq.removeListener(update);
-      }
-    };
-  }, []);
 
-  useEffect(() => {
-    const el = svgRef.current;
-    if (!el) return;
 
-    const update = () => {
-      const r = el.getBoundingClientRect();
-      setPreviewPxH(r.height);
-    };
 
-    update();
 
-    const ro = new ResizeObserver(() => update());
-    ro.observe(el);
-
-    window.addEventListener('resize', update);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', update);
-    };
-  }, []);
 
 
   // Full-viewport paint layer to hide any layout decorations behind this route
-  useLayoutEffect(() => {
-    const html = document.documentElement;
-    const body = document.body;
 
-    const prevHtmlBg = html.style.backgroundImage;
-    const prevBodyBg = body.style.backgroundImage;
-
-    html.style.backgroundImage = 'none';
-    body.style.backgroundImage = 'none';
-
-    return () => {
-      html.style.backgroundImage = prevHtmlBg;
-      body.style.backgroundImage = prevBodyBg;
-    };
-  }, []);
 
   // ---------- Page box (mm) ----------
   const raw = PAPERS_MM[paper];
@@ -823,118 +679,11 @@ const slantAngleDeg = useMemo(() => {
 
   }, [baselinePositions, margins.left, margins.right, box.w, guideTemplate, xMM, ascMM, descMM, script, effectiveNibMM, nibMM, gridWidthMode, customGridWidthMM]);
 
-  const computeBaseView = () => {
-    const topPadPX = 30;
 
-    // When in custom, keep the “feel” of where custom zoom originated.
-    // This prevents the first zoom press from fullpage changing padding/anchor abruptly.
-    const padMode: 'autofit' | 'fullpage' =
-      view === 'custom' ? customOrigin : (view === 'fullpage' ? 'fullpage' : 'autofit');
-
-    const fitZoom = view === 'autofit' ? DEFAULT_AUTOFIT_ZOOM : 1;
-    const zoomForView = view === 'custom' ? zoom : fitZoom;
-
-    // Stage padding:
-    // - Full page: ~5px top/bottom (converted into mm)
-    // - Autofit/custom-from-autofit: roomy stage pad in mm
-    const fullPagePadPX = 5;
-    const stagePadMM =
-      padMode === 'fullpage'
-        ? (() => {
-          const pxH = Math.max(1, previewPxH);
-          const mmPerPx = box.h / pxH;
-          return fullPagePadPX * mmPerPx;
-        })()
-        : 22;
-
-
-
-    let minX: number;
-    let minY: number;
-    let vw: number;
-    let vh: number;
-
-    if (padMode === 'fullpage' || guideSets.length === 0) {
-      // Fullpage-style framing:
-      // - In actual fullpage view: always show the whole sheet.
-      // - In custom-from-fullpage: same framing but allow zoom to shrink the view.
-      if (view === 'custom') {
-        vw = box.w / Math.max(1, zoomForView);
-        vh = box.h / Math.max(1, zoomForView);
-        minX = (box.w - vw) / 2;
-        minY = (box.h - vh) / 2;
-      } else {
-        vw = box.w;
-        vh = box.h;
-        minX = 0;
-        minY = 0;
-      }
-    } else {
-      const fitPad = 8;
-      const pts = guideSets.flatMap((guideSet) => [
-        ...guideSet.ascLine,
-        ...guideSet.waistLine,
-        ...guideSet.baseLine,
-        ...guideSet.descLine,
-      ]);
-
-      const xs = pts.map(p => p.x);
-      const ys = pts.map(p => p.y);
-      const minX0 = Math.min(...xs) - fitPad;
-      const maxX0 = Math.max(...xs) + fitPad;
-      const minY0 = Math.min(...ys) - fitPad;
-      const maxY0 = Math.max(...ys) + fitPad;
-
-      const cx = (minX0 + maxX0) / 2;
-      const cy = (minY0 + maxY0) / 2;
-
-      vw = Math.max(1, maxX0 - minX0) / Math.max(1, zoomForView);
-      vh = Math.max(1, maxY0 - minY0) / Math.max(1, zoomForView);
-      minX = cx - vw / 2;
-      minY = cy - vh / 2;
-      // Don’t let autofit frame drift too far below the page top;
-      // we want some stage visible above y=0.
-      minY = Math.min(minY, stagePadMM);
-    }
-
-    const baseVhMM = vh + stagePadMM * 2;
-    const mmPerPx = previewPxH > 0 ? baseVhMM / previewPxH : 0;
-    const extraTopMM = padMode === 'autofit' ? topPadPX * mmPerPx : 0;
-
-    return {
-      minX,
-      minY,
-      vw,
-      vh,
-      stagePadMM,
-      extraTopMM,
-    };
-  };
 
   // ---------- ViewBox (includes stage margin so paper stands out) ----------
-  const vb = useMemo(() => {
-    const { minX, minY, vw, vh, stagePadMM, extraTopMM } = computeBaseView();
-
-    let minXc = minX + pan.x - stagePadMM;
-    let minYc = minY + pan.y - stagePadMM - extraTopMM;
-    let vwc = vw + stagePadMM * 2;
-    let vhc = vh + stagePadMM * 2;
-
-    // Ensure the full paper width always fits inside the viewBox in autofit.
-    // If we zoom in too far (or the window is narrow), vwc can become < paper width,
-    // which clips the page. Clamp to at least the paper width + stage padding.
-    if (view === 'autofit') {
-      const minVwc = box.w + stagePadMM * 2;
-      if (vwc < minVwc) {
-        vwc = minVwc;
-        // Center the paper horizontally with equal stage padding on both sides.
-        // Paper spans [0..box.w], so padded span is [-pad..box.w+pad].
-        minXc = -stagePadMM + pan.x;
-      }
-    }
-
-    return { minX: minXc, minY: minYc, vw: vwc, vh: vhc, str: `${minXc} ${minYc} ${vwc} ${vhc}` };
-  }, [view, box, guideSets, zoom, pan, previewPxH, DEFAULT_AUTOFIT_ZOOM]);
+  const camera = useEditorCamera(svgRef, {x:0,y:0,w:box.w,h:box.h}, pointBounds(guideSets.flatMap(g=>[...g.ascLine,...g.waistLine,...g.baseLine,...g.descLine]),{x:0,y:0,w:box.w,h:box.h},2));
+  const vb = camera;
   /* ---------------- Export actions ---------------- */
   function downloadSVG() {
     const svg = svgRef.current;
@@ -979,125 +728,21 @@ const slantAngleDeg = useMemo(() => {
   }
 
   /* ---------------- Pan handlers ---------------- */
-  function onPointerDown(e: React.PointerEvent<SVGSVGElement>) {
-    const svg = svgRef.current;
-    if (!svg) return;
-    svg.setPointerCapture(e.pointerId);
-    dragRef.current = { px: e.clientX, py: e.clientY, panX: pan.x, panY: pan.y };
-    setIsPanning(true);
-  }
-
-  function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
-    if (!dragRef.current) return;
-    const svg = svgRef.current!;
-    const rect = svg.getBoundingClientRect();
-    const mmPerPxX = vb.vw / rect.width;
-    const mmPerPxY = vb.vh / rect.height;
-
-    // Pan stage
-    const nx = dragRef.current.panX - (e.clientX - dragRef.current.px) * mmPerPxX;
-    const ny = dragRef.current.panY - (e.clientY - dragRef.current.py) * mmPerPxY;
-    setPan({ x: nx, y: ny });
-  }
-
-  function onPointerUp(e: React.PointerEvent<SVGSVGElement>) {
-    const svg = svgRef.current;
-    if (!svg) return;
-    try {
-      svg.releasePointerCapture(e.pointerId);
-    } catch {
-      // ignore
-    }
-    dragRef.current = null;
-    setIsPanning(false);
-  }
-
-  function resetView() {
-    setView('autofit');
-    setZoom(DEFAULT_ZOOM);
-    setPan({ x: 0, y: 0 });
-  }
-
-  function goToTop() {
-    // Goal: match the SAME grey gap you see after "Reset view".
-    // Reset view => view='autofit', zoom=DEFAULT_ZOOM, pan={0,0}.
-    // We'll compute the autofit extraTopMM using DEFAULT_ZOOM framing (not current view).
-
-    // Current base view (for solving pan in the current mode)
-    const cur = computeBaseView();
-
-    // Compute what extraTopMM would be under resetView() conditions.
-    // These constants must match computeBaseView():
-    const topPadPX = 30;
-    const stagePadMM_Auto = 22;
-
-    // Under reset view, zoomForView = DEFAULT_AUTOFIT_ZOOM (=4), and stage pad is 22mm.
-    // We only need vh to convert px->mm for the top gap.
-    // We'll approximate vh_reset as the current vh if we're already autofit+DEFAULT_AUTOFIT_ZOOM,
-    // otherwise recompute it from the guide bounds at zoom = DEFAULT_AUTOFIT_ZOOM.
-    let vh_reset = cur.vh;
-
-    // Recompute vh_reset from the guide bounds using zoom = DEFAULT_AUTOFIT_ZOOM (4).
-    // This mirrors the autofit branch in computeBaseView but only for vh.
-    if (guideSets.length > 0) {
-      const fitPad = 8;
-      const pts = guideSets.flatMap((guideSet) => [
-        ...guideSet.ascLine,
-        ...guideSet.waistLine,
-        ...guideSet.baseLine,
-        ...guideSet.descLine,
-      ]);
-
-      const ys = pts.map((p) => p.y);
-      const minY0 = Math.min(...ys) - fitPad;
-      const maxY0 = Math.max(...ys) + fitPad;
-
-      const vh0 = Math.max(1, maxY0 - minY0);
-      vh_reset = vh0 / Math.max(1, DEFAULT_AUTOFIT_ZOOM);
-    }
-
-    const baseVhMM_reset = vh_reset + stagePadMM_Auto * 2;
-    const mmPerPx_reset = previewPxH > 0 ? baseVhMM_reset / previewPxH : 0;
-    const extraTopMM_reset = topPadPX * mmPerPx_reset;
-
-    // After reset view, the viewBox minY is effectively: -extraTopMM_reset (because minY gets clamped to stagePad).
-    // So our target for the current viewBox is: minYc_target = -extraTopMM_reset.
-    const minYc_target = -extraTopMM_reset;
-
-    // Current vb formula: minYc = cur.minY + pan.y - cur.stagePadMM - cur.extraTopMM
-    // Solve for pan.y:
-    // pan.y = minYc_target + cur.stagePadMM + cur.extraTopMM - cur.minY
-    setPan((p) => ({
-      ...p,
-      y: minYc_target + cur.stagePadMM + cur.extraTopMM - cur.minY,
-    }));
-  }
 
 
 
 
 
-  function adjustZoom(direction: 'in' | 'out') {
-    // Only set the origin WHEN LEAVING a non-custom mode.
-    // If we're already in custom, keep the existing origin.
-    if (view === 'fullpage') setCustomOrigin('fullpage');
-    if (view === 'autofit') setCustomOrigin('autofit');
 
-    const currentEffectiveZoom =
-      view === 'custom'
-        ? zoom
-        : view === 'autofit'
-          ? DEFAULT_AUTOFIT_ZOOM
-          : 1;
 
-    const next =
-      direction === 'in'
-        ? currentEffectiveZoom * 1.25
-        : currentEffectiveZoom / 1.25;
 
-    setView('custom');
-    setZoom(clamp(next, 1, 12));
-  }
+
+
+
+
+
+
+
 
 
 
@@ -1113,88 +758,30 @@ const slantAngleDeg = useMemo(() => {
   const centerX = margins.left + (box.w - margins.left - margins.right) / 2;
 
   return (
-    <main className="min-h-screen text-slate-900 relative pb-8">
-      {/* FULL-VIEWPORT “PAINT OVER” LAYER */}
-      <div className="fixed inset-0 -z-10 bg-slate-100" style={{ backgroundImage: 'none' }} />
-
-      {/* Header */}
-      <header className="px-4 sm:px-6 pt-6 sm:pt-8 pb-6">
-        <div className="max-w-[1280px] mx-auto">
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-            Calligraphy Tools <span className="text-indigo-600">— Guideline Generator</span>
-          </h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Generate printable guidelines for Copperplate, blackletter, and Insular Majuscule using straight baselines.
-          </p>
-        </div>
-      </header>
-
-      {/* Preview */}
-      <section className="px-4 sm:px-6">
-        <div className="max-w-[1280px] mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4 sm:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="font-semibold text-slate-800">Preview</h3>
-                <InfoTip side="right">
-                  Drag anywhere to pan. Zoom with ±. Use full page for print-ready output.
-                </InfoTip>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-slate-500">View:</span>
-                <select
-                  className="p-1.5 text-sm rounded-lg border border-slate-300"
-                  value={view}
-                  onChange={e => {
-                    setView(e.target.value as ViewMode);
-                    setPan({ x: 0, y: 0 });
-                  }}
-                >
-                  <option value="autofit">Auto-fit guidelines</option>
-                  <option value="fullpage">Full page</option>
-                  <option value="custom">Custom</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button onMouseDown={e => e.preventDefault()} aria-label="Zoom out" onClick={() => adjustZoom('out')} className="min-h-10 px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
-                –
-              </button>
-              <button onMouseDown={e => e.preventDefault()} aria-label="Zoom in" onClick={() => adjustZoom('in')} className="min-h-10 px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
-                +
-              </button>
-              <button onMouseDown={e => e.preventDefault()} onClick={resetView} className="min-h-10 px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
-                Reset view
-              </button>
-              <button onMouseDown={e => e.preventDefault()} onClick={goToTop} className="min-h-10 px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
+    <EditorWorkspace preview={<>
+<section className=" ">
+        <div className="preview-panel  mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4 sm:p-6">
+          <PreviewToolbar camera={camera}><Button onMouseDown={e => e.preventDefault()} onClick={camera.top} className="min-h-10   text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
                 Top
-              </button>
-
-              <button onMouseDown={e => e.preventDefault()} onClick={downloadSVG} className="px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
+              </Button>
+<Button onMouseDown={e => e.preventDefault()} onClick={downloadSVG} className="  text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
                 SVG
-              </button>
-              <button onMouseDown={e => e.preventDefault()} onClick={downloadPDF} className="px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
+              </Button>
+<Button onMouseDown={e => e.preventDefault()} onClick={downloadPDF} className="  text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
                 PDF
-              </button>
-              <button onMouseDown={e => e.preventDefault()} onClick={printToScale} className="px-3 py-2 text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500">
+              </Button>
+<Button onMouseDown={e => e.preventDefault()} onClick={printToScale} className="  text-sm rounded-lg text-white bg-indigo-600 hover:bg-indigo-500">
                 Print
-              </button>
-            </div>
-          </div>
+              </Button></PreviewToolbar>
 
           {/* Darker stage behind paper */}
           <div className="relative overflow-x-auto rounded-xl border border-slate-200 bg-slate-300">
             <svg
               ref={svgRef}
               viewBox={vb.str}
-              className={`block mx-auto w-full h-[38vh] sm:h-[44vh] md:h-[50vh] touch-none ${isPanning ? 'cursor-move' : 'cursor-grab active:cursor-grabbing'}`}
+              className="editor-svg"
               style={{ background: '#cbd5e1' }}
-              preserveAspectRatio={(view === 'fullpage' || (view === 'custom' && customOrigin === 'fullpage')) ? 'xMidYMid meet' : 'xMidYMin meet'}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerLeave={onPointerUp}
+              preserveAspectRatio="xMidYMid meet"
             >
               <defs>
                 <clipPath id="pageClip">
@@ -1228,35 +815,32 @@ const slantAngleDeg = useMemo(() => {
             </svg>
 
           </div>
-          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs leading-5 text-slate-600">
+          <PreviewMeta>
             <span>Baselines: {guideSets.length}</span>
             <span>Line height: {lineHeight.toFixed(1)} mm</span>
             <span>Row gap: {rowGapMM.toFixed(1)} mm</span>
             <span>Row step: {rowStepMM.toFixed(1)} mm</span>
-          </div>
+          </PreviewMeta>
         </div>
       </section>
-
-      {/* Controls */}
-      <section className="px-4 sm:px-6 py-6 max-w-[1328px] mx-auto grid grid-cols-1 lg:grid-cols-2 items-start gap-6">
+</>} help={<InspectorIntro>Generate printable guidelines for Copperplate, blackletter, and Insular Majuscule using straight baselines.
+          </InspectorIntro>} inspector={<>
+<section className="    mx-auto grid grid-cols-1  items-start gap-6">
         {/* Step 1 */}
-        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 min-w-0 p-5 sm:p-6">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-slate-800">Step 1 — Basics</h2>
-            <InfoTip side="right">Guidelines are spaced by x-height + ascender + descender.</InfoTip>
-          </div>
+        <DisclosureSection title="Document & Appearance" defaultOpen headerAction={<InfoTip side="right">Guidelines are spaced by x-height + ascender + descender.</InfoTip>}>
+
 
           <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="sm:col-span-2">
               <label className="font-medium text-slate-700">Paper size</label>
-              <select
+              <Select
                 className="mt-1 w-full p-2 rounded-lg border border-slate-300"
                 value={paper}
                 onChange={e => {
                   const id = e.target.value as PaperId;
                   setPaper(id);
                   setOrientation(PAPERS_MM[id].defaultOrientation);
-                  setPan({ x: 0, y: 0 });
+                  camera.fit('page');
                 }}
               >
                 {Object.entries(PAPERS_MM).map(([id, p]) => (
@@ -1264,20 +848,20 @@ const slantAngleDeg = useMemo(() => {
                     {p.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             <div>
               <label className="font-medium text-slate-700">Orientation</label>
-              <select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={orientation} onChange={e => setOrientation(e.target.value as Orientation)}>
+              <Select className="mt-1 w-full p-2 rounded-lg border border-slate-300" value={orientation} onChange={e => setOrientation(e.target.value as Orientation)}>
                 <option value="portrait">Portrait</option>
                 <option value="landscape">Landscape</option>
-              </select>
+              </Select>
             </div>
 
             <div>
               <label className="font-medium text-slate-700">Row gap (mm)</label>
-              <input
+              <NumericInput
                 type="number"
                 step="0.1"
                 min="0"
@@ -1294,7 +878,7 @@ const slantAngleDeg = useMemo(() => {
             <div className="flex min-w-0 flex-col items-stretch gap-2">
               <label className="block font-medium text-slate-700">Top margin</label>
               <div className="relative flex-1 min-w-0">
-                <input
+                <NumericInput
                   type="number"
                   step="0.5"
                   min="0"
@@ -1309,7 +893,7 @@ const slantAngleDeg = useMemo(() => {
             <div className="flex min-w-0 flex-col items-stretch gap-2">
               <label className="block font-medium text-slate-700">Bottom margin</label>
               <div className="relative flex-1 min-w-0">
-                <input
+                <NumericInput
                   type="number"
                   step="0.5"
                   min="0"
@@ -1324,7 +908,7 @@ const slantAngleDeg = useMemo(() => {
             <div className="flex min-w-0 flex-col items-stretch gap-2">
               <label className="block font-medium text-slate-700">Left margin</label>
               <div className="relative flex-1 min-w-0">
-                <input
+                <NumericInput
                   type="number"
                   step="0.5"
                   min="0"
@@ -1339,7 +923,7 @@ const slantAngleDeg = useMemo(() => {
             <div className="flex min-w-0 flex-col items-stretch gap-2">
               <label className="block font-medium text-slate-700">Right margin</label>
               <div className="relative flex-1 min-w-0">
-                <input
+                <NumericInput
                   type="number"
                   step="0.5"
                   min="0"
@@ -1360,7 +944,7 @@ const slantAngleDeg = useMemo(() => {
                 {/* Baseline */}
                 <div className="flex min-w-0 flex-col items-stretch gap-2">
                   <div className="min-w-0 text-sm font-medium text-slate-700">Baseline</div>
-                  <button
+                  <Button
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => setShowBaselineIndicator(v => !v)}
@@ -1374,13 +958,13 @@ const slantAngleDeg = useMemo(() => {
                       <span className="h-3 w-3 rounded-full bg-white shadow" />
                     </span>
                     {showBaselineIndicator ? 'On' : 'Off'}
-                  </button>
+                  </Button>
                 </div>
 
                 {/* High-contrast */}
                 <div className="flex min-w-0 flex-col items-stretch gap-2">
                   <div className="min-w-0 text-sm font-medium text-slate-700">High-contrast</div>
-                  <button
+                  <Button
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => {
@@ -1406,13 +990,13 @@ const slantAngleDeg = useMemo(() => {
                       <span className="h-3 w-3 rounded-full bg-white shadow" />
                     </span>
                     {highContrastMode ? 'On' : 'Off'}
-                  </button>
+                  </Button>
                 </div>
 
                 {/* Center */}
                 <div className="flex min-w-0 flex-col items-stretch gap-2">
                   <div className="min-w-0 text-sm font-medium text-slate-700">Center</div>
-                  <button
+                  <Button
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => setShowCenterLine(v => !v)}
@@ -1426,7 +1010,7 @@ const slantAngleDeg = useMemo(() => {
                       <span className="h-3 w-3 rounded-full bg-white shadow" />
                     </span>
                     {showCenterLine ? 'On' : 'Off'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -1472,7 +1056,7 @@ const slantAngleDeg = useMemo(() => {
                 <label className="font-medium text-slate-700">X-line contrast</label>
                 <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : xLineContrast) * 100)}%</span>
               </div>
-              <input
+              <Slider
                 type="range"
                 min="0"
                 max="1"
@@ -1495,7 +1079,7 @@ const slantAngleDeg = useMemo(() => {
                 <label className="font-medium text-slate-700">X-line thickness</label>
                 <span className="text-xs text-slate-500">{(highContrastMode ? 1.8 : xLineThickness).toFixed(2)}×</span>
               </div>
-              <input
+              <Slider
                 type="range"
                 min="0.6"
                 max="2.5"
@@ -1512,18 +1096,15 @@ const slantAngleDeg = useMemo(() => {
 
 
           </div>
-        </div>
+        </DisclosureSection>
 
         {/* Step 2 */}
-        <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 min-w-0 p-5 sm:p-6">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-slate-800">Step 2 — Heights & Guides</h2>
-            <InfoTip side="right">
+        <DisclosureSection title="Script & Dimensions" defaultOpen headerAction={<InfoTip side="right">
               {script === 'Copperplate'
                 ? 'Copperplate uses x-height (mm) with optional calibration for lowercase scale and spacing.'
                 : 'Heights are nibs × nib size (mm).'}
-            </InfoTip>
-          </div>
+            </InfoTip>}>
+
 
           {/* Top controls */}
           <div className="mt-5 space-y-5">
@@ -1532,7 +1113,7 @@ const slantAngleDeg = useMemo(() => {
               <div className="flex min-w-0 flex-col items-stretch gap-2">
                 <label className="block font-medium text-slate-700">Script</label>
                 <div className="flex-1 min-w-0">
-                  <select
+                  <Select
                     className="w-full p-2 rounded-lg border border-slate-300"
                     value={script}
                     onChange={(e) => setScript(e.target.value as ScriptId)}
@@ -1541,7 +1122,7 @@ const slantAngleDeg = useMemo(() => {
                     <option value="Fraktur">Fraktur</option>
                     <option value="TexturaQuadrata">Textura Quadrata</option>
                      <option value="InsularMajuscule">Insular Majuscule</option>
-                  </select>
+                  </Select>
                 </div>
               </div>
 
@@ -1552,7 +1133,7 @@ const slantAngleDeg = useMemo(() => {
 
                 <div className="flex-1 min-w-0">
                   {script === 'Copperplate' ? (
-                    <input
+                    <NumericInput
                       type="number"
                       step={0.5}
                       min={2}
@@ -1584,7 +1165,7 @@ const slantAngleDeg = useMemo(() => {
                       }}
                     />
                   ) : (
-                    <input
+                    <NumericInput
                       type="number"
                       step={0.5}
                       min={1}
@@ -1605,7 +1186,7 @@ const slantAngleDeg = useMemo(() => {
                   <div className="flex min-w-0 flex-col items-stretch gap-2">
                     <label className="block font-medium text-slate-700">Guideline ratio (desc : x : asc)</label>
                     <div className="flex-1 min-w-0">
-                      <select
+                      <Select
                         className="w-full p-2 rounded-lg border border-slate-300"
                         value={copperplateRatioPreset}
                         onChange={(e) => setCopperplateRatioPreset(e.target.value as CopperplateRatioPreset)}
@@ -1614,7 +1195,7 @@ const slantAngleDeg = useMemo(() => {
                         <option value="3:2:3">3 : 2 : 3</option>
                         <option value="1:1:1">1 : 1 : 1</option>
                         <option value="custom">Custom…</option>
-                      </select>
+                      </Select>
                     </div>
                   </div>
                   <p className="mt-1 text-[11px] text-slate-400">Ascender/descender scale from x-height.</p>
@@ -1625,7 +1206,7 @@ const slantAngleDeg = useMemo(() => {
                     {/* Desc */}
                     <div>
                       <label className="font-medium text-slate-700">Desc units</label>
-                      <input
+                      <NumericInput
                         type="number"
                         min={0}
                         step="0.5"
@@ -1665,7 +1246,7 @@ const slantAngleDeg = useMemo(() => {
                     {/* X */}
                     <div>
                       <label className="font-medium text-slate-700">X units</label>
-                      <input
+                      <NumericInput
                         type="number"
                         min={0.5}
                         step="0.5"
@@ -1705,7 +1286,7 @@ const slantAngleDeg = useMemo(() => {
                     {/* Asc */}
                     <div>
                       <label className="font-medium text-slate-700">Asc units</label>
-                      <input
+                      <NumericInput
                         type="number"
                         min={0}
                         step="0.5"
@@ -1759,7 +1340,7 @@ const slantAngleDeg = useMemo(() => {
                     {/* Nib size */}
                     <div>
                       <label className="font-medium text-slate-700">Nib size (mm)</label>
-                      <input
+                      <NumericInput
                         type="number"
                         step="any"
                         min={0.2}
@@ -1792,7 +1373,7 @@ const slantAngleDeg = useMemo(() => {
                     {/* Pen angle */}
                     <div>
                       <label className="font-medium text-slate-700">Pen angle (°)</label>
-                      <select
+                      <Select
                         className="mt-1 w-full p-2 rounded-lg border border-slate-300"
                         value={penAngleDeg}
                         onChange={(e) => setPenAngleDeg(parseInt(e.target.value, 10) as 15 | 35 | 40 | 45)}
@@ -1801,14 +1382,14 @@ const slantAngleDeg = useMemo(() => {
                          <option value={35}>35°</option>
                         <option value={40}>40°</option>
                         <option value={45}>45°</option>
-                      </select>
+                      </Select>
                     </div>
 
                     {/* Grid width */}
                     {showGridControls ? (
                       <div className="space-y-2">
                         <label className="font-medium text-slate-700">Grid width</label>
-                        <select
+                        <Select
                           className="mt-1 w-full p-2 rounded-lg border border-slate-300"
                           value={gridWidthMode}
                           onChange={(e) => setGridWidthMode(e.target.value as 'effective' | 'actual' | 'custom')}
@@ -1816,8 +1397,8 @@ const slantAngleDeg = useMemo(() => {
                           <option value="effective">Stroke-width</option>
                           <option value="actual">Actual nib</option>
                           <option value="custom">Custom</option>
-                        </select>
-                        {gridWidthMode === 'custom' && <label className="block font-medium text-slate-700">Custom grid width<div className="relative"><input className="mt-1 w-full rounded-lg border border-slate-300 p-2 pr-10" type="number" min="0.1" step="0.1" value={customGridWidthMM} onChange={e => { const next = Number(e.target.value); if (Number.isFinite(next) && next >= .1) setCustomGridWidthMM(next); }} /><span className="pointer-events-none absolute right-3 top-3 text-sm text-slate-400">mm</span></div></label>}
+                        </Select>
+                        {gridWidthMode === 'custom' && <label className="block font-medium text-slate-700">Custom grid width<div className="relative"><NumericInput className="mt-1 w-full rounded-lg border border-slate-300 p-2 pr-10" type="number" min="0.1" step="0.1" value={customGridWidthMM} onChange={e => { const next = Number(e.target.value); if (Number.isFinite(next) && next >= .1) setCustomGridWidthMM(next); }} /><span className="pointer-events-none absolute right-3 top-3 text-sm text-slate-400">mm</span></div></label>}
                       </div>
                     ) : (
                       <div />
@@ -1827,7 +1408,7 @@ const slantAngleDeg = useMemo(() => {
                     {showGridControls ? (
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-slate-700">Angle guide</div>
-                        <button
+                        <Button
                           type="button"
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => setShowNibAngleGuide((v) => !v)}
@@ -1841,7 +1422,7 @@ const slantAngleDeg = useMemo(() => {
                             <span className="h-3 w-3 rounded-full bg-white shadow" />
                           </span>
                           {showNibAngleGuide ? 'On' : 'Off'}
-                        </button>
+                        </Button>
                       </div>
                     ) : (
                       <div />
@@ -1852,7 +1433,7 @@ const slantAngleDeg = useMemo(() => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
                       <label className="font-medium text-slate-700">Ascender (nibs)</label>
-                      <input
+                      <NumericInput
                         type="number"
                         step={0.5}
                         min={0}
@@ -1864,7 +1445,7 @@ const slantAngleDeg = useMemo(() => {
                     </div>
                     <div>
                       <label className="font-medium text-slate-700">Descender (nibs)</label>
-                      <input
+                      <NumericInput
                         type="number"
                         step={0.5}
                         min={0}
@@ -1893,7 +1474,7 @@ const slantAngleDeg = useMemo(() => {
                     <label className="font-medium text-slate-700">1st asc/desc spacing</label>
                     <span className="text-xs text-slate-500">{midlineDashGap.toFixed(1)} mm</span>
                   </div>
-                  <input
+                  <Slider
                     type="range"
                     min="2"
                     max="14"
@@ -1913,7 +1494,7 @@ const slantAngleDeg = useMemo(() => {
                     <label className="font-medium text-slate-700">1st asc/desc contrast</label>
                     <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : midlineDashContrast) * 100)}%</span>
                   </div>
-                  <input
+                  <Slider
                     type="range"
                     min="0"
                     max="1"
@@ -1943,7 +1524,7 @@ const slantAngleDeg = useMemo(() => {
       <div className="flex min-w-0 flex-col items-stretch gap-2">
         <label className="block font-medium text-slate-700">Slant angle</label>
         <div className="relative flex-1 min-w-0">
-          <input
+          <NumericInput
             type="number"
             step={1}
             min={0}
@@ -1979,14 +1560,14 @@ const slantAngleDeg = useMemo(() => {
       <div className="flex min-w-0 flex-col items-stretch gap-2">
         <div className="flex items-center gap-2">
           <label className="font-medium text-slate-700">Slant 2</label>
-          <input
+          <Toggle
             type="checkbox"
             checked={enableSlant2}
             onChange={(e) => setEnableSlant2(e.target.checked)}
           />
         </div>
         <div className="relative flex-1 min-w-0">
-          <input
+          <NumericInput
             type="number"
             step={1}
             min={0}
@@ -2014,7 +1595,7 @@ const slantAngleDeg = useMemo(() => {
           {slantSpacingMM.toFixed(1)} mm
         </span>
       </div>
-      <input
+      <Slider
         type="range"
         min="4"
         max="30"
@@ -2033,7 +1614,7 @@ const slantAngleDeg = useMemo(() => {
           {Math.round((highContrastMode ? 1 : slantLineContrast) * 100)}%
         </span>
       </div>
-      <input
+      <Slider
         type="range"
         min="0"
         max="1"
@@ -2058,7 +1639,7 @@ const slantAngleDeg = useMemo(() => {
                     <label className="font-medium text-slate-700">Grid contrast</label>
                     <span className="text-xs text-slate-500">{Math.round(gridContrast * 100)}%</span>
                   </div>
-                  <input
+                  <Slider
                     type="range"
                     min="0"
                     max="1"
@@ -2078,7 +1659,7 @@ const slantAngleDeg = useMemo(() => {
                     <label className="font-medium text-slate-700">Grid thickness</label>
                     <span className="text-xs text-slate-500">{gridThickness.toFixed(2)}×</span>
                   </div>
-                  <input
+                  <Slider
                     type="range"
                     min="0.6"
                     max="1.4"
@@ -2100,7 +1681,7 @@ const slantAngleDeg = useMemo(() => {
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-6">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-medium text-slate-700">Horizontal grid lines</div>
-                <button
+                <Button
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => setShowGridHorizontal((v) => !v)}
@@ -2116,12 +1697,12 @@ const slantAngleDeg = useMemo(() => {
                     <span className="h-3 w-3 rounded-full bg-white shadow" />
                   </span>
                   {showGridHorizontal ? 'On' : 'Off'}
-                </button>
+                </Button>
               </div>
 
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-medium text-slate-700">Vertical grid lines</div>
-                <button
+                <Button
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => setShowGridVertical((v) => !v)}
@@ -2137,13 +1718,13 @@ const slantAngleDeg = useMemo(() => {
                     <span className="h-3 w-3 rounded-full bg-white shadow" />
                   </span>
                   {showGridVertical ? 'On' : 'Off'}
-                </button>
+                </Button>
               </div>
             </div>
           )}
-        </div>
+        </DisclosureSection>
 
       </section>
-    </main>
+</>}></EditorWorkspace>
   );
 }

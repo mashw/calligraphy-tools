@@ -3,13 +3,14 @@ import { createDefaultGuidelinesSettings, type GuidelinesSettings } from '@/lib/
 import { createDefaultShapeSettings, isConstrainedShape, type ShapeKind, type ShapeSettings } from './shape';
 import { createDefaultCurvedTitleSettings, type CurvedTitleSettings } from '@/lib/curved-title/settings';
 import { createDefaultCalligramSettings, type CalligramSettings } from '@/lib/calligram/settings';
+import { createDefaultWovenSettings, type WovenSettings } from './woven';
 import type { ArtworkDocument } from './artwork';
 
-export type ElementType = 'page' | 'guidelines' | 'calligram' | 'curved-title' | 'shape' | 'artwork';
+export type ElementType = 'page' | 'guidelines' | 'calligram' | 'curved-title' | 'shape' | 'artwork' | 'woven';
 export type Frame = { x: number; y: number; width: number; height: number };
 export type Margins = { top: number; right: number; bottom: number; left: number };
 export type LayoutPaperId = PaperId | 'Custom';
-type ElementBase = { id: string; name: string; frame: Frame; locked: boolean };
+type ElementBase = { visible?: boolean; id: string; name: string; frame: Frame; locked: boolean };
 type MovableElementBase = ElementBase & { paddingMM: number; rotationDeg?: number };
 export type PageElement = ElementBase & { id: 'page'; type: 'page'; locked: true; settings: { paper: LayoutPaperId; orientation: Orientation; customWidthMM: number; customHeightMM: number; margins: Margins; centerLines: { vertical: boolean; horizontal: boolean } } };
 export type GuidelinesMaskSettings = { enabled:boolean;kind:ShapeKind;textLayoutRespectsMask:boolean;showOutline:boolean;outlineColor:string;outlineWidthMM:number;cornerRadiusMM:number };
@@ -19,7 +20,8 @@ export type ShapeElement = MovableElementBase & { type: 'shape'; settings: Shape
 export type CurvedTitleElement = MovableElementBase & { type: 'curved-title'; settings: CurvedTitleSettings };
 export type CalligramElement = MovableElementBase & { type: 'calligram'; settings: CalligramSettings };
 export type ArtworkElement = MovableElementBase & { type:'artwork'; sourceFilename:string; document:ArtworkDocument; intrinsicAspectRatio:number; settings:{lockProportions:boolean;opacity:number;occludeLowerLayers:boolean;occludeClosedShapes:boolean;occlusionArea?:'visible-artwork'|'bounds';textFitExclusion?:'bounds'|'geometry'} };
-export type LayoutElement = PageElement | GuidelinesElement | ShapeElement | CurvedTitleElement | CalligramElement | ArtworkElement;
+export type WovenElement = MovableElementBase & {type:'woven'; settings:WovenSettings};
+export type LayoutElement = WovenElement | PageElement | GuidelinesElement | ShapeElement | CurvedTitleElement | CalligramElement | ArtworkElement;
 export type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 export type ResizeAspectMode = 'free' | 'corners' | 'all';
 export type GuidelinesTextMode = 'estimate'|'line-layout';
@@ -31,10 +33,10 @@ export function pageSize(element: PageElement) {
   const raw=PAPERS_MM[element.settings.paper]; return element.settings.orientation==='landscape'&&raw.w<raw.h||element.settings.orientation==='portrait'&&raw.w>raw.h?{width:raw.h,height:raw.w}:{width:raw.w,height:raw.h};
 }
 export const pageElement = (): PageElement => ({ id:'page',type:'page',name:'Page',locked:true,settings:{paper:'A4',orientation:PAPERS_MM.A4.defaultOrientation,customWidthMM:210,customHeightMM:297,margins:{top:0,right:0,bottom:0,left:0},centerLines:{vertical:false,horizontal:false}},frame:{x:0,y:0,width:210,height:297} });
-const labels = { guidelines:'Guidelines',calligram:'Calligram','curved-title':'Curved title',shape:'Shape' } as const;
+const labels = { woven:'Woven Calligraphy', guidelines:'Guidelines',calligram:'Calligram','curved-title':'Curved title',shape:'Shape' } as const;
 export function defaultElementSize(type: Exclude<ElementType,'page'|'artwork'>, page:{width:number;height:number}) {
-  const width=Math.min(type==='guidelines'?150:type==='shape'?40:type==='curved-title'?page.width*.8:type==='calligram'?140:72,Math.max(20,page.width-30));
-  const height=type==='calligram'?width:Math.min(type==='guidelines'?180:type==='shape'?35:type==='curved-title'?60:50,Math.max(20,page.height-30));
+  const width=Math.min(type==='woven'?165:type==='guidelines'?150:type==='shape'?40:type==='curved-title'?page.width*.8:type==='calligram'?140:72,Math.max(20,page.width-30));
+  const height=type==='calligram'||type==='woven'?width:Math.min(type==='guidelines'?180:type==='shape'?35:type==='curved-title'?60:50,Math.max(20,page.height-30));
   return {width,height};
 }
 
@@ -49,6 +51,7 @@ export function newElement(type: Exclude<ElementType,'page'|'artwork'>, count:nu
   const {width,height}=defaultElementSize(type,page);
   const base={id:`${type}-${crypto.randomUUID()}`,type,name:`${labels[type]} ${count}`,locked:false,paddingMM:0,rotationDeg:0,frame:{x:Math.max(5,(page.width-width)/2),y:type==='curved-title'?Math.max(5,(page.height-height)*.2):Math.max(5,(page.height-height)/2),width,height}};
   if(type==='guidelines') { const settings=createDefaultGuidelinesSettings(); settings.margins={top:0,right:0,bottom:0,left:0}; return {...base,type,allowPartialGuidelines:true,fitText:'',textMode:'estimate',plannedLines:[],rightAlignMode:'waist',avoidOccludingElements:true,mask:createDefaultGuidelinesMaskSettings(),settings}; }
+  if(type==='woven')return {...base,type,settings:createDefaultWovenSettings()};
   if(type==='shape') return {...base,type,settings:createDefaultShapeSettings()};
   if(type==='curved-title') return {...base,type,settings:createDefaultCurvedTitleSettings()};
   if(type==='calligram') return {...base,type,settings:createDefaultCalligramSettings()};
