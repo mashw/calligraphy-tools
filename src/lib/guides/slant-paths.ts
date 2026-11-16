@@ -221,6 +221,7 @@ export function flowingSlants(
 export function clipSlantToBand(
   points: SlantPoint[],
   polygon: SlantPoint[],
+  keepInside = true,
 ): SlantPoint[][] {
   if (polygon.length < 3) return [];
   const inside = (p: SlantPoint) => {
@@ -255,7 +256,7 @@ export function clipSlantToBand(
     ts.sort((a, b) => a - b);
     const at = (t: number) => ({ x: a.x + t * dx, y: a.y + t * dy });
     for (let j = 1; j < ts.length; j++)
-      if (ts[j] - ts[j - 1] > 1e-9 && inside(at((ts[j] + ts[j - 1]) / 2))) {
+      if (ts[j] - ts[j - 1] > 1e-9 && inside(at((ts[j] + ts[j - 1]) / 2)) === keepInside) {
         const p = at(ts[j - 1]),
           q = at(ts[j]),
           last = out.at(-1);

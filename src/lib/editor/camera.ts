@@ -22,6 +22,7 @@ export function zoomBounds(frame: Bounds, factor: number, anchor = { x: .5, y: .
 
 /** Keep center and units per CSS pixel when a custom view is resized. */
 export function resizeBounds(frame: Bounds, before: Size, after: Size): Bounds {
+  if (before.width === after.width && before.height === after.height) return frame;
   const unitsPerPixel = frame.w / Math.max(1, before.width);
   const w = Math.max(1, after.width) * unitsPerPixel, h = Math.max(1, after.height) * unitsPerPixel;
   return { x: frame.x + (frame.w - w) / 2, y: frame.y + (frame.h - h) / 2, w, h };

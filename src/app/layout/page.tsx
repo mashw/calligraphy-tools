@@ -6,9 +6,9 @@ import { useState } from 'react';
 import LayoutInspector from '@/components/layout/LayoutInspector';
 import LayoutStage from '@/components/layout/LayoutStage';
 import LayersPanel, { type DesignMessage } from '@/components/layout/LayersPanel';
-import { defaultArtworkSize, newElement, pageElement, pageSize, type ElementType, type Frame, type LayoutElement } from '@/lib/layout/types';
+import { newElement, pageElement, pageSize, type ElementType, type Frame, type LayoutElement } from '@/lib/layout/types';
 import { buildGuidelinesLineLayoutPlan, buildGuidelinesTextFitPlan, buildGuidelinesVisibilityCacheKey, getCachedGuidelinesCollisionSpans, getCachedGuidelinesPlacementSpans, resolveTextFitColors, TEXT_FIT_COLORS, preferredTextFitColorIndex, type GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
-import { sanitizeArtworkSvg } from '@/lib/layout/artwork';
+import { importArtwork } from '@/lib/layout/import-artwork';
 import { pageContentRect } from '@/lib/layout/geometry';
 import { parseLayoutDesign, serializeLayoutDesign } from '@/lib/layout/design-file';
 
@@ -31,7 +31,7 @@ export default function LayoutPage() {
     const element = newElement(type, count, pageSize(page));
     setElements(current => [element, ...current]); setSelectedId(element.id);
   };
-  const addArtwork=async(files:FileList)=>{markEdited();const imported:Extract<LayoutElement,{type:'artwork'}>[]=[];const messages:string[]=[];const usable=pageContentRect(pageSize(page),page.settings.margins);for(const file of [...files]){try{const document=sanitizeArtworkSvg(await file.text()),ratio=document.viewBox.width/document.viewBox.height,{width,height}=defaultArtworkSize(ratio,usable,document.viewBox.width);imported.push({id:`artwork-${crypto.randomUUID()}`,type:'artwork',name:file.name.replace(/\.svg$/i,''),locked:false,paddingMM:0,rotationDeg:0,sourceFilename:file.name,document,intrinsicAspectRatio:ratio,settings:{lockProportions:true,opacity:100,occludeLowerLayers:true,occludeClosedShapes:true,occlusionArea:'visible-artwork',textFitExclusion:'bounds'},frame:{x:usable.x+(usable.width-width)/2,y:usable.y+(usable.height-height)/2,width,height}});if(document.warning)messages.push(`${file.name}: ${document.warning}`);}catch(error){messages.push(`${file.name}: ${error instanceof Error?error.message:'Could not import SVG.'}`);}}if(imported.length){setElements(current=>[...imported,...current]);setSelectedId(imported.at(-1)!.id);}setArtworkMessage(messages.join(' ')||null);};
+  const addArtwork=async(files:FileList)=>{markEdited();const imported:Extract<LayoutElement,{type:'artwork'}>[]=[];const messages:string[]=[];const usable=pageContentRect(pageSize(page),page.settings.margins);for(const file of [...files]){try{const {document,intrinsicAspectRatio:ratio,interlaceSource,size:{width,height}}=importArtwork(await file.text(),usable);imported.push({id:`artwork-${crypto.randomUUID()}`,type:'artwork',name:file.name.replace(/\.svg$/i,''),locked:false,paddingMM:0,rotationDeg:0,sourceFilename:file.name,document,interlaceSource,intrinsicAspectRatio:ratio,settings:{lockProportions:true,opacity:100,occludeLowerLayers:true,occludeClosedShapes:true,occlusionArea:'visible-artwork',textFitExclusion:'bounds'},frame:{x:usable.x+(usable.width-width)/2,y:usable.y+(usable.height-height)/2,width,height}});if(document.warning)messages.push(`${file.name}: ${document.warning}`);}catch(error){messages.push(`${file.name}: ${error instanceof Error?error.message:'Could not import SVG.'}`);}}if(imported.length){setElements(current=>[...imported,...current]);setSelectedId(imported.at(-1)!.id);}setArtworkMessage(messages.join(' ')||null);};
   const move = (id: string, direction: -1 | 1) => { markEdited(); setElements(current => {
     const index = current.findIndex(element => element.id === id); const target = index + direction;
     if (index < 0 || target < 0 || target >= current.length || current[target].type === 'page') return current;

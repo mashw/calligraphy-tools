@@ -1,3 +1,4 @@
+import { validateInterlaceSource } from '../interlace/layout-source';
 import {validateWovenSettings} from './woven';
 import type { LayoutElement } from './types';
 
@@ -98,6 +99,7 @@ function validateGuidelines(value: JsonObject) {
 }
 
 function validateArtwork(value: JsonObject) {
+  if(value.interlaceSource!==undefined)value.interlaceSource=validateInterlaceSource(value.interlaceSource);
   if (typeof value.sourceFilename !== 'string' || !isFiniteNumber(value.intrinsicAspectRatio) || (value.intrinsicAspectRatio as number) <= 0) fail('Saved artwork has invalid source metadata.');
   validateArtworkDocument(value.document);
   if (!isObject(value.settings)) fail('Saved artwork settings are missing.');

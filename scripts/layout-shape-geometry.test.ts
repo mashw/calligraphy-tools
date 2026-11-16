@@ -40,7 +40,9 @@ test('Layout element creation and reset size share defaults and preserve the cen
   assert.match(types,/export function defaultArtworkSize/);
   assert.match(types,/const \{width,height\}=defaultElementSize\(type,page\)/);
   assert.match(types,/rotationDeg:0/);
-  assert.match(page,/defaultArtworkSize\(ratio,usable,document\.viewBox\.width\)/);
+  assert.match(page,/importArtwork\(await file\.text\(\),usable\)/);
+  const importer=readFileSync(new URL('../src/lib/layout/import-artwork.ts',import.meta.url),'utf8');
+  assert.match(importer,/defaultArtworkSize\(ratio,usable,document\.viewBox\.width\)/);
   assert.match(inspector,/resizeAroundCenter\(element\.frame,size\)/);
 });
 

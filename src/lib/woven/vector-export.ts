@@ -1,13 +1,24 @@
 import type { Point } from './geometry';
-export type Stroke = { points: Point[]; color: string; width: number; role?: 'primary'|'grid'|'slant'|'construction'|'annotation' };
+export type Stroke = { points: Point[]; color: string; width: number; role?: 'primary'|'grid'|'slant'|'construction'|'annotation'; guide?:'baseline'|'waist' };
 export type Label = { point: Point; text: string; size: number; color: string };
 export type Scene = { strokes: Stroke[]; labels: Label[]; page?: { w: number; h: number } };
 const n = (value: number) => value.toFixed(3);
 export const pointsD = (points: Point[]) => points.map((p, i) => `${i ? 'L' : 'M'}${n(p.x)} ${n(p.y)}`).join(' ');
 const escapeXml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-export function sceneSvg(scene: Scene): string {
+export function sceneSvg(scene: Scene, { combineAdjacentStrokes = false } = {}): string {
   const {w,h} = scene.page ?? {w:210,h:297};
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}"><title>Woven Calligraphy writing guides</title>${scene.strokes.map(s => `<path d="${pointsD(s.points)}" fill="none" stroke="${s.color}" stroke-width="${s.width}" stroke-linejoin="round" stroke-linecap="round"/>`).join('')}${scene.labels.map(l => `<text x="${n(l.point.x)}" y="${n(l.point.y)}" font-family="Helvetica,Arial,sans-serif" font-size="${l.size}" fill="${l.color}">${escapeXml(l.text)}</text>`).join('')}</svg>`;
+  const paths: { color: string; width: number; subpaths: string[] }[] = [];
+  for (const stroke of scene.strokes) {
+    const previous = paths.at(-1);
+    const d = pointsD(stroke.points);
+    if (combineAdjacentStrokes && previous?.color === stroke.color && previous.width === stroke.width) {
+      previous.subpaths.push(d);
+    } else {
+      paths.push({ color: stroke.color, width: stroke.width, subpaths: [d] });
+    }
+  }
+  const geometry = paths.map(path => `<path d="${path.subpaths.join(' ')}" fill="none" stroke="${path.color}" stroke-width="${path.width}" stroke-linejoin="round" stroke-linecap="round"/>`).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}"><title>Woven Calligraphy writing guides</title>${geometry}${scene.labels.map(l => `<text x="${n(l.point.x)}" y="${n(l.point.y)}" font-family="Helvetica,Arial,sans-serif" font-size="${l.size}" fill="${l.color}">${escapeXml(l.text)}</text>`).join('')}</svg>`;
 }
 /** Small vector-only PDF writer. Coordinates and pen widths remain physical mm. */
 export function scenePdf(scene: Scene): Uint8Array {

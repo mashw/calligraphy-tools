@@ -4,6 +4,7 @@ import { createDefaultShapeSettings, isConstrainedShape, type ShapeKind, type Sh
 import { createDefaultCurvedTitleSettings, type CurvedTitleSettings } from '@/lib/curved-title/settings';
 import { createDefaultCalligramSettings, type CalligramSettings } from '@/lib/calligram/settings';
 import { createDefaultWovenSettings, type WovenSettings } from './woven';
+import type { InterlaceSource } from '../interlace/layout-source';
 import type { ArtworkDocument } from './artwork';
 
 export type ElementType = 'page' | 'guidelines' | 'calligram' | 'curved-title' | 'shape' | 'artwork' | 'woven';
@@ -19,7 +20,7 @@ export type GuidelinesElement = MovableElementBase & { type: 'guidelines'; allow
 export type ShapeElement = MovableElementBase & { type: 'shape'; settings: ShapeSettings };
 export type CurvedTitleElement = MovableElementBase & { type: 'curved-title'; settings: CurvedTitleSettings };
 export type CalligramElement = MovableElementBase & { type: 'calligram'; settings: CalligramSettings };
-export type ArtworkElement = MovableElementBase & { type:'artwork'; sourceFilename:string; document:ArtworkDocument; intrinsicAspectRatio:number; settings:{lockProportions:boolean;opacity:number;occludeLowerLayers:boolean;occludeClosedShapes:boolean;occlusionArea?:'visible-artwork'|'bounds';textFitExclusion?:'bounds'|'geometry'} };
+export type ArtworkElement = MovableElementBase & { type:'artwork'; sourceFilename:string; document:ArtworkDocument; interlaceSource?:InterlaceSource; intrinsicAspectRatio:number; settings:{lockProportions:boolean;opacity:number;occludeLowerLayers:boolean;occludeClosedShapes:boolean;occlusionArea?:'visible-artwork'|'bounds';textFitExclusion?:'bounds'|'geometry'} };
 export type WovenElement = MovableElementBase & {type:'woven'; settings:WovenSettings};
 export type LayoutElement = WovenElement | PageElement | GuidelinesElement | ShapeElement | CurvedTitleElement | CalligramElement | ArtworkElement;
 export type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';

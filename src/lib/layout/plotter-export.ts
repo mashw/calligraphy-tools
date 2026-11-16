@@ -212,7 +212,7 @@ function clipSegmentToRect(a: Pt, b: Pt, rect: Frame): [Pt, Pt] | null {
   return [lerp(a, b, t0), lerp(a, b, t1)];
 }
 
-function clipPolylineToRect(input: PlotPolyline, rect: Frame) {
+export function clipPolylineToRect(input: PlotPolyline, rect: Frame) {
   const out: PlotPolyline[] = [];
   let current: Pt[] = [];
   const flush = () => {
@@ -728,7 +728,18 @@ function sampleArtwork(element: Extract<LayoutElement, { type: 'artwork' }>, war
   root.setAttribute('height', '100');
   root.style.cssText = 'position:fixed;left:-10000px;top:-10000px;width:100px;height:100px;pointer-events:none;overflow:visible';
   const geometries: SVGGeometryElement[] = [];
-  element.document.nodes.forEach(node => appendArtworkNode(node, root, geometries));
+  for (const node of element.document.nodes) {
+    const d = node.attrs.d?.trim();
+    // Interlace packs clipped strokes into independent, absolute SVG subpaths.
+    // Measure them individually so a pen never bridges the gap between strokes.
+    if (element.interlaceSource && node.tag === 'path' && node.attrs.fill === 'none' && d?.startsWith('M') && !d.includes('m')) {
+      for (const subpath of d.split(/(?=M)/)) {
+        appendArtworkNode({ ...node, attrs: { ...node.attrs, d: subpath } }, root, geometries);
+      }
+    } else {
+      appendArtworkNode(node, root, geometries);
+    }
+  }
   document.body.appendChild(root);
 
   const result: PlotPolyline[] = [];
@@ -929,14 +940,25 @@ export function buildPlotterExport(
 
   // Occlusion is computed in Layout-panel order (topmost first). SVG groups are then
   // serialized bottom-to-top, matching SVG paint order and the on-canvas stack.
+  return buildPlotterGeometryExport([...drawingLayers].reverse(), page, matId, options.layering, warnings);
+}
+
+/** Serialize already resolved page-space centrelines in SVG paint order. */
+export function buildPlotterGeometryExport(
+  drawingLayers: {elementId:string;name:string;lines:{points:Pt[];source:string}[]}[],
+  page: {width:number;height:number},
+  matId: CricutMatId,
+  layering: ExportLayering = 'combined',
+  warnings: string[] = [],
+): PlotterExportResult {
   const drawing=drawingLayers.flatMap(layer=>layer.lines);
   const safety = analyzeSafety(drawing, page, matId);
   const anchors=anchorPolylines(page),allLines=[...anchors,...drawing];
   const viewport=drawableGeometryBounds(allLines);
   if(!viewport)warnings.push('No drawable plotter geometry was produced.');
   else if(viewport.width<=EPS||viewport.height<=EPS)warnings.push('Drawable plotter geometry has no two-dimensional export bounds.');
-  const layers:PlotterSvgLayer[]=[...drawingLayers].reverse().map(layer=>({elementId:layer.elementId,name:layer.name,pathData:polylinesToPathD(layer.lines)}));
-  const svg=serializePlotterSvg({viewport:viewport&&viewport.width>EPS&&viewport.height>EPS?viewport:{x:0,y:0,width:1,height:1},strokeWidth:CRICUT_PEN_STROKE_MM,anchorPath:polylinesToPathD(anchors),layers,layering:options.layering,format:fmt});
+  const layers:PlotterSvgLayer[]=[...drawingLayers].map(layer=>({elementId:layer.elementId,name:layer.name,pathData:polylinesToPathD(layer.lines)}));
+  const svg=serializePlotterSvg({viewport:viewport&&viewport.width>EPS&&viewport.height>EPS?viewport:{x:0,y:0,width:1,height:1},strokeWidth:CRICUT_PEN_STROKE_MM,anchorPath:polylinesToPathD(anchors),layers,layering,format:fmt});
 
   return { svg, warnings, safety, polylineCount: allLines.length };
 }
