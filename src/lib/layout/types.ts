@@ -6,6 +6,7 @@ import { createDefaultCalligramSettings, type CalligramSettings } from '@/lib/ca
 import { createDefaultWovenSettings, type WovenSettings } from './woven';
 import type { InterlaceSource } from '../interlace/layout-source';
 import type { ArtworkDocument } from './artwork';
+import { usesCustomMask, type CustomMask } from './custom-mask';
 
 export type ElementType = 'page' | 'guidelines' | 'calligram' | 'curved-title' | 'shape' | 'artwork' | 'woven';
 export type Frame = { x: number; y: number; width: number; height: number };
@@ -14,7 +15,7 @@ export type LayoutPaperId = PaperId | 'Custom';
 type ElementBase = { visible?: boolean; id: string; name: string; frame: Frame; locked: boolean };
 type MovableElementBase = ElementBase & { paddingMM: number; rotationDeg?: number };
 export type PageElement = ElementBase & { id: 'page'; type: 'page'; locked: true; settings: { paper: LayoutPaperId; orientation: Orientation; customWidthMM: number; customHeightMM: number; margins: Margins; centerLines: { vertical: boolean; horizontal: boolean } } };
-export type GuidelinesMaskSettings = { enabled:boolean;kind:ShapeKind;textLayoutRespectsMask:boolean;showOutline:boolean;outlineColor:string;outlineWidthMM:number;cornerRadiusMM:number };
+export type GuidelinesMaskSettings = { enabled:boolean;kind:ShapeKind|'customSvg';customSvg?:CustomMask;internalPaddingMM?:number;textLayoutRespectsMask:boolean;showOutline:boolean;outlineColor:string;outlineWidthMM:number;cornerRadiusMM:number };
 export const createDefaultGuidelinesMaskSettings=():GuidelinesMaskSettings=>({enabled:false,kind:'circle',textLayoutRespectsMask:true,showOutline:false,outlineColor:'#334155',outlineWidthMM:.5,cornerRadiusMM:3});
 export type GuidelinesElement = MovableElementBase & { type: 'guidelines'; allowPartialGuidelines: boolean; fitText: string; textMode:GuidelinesTextMode;plannedLines:PlannedTextLine[];rightAlignMode:'waist'|'baseline';avoidOccludingElements:boolean;mask:GuidelinesMaskSettings; settings: GuidelinesSettings };
 export type ShapeElement = MovableElementBase & { type: 'shape'; settings: ShapeSettings };
@@ -60,6 +61,7 @@ export function newElement(type: Exclude<ElementType,'page'|'artwork'>, count:nu
 }
 export function resizeAspectMode(element: LayoutElement): ResizeAspectMode {
   if(element.type==='artwork')return element.settings.lockProportions?'all':'free';
+  if(element.type==='guidelines'&&usesCustomMask(element))return 'all';
   if (
     element.type === 'calligram'
     || (element.type === 'shape' && isConstrainedShape(element.settings))

@@ -93,7 +93,7 @@ test('preview and both occlusion pipelines retain rectangles only for unmasked g
   for(const file of ['guidelines-text-fit.ts','plotter-export.ts']){
     const source=readFileSync(new URL(`../src/lib/layout/${file}`,import.meta.url),'utf8');
     assert.match(source,/if\(!element\.mask\?\.enabled\)return \[rectOccluder\(occupiedRect\(/,file);
-    assert.match(source,/shapeFootprintContains\(element\.mask\.kind/,file);
+    assert.match(source,/shapeFootprintContains\((?:element\.mask\.)?kind/,file);
   }
 });
 
@@ -206,7 +206,7 @@ test('overlapping elements warn without repositioning guideline text',()=>{
   assert.match(planning,/buildGuidelinesCollisionSpans[\s\S]*?pageWaist[\s\S]*?pageBase/);
   assert.match(page,/collisionSpans=getCachedGuidelinesCollisionSpans[\s\S]*?placementSpans=getCachedGuidelinesPlacementSpans/);
   assert.match(page,/buildGuidelinesTextFitPlan\(item,placementSpans\)/);
-  assert.match(page,/buildGuidelinesLineLayoutPlan\(item,placementSpans,page,collisionSpans\)/);
+  assert.match(page,/buildGuidelinesLineLayoutPlan\(item,placementSpans,page,collisionSpans,elements\)/);
   assert.match(panel,/Flag element collisions/);
 });
 

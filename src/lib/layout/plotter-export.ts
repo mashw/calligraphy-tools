@@ -10,6 +10,7 @@ import { expandedShapeFrame, shapeBoundaryPoints, shapeContainsPoint, shapeFootp
 import { pageSize, type Frame, type LayoutElement, type PageElement } from '@/lib/layout/types';
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 import { drawableGeometryBounds, serializePlotterSvg, type ExportLayering, type PlotterSvgLayer } from './plotter-svg';
+import { activeCustomMask, clipCustomMaskPolyline, CUSTOM_MASK_PADDING_MM, customMaskContains, customMaskGeometry, usesCustomMask } from './custom-mask';
 import { artworkBoundsContains, usesArtworkBoundsOcclusion } from './artwork-occlusion';
 import { cricutGuidePathSegments, dashHorizontalGuidePoints, dashPolylinePoints } from '../guides/polyline-dash';
 export { CRICUT_PRIMARY_GUIDE_DASH_MM, CRICUT_PRIMARY_GUIDE_GAP_MM } from '../guides/polyline-dash';
@@ -361,8 +362,13 @@ function unrotatedElementOccluders(element: LayoutElement): Occluder[] {
   if (element.type === 'shape') return [shapeOccluder(element)];
   if (element.type === 'guidelines') {
     if(!element.mask?.enabled)return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
+    const {kind}=element.mask;
+    if(kind==='customSvg'){
+      const custom=activeCustomMask(element), {frame}=element;
+      return custom?[{bounds:frame,contains:p=>customMaskContains(custom,frame,{x:p.x-frame.x,y:p.y-frame.y})}]:[];
+    }
     const bounds=expandedShapeFrame(element.frame,element.paddingMM);
-    return [{bounds,contains:point=>shapeFootprintContains(element.mask.kind,element.frame,point,element.mask.cornerRadiusMM,element.paddingMM)}];
+    return [{bounds,contains:point=>shapeFootprintContains(kind,element.frame,point,element.mask.cornerRadiusMM,element.paddingMM)}];
   }
   if (element.type === 'artwork') {
     if(usesArtworkBoundsOcclusion(element.settings))return [{bounds:element.frame,contains:point=>artworkBoundsContains(element.frame,point)}];
@@ -431,7 +437,7 @@ function clipPolylinesByOccluders(lines: PlotPolyline[], occluders: Occluder[]) 
   return lines.flatMap(line => clipPolylineByOccluders(line, occluders));
 }
 
-function clipPolylineInsideShape(input:PlotPolyline,kind:Extract<LayoutElement,{type:'guidelines'}>['mask']['kind'],width:number,height:number,cornerRadiusMM:number){
+function clipPolylineInsideShape(input:PlotPolyline,kind:Parameters<typeof shapeContainsPoint>[0],width:number,height:number,cornerRadiusMM:number){
   const contains=(p:Pt)=>shapeContainsPoint(kind,width,height,p,cornerRadiusMM),result:PlotPolyline[]=[];let current:Pt[]=[];
   const flush=()=>{const next=polyline(current,input.source);if(next)result.push(next);current=[];};
   const boundary=(a:Pt,b:Pt,aInside:boolean)=>{let lo=a,hi=b;for(let i=0;i<18;i++){const mid=lerp(lo,hi,.5);if(contains(mid)===aInside)lo=mid;else hi=mid;}return aInside?lo:hi;};
@@ -647,8 +653,19 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
 
   let masked=result;
   if(element.mask?.enabled){
-    masked=result.flatMap(line=>clipPolylineInsideShape(line,element.mask.kind,box.width,box.height,element.mask.cornerRadiusMM));
-    if(element.mask.showOutline){const boundary=closedPolyline(shapeBoundaryPoints(element.mask.kind,box.width,box.height,element.mask.cornerRadiusMM),`guidelines:${element.id}:mask-outline`);if(boundary)masked.push(boundary);}
+    const {kind,showOutline,cornerRadiusMM}=element.mask,custom=activeCustomMask(element);
+    if(kind==='customSvg'){
+      if(!custom) return [];
+      masked=result.flatMap(line=>clipCustomMaskPolyline(custom,box,element.mask.internalPaddingMM??CUSTOM_MASK_PADDING_MM,line.points)
+        .map(points=>({points,source:line.source})));
+    } else {
+      masked=result.flatMap(line=>clipPolylineInsideShape(line,kind,box.width,box.height,cornerRadiusMM));
+    }
+    if(showOutline&&(kind!=='customSvg'||options.shapeOutlines)){
+      const boundary=custom?customMaskGeometry(custom,box).points:kind==='customSvg'?[]:shapeBoundaryPoints(kind,box.width,box.height,cornerRadiusMM);
+      const outline=closedPolyline(boundary,`guidelines:${element.id}:mask-outline`);
+      if(outline)masked.push(outline);
+    }
   }
   return translatePolylines(masked, element.frame.x, element.frame.y);
 }
@@ -822,6 +839,7 @@ function wovenPolylines(element:Extract<LayoutElement,{type:'woven'}>,options:Pl
 
 function elementPolylines(element: LayoutElement, textFitEntry: GuidelinesTextFitEntry | null, warnings: string[], options: PlotterExportOptions) {
   if (element.type === 'page'||element.visible===false) return [];
+  if(element.type==='guidelines'&&usesCustomMask(element)&&!activeCustomMask(element))warnings.push(`${element.name}: upload an SVG mask before plotting these guidelines.`);
   const lines=element.type === 'guidelines'?straightGuidelinesPolylines(element, textFitEntry, options)
     :element.type === 'shape'?(options.shapeOutlines ? shapeBoundaryPolylines(element) : [])
     :element.type === 'curved-title'?curvedTitlePolylines(element, options)

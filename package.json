@@ -11,7 +11,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:layout-shapes": "node --experimental-strip-types --test scripts/layout-shape-geometry.test.ts",
+    "test:layout-shapes": "node --import ./scripts/register-ts.mjs --experimental-strip-types --test scripts/layout-shape-geometry.test.ts scripts/layout-custom-mask.test.ts",
     "test:custom-curves": "node --experimental-strip-types --test scripts/custom-curved-title.test.ts",
     "test:insular": "node --import ./scripts/register-ts.mjs --experimental-strip-types --test src/lib/scripts/insular-majuscule.test.ts src/lib/guides/straight/insular-majuscule.test.ts src/lib/layout/design-file.test.ts",
     "test:slant-styles": "node --import ./scripts/register-ts.mjs --experimental-strip-types --test scripts/slant-styles.test.ts",

@@ -1,6 +1,6 @@
 'use client';
 import {LayoutWovenRenderer} from '@/components/woven/WovenRenderer';
-import {wovenLayoutPdf} from '@/lib/layout/woven-pdf';
+import {layeredLayoutPdf} from '@/lib/layout/woven-pdf';
 
 import { Button, Toggle, Select } from '@/components/editor/Controls';
 
@@ -24,6 +24,7 @@ import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 import { buildPlotterExport, CRICUT_MATS, DEFAULT_PLOTTER_EXPORT_OPTIONS, getCricutSafeRect, type CricutMatId, type PlotterExportOptions } from '@/lib/layout/plotter-export';
 import { safeLayerId, type ExportLayering } from '@/lib/layout/plotter-svg';
 import ArtworkRenderer from './ArtworkRenderer';
+import { activeCustomMask, CUSTOM_MASK_PADDING_MM, customMaskFrame, customMaskGeometry, customMaskTransform, usesCustomMask, type CustomMask } from '@/lib/layout/custom-mask';
 
 
 type Interaction =
@@ -243,7 +244,7 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
   const exportClone = (layering:ExportLayering) => { if (!svgRef.current) return null; const clone = svgRef.current.cloneNode(true) as SVGSVGElement; clone.setAttribute('viewBox', `0 0 ${page.width} ${page.height}`); clone.setAttribute('width', `${page.width}mm`); clone.setAttribute('height', `${page.height}mm`); bakeExportStrokes(svgRef.current, clone, page.width); stripNoExport(clone); clone.querySelectorAll<SVGElement>('[data-full-detail]').forEach(node=>{node.style.removeProperty('display');node.removeAttribute('data-full-detail');}); clone.querySelectorAll('[data-export-layer-id]').forEach(node=>{if(layering==='elements'){const draws=Array.from(node.querySelectorAll('path,line,polyline,polygon,rect,circle,ellipse,text')).some(item=>!item.closest('defs'));if(!draws){node.remove();return;}node.setAttribute('id',node.getAttribute('data-export-layer-id')!);node.setAttribute('data-name',node.getAttribute('data-export-layer-name')!);}node.removeAttribute('data-export-layer-id');node.removeAttribute('data-export-layer-name');}); return clone; };
   const exportSvg = () => { const clone = exportClone(exportLayering); if (!clone) return; download(new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml' }), 'layout.svg'); };
   const raster = async () => { if (!svgRef.current) return null; const { wPx, hPx } = computeRasterPxPerMM(page.width, page.height); const clone = exportClone('combined')!; return { data: await renderSvgCloneToJpegDataUrl(clone, wPx, hPx), wPx, hPx }; };
-  const exportPdf = async () => { if(elements.some(e=>e.type==='woven'&&e.visible!==false)){const clone=exportClone('combined');if(clone)download(await wovenLayoutPdf(clone,elements,page),'layout.pdf');return;} const result = await raster(); if (result) download(jpegDataUrlToPdf(result.data, page.width, page.height, result.wPx, result.hPx), 'layout.pdf'); };
+  const exportPdf = async () => { if(elements.some(e=>e.visible!==false&&(e.type==='woven'||e.type==='guidelines'&&usesCustomMask(e)))){const clone=exportClone('combined');if(clone)download(await layeredLayoutPdf(clone,elements,page),'layout.pdf');return;} const result = await raster(); if (result) download(jpegDataUrlToPdf(result.data, page.width, page.height, result.wPx, result.hPx), 'layout.pdf'); };
   const print = () => {
     const clone=exportClone('combined');if(!clone)return;
     const win=window.open('','_blank');if(!win)return;
@@ -277,7 +278,9 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
           const centre=elementRotationCenter(element,frame);
           const occupied = occupiedRect(element.type==='calligram'&&!(element.settings.transparentWhitespace??true)?elementVisualFrame(element,frame):frame, element.paddingMM);
           return <g key={element.id} transform={`rotate(${rotationDeg} ${centre.x} ${centre.y})`} data-camera-interactive="true" data-layout-id={element.id} data-export-layer-id={safeLayerId(element.name,element.id)} data-export-layer-name={element.name} onPointerDown={e => begin(e, element)} style={{ cursor: element.locked ? 'pointer' : 'move' }}>
-            {element.type==='guidelines'&&element.mask?.enabled
+            {element.type==='guidelines'&&usesCustomMask(element)
+              ? <CustomMaskBackground element={element} frame={frame}/>
+              : element.type==='guidelines'&&element.mask?.enabled&&element.mask.kind!=='customSvg'
               ? <path transform={`translate(${occupied.x} ${occupied.y})`} d={shapePathData(element.mask.kind,occupied.width,occupied.height,element.mask.cornerRadiusMM+Math.max(0,element.paddingMM))} fill={PAGE_BACKGROUND}/>
               : element.type !== 'woven' && element.type !== 'shape' && element.type !== 'artwork' && !((element.type==='curved-title'||element.type==='calligram')&&(element.settings.transparentWhitespace??true)) && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
             <g data-full-detail="true" style={{display:previewSimplify?'none':undefined}}><ElementVisual element={detailElement} frame={previewSimplify?detailElement.frame:frame} simplify={false} selected={element.id === selectedId} textFitEntry={textFitPlans[element.id]??null} onPlannedLinePlacementChange={onPlannedLinePlacementChange}/></g>
@@ -341,27 +344,67 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
 }
 
 function LineLayoutOverlay({guidelinesId,entry,frame,onCommit}:{guidelinesId:string;entry:Extract<GuidelinesTextFitEntry,{mode:'line-layout'}>;frame:Frame;onCommit:(guidelinesId:string,lineId:string,start:number)=>void}){
-  const [drag,setDrag]=useState<{lineId:string;pointerId:number;clientX:number;start:number;max:number;live:number}|null>(null);
-  return <g data-no-export="true">{entry.plan.lines.filter(line=>line.rowIndex!==null&&line.text).map(line=>{const live=drag?.lineId===line.lineId?drag.live:line.startFromLeftMM,dx=live-line.startFromLeftMM,y1=line.waistY-frame.y,y2=line.baseY-frame.y,start=line.baselineStartX-frame.x+dx,end=line.baselineEndX-frame.x+dx,shift=line.slantShiftMM;return <g key={line.lineId} onPointerMove={event=>{if(!drag||drag.pointerId!==event.pointerId)return;const svg=event.currentTarget.ownerSVGElement!,rect=svg.getBoundingClientRect(),mm=(event.clientX-drag.clientX)/rect.width*svg.viewBox.baseVal.width,next=Math.max(0,Math.min(drag.max,drag.start+mm));setDrag({...drag,live:next});}} onPointerUp={event=>{if(!drag||drag.pointerId!==event.pointerId)return;event.currentTarget.releasePointerCapture(event.pointerId);onCommit(guidelinesId,line.lineId,drag.live);setDrag(null);}}>{line.glyphs.map((glyph,index)=>{const x1=glyph.startX-frame.x+dx,x2=glyph.endX-frame.x+dx,d=`M ${x1+shift},${y1} L ${x2+shift},${y1} L ${x2},${y2} L ${x1},${y2} Z`;return <g key={index}><path d={d} fill={glyph.collision?'rgba(239,68,68,.22)':entry.color.fill} stroke={glyph.collision?'#dc2626':entry.color.stroke} strokeWidth=".3" vectorEffect="non-scaling-stroke"/><text x={(x1+x2)/2+shift/2} y={(y1+y2)/2} textAnchor="middle" dominantBaseline="central" fontSize={Math.max(1.8,(y2-y1)*.65)} fill="#334155">{glyph.kind==='space'?'':glyph.ch}</text></g>})}{[start,end].map((x,index)=><g key={index} style={{cursor:'ew-resize'}} onPointerDown={event=>{event.preventDefault();event.stopPropagation();event.currentTarget.parentElement?.setPointerCapture(event.pointerId);setDrag({lineId:line.lineId,pointerId:event.pointerId,clientX:event.clientX,start:line.startFromLeftMM,max:line.maxCustomStartMM,live:line.startFromLeftMM});}}><line x1={x+shift} x2={x} y1={y1} y2={y2} stroke={entry.color.stroke} strokeWidth="2" vectorEffect="non-scaling-stroke"/><line x1={x-4} x2={x+4} y1={y1} y2={y2} stroke="transparent" strokeWidth="14" vectorEffect="non-scaling-stroke"/></g>)}</g>;})}</g>;
+  const [drag,setDrag]=useState<{lineId:string;pointerId:number;localX:number;start:number;max:number;live:number}|null>(null);
+  const localPointerX=(event:React.PointerEvent<SVGGElement>)=>{
+    const matrix=event.currentTarget.getScreenCTM();
+    return matrix?new DOMPoint(event.clientX,event.clientY).matrixTransform(matrix.inverse()).x:0;
+  };
+  return <g data-no-export="true">{entry.plan.lines.filter(line=>line.rowIndex!==null&&line.text).map(line=>{const live=drag?.lineId===line.lineId?drag.live:line.startFromLeftMM,dx=live-line.startFromLeftMM,y1=line.waistY-frame.y,y2=line.baseY-frame.y,start=line.baselineStartX-frame.x+dx,end=line.baselineEndX-frame.x+dx,shift=line.slantShiftMM;return <g key={line.lineId} onPointerMove={event=>{if(!drag||drag.pointerId!==event.pointerId)return;const mm=localPointerX(event)-drag.localX,next=Math.max(0,Math.min(drag.max,drag.start+mm));setDrag({...drag,live:next});}} onPointerUp={event=>{if(!drag||drag.pointerId!==event.pointerId)return;event.currentTarget.releasePointerCapture(event.pointerId);onCommit(guidelinesId,line.lineId,drag.live);setDrag(null);}}>{line.glyphs.map((glyph,index)=>{const x1=glyph.startX-frame.x+dx,x2=glyph.endX-frame.x+dx,d=`M ${x1+shift},${y1} L ${x2+shift},${y1} L ${x2},${y2} L ${x1},${y2} Z`;return <g key={index}><path d={d} fill={glyph.collision?'rgba(239,68,68,.22)':entry.color.fill} stroke={glyph.collision?'#dc2626':entry.color.stroke} strokeWidth=".3" vectorEffect="non-scaling-stroke"/><text x={(x1+x2)/2+shift/2} y={(y1+y2)/2} textAnchor="middle" dominantBaseline="central" fontSize={Math.max(1.8,(y2-y1)*.65)} fill="#334155">{glyph.kind==='space'?'':glyph.ch}</text></g>})}{[start,end].map((x,index)=><g key={index} style={{cursor:'ew-resize'}} onPointerDown={event=>{event.preventDefault();event.stopPropagation();event.currentTarget.parentElement?.setPointerCapture(event.pointerId);setDrag({lineId:line.lineId,pointerId:event.pointerId,localX:localPointerX(event),start:Math.max(0,line.startFromLeftMM),max:line.maxCustomStartMM,live:line.startFromLeftMM});}}><line x1={x+shift} x2={x} y1={y1} y2={y2} stroke={entry.color.stroke} strokeWidth="2" vectorEffect="non-scaling-stroke"/><line x1={x-4} x2={x+4} y1={y1} y2={y2} stroke="transparent" strokeWidth="14" vectorEffect="non-scaling-stroke"/></g>)}</g>;})}</g>;
+}
+
+function customBoundaryPath(mask:CustomMask,frame:Frame) {
+  return 'M '+customMaskGeometry(mask,frame).points.map(({x,y})=>`${x} ${y}`).join(' L ')+' Z';
+}
+
+function CustomMaskBackground({element,frame}:{element:Extract<LayoutElement,{type:'guidelines'}>;frame:Frame}) {
+  const mask=activeCustomMask(element);
+  if(!mask) return null;
+  const local=customMaskFrame(mask,frame);
+  return <path data-custom-mask-silhouette="true" d={mask.path} fillRule="evenodd"
+    transform={customMaskTransform(mask,{...local,x:frame.x+local.x,y:frame.y+local.y})} fill={PAGE_BACKGROUND}/>;
 }
 
 function ElementVisual({ element, frame, simplify, selected, textFitEntry,onPlannedLinePlacementChange }: { element: LayoutElement; frame: Frame; simplify: boolean; selected: boolean; textFitEntry: GuidelinesTextFitEntry | null;onPlannedLinePlacementChange:(guidelinesId:string,lineId:string,customStartMM:number)=>void }) {
   const common = { x: frame.x, y: frame.y, width: frame.width, height: frame.height };
   if(element.type==='woven')return <LayoutWovenRenderer element={element} frame={frame} simplify={simplify}/>;
   if (element.type === 'shape') return <ShapeElementRenderer element={element} frame={frame} selected={selected} />;
-  if (simplify) return element.type==='guidelines'&&element.mask?.enabled
+  const custom=element.type==='guidelines'?activeCustomMask(element):undefined;
+  const customMode=element.type==='guidelines'&&usesCustomMask(element);
+  if (customMode&&!custom) return simplify||selected?<rect {...common} fill="transparent" />:null;
+  if (simplify&&custom) return <path transform={`translate(${frame.x} ${frame.y})`} d={customBoundaryPath(custom,frame)} fill="#eef2ff" fillRule="evenodd" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5"/>;
+  if (simplify) return element.type==='guidelines'&&element.mask?.enabled&&element.mask.kind!=='customSvg'
     ? <g transform={`translate(${frame.x} ${frame.y})`}><ShapeGeometry kind={element.mask.kind} width={frame.width} height={frame.height} cornerRadiusMM={element.mask.cornerRadiusMM} fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5"/></g>
     : <rect {...common} rx="1" fill="#eef2ff" stroke="#6366f1" strokeDasharray="3 2" strokeWidth=".5" />;
   if(element.type==='artwork')return <ArtworkRenderer element={element} frame={frame}/>;
   if (element.type === 'guidelines') {
     const mask=element.mask;
+    const builtin=mask?.enabled&&mask.kind!=='customSvg'?mask.kind:undefined;
     const clipId=`layout-${element.id}-shape-mask`;
-    const wrap=(content:React.ReactNode)=><g transform={`translate(${frame.x} ${frame.y})`}>
-      {mask?.enabled&&<defs><clipPath id={clipId}><path d={shapePathData(mask.kind,frame.width,frame.height,mask.cornerRadiusMM)}/></clipPath></defs>}
-      <g clipPath={mask?.enabled?`url(#${clipId})`:undefined}>{content}</g>
-      {mask?.enabled&&mask.showOutline&&<ShapeGeometry kind={mask.kind} width={frame.width} height={frame.height} cornerRadiusMM={mask.cornerRadiusMM} fill="none" stroke={mask.outlineColor} strokeWidth={mask.outlineWidthMM}/>}
+    const padding=mask.internalPaddingMM??CUSTOM_MASK_PADDING_MM;
+    const innerId=clipId+'-padding';
+    const customPath=custom?customBoundaryPath(custom,frame):undefined;
+    const wrap=(content:React.ReactNode,overlay?:React.ReactNode)=><g transform={`translate(${frame.x} ${frame.y})`}>
+      {builtin&&<defs><clipPath id={clipId}><path d={shapePathData(builtin,frame.width,frame.height,mask.cornerRadiusMM)}/></clipPath></defs>}
+      {custom&&<defs>
+        <clipPath id={clipId}><path d={custom.path} transform={customMaskTransform(custom,customMaskFrame(custom,frame))} clipRule="evenodd"/></clipPath>
+        {custom&&padding>0&&<mask id={innerId} maskUnits="userSpaceOnUse" x={0} y={0} width={frame.width} height={frame.height}>
+          <rect width={frame.width} height={frame.height} fill="white"/>
+          <path d={customPath} fill="none" stroke="black" strokeWidth={2*padding} strokeLinejoin="round"/>
+        </mask>}
+      </defs>}
+      <g data-custom-mask-guides={custom?'true':undefined} clipPath={builtin||custom?`url(#${clipId})`:undefined}
+        mask={custom&&padding>0?`url(#${innerId})`:undefined}>
+        {content}
+      </g>
+      {overlay}
+      {builtin&&mask.showOutline&&<ShapeGeometry kind={builtin} width={frame.width} height={frame.height} cornerRadiusMM={mask.cornerRadiusMM} fill="none" stroke={mask.outlineColor} strokeWidth={mask.outlineWidthMM}/>}
+      {custom&&mask.showOutline&&<path data-custom-mask-outline="true" d={customPath} fill="none" stroke={mask.outlineColor} strokeWidth={mask.outlineWidthMM} strokeLinejoin="round"/>}
     </g>;
-    if(textFitEntry?.mode==='line-layout')return wrap(<><GuidelinesRenderer box={{width:frame.width,height:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`}/><LineLayoutOverlay guidelinesId={element.id} entry={textFitEntry} frame={frame} onCommit={onPlannedLinePlacementChange}/></>);
+    if(textFitEntry?.mode==='line-layout'){
+      const guides=<GuidelinesRenderer box={frame} settings={element.settings} idPrefix={`layout-${element.id}`}/>;
+      const overlay=<LineLayoutOverlay guidelinesId={element.id} entry={textFitEntry} frame={frame} onCommit={onPlannedLinePlacementChange}/>;
+      return custom?wrap(guides,overlay):wrap(<>{guides}{overlay}</>);
+    }
     const placements = textFitEntry?.mode==='estimate'?textFitEntry.plan.placements:[];
     const placementGeometry = placements.map(placement => {
       const x=placement.x1-frame.x,y1=placement.waistY-frame.y,y2=placement.baseY-frame.y,shift=placement.slantShiftMM,x2=x+placement.consumedMM;

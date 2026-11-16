@@ -1,6 +1,6 @@
 export type ArtworkViewBox = { x: number; y: number; width: number; height: number };
 export type ArtworkNode = { tag: 'g'|'path'|'rect'|'circle'|'ellipse'|'polygon'|'polyline'|'line'; attrs: Record<string,string>; children: ArtworkNode[] };
-export type ArtworkDocument = { viewBox: ArtworkViewBox; nodes: ArtworkNode[]; warning: string | null };
+export type ArtworkDocument = { viewBox: ArtworkViewBox; nodes: ArtworkNode[]; warning: string | null; rootTransform?: string };
 
 const MAX_FILE_BYTES=2_000_000,MAX_NODES=2_000;
 const TAGS=new Set(['g','path','rect','circle','ellipse','polygon','polyline','line']);
@@ -13,16 +13,19 @@ const rootStyleHasMaterialRemoval=(style:string)=>style.split(';').some(declarat
 
 export function pathHasOnlyClosedSubpaths(d:string){let active=false,closed=false;for(let i=0;i<d.length;i++){const c=d[i];if(!'MmZzLlHhVvCcSsQqTtAa'.includes(c))continue;if(c==='M'||c==='m'){if(active&&!closed)return false;active=true;closed=false;}else if(c==='Z'||c==='z'){if(active)closed=true;}else if(active&&closed){closed=false;}}return active&&closed;}
 
-export function sanitizeArtworkSvg(source:string):ArtworkDocument{
+export function sanitizeArtworkSvg(source:string, options?:{forSilhouette?:boolean}):ArtworkDocument{
   if(new Blob([source]).size>MAX_FILE_BYTES)throw new Error('SVG file is larger than the 2 MB limit.');
   const parsed=new DOMParser().parseFromString(source,'image/svg+xml');
   if(parsed.querySelector('parsererror')||parsed.documentElement.localName!=='svg')throw new Error('This file is not a valid SVG.');
-  const raw=parsed.documentElement.getAttribute('viewBox')?.trim().split(/[\s,]+/).map(Number);
+  const root=parsed.documentElement;
+  const dimension=(name:string)=>{const v=root.getAttribute(name)?.trim();return v&&/^\d+(?:\.\d+)?(?:px)?$/.test(v)?parseFloat(v):NaN;};
+  const raw=root.getAttribute('viewBox')?.trim().split(/[\s,]+/).map(Number)
+    ??(options?.forSilhouette?[0,0,dimension('width'),dimension('height')]:undefined);
   if(!raw||raw.length!==4||raw.some(value=>!Number.isFinite(value))||raw[2]<=0||raw[3]<=0)throw new Error('SVG must have a valid viewBox.');
-  let count=0,removed=[...parsed.documentElement.attributes].some(attribute=>!['viewBox','width','height'].includes(attribute.name)&&!harmlessAttribute(attribute)&&(attribute.localName!=='style'||rootStyleHasMaterialRemoval(attribute.value))),geometry=0;
+  let count=0,removed=[...parsed.documentElement.attributes].some(attribute=>!['viewBox','width','height',...(options?.forSilhouette?['transform','preserveAspectRatio']:[])].includes(attribute.name)&&!harmlessAttribute(attribute)&&(attribute.localName!=='style'||rootStyleHasMaterialRemoval(attribute.value))),geometry=0;
   const visit=(element:Element):ArtworkNode|null=>{
     const tag=element.localName;
-    if(!TAGS.has(tag)){if(!harmlessElement(tag))removed=true;return null;}
+    if(!TAGS.has(tag)){if(!harmlessElement(tag)&&!(options?.forSilhouette&&tag==='defs'))removed=true;return null;}
     if(++count>MAX_NODES)throw new Error(`SVG exceeds the ${MAX_NODES} element limit.`);
     const attrs:Record<string,string>={};
     for(const attribute of [...element.attributes]){
@@ -37,5 +40,5 @@ export function sanitizeArtworkSvg(source:string):ArtworkDocument{
   };
   const nodes=[...parsed.documentElement.children].map(visit).filter((node):node is ArtworkNode=>!!node);
   if(!geometry)throw new Error('SVG contains no supported vector geometry.');
-  return{viewBox:{x:raw[0],y:raw[1],width:raw[2],height:raw[3]},nodes,warning:removed?'Some unsupported SVG features were removed.':null};
+  return{viewBox:{x:raw[0],y:raw[1],width:raw[2],height:raw[3]},nodes,...(options?.forSilhouette?{rootTransform:root.getAttribute('transform')??undefined}:{}),warning:removed?'Some unsupported SVG features were removed.':null};
 }

@@ -1,6 +1,8 @@
 import { validateInterlaceSource } from '../interlace/layout-source';
 import {validateWovenSettings} from './woven';
 import type { LayoutElement } from './types';
+import { SHAPE_OPTIONS } from './shape';
+import { validateCustomMask } from './custom-mask';
 
 export const LAYOUT_DESIGN_FORMAT = 'calligraphy-tools-layout';
 export const LAYOUT_DESIGN_VERSION = 1;
@@ -96,6 +98,10 @@ function validateGuidelines(value: JsonObject) {
   if (typeof mask.enabled !== 'boolean' || typeof mask.kind !== 'string' || typeof mask.textLayoutRespectsMask !== 'boolean' || typeof mask.showOutline !== 'boolean' || typeof mask.outlineColor !== 'string' || !isFiniteNumber(mask.outlineWidthMM) || !isFiniteNumber(mask.cornerRadiusMM)) {
     fail('Saved guidelines have invalid mask settings.');
   }
+  if (mask.kind !== 'customSvg' && !SHAPE_OPTIONS.some(option=>option.kind===mask.kind)) fail('Saved guidelines use an unsupported mask shape.');
+  if (mask.customSvg !== undefined) validateCustomMask(mask.customSvg);
+  if (mask.kind === 'customSvg' && (!/^#[0-9a-f]{6}$/i.test(mask.outlineColor) || mask.outlineWidthMM < 0)) fail('Saved guidelines have invalid custom mask outline settings.');
+  if (mask.internalPaddingMM !== undefined && (!isFiniteNumber(mask.internalPaddingMM) || mask.internalPaddingMM < 0)) fail('Saved guidelines have invalid internal mask padding.');
 }
 
 function validateArtwork(value: JsonObject) {
