@@ -1,3 +1,5 @@
+import { automatic,editableGuides,guideKey,guideTransform,rowKey } from '../src/lib/layout/guideline-arrangement.ts';
+import { calculateStraightGuidelines } from '../src/lib/guides/straight/model.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { clipCustomMaskPolyline, customMaskWritingSpans, validateCustomMask, validateMaskPath, type CustomMask } from '../src/lib/layout/custom-mask.ts';
@@ -84,4 +86,52 @@ test('custom mask, padding, sizing and placement survive Layout Save/Open',()=>{
   assert.equal(decoded.selectedElementId,element.id);
   const invalid={...element,mask:{...element.mask,internalPaddingMM:-1}};
   assert.throws(()=>parseLayoutDesign(serializeLayoutDesign([invalid,page],element.id)),/internal mask padding/);
+});
+
+test('released row and detached sections keep physical poses across regroup, resize and Save/Open',()=>{
+  const e:GuidelinesElement=guidelines(),page=pageElement(),key=rowKey(e,1);
+  const group={x:3,y:-4,angle:12},row={x:0,y:5,angle:8};
+  e.mask.arrangement={...automatic,released:true,group,rows:{[key]:row,[key+'/1']:{x:6,y:1,angle:-7}},cuts:{[key]:[.5]}};
+  const model=calculateStraightGuidelines(e.frame,e.settings);
+  const rows=editableGuides(e,model.guideSets);
+  const part=rows.findIndex((g,i)=>guideKey(e,g,i)===key+'/1');
+  assert.ok(part>1);
+  const t=guideTransform(e,rows[part],part),p={x:72,y:40},q=t.apply(p);
+  const inverse=t.inverse(q);
+  assert.ok(Math.hypot(inverse.x-p.x,inverse.y-p.y)<1e-10);
+  assert.notDeepEqual(q,guideTransform(e,rows[part-1],part-1).apply(p));
+  e.mask.arrangement.released=false;
+  assert.deepEqual(guideTransform(e,rows[part],part).apply(p),q);
+  const copy=structuredClone(e);copy.id+='-copy';copy.frame.width*=1.1;
+  const saved=parseLayoutDesign(serializeLayoutDesign([e,copy,page],copy.id));
+  assert.deepEqual(saved.elements,[e,copy,page]);
+  const resized=editableGuides(copy,calculateStraightGuidelines(copy.frame,copy.settings).guideSets);
+  assert.equal(guideKey(copy,resized[part],part),key+'/1');
+  assert.notEqual(resized[part].left,rows[part].left);
+  e.settings={...e.settings,script:e.settings.script==='Copperplate'?'Fraktur':'Copperplate'};
+  assert.equal(editableGuides(e,model.guideSets).length,model.guideSets.length);
+  assert.notEqual(rowKey(e,1),key);
+});
+
+test('manual writing spans stay inside both padded arms after group and row rotations',()=>{
+  const e:GuidelinesElement=guidelines(),page=pageElement();
+  const original=buildGuidelinesVisibleSpans(e,page,[]);
+  e.mask.arrangement={...automatic,group:{x:-7,y:3,angle:12},rows:{[rowKey(e,1)]:{x:2,y:4,angle:8}}};
+  const spans=buildGuidelinesVisibleSpans(e,page,[]),rows=calculateStraightGuidelines(e.frame,e.settings).guideSets;
+  assert.ok(spans.length>0);
+  assert.notDeepEqual(spans,original);
+  const slope=e.settings.script==='Copperplate'?1/Math.tan(e.settings.slant.angle*Math.PI/180):0;
+  for(const span of spans){
+    const t=guideTransform(e,rows[span.rowIndex],span.rowIndex);
+    for(const y of [span.ascY+.001,span.baseY,span.descY-.001]){
+      const x=(span.x1+span.x2)/2+(span.baseY-y)*slope;
+      const p=t.apply({x:x-e.frame.x,y:y-e.frame.y});
+      assert.ok(p.x>=2&&p.y>=2&&p.x<=98&&p.y<=98);
+      assert.ok(p.y<=28||p.x<=28||p.x>=72);
+    }
+  }
+  e.mask.arrangement.group.x=1000;
+  assert.equal(buildGuidelinesVisibleSpans(e,page,[]).length,0);
+  e.mask.enabled=false;
+  assert.deepEqual(buildGuidelinesVisibleSpans(e,page,[]),buildGuidelinesVisibleSpans({...e,mask:{...e.mask,arrangement:undefined}},page,[]));
 });

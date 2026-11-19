@@ -2,6 +2,7 @@ import { validateInterlaceSource } from '../interlace/layout-source';
 import {validateWovenSettings} from './woven';
 import type { LayoutElement } from './types';
 import { SHAPE_OPTIONS } from './shape';
+import { validateArrangement } from './guideline-arrangement';
 import { validateCustomMask } from './custom-mask';
 
 export const LAYOUT_DESIGN_FORMAT = 'calligraphy-tools-layout';
@@ -99,6 +100,7 @@ function validateGuidelines(value: JsonObject) {
     fail('Saved guidelines have invalid mask settings.');
   }
   if (mask.kind !== 'customSvg' && !SHAPE_OPTIONS.some(option=>option.kind===mask.kind)) fail('Saved guidelines use an unsupported mask shape.');
+  if (mask.arrangement !== undefined) validateArrangement(mask.arrangement);
   if (mask.customSvg !== undefined) validateCustomMask(mask.customSvg);
   if (mask.kind === 'customSvg' && (!/^#[0-9a-f]{6}$/i.test(mask.outlineColor) || mask.outlineWidthMM < 0)) fail('Saved guidelines have invalid custom mask outline settings.');
   if (mask.internalPaddingMM !== undefined && (!isFiniteNumber(mask.internalPaddingMM) || mask.internalPaddingMM < 0)) fail('Saved guidelines have invalid internal mask padding.');

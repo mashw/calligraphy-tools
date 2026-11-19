@@ -1,3 +1,4 @@
+import {shapeBoundaryPoints} from './shape';
 import { activeCustomMask, CUSTOM_MASK_PADDING_MM, customMaskGeometry } from './custom-mask';
 import { elementRotationCenter } from './element-transform';
 import { rotatePoint } from './geometry';
@@ -58,12 +59,13 @@ type PdfStates = {
 export function customMaskPdfCommands(layer:Element,element:GuidelinesElement,pageHeightPt:number,states:PdfStates) {
   const mask=activeCustomMask(element);
   const guides=layer.querySelector('[data-custom-mask-guides]');
-  if(!mask||!guides) return [];
-  const padding=element.mask.internalPaddingMM??CUSTOM_MASK_PADDING_MM;
+  if(!guides||(!mask&&element.mask.kind==='customSvg')) return [];
+  const padding=mask?(element.mask.internalPaddingMM??CUSTOM_MASK_PADDING_MM):0;
   const frame=element.frame,rotation=element.rotationDeg??0,center=elementRotationCenter(element);
   const origin=rotatePoint(frame,center,rotation),angle=rotation*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle);
   const pt=72/25.4;
-  const boundary=path(customMaskGeometry(mask,frame).points,true);
+  const {kind}=element.mask;
+  const boundary=path(mask?customMaskGeometry(mask,frame).points:kind==='customSvg'?[]:shapeBoundaryPoints(kind,frame.width,frame.height,element.mask.cornerRadiusMM),true);
   const commands=[
     `q ${n(pt)} 0 0 ${n(-pt)} 0 ${n(pageHeightPt)} cm`,
     `${n(c)} ${n(s)} ${n(-s)} ${n(c)} ${n(origin.x)} ${n(origin.y)} cm`,
@@ -80,6 +82,7 @@ export function customMaskPdfCommands(layer:Element,element:GuidelinesElement,pa
     const clip=definition(node,'clip-path');
     const rowMask=definition(node,'mask');
     commands.push('q');
+    for(const matrix of (node.getAttribute('transform')??'').matchAll(/matrix\(([^)]+)\)/g)) commands.push(nums(matrix[1]).map(n).join(' ')+' cm');
     if(clip) commands.push(Array.from(clip.children).map(geometry).join(' ')+' W n');
     if(rowMask) commands.push(Array.from(rowMask.children).filter(child=>child.getAttribute('fill')==='white').map(geometry).join(' ')+' W n');
     const outline=geometry(node);
@@ -101,6 +104,7 @@ export function customMaskPdfCommands(layer:Element,element:GuidelinesElement,pa
   commands.push('Q');
   const outline=layer.querySelector('[data-custom-mask-outline]');
   if(outline) draw(outline);
+  else if(!mask&&element.mask.showOutline){const color=paint(element.mask.outlineColor);if(color)commands.push(`${color.rgb} RG ${n(element.mask.outlineWidthMM)} w ${boundary} S`);}
   commands.push('Q');
   return commands;
 }

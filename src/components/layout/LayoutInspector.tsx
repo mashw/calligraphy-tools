@@ -1,5 +1,6 @@
 'use client';
 import { useRef, useState } from 'react';
+import { ArrangementControls } from './GuidelineEditing';
 import LayoutWovenSettings from '@/components/woven/LayoutWovenSettings';
 import { ActionGroup } from '@/components/editor/Controls';
 
@@ -89,6 +90,7 @@ function GuidelinesMaskPanel({element,onChange}:{element:GuidelinesElement;onCha
       </>}
     </>}
     {mask.enabled&&(!custom||mask.customSvg)&&<>
+      <ArrangementControls element={element} save={arrangement=>patch({arrangement})}/>
       {!custom&&<label className="flex items-center justify-between text-sm text-slate-700">
         Text layout respects mask
         <Toggle type="checkbox" className="accent-indigo-600" checked={mask.textLayoutRespectsMask} onChange={event=>patch({textLayoutRespectsMask:event.target.checked})}/>

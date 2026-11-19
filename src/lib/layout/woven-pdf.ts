@@ -62,7 +62,7 @@ export async function layeredLayoutPdf(svg:SVGSVGElement,elements:LayoutElement[
       for(const label of scene.labels){const p=locate(label.point),r=-angle*Math.PI/180,text=label.text.replace(/[^\x20-\x7e]/g,'?').replace(/([\\()])/g,'\\$1');commands.push(`BT /F1 ${n(pt(label.size))} Tf ${rgb(label.color)} rg ${n(Math.cos(r))} ${n(Math.sin(r))} ${n(-Math.sin(r))} ${n(Math.cos(r))} ${n(pt(p.x))} ${n(height-pt(p.y))} Tm (${text}) Tj ET`);}
       continue;
     }
-    if(element.type==='guidelines'&&usesCustomMask(element)){
+    if(element.type==='guidelines'&&(usesCustomMask(element)||element.mask?.enabled&&element.mask.arrangement)){
       const layer=Array.from(svg.querySelectorAll('[data-layout-id]')).find(node=>node.getAttribute('data-layout-id')===element.id);
       if(layer) {
         commands.push('% Custom SVG mask vector layer',customMaskPdfCommands(layer,element,height,states).join('\n'));

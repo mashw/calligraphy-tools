@@ -11,7 +11,9 @@ import { pathHasOnlyClosedSubpaths, type ArtworkNode } from './artwork';
 import { lineMetricFromMeasuredRun } from '@/lib/measure/measure-lines-generic';
 import type { PlannedLineAlignment } from './types';
 import { isGuidelinesPlanningPointBlocked, selectLineLayoutSpan } from './guidelines-planning';
-import { activeCustomMask, CUSTOM_MASK_PADDING_MM, customMaskContains, customMaskWritingSpans, usesCustomMask } from './custom-mask';
+import { editableGuides, guideTransform } from './guideline-arrangement';
+import { shapeBoundaryPoints } from './shape';
+import { customMaskGeometry, polygonWritingSpans, activeCustomMask, CUSTOM_MASK_PADDING_MM, customMaskContains, usesCustomMask } from './custom-mask';
 
 type Point = { x: number; y: number };
 type Occluder = { bounds: { x: number; y: number; width: number; height: number }; contains: (point: Point) => boolean; dispose?:()=>void };
@@ -100,9 +102,12 @@ function customSlantSlope(element:GuidelinesElement) {
   return element.settings.script==='Copperplate' ? 1/Math.tan(element.settings.slant.angle*Math.PI/180) : 0;
 }
 
+function useBandPlanner(element:GuidelinesElement) {
+  return usesCustomMask(element)||!!(element.mask?.enabled&&element.mask.arrangement);
+}
 function buildCustomWritingSpans(element:GuidelinesElement, page:PageElement):VisibleGuideSpan[] {
   const mask=activeCustomMask(element);
-  if (!mask) return [];
+  if (!mask && element.mask.kind==='customSvg') return [];
   const frame=element.frame, paper=pageSize(page), model=calculateStraightGuidelines(frame,element.settings);
   const rotation=element.rotationDeg??0, center=elementRotationCenter(element);
   const local=(p:Point)=>{const q=inverseRotatePoint(p,center,rotation);return {x:q.x-frame.x,y:q.y-frame.y};};
@@ -112,14 +117,18 @@ function buildCustomWritingSpans(element:GuidelinesElement, page:PageElement):Vi
     const q=rotatePoint({x:p.x+frame.x,y:p.y+frame.y},center,rotation);
     return q.x>=-.0001 && q.x<=paper.width+.0001 && q.y>=-.0001 && q.y<=paper.height+.0001;
   };
+  const builtin=element.mask.kind;
+  const boundary=mask?customMaskGeometry(mask,frame):{error:0,points:builtin==='customSvg'?[]:shapeBoundaryPoints(builtin,frame.width,frame.height,element.mask.cornerRadiusMM)};
   const slope=customSlantSlope(element);
-  return model.guideSets.flatMap((guide,rowIndex)=>{
+  return editableGuides(element,model.guideSets).flatMap((guide,rowIndex)=>{
     const top=guide.ascLine[0].y, bottom=guide.descLine[0].y, baseline=guide.baseLine[0].y;
     if(top<0 || bottom>frame.height) return [];
     const shifts=[(baseline-top)*slope,(baseline-bottom)*slope];
-    const x1=guide.baseLine[0].x-Math.min(...shifts),x2=guide.baseLine.at(-1)!.x-Math.max(...shifts);
-    return customMaskWritingSpans(mask,frame,element.mask.internalPaddingMM??CUSTOM_MASK_PADDING_MM,
-      {x1,x2,top,bottom,baseline,slope},edges,pageContains).map(([left,right])=>({
+    const x1=(guide.left??guide.baseLine[0].x)-Math.min(...shifts),x2=(guide.right??guide.baseLine.at(-1)!.x)-Math.max(...shifts);
+    const t=guideTransform(element,guide,rowIndex);
+    const usable=!mask&&!element.mask.textLayoutRespectsMask ? {points:corners,error:0}:boundary;
+    return polygonWritingSpans({points:usable.points.map(t.inverse),error:usable.error},mask?(element.mask.internalPaddingMM??CUSTOM_MASK_PADDING_MM):0,
+      {x1,x2,top,bottom,baseline,slope},edges.map(([a,b])=>[t.inverse(a),t.inverse(b)]),p=>pageContains(t.apply(p))).map(([left,right])=>({
         rowIndex,x1:frame.x+left,x2:frame.x+right,ascY:frame.y+top,
         waistY:frame.y+guide.waistLine[0].y,baseY:frame.y+baseline,descY:frame.y+bottom,
       }));
@@ -127,7 +136,7 @@ function buildCustomWritingSpans(element:GuidelinesElement, page:PageElement):Vi
 }
 
 export function buildGuidelinesVisibleSpans(element: GuidelinesElement, page: PageElement, elements: LayoutElement[]): VisibleGuideSpan[] {
-  if (usesCustomMask(element)) return buildCustomWritingSpans(element,page);
+  if (useBandPlanner(element)) return buildCustomWritingSpans(element,page);
   const maskKind=element.mask?.kind==='customSvg'?undefined:element.mask?.kind;
   const pageBox=pageSize(page),model=calculateStraightGuidelines({width:element.frame.width,height:element.frame.height},element.settings),index=elements.findIndex(item=>item.id===element.id),occluders=element.avoidOccludingElements!==false?elements.slice(0,Math.max(0,index)).flatMap(elementOccluders):[],spans:VisibleGuideSpan[]=[];
   model.guideSets.forEach((guide,rowIndex)=>{
@@ -161,7 +170,7 @@ function buildGuidelinesCollisionSpans(element:GuidelinesElement,page:PageElemen
   occluders.forEach(occluder=>occluder.dispose?.());return spans;
 }
 const collisionSpanCache=new Map<string,VisibleGuideSpan[]>();
-export function getCachedGuidelinesCollisionSpans(key:string,element:GuidelinesElement,page:PageElement,elements:LayoutElement[]){if(usesCustomMask(element))return [];const cacheKey=`collision:${key}`,cached=collisionSpanCache.get(cacheKey);if(cached)return cached;const spans=buildGuidelinesCollisionSpans(element,page,elements);if(collisionSpanCache.size>=50)collisionSpanCache.delete(collisionSpanCache.keys().next().value!);collisionSpanCache.set(cacheKey,spans);return spans;}
+export function getCachedGuidelinesCollisionSpans(key:string,element:GuidelinesElement,page:PageElement,elements:LayoutElement[]){if(useBandPlanner(element))return [];const cacheKey=`collision:${key}`,cached=collisionSpanCache.get(cacheKey);if(cached)return cached;const spans=buildGuidelinesCollisionSpans(element,page,elements);if(collisionSpanCache.size>=50)collisionSpanCache.delete(collisionSpanCache.keys().next().value!);collisionSpanCache.set(cacheKey,spans);return spans;}
 
 export function buildGuidelinesVisibilityCacheKey(element:GuidelinesElement,page:PageElement,higherElements:LayoutElement[]){return JSON.stringify({frame:element.frame,rotation:element.rotationDeg,settings:element.settings,mask:element.mask,avoidOccludingElements:element.avoidOccludingElements!==false,page,higher:element.avoidOccludingElements!==false?higherElements.map(item=>item.type==='guidelines'?{...item,fitText:'',plannedLines:[],textMode:'estimate',rightAlignMode:'waist'}:item):[]});}
 
@@ -169,7 +178,7 @@ export function buildGuidelinesTextFitPlan(element: GuidelinesElement, visibleSp
   const measurementText=element.fitText.replace(/\s*\n+\s*/g,' ').replace(/\s+/g,' ').trim();
   if(!measurementText)return{visibleSpans:[],placements:[],requiredMM:0,availableMM:0,remainingMM:0,fits:true};
   const settings=element.settings,effectiveNib=settings.nibMM*Math.cos(settings.penAngleDeg*Math.PI/180),ctx=settings.script==='Copperplate'?buildCopperplateContext({xHeightMM:settings.xHeightMM,capStyle:'simple',calibration:{enabled:false}}).ctx:{xHeightMM:settings.xNib*(settings.script==='InsularMajuscule'?settings.nibMM:effectiveNib),nibMM:effectiveNib,scale:1,spaceMult:1,capStyle:'simple' as const},run=measureRun(measurementText,SCRIPT_PROFILES[settings.script],ctx),slant=settings.script==='Copperplate'?settings.xHeightMM/Math.tan(55*Math.PI/180):0;
-  if (usesCustomMask(element)) return buildCustomEstimate(element,visibleSpans,run);
+  if (useBandPlanner(element)) return buildCustomEstimate(element,visibleSpans,run);
   const capacities=visibleSpans.map(span=>Math.max(0,span.x2-span.x1-slant)),availableMM=capacities.reduce((sum,value)=>sum+value,0),placements:EstimatedSpanPlacement[]=[];let remaining=run.totalAdvanceMM;
   visibleSpans.forEach((span,index)=>{if(remaining<=0)return;const consumed=Math.min(remaining,capacities[index]);if(consumed>0)placements.push({...span,consumedMM:consumed,slantShiftMM:slant});remaining-=consumed;});
   return{visibleSpans,placements,requiredMM:run.totalAdvanceMM,availableMM,remainingMM:Math.max(0,remaining),fits:remaining<=.001};
@@ -204,7 +213,7 @@ function buildCustomEstimate(element:GuidelinesElement,spans:VisibleGuideSpan[],
 
 function measureGuidelinesRun(element:GuidelinesElement,text:string){const s=element.settings,effective=s.nibMM*Math.cos(s.penAngleDeg*Math.PI/180),ctx=s.script==='Copperplate'?buildCopperplateContext({xHeightMM:s.xHeightMM,capStyle:'simple',calibration:{enabled:false}}).ctx:{xHeightMM:s.xNib*(s.script==='InsularMajuscule'?s.nibMM:effective),nibMM:effective,scale:1,spaceMult:1,capStyle:'simple' as const};return measureRun(text,SCRIPT_PROFILES[s.script],ctx);}
 export function buildGuidelinesLineLayoutPlan(element:GuidelinesElement,placementSpans:VisibleGuideSpan[],page?:PageElement,collisionSpans:VisibleGuideSpan[]=placementSpans,elements:LayoutElement[]=[]):GuidelinesLineLayoutPlan{
-  if (usesCustomMask(element)) return buildCustomLineLayout(element,placementSpans,elements);
+  if (useBandPlanner(element)) return buildCustomLineLayout(element,placementSpans,elements);
   const model=calculateStraightGuidelines({width:element.frame.width,height:element.frame.height},element.settings),pageHeight=page?pageSize(page).height:Infinity;
   const candidates=model.guideSets.flatMap((g,rowIndex)=>{const ascY=element.frame.y+g.ascLine[0].y,descY=element.frame.y+g.descLine[0].y;if(g.ascLine[0].y<0||g.descLine[0].y>element.frame.height||ascY<0||descY>pageHeight)return[];const row={rowIndex,x1:element.frame.x+g.baseLine[0].x,x2:element.frame.x+g.baseLine.at(-1)!.x,ascY,waistY:element.frame.y+g.waistLine[0].y,baseY:element.frame.y+g.baseLine[0].y,descY},spans=placementSpans.filter(span=>span.rowIndex===rowIndex).sort((a,b)=>a.x1-b.x1);return spans.length?[{row,spans}]:[];});
   const rows=candidates.map(({row,spans})=>{const widest=[...spans].sort((a,b)=>(b.x2-b.x1)-(a.x2-a.x1))[0];return{...row,x1:widest.x1,x2:widest.x2};});
@@ -220,6 +229,7 @@ function buildCustomLineLayout(element:GuidelinesElement,spans:VisibleGuideSpan[
     rows.set(span.rowIndex,row);
   }
   const bands=[...rows.values()];
+  const guides=editableGuides(element,calculateStraightGuidelines(element.frame,element.settings).guideSets);
   const slope=customSlantSlope(element);
   const index=elements.findIndex(item=>item.id===element.id);
   const occluders=element.avoidOccludingElements!==false?elements.slice(0,Math.max(0,index)).flatMap(elementOccluders):[];
@@ -237,13 +247,15 @@ function buildCustomLineLayout(element:GuidelinesElement,spans:VisibleGuideSpan[
       const start=line.alignment==='custom'?Math.max(left,Math.min(right,left+line.customStartMM)):selection.start;
       const selected=line.alignment==='custom'?row.find(span=>span.x1-.001<=start && span.x2+.001>=start):selection.span;
       const availableMM=selected?selected.x2-(line.alignment==='custom'?start:selected.x1):0;
+      const transform=guideTransform(element,guides[rowIndex],rowIndex);
       const hits=(x1:number,x2:number)=>{
         if (!occluders.length) return false;
         const dx=Math.max(1,Math.ceil((x2-x1)/.5)),dy=Math.max(1,Math.ceil((descY-ascY)/.5));
         for (let y=0;y<=dy;y++) {
           const py=ascY+(descY-ascY)*y/dy;
           for (let x=0;x<=dx;x++) {
-            const p=rotatePoint({x:x1+(x2-x1)*x/dx+(baseY-py)*slope,y:py},center,rotation);
+            const q=transform.apply({x:x1+(x2-x1)*x/dx+(baseY-py)*slope-element.frame.x,y:py-element.frame.y});
+            const p=rotatePoint({x:q.x+element.frame.x,y:q.y+element.frame.y},center,rotation);
             if (occluders.some(o=>inBounds(p,o.bounds)&&o.contains(p))) return true;
           }
         }

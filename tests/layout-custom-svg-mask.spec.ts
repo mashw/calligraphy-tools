@@ -101,3 +101,101 @@ test('concave guides clip in SVG and Cricut Draw at the correct physical size',a
   expect(pdf.toString('latin1')).not.toContain('/Subtype /Image');
   expect(pdf.toString('latin1')).toMatch(/\/MediaBox\s*\[0 0 595\.\d+ 841\.\d+\]/);
 });
+
+for (const width of [390,1440]) {
+  test(`edit masked rows, separate sections and regroup at ${width}px`,async({page})=>{
+    await page.setViewportSize({width,height:960});
+    await start(page);
+    await page.getByLabel('Upload SVG mask').setInputFiles(file('arch.svg',arch));
+    await page.getByRole('button',{name:'Edit guidelines within mask'}).click();
+    const fixed=page.locator('[data-custom-mask-silhouette]');
+    const boundary=await fixed.getAttribute('transform');
+    const controls=page.locator('fieldset').filter({has:page.getByText('Finish editing guidelines',{exact:true})}).last();
+    const field=(name:string)=>controls.getByRole('spinbutton',{name,exact:true});
+    const rotate=page.getByLabel('Rotate guidelines',{exact:true});
+    async function drag(row:number|'rotate',dx:number,dy:number){
+      const target=row==='rotate'?rotate:page.locator('[data-edit-row="'+row+'"]');
+      await target.scrollIntoViewIfNeeded();
+      const point=await target.evaluate(el=>{
+        const g=el as SVGGraphicsElement,b=g.getBBox();
+        const p=new DOMPoint(b.x+b.width*.15,b.y+b.height/2).matrixTransform(g.getScreenCTM()!);
+        return {x:p.x,y:p.y};
+      });
+      await page.mouse.move(point.x,point.y);await page.mouse.down();
+      await page.mouse.move(point.x+dx,point.y+dy,{steps:4});await page.mouse.up();
+    }
+    await drag(0,4,3);
+    expect(Number(await field('X (mm)').inputValue())).toBeGreaterThan(0);
+    await drag('rotate',5,2);
+    expect(Math.abs(Number(await field('Rotation (°)').inputValue()))).toBeGreaterThan(0);
+    await page.getByRole('button',{name:'Reset group position and rotation'}).click();
+    await page.getByRole('button',{name:'Release guidelines'}).click();
+    await drag(1,3,2);
+    await expect(page.getByLabel('Writing row')).toHaveValue('1');
+    expect(Number(await field('X (mm)').inputValue())).toBeGreaterThan(0);
+    await field('Y (mm)').fill('5');
+    await field('Rotation (°)').fill('8');
+    await page.getByRole('button',{name:'Regroup guidelines'}).click();
+    await field('Rotation (°)').fill('12');
+    await page.getByRole('button',{name:'Release guidelines'}).click();
+    await expect(field('Rotation (°)')).toHaveValue('8');
+    await expect(field('Y (mm)')).toHaveValue('5');
+    await expect(fixed).toHaveAttribute('transform',boundary!);
+    const rows=page.getByLabel('Writing row'),split=page.getByRole('button',{name:'Separate visible sections'});
+    for(let i=0;i<await rows.locator('option').count();i++){
+      await rows.selectOption(String(i));if(await split.isVisible())break;
+    }
+    await split.click();await expect(rows.locator('option:checked')).toHaveText(/section 1/);
+    await field('X (mm)').fill('-3');
+    await page.evaluate(()=>{
+      const original=window.open;
+      window.open=function(...args){
+        const popup=original.apply(window,args);
+        if(popup)popup.print=()=>{document.documentElement.dataset.printSvg=popup.document.querySelector('svg')?.outerHTML;popup.close();};
+        return popup;
+      };
+    });
+    await page.getByRole('button',{name:'Print',exact:true}).click();
+    const printed=await page.locator('html').getAttribute('data-print-svg');
+    expect(printed).toContain('-piece-');expect(printed).not.toContain('data-edit-row');
+    const saved=await download(page,'Save');
+    const arrangement=JSON.parse(saved.toString()).elements[0].mask.arrangement;
+    expect(arrangement.group.angle).toBe(12);
+    expect(Object.keys(arrangement.cuts)).toHaveLength(1);
+    const svg=(await download(page,'SVG','Export SVG')).toString();
+    expect(svg).not.toContain('data-edit-row');expect(svg).toContain('-piece-');
+    const pdf=(await download(page,'PDF')).toString('latin1');
+    expect(pdf).toMatch(/0\.97815 0\.20791 -0\.20791 0\.97815/);
+    const cut=(await download(page,'Cricut Draw','Export Cricut SVG')).toString();
+    expect(cut).not.toContain('clip-path');
+    const frame=JSON.parse(saved.toString()).elements[0].frame;
+    // The fixture has two legs below 30% of its height. Sample complete pen
+    // segments as well as endpoints so a single line across the gap fails.
+    const subpaths=cut.match(/<path d="([^"]+)"/)![1].split(/(?=M)/);
+    let diagonal=0,escaped=0;
+    for(const subpath of subpaths){
+      const points=Array.from(subpath.matchAll(/[ML]\s*([-\d.]+)[ ,]+([-\d.]+)/g),m=>[Number(m[1])-frame.x,Number(m[2])-frame.y]);
+      if(!points.length||points.every(([x,y])=>x<0||x>frame.width||y<0||y>frame.height))continue;
+      for(let j=1;j<points.length;j++){
+        const [x,y]=points[j-1],[u,v]=points[j],steps=Math.max(1,Math.ceil(Math.hypot(u-x,v-y)));
+        if(Math.abs(u-x)>1&&Math.abs(v-y)>.1)diagonal++;
+        for(let k=0;k<=steps;k++){
+          const px=x+(u-x)*k/steps,py=y+(v-y)*k/steps;
+          if(px<1.99||px>frame.width-1.99||py<1.99||py>frame.height-1.99||py>frame.height*.3&&px>frame.width*.3&&px<frame.width*.7)escaped++;
+        }
+      }
+    }
+    expect(escaped).toBe(0);
+    expect(diagonal).toBeGreaterThan(0);
+    await page.keyboard.press('Escape');
+    await page.getByRole('button',{name:'Reset selected row'}).click();
+    await expect(field('X (mm)')).toHaveValue('0');
+    await page.getByRole('button',{name:'Restore automatic arrangement'}).click();
+    await expect(controls.getByText('Grouped',{exact:true})).toBeVisible();
+    await page.locator('input[accept*="calligraphy-layout"]').setInputFiles(file('manual.json',saved.toString()));
+    expect(JSON.parse((await download(page,'Save')).toString()).elements[0].mask.arrangement).toEqual(arrangement);
+    await page.getByRole('button',{name:'Duplicate',exact:true}).first().click();
+    const duplicate=JSON.parse((await download(page,'Save')).toString()).elements[0];
+    expect(duplicate.mask.arrangement).toEqual(arrangement);
+  });
+}

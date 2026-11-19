@@ -111,13 +111,17 @@ export function customMaskGeometry(mask: CustomMask, box: Pick<Frame,'width'|'he
   if (cached?.width === box.width && cached.height === box.height) return cached;
   const frame = customMaskFrame(mask,box);
   const points = mask.boundary.map(p => ({x:frame.x+p.x*frame.width,y:frame.y+p.y*frame.height}));
-  const edges = points.flatMap((a,i):Edge[] => {
-    const b = points[(i+1)%points.length], direction = delta(a,b), length = Math.hypot(direction.x,direction.y);
-    return length > EPS ? [{a,b,direction,length,minX:Math.min(a.x,b.x),maxX:Math.max(a.x,b.x),minY:Math.min(a.y,b.y),maxY:Math.max(a.y,b.y)}] : [];
-  });
+  const edges=polygonEdges(points);
   const geometry = {width:box.width,height:box.height,edges,points,error:mask.tolerance*Math.max(frame.width,frame.height)};
   geometryCache.set(mask,geometry);
   return geometry;
+}
+
+function polygonEdges(points:Point[]) {
+  return points.flatMap((a,i):Edge[] => {
+    const b = points[(i+1)%points.length], direction = delta(a,b), length = Math.hypot(direction.x,direction.y);
+    return length > EPS ? [{a,b,direction,length,minX:Math.min(a.x,b.x),maxX:Math.max(a.x,b.x),minY:Math.min(a.y,b.y),maxY:Math.max(a.y,b.y)}] : [];
+  });
 }
 
 function inside(point: Point, edges: Edge[]) {
@@ -225,7 +229,11 @@ export function clipCustomMaskPolyline(mask: CustomMask,box: Pick<Frame,'width'|
  */
 export function customMaskWritingSpans(mask: CustomMask,box: Pick<Frame,'width'|'height'>,padding: number,
   row: {x1:number;x2:number;top:number;bottom:number;baseline:number;slope:number}, extraEdges: [Point,Point][] = [], pageContains?: (p:Point)=>boolean) {
-  const {edges,error}=customMaskGeometry(mask,box), radius=padding+error, {x1,x2,baseline,slope}=row;
+  return polygonWritingSpans(customMaskGeometry(mask,box),padding,row,extraEdges,pageContains);
+}
+export function polygonWritingSpans(boundary:{points:Point[];error:number},padding:number,
+  row:{x1:number;x2:number;top:number;bottom:number;baseline:number;slope:number},extraEdges:[Point,Point][],pageContains?: (p:Point)=>boolean) {
+  const edges=polygonEdges(boundary.points),radius=padding+boundary.error,{x1,x2,baseline,slope}=row;
   const inset=Math.min(.000001,(row.bottom-row.top)/2);
   const top=row.top+inset,bottom=row.bottom-inset;
   if (x2<=x1 || top>bottom) return [];

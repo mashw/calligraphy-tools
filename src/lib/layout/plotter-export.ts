@@ -10,6 +10,7 @@ import { expandedShapeFrame, shapeBoundaryPoints, shapeContainsPoint, shapeFootp
 import { pageSize, type Frame, type LayoutElement, type PageElement } from '@/lib/layout/types';
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 import { drawableGeometryBounds, serializePlotterSvg, type ExportLayering, type PlotterSvgLayer } from './plotter-svg';
+import { editableGuides, guideTransform } from './guideline-arrangement';
 import { activeCustomMask, clipCustomMaskPolyline, CUSTOM_MASK_PADDING_MM, customMaskContains, customMaskGeometry, usesCustomMask } from './custom-mask';
 import { artworkBoundsContains, usesArtworkBoundsOcclusion } from './artwork-occlusion';
 import { cricutGuidePathSegments, dashHorizontalGuidePoints, dashPolylinePoints } from '../guides/polyline-dash';
@@ -566,7 +567,9 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
   const guideAlpha = settings.appearance.highContrast ? 1 : settings.appearance.xLineContrast;
   const guideVisible = guideAlpha > 0.001;
 
-  model.guideSets.forEach((guide, rowIndex) => {
+  const rows=editableGuides(element,model.guideSets);
+  rows.forEach((guide, rowIndex) => {
+    const start=result.length;
     if (guideVisible) {
       const paths = guideSetPolylines(guide as GuideLike, `guidelines:${element.id}:row-${rowIndex}`, {
         ticks: settings.script !== 'Copperplate' && exportVerticalGrid,
@@ -609,6 +612,12 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
         dashPolyline(base, 6, settings.appearance.midpointDashGap).forEach(dash => result.push(...clipPolylineToRect(dash, clipRect)));
       });
     }
+    if(element.mask?.enabled && element.mask.arrangement) {
+      const t=guideTransform(element,guide,rowIndex);
+      const strokes=result.splice(start);
+      const parts=guide.section===undefined?strokes:clipPolylinesToRect(strokes,{...clipRect,x:guide.left!,width:guide.right!-guide.left!});
+      for(const part of parts)result.push({...part,points:part.points.map(t.apply)});
+    }
   });
 
   if (settings.script === 'Copperplate' && options.slantGuides) {
@@ -618,11 +627,12 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
       slants.forEach((slant, index) => {
         const raw = linePolyline({ x: slant.x1, y: slant.y1 }, { x: slant.x2, y: slant.y2 }, `guidelines:${element.id}:slant-${group}-${index}`);
         if (!raw) return;
-        model.guideSets.forEach(guide => {
+        rows.forEach((guide,rowIndex) => {
           const x1 = guide.baseLine[0].x;
           const x2 = guide.baseLine.at(-1)!.x;
-          const rowRect = { x: x1, y: guide.ascLine[0].y, width: x2 - x1, height: guide.descLine[0].y - guide.ascLine[0].y };
-          clipPolylineToRect(raw, rowRect).forEach(part => result.push(...clipPolylineToRect(part, clipRect)));
+          const rowRect = { x: guide.left??x1, y: guide.ascLine[0].y, width: (guide.right??x2) - (guide.left??x1), height: guide.descLine[0].y - guide.ascLine[0].y };
+          const t=guideTransform(element,guide,rowIndex);
+          for(const part of clipPolylineToRect(raw,rowRect).flatMap(line=>clipPolylineToRect(line,clipRect))) result.push({...part,points:part.points.map(t.apply)});
         });
       });
     });
@@ -634,7 +644,7 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
       { x: box.width / 2, y: box.height - settings.margins.bottom },
       `guidelines:${element.id}:center`,
     );
-    if (center) result.push(...clipPolylineToRect(center, clipRect));
+    if (center) result.push(...clipPolylineToRect(center,clipRect).map(line=>({...line,points:line.points.map(guideTransform(element).apply)})));
   }
 
   if (options.textStartEndMarkers && textFitEntry?.mode === 'line-layout') {
@@ -647,7 +657,7 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
       const end1 = linePolyline({ x: endX, y: baselineY }, { x: endX, y: markerBottom }, `guidelines:${element.id}:line-${line.lineId}:end-1`);
       const end2X = endX - LINE_MARKER_DOUBLE_GAP_MM;
       const end2 = linePolyline({ x: end2X, y: baselineY }, { x: end2X, y: markerBottom }, `guidelines:${element.id}:line-${line.lineId}:end-2`);
-      [start, end1, end2].forEach(marker => { if (marker) result.push(...clipPolylineToRect(marker, clipRect)); });
+      [start, end1, end2].forEach(marker => { if (marker) result.push(...clipPolylineToRect(marker,clipRect).map(part=>({...part,points:part.points.map(guideTransform(element,rows[line.rowIndex!],line.rowIndex!).apply)}))); });
     });
   }
 

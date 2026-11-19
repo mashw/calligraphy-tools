@@ -1,12 +1,12 @@
-name: Interlace branch validation
+name: Editor branch validation
 on:
   pull_request:
-    branches: [feature/unified-editor-ui]
+    branches: [feature/unified-editor-ui, main]
 permissions:
   contents: read
 jobs:
   verify:
-    if: github.head_ref == 'feature/interlace-studio'
+    if: (github.base_ref == 'feature/unified-editor-ui' && github.head_ref == 'feature/interlace-studio') || (github.base_ref == 'main' && github.head_ref == 'feature/layout-custom-svg-masks')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -32,4 +32,5 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:ui
       - name: Repeat Woven interactions at both viewport widths
+        if: github.head_ref == 'feature/interlace-studio'
         run: npx playwright test tests/woven-layout.spec.ts -g 'Woven movement' --repeat-each=5 --workers=1
