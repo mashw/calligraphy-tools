@@ -40,15 +40,19 @@ export function calculateStraightGuidelines(box: { width: number; height: number
   const count = rowStepMM > 0 ? Math.max(0, Math.ceil((overshootEndY - startY) / rowStepMM)) : -1;
   const baselinePositions = Array.from({ length: count + 1 }, (_, index) => startY + index * rowStepMM);
   const guideSets = baselinePositions.map(y => {
-    const baseline: Pt[] = [{ x: settings.margins.left, y }, { x: box.width - settings.margins.right, y }];
-    const gridUnitMM = resolveBlackletterGridWidthMM(settings.grid.widthMode, nibMM, settings.penAngleDeg, settings.grid.customWidthMM);
-    return buildGuideSet(script === 'Copperplate' ? 'copperplate' : 'blackletter', {
-      baseline, ...heights, tickStepMM: script === 'Copperplate' ? Math.max(heights.xMM * .9, 3) : gridUnitMM, actualNibMM: nibMM,
-      penAngleDeg: settings.penAngleDeg, blackletterScript: script === 'Copperplate' ? undefined : script,
-      constructionGuides: settings.constructionGuides,
-    });
+    return straightRow(settings, heights, y, settings.margins.left, box.width - settings.margins.right);
   });
   return { ...heights, effectiveNibMM, lineHeight, rowStepMM, baselinePositions, guideSets };
+}
+
+export function straightRow(settings: GuidelinesSettings, heights: {ascMM:number; xMM:number; descMM:number}, y:number, left:number, right:number) {
+    const baseline: Pt[] = [{ x: left, y }, { x: right, y }];
+    const gridUnitMM = resolveBlackletterGridWidthMM(settings.grid.widthMode, settings.nibMM, settings.penAngleDeg, settings.grid.customWidthMM);
+    return buildGuideSet(settings.script === 'Copperplate' ? 'copperplate' : 'blackletter', {
+      baseline, ...heights, tickAnchorS: settings.margins.left-left, tickStepMM: settings.script === 'Copperplate' ? Math.max(heights.xMM * .9, 3) : gridUnitMM, actualNibMM: settings.nibMM,
+      penAngleDeg: settings.penAngleDeg, blackletterScript: settings.script === 'Copperplate' ? undefined : settings.script,
+      constructionGuides: settings.constructionGuides,
+    });
 }
 
 export function buildStraightSlantLines(guideSets: ReturnType<typeof buildGuideSet>[], box: { width: number; height: number }, spacing: number, angle: number) {
