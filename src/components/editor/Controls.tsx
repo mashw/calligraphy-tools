@@ -19,6 +19,20 @@ export function NumericInput({ className = '', ...props }: ComponentProps<'input
 export function Toggle({ className = '', ...props }: ComponentProps<'input'>) {
   return <input {...props} type="checkbox" className={`ui-toggle ${className}`} />;
 }
+export function Switch({ label, checked, onChange, disabled = false }: {
+  label: ReactNode;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+}) {
+  return <label className="switch-row">
+    <span>{label}</span>
+    <input className="sr-only" type="checkbox" role="switch" checked={checked} disabled={disabled}
+      onChange={event => onChange(event.target.checked)} />
+    <span className="switch-track" aria-hidden="true" />
+  </label>;
+}
+
 export function Slider({ className = '', ...props }: ComponentProps<'input'>) {
   return <input {...props} type="range" className={`ui-slider ${className}`} />;
 }
@@ -57,7 +71,7 @@ export function InfoTip({ title = 'More information', children, className = '' }
     setPosition({ left: Math.max(12, Math.min(rect.left, window.innerWidth - 312)), top: rect.bottom + 8, above: rect.bottom > window.innerHeight - 160 });
   }
   return <span className={`inline-flex ${className}`} onMouseLeave={() => setPosition(null)}>
-    <button type="button" className="info-trigger" aria-label={title} aria-describedby={position ? id : undefined} aria-expanded={!!position} onMouseEnter={event => show(event.currentTarget)} onFocus={event => show(event.currentTarget)} onBlur={() => setPosition(null)} onClick={event => position ? setPosition(null) : show(event.currentTarget)} onKeyDown={event => { if (event.key === 'Escape') setPosition(null); }}>i</button>
+    <button type="button" className="info-trigger" aria-label={title} aria-describedby={position ? id : undefined} aria-expanded={!!position} onMouseEnter={event => show(event.currentTarget)} onFocus={event => show(event.currentTarget)} onBlur={() => setPosition(null)} onClick={event => show(event.currentTarget)} onKeyDown={event => { if (event.key === 'Escape') setPosition(null); }}>i</button>
     {position && createPortal(<span id={id} role="tooltip" className="editor-tooltip" style={{ left: position.left, top: position.above ? undefined : position.top, bottom: position.above ? 16 : undefined }}>{children}</span>, document.body)}
   </span>;
 }

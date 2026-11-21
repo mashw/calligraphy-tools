@@ -183,8 +183,14 @@ export default function InterlaceStudio() {
     <PreviewToolbar camera={camera}><Button aria-pressed={simplify} onClick={()=>setSimplify(!simplify)}>Simplify</Button>
       {(['SVG','PDF','Cricut Draw','Print','Export for Layout'] as const).map(kind=><Button key={kind} onClick={()=>output(kind)}>{kind}</Button>)}
       <Button aria-pressed={contrast} onClick={()=>setContrast(!contrast)}>High contrast</Button>
-      <Button className="min-w-28" popoverTarget="interlace-warnings" aria-haspopup="dialog">Warnings ({warn.length})</Button>
-      <div id="interlace-warnings" popover="auto" role="dialog" aria-label="Design warnings" className="m-auto w-80 max-w-[90vw] rounded border bg-white p-3 shadow-lg"><h2 className="font-semibold">Design warnings</h2>{warn.length?<ul className="space-y-2 text-sm">{warn.map(w=><li key={w}>{w}</li>)}</ul>:<p>No design warnings.</p>}<Button popoverTarget="interlace-warnings" popoverTargetAction="hide">Close warnings</Button></div>
+      {warn.length > 0 && <>
+        <Button popoverTarget="interlace-warnings" aria-haspopup="dialog">Warnings ({warn.length})</Button>
+        <div id="interlace-warnings" popover="auto" role="dialog" aria-label="Design warnings" className="m-auto w-80 max-w-[90vw] rounded border bg-white p-3 shadow-lg">
+          <h2 className="font-semibold">Design warnings</h2>
+          <ul className="space-y-2 text-sm">{warn.map(warning => <li key={warning}>{warning}</li>)}</ul>
+          <Button popoverTarget="interlace-warnings" popoverTargetAction="hide">Close warnings</Button>
+        </div>
+      </>}
       <Button popoverTarget="interlace-export-options" aria-haspopup="dialog">Export options</Button>
       <div id="interlace-export-options" popover="auto" role="dialog" aria-label="Export options" className="m-auto w-80 max-w-[90vw] rounded border bg-white p-3 shadow-lg"><label><input type="checkbox" checked={includeText} onChange={e=>setIncludeText(e.target.checked)}/> Include text-position boxes in SVG / PDF / Print</label><p className="text-xs">Layout and Cricut exports always contain writing guides only. High contrast is preview only.</p><Button popoverTarget="interlace-export-options" popoverTargetAction="hide">Close options</Button></div>
     </PreviewToolbar>

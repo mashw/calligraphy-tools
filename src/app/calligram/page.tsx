@@ -2,7 +2,7 @@
 
 import { InspectorIntro } from '@/components/editor/Controls';
 
-import { Button, Select, Toggle, Slider, NumericInput } from '@/components/editor/Controls';
+import { Button, Select, Toggle, Switch, Slider, NumericInput } from '@/components/editor/Controls';
 
 import { InfoTip, InsetLabeledField, INSET_CONTROL_BASE, INSET_CONTROL_MM, INSET_CONTROL_WIDE } from '@/components/editor/Controls';
 
@@ -1747,7 +1747,6 @@ const innerRadiusMaxMM = useMemo(
 
 
           {(script === 'Copperplate' || (topBandEnabled && topBandScript === 'Copperplate') || (bottomBandEnabled && bottomBandScript === 'Copperplate')) && <SlantStyleControl value={slantStyle} onChange={setSlantStyle} />}
-          {script !== 'Copperplate' && <div className="mt-3 rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} compact /></div>}
 
           {script === 'Copperplate' ? (
             <div className="mt-3 space-y-4">
@@ -1997,30 +1996,20 @@ const innerRadiusMaxMM = useMemo(
             </div>
           )}
 
-          <div className="my-3 border-t border-slate-200/70" />
+        </DisclosureSection>
+
+        <DisclosureSection title="Additional circles">
           <div className="space-y-3">
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-medium text-slate-700">Inner circle</div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <Toggle
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={topBandEnabled}
-                    onChange={e => {
-                      const enabled = e.target.checked;
-                      setTopBandEnabled(enabled);
-                      if (enabled && !topBandEnabled) {
-                        applyDefaultsForBand('inner', topBandScript, 'enable');
-                      }
-                    }}
-                    aria-label="Inner circle"
-                  />
-                  <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
-                  <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
-                </label>
-                <div className="ml-auto flex items-center gap-2 min-w-[14rem]">
-                  <span className="text-xs text-slate-600">Radius</span>
+              <Switch label="Inner circle" checked={topBandEnabled} onChange={enabled => {
+                setTopBandEnabled(enabled);
+                if (enabled && !topBandEnabled) {
+                  applyDefaultsForBand('inner', topBandScript, 'enable');
+                }
+              }} />
+              {topBandEnabled && <div className="space-y-2">
+                <label className="block">
+                  <span className="flex justify-between gap-2 text-xs text-slate-600">Radius <span className="tabular-nums">{innerRadiusMM.toFixed(1)} mm</span></span>
                   <Slider
                     type="range"
                     min={innerRadiusMinMM}
@@ -2037,70 +2026,54 @@ const innerRadiusMaxMM = useMemo(
                       const nextOffset = radiusMM - r; // larger radius => smaller inward offset
                       setInnerOffsetMM(Math.max(innerOffsetMinMM, Math.min(nextOffset, innerOffsetMaxMM)));
                     }}
-                    disabled={!topBandEnabled}
-                    className="w-full disabled:opacity-50"
+                    className="w-full"
                   />
-                  <span className="text-xs font-medium text-slate-500 w-[3.5rem] text-right">{innerRadiusMM.toFixed(1)} mm</span>
+                </label>
+                <div className="guide-option-grid">
+                  <InsetLabeledField label="Script">
+                    <Select
+                      className={INSET_CONTROL_BASE}
+                      value={topBandScript}
+                      onChange={e => handleTopBandScriptChange(e.target.value as ScriptId)}
+                    >
+                      <option value="TexturaQuadrata">Textura Quadrata</option>
+                       <option value="InsularMajuscule">Insular Majuscule</option>
+                      <option value="Fraktur">Fraktur</option>
+                      <option value="Copperplate">Copperplate</option>
+                    </Select>
+                  </InsetLabeledField>
+                  <InsetLabeledField label={topBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} rightAdornment="mm">
+                      <NumericInput
+                        type="number"
+                        step="any"
+                        min={0.2}
+                        className={INSET_CONTROL_MM}
+                        value={topBandSizeText}
+                        onChange={e => {
+                          if (topBandScript === 'Copperplate') {
+                            touchedRef.current.inner.xHeight = true;
+                          } else {
+                            touchedRef.current.inner.nib = true;
+                          }
+                          setTopBandSizeText(e.target.value);
+                        }}
+                      />
+                  </InsetLabeledField>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <InsetLabeledField label="Script" disabled={!topBandEnabled}>
-                  <Select
-                    className={INSET_CONTROL_BASE}
-                    value={topBandScript}
-                    onChange={e => handleTopBandScriptChange(e.target.value as ScriptId)}
-                    disabled={!topBandEnabled}
-                  >
-                    <option value="TexturaQuadrata">TexturaQuadrata</option>
-                     <option value="InsularMajuscule">Insular Majuscule</option>
-                    <option value="Fraktur">Fraktur</option>
-                    <option value="Copperplate">Copperplate</option>
-                  </Select>
-                </InsetLabeledField>
-                <InsetLabeledField label={topBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} disabled={!topBandEnabled} rightAdornment="mm">
-                    <NumericInput
-                      type="number"
-                      step="any"
-                      min={0.2}
-                      className={INSET_CONTROL_MM}
-                      value={topBandSizeText}
-                      onChange={e => {
-                        if (topBandScript === 'Copperplate') {
-                          touchedRef.current.inner.xHeight = true;
-                        } else {
-                          touchedRef.current.inner.nib = true;
-                        }
-                        setTopBandSizeText(e.target.value);
-                      }}
-                      disabled={!topBandEnabled}
-                    />
-                </InsetLabeledField>
-              </div>
+              </div>}
             </div>
 
             <div className="my-3 border-t border-slate-200/70" />
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-medium text-slate-700">Outer circle</div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <Toggle
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={bottomBandEnabled}
-                    onChange={e => {
-                      const enabled = e.target.checked;
-                      setBottomBandEnabled(enabled);
-                      if (enabled && !bottomBandEnabled) {
-                        applyDefaultsForBand('outer', bottomBandScript, 'enable');
-                      }
-                    }}
-                    aria-label="Outer circle"
-                  />
-                  <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
-                  <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
-                </label>
-                <div className="ml-auto flex items-center gap-2 min-w-[14rem]">
-                  <span className="text-xs text-slate-600">Radius</span>
+              <Switch label="Outer circle" checked={bottomBandEnabled} onChange={enabled => {
+                setBottomBandEnabled(enabled);
+                if (enabled && !bottomBandEnabled) {
+                  applyDefaultsForBand('outer', bottomBandScript, 'enable');
+                }
+              }} />
+              {bottomBandEnabled && <div className="space-y-2">
+                <label className="block">
+                  <span className="flex justify-between gap-2 text-xs text-slate-600">Radius <span className="tabular-nums">{outerRadiusMM.toFixed(1)} mm</span></span>
                   <Slider
                     type="range"
                     min={radiusMM + outerOffsetMinMM}
@@ -2119,52 +2092,49 @@ const innerRadiusMaxMM = useMemo(
                       const nextOffset = r - radiusMM;
                       setOuterOffsetMM(Math.max(outerOffsetMinMM, Math.min(nextOffset, outerOffsetMaxMM)));
                     }}
-                    disabled={!bottomBandEnabled}
-                    className="w-full disabled:opacity-50"
+                    className="w-full"
                   />
-                  <span className="text-xs font-medium text-slate-500 w-[3.5rem] text-right">{outerRadiusMM.toFixed(1)} mm
-                  </span>
+                </label>
+                <div className="guide-option-grid">
+                  <InsetLabeledField label="Script">
+                    <Select
+                      className={INSET_CONTROL_BASE}
+                      value={bottomBandScript}
+                      onChange={e => handleBottomBandScriptChange(e.target.value as ScriptId)}
+                    >
+                      <option value="TexturaQuadrata">Textura Quadrata</option>
+                       <option value="InsularMajuscule">Insular Majuscule</option>
+                      <option value="Fraktur">Fraktur</option>
+                      <option value="Copperplate">Copperplate</option>
+                    </Select>
+                  </InsetLabeledField>
+                  <InsetLabeledField label={bottomBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} rightAdornment="mm">
+                      <NumericInput
+                        type="number"
+                        step="any"
+                        min={0.2}
+                        className={INSET_CONTROL_MM}
+                        value={bottomBandSizeText}
+                        onChange={e => {
+                          if (bottomBandScript === 'Copperplate') {
+                            touchedRef.current.outer.xHeight = true;
+                          } else {
+                            touchedRef.current.outer.nib = true;
+                          }
+                          setBottomBandSizeText(e.target.value);
+                        }}
+                      />
+                  </InsetLabeledField>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <InsetLabeledField label="Script" disabled={!bottomBandEnabled}>
-                  <Select
-                    className={INSET_CONTROL_BASE}
-                    value={bottomBandScript}
-                    onChange={e => handleBottomBandScriptChange(e.target.value as ScriptId)}
-                    disabled={!bottomBandEnabled}
-                  >
-                    <option value="TexturaQuadrata">TexturaQuadrata</option>
-                     <option value="InsularMajuscule">Insular Majuscule</option>
-                    <option value="Fraktur">Fraktur</option>
-                    <option value="Copperplate">Copperplate</option>
-                  </Select>
-                </InsetLabeledField>
-                <InsetLabeledField label={bottomBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} disabled={!bottomBandEnabled} rightAdornment="mm">
-                    <NumericInput
-                      type="number"
-                      step="any"
-                      min={0.2}
-                      className={INSET_CONTROL_MM}
-                      value={bottomBandSizeText}
-                      onChange={e => {
-                        if (bottomBandScript === 'Copperplate') {
-                          touchedRef.current.outer.xHeight = true;
-                        } else {
-                          touchedRef.current.outer.nib = true;
-                        }
-                        setBottomBandSizeText(e.target.value);
-                      }}
-                      disabled={!bottomBandEnabled}
-                    />
-                </InsetLabeledField>
-              </div>
+              </div>}
             </div>
           </div>
         </DisclosureSection>
 
 
         {/* Step 3 */}
+        <ConstructionGuideControls scripts={[script, topBandEnabled && topBandScript, bottomBandEnabled && bottomBandScript]} value={constructionGuides} onChange={setConstructionGuides} />
+
         <DisclosureSection title="Text & Placement" defaultOpen headerAction={<InfoTip side="right">Check text fit and preview overlays.</InfoTip>}>
 
 

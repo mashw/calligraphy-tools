@@ -2,7 +2,7 @@
 
 import { InspectorIntro } from '@/components/editor/Controls';
 
-import { Button, Select, Toggle, NumericInput, Slider } from '@/components/editor/Controls';
+import { Button, Select, Toggle, Switch, NumericInput, Slider } from '@/components/editor/Controls';
 
 import { InfoTip, InsetLabeledField, INSET_CONTROL_BASE, INSET_CONTROL_MM, INSET_CONTROL_WIDE } from '@/components/editor/Controls';
 
@@ -1644,7 +1644,6 @@ export default function CurvedTitlePage() {
 
 
           {(script === 'Copperplate' || (topBandEnabled && topBandScript === 'Copperplate') || (bottomBandEnabled && bottomBandScript === 'Copperplate')) && <SlantStyleControl value={slantStyle} onChange={setSlantStyle} />}
-          {script !== 'Copperplate' && <div className="mt-3 rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} compact /></div>}
 
           {script === 'Copperplate' ? (
             <div className="mt-3 space-y-4">
@@ -2031,32 +2030,26 @@ export default function CurvedTitlePage() {
             </div>
           )}
 
-          <div className="my-3 border-t border-slate-200/70" />
+        </DisclosureSection>
+
+        <DisclosureSection title="Additional bands">
           <div className="space-y-3">
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-medium text-slate-700">Top band</div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <Toggle type="checkbox" className="sr-only peer" checked={topBandEnabled} onChange={e => setTopBandEnabled(e.target.checked)} aria-label="Top band" />
-                  <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
-                  <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <InsetLabeledField label="Script" disabled={!topBandEnabled}>
+              <Switch label="Top band" checked={topBandEnabled} onChange={setTopBandEnabled} />
+              {topBandEnabled && <div className="guide-option-grid">
+                <InsetLabeledField label="Script">
                   <Select
                     className={INSET_CONTROL_BASE}
                     value={topBandScript}
                     onChange={e => setTopBandScript(e.target.value as ScriptId)}
-                    disabled={!topBandEnabled}
                   >
-                    <option value="TexturaQuadrata">TexturaQuadrata</option>
+                    <option value="TexturaQuadrata">Textura Quadrata</option>
                      <option value="InsularMajuscule">Insular Majuscule</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="Copperplate">Copperplate</option>
                   </Select>
                 </InsetLabeledField>
-                <InsetLabeledField label={topBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} disabled={!topBandEnabled} rightAdornment="mm">
+                <InsetLabeledField label={topBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} rightAdornment="mm">
                     <NumericInput
                       type="number"
                       step="any"
@@ -2064,37 +2057,28 @@ export default function CurvedTitlePage() {
                       className={INSET_CONTROL_MM}
                       value={topBandSizeText}
                       onChange={e => setTopBandSizeText(e.target.value)}
-                      disabled={!topBandEnabled}
                     />
                 </InsetLabeledField>
-              </div>
+              </div>}
             </div>
 
             <div className="my-3 border-t border-slate-200/70" />
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-medium text-slate-700">Bottom band</div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <Toggle type="checkbox" className="sr-only peer" checked={bottomBandEnabled} onChange={e => setBottomBandEnabled(e.target.checked)} aria-label="Bottom band" />
-                  <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
-                  <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <InsetLabeledField label="Script" disabled={!bottomBandEnabled}>
+              <Switch label="Bottom band" checked={bottomBandEnabled} onChange={setBottomBandEnabled} />
+              {bottomBandEnabled && <div className="guide-option-grid">
+                <InsetLabeledField label="Script">
                   <Select
                     className={INSET_CONTROL_BASE}
                     value={bottomBandScript}
                     onChange={e => setBottomBandScript(e.target.value as ScriptId)}
-                    disabled={!bottomBandEnabled}
                   >
-                    <option value="TexturaQuadrata">TexturaQuadrata</option>
+                    <option value="TexturaQuadrata">Textura Quadrata</option>
                      <option value="InsularMajuscule">Insular Majuscule</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="Copperplate">Copperplate</option>
                   </Select>
                 </InsetLabeledField>
-                <InsetLabeledField label={bottomBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} disabled={!bottomBandEnabled} rightAdornment="mm">
+                <InsetLabeledField label={bottomBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} rightAdornment="mm">
                     <NumericInput
                       type="number"
                       step="any"
@@ -2102,16 +2086,17 @@ export default function CurvedTitlePage() {
                       className={INSET_CONTROL_MM}
                       value={bottomBandSizeText}
                       onChange={e => setBottomBandSizeText(e.target.value)}
-                      disabled={!bottomBandEnabled}
                     />
                 </InsetLabeledField>
-              </div>
+              </div>}
             </div>
           </div>
         </DisclosureSection>
 
 
         {/* Step 3 */}
+        <ConstructionGuideControls scripts={[script, topBandEnabled && topBandScript, bottomBandEnabled && bottomBandScript]} value={constructionGuides} onChange={setConstructionGuides} />
+
         <DisclosureSection title="Shape, Path & Guides" defaultOpen headerAction={<InfoTip side="right">Rotate and scale the curve.</InfoTip>}>
 
 

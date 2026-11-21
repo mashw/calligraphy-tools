@@ -48,13 +48,24 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .editor-settings { display: contents; }
 .editor-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 370px; grid-template-rows: minmax(0,1fr); gap: 12px; padding: 0 16px 12px; height: calc(100dvh - 108px); min-height: 360px; }
 .editor-preview, .editor-inspector, .editor-layers { min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
-.editor-preview { border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--panel-shadow); background: white; display: flex; flex-direction: column; }
+.editor-preview { container-type: inline-size; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--panel-shadow); background: white; display: flex; flex-direction: column; }
 .editor-preview > section:not(.preview-panel) { display: flex; flex-direction: column; flex: 1; min-height: 0; margin: 0; padding: 0; }
 .editor-preview :has(> svg.editor-svg) { min-height: 180px; flex: 1; display: flex; border-radius: 7px; overflow: hidden; }
 .editor-preview svg.editor-svg { display: block; width: 100%; height: 100%; min-height: 180px; flex: 1; touch-action: none; user-select: none; background: #e0e3eb; }
 .preview-toolbar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-bottom: 6px; }
 .camera-controls, .document-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.camera-controls { padding-right: 8px; border-right: 1px solid var(--line); }
+.camera-zoom { display: inline-flex; align-items: center; gap: 3px; }
+.camera-controls button { white-space: nowrap; }
+@container (max-width: 520px) {
+  .preview-toolbar > .camera-controls { flex-basis: 100%; }
+  .preview-toolbar > .document-actions { max-width: 100%; }
+}
+@container (max-width: 380px) {
+  .preview-toolbar .camera-controls { gap: 4px; }
+  .preview-toolbar .camera-controls button { padding-inline: 6px; }
+  .preview-toolbar .camera-controls output { width: 34px; }
+  .preview-toolbar .camera-controls .compact-help > summary { width: 24px; }
+}
 .document-actions { flex: 0 1 auto; }
 .camera-controls output { color: var(--muted); width: 40px; text-align: center; font-size: 11px; font-variant-numeric: tabular-nums; }
 .editor-workspace button, .editor-workspace select, .editor-workspace input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]) { min-height: var(--control-height); border-radius: 6px; }
@@ -84,7 +95,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .editor-inspector .sm\:grid-cols-2, .editor-inspector .md\:grid-cols-2, .editor-inspector .lg\:grid-cols-2 { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .editor-inspector .sm\:col-span-3 { grid-column: 1/-1; }
 }
-@container (max-width: 310px) {
+@container (max-width: 325px) {
   .editor-inspector .grid { grid-template-columns: minmax(0,1fr); }
   .editor-inspector [class*=col-span] { grid-column: auto; }
 }
@@ -96,8 +107,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .editor-layers { grid-column: 1; grid-row: 1; }
 .editor-layers > section { padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); height: 100%; }
 .has-layers { grid-template-columns: minmax(0,1fr) 370px; }
-.has-layers .editor-layers { grid-column: 2; grid-row: 1; max-height: 224px; margin-bottom: 12px; }
-.has-layers .editor-inspector { grid-column: 2; grid-row: 1; margin-top: 234px; }
+.has-layers .editor-settings { display: flex; flex-direction: column; grid-column: 2; grid-row: 1; gap: 10px; min-width: 0; min-height: 0; }
+.has-layers .editor-layers { flex: 0 0 auto; max-height: min(42%, 320px); }
+.has-layers .editor-layers > section { height: auto; }
+.has-layers .editor-inspector { flex: 1 1 0; }
 .has-layers .editor-preview { grid-column: 1; grid-row: 1; }
 .editor-workspace.inspector-hidden { grid-template-columns: minmax(0,1fr); }
 .inspector-hidden .editor-layers { display: none; }
@@ -119,9 +132,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 @media (min-width: 1680px) {
   .editor-workspace { grid-template-columns: minmax(0,1fr) 400px; }
   .editor-workspace.has-layers { grid-template-columns: 310px minmax(0,1fr) 400px; }
-  .has-layers .editor-layers { grid-column: 1; max-height: none; margin-bottom: 0; }
+  .has-layers .editor-settings { display: contents; }
+  .has-layers .editor-layers { grid-column: 1; max-height: none; }
   .has-layers .editor-preview { grid-column: 2; }
-  .has-layers .editor-inspector { grid-column: 3; margin-top: 0; }
+  .has-layers .editor-inspector { grid-column: 3; grid-row: 1; }
 }
 @media (max-width: 1099px) {
   .app-caption { display: none; }
@@ -216,6 +230,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .editor-inspector .action-group[data-columns="2"], .editor-inspector .control-pair { grid-template-columns: repeat(2,minmax(0,1fr)); }
 .editor-inspector .action-group[data-columns="3"] { grid-template-columns: repeat(3,minmax(0,1fr)); }
 .editor-inspector .action-group[data-columns="6"] { grid-template-columns: repeat(6,minmax(0,1fr)); }
+@container (max-width: 325px) {
+  .editor-inspector .control-pair { grid-template-columns: minmax(0,1fr); }
+  .editor-inspector .action-group[data-columns="6"] { grid-template-columns: repeat(3,minmax(0,1fr)); }
+}
 .action-group > button { min-width: 0; padding: 4px 8px; }
 .action-group[data-columns] > button { width: 100%; }
 .inspector-stack { display: flex; flex-direction: column; gap: 8px; }
@@ -230,14 +248,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .numeric-unit { margin-left: 5px; color: var(--muted); font-size: 10px; font-weight: 400; }
 .numeric-slider > input[type=range] { grid-column: 1; grid-row: 2; width: 100%; min-width: 0; height: 22px; }
 .numeric-slider > input[type=number] { grid-column: 2; grid-row: 1 / span 2; width: 100%; min-width: 0; padding: 4px 6px; border: 1px solid var(--line); background: white; }
-@container (max-width: 260px) { .editor-inspector .action-group[data-columns="6"] { grid-template-columns: repeat(3,minmax(0,1fr)); } }
 @media (max-width: 799px) { .preview-toolbar { gap: 4px; } .document-actions button { padding: 4px 8px; font-size: 11px; } }
 
-.toolbar-compact-label { display: none; }
 .workspace-panel-toggle { min-height: 30px; border-radius: 6px; }
 .camera-controls button[aria-label^='Zoom'] { min-width: 32px; }
 @media (max-width: 799px) { .workspace-panel-toggle { top: -36px; right: 8px; } }
-@media (max-width: 599px) { .toolbar-wide-label { display: none; } .toolbar-compact-label { display: inline; font-size: 16px; } .camera-controls button[aria-label='Reset view'] { min-width: 32px; } }
 
 
 @media (max-width: 799px) { .editor-workspace.has-layers.inspector-hidden { grid-template-rows: minmax(0,1fr); } }
@@ -249,3 +264,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .has-layers .editor-layers, .has-layers .editor-inspector { flex: none; min-height: max-content; overflow: visible; }
   .has-layers .editor-layers > section { height: auto; min-height: max-content; }
 }
+
+/* Match the switch hit area to the full label row. */
+.switch-row { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; min-height: 34px; font-size: 13px; font-weight: 500; cursor: pointer; }
+.switch-row > span:first-child { min-width: 0; overflow-wrap: normal; }
+.switch-track { position: relative; flex: 0 0 36px; height: 20px; border-radius: 999px; background: #64748b; transition: background .12s; }
+.switch-track::before { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: white; transition: transform .12s; }
+.switch-row input:checked + .switch-track { background: var(--accent); }
+.switch-row input:checked + .switch-track::before { transform: translateX(16px); }
+.switch-row input:focus-visible + .switch-track { outline: 2px solid var(--accent); outline-offset: 3px; }
+.switch-row:has(input:disabled) { opacity: .55; cursor: default; }
+.guide-option-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px 12px; }
+@media (prefers-reduced-motion: reduce) { .switch-track::before { transition: none; } }
