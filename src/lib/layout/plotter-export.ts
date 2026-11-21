@@ -1,3 +1,4 @@
+import { maskedGuideField, fieldSlants } from './masked-guide-field';
 import {layoutWovenModel} from './woven';
 import { buildCalligramModel } from '@/lib/calligram/model';
 import { buildCurvedTitleModel } from '@/lib/curved-title/model';
@@ -567,9 +568,12 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
   const guideAlpha = settings.appearance.highContrast ? 1 : settings.appearance.xLineContrast;
   const guideVisible = guideAlpha > 0.001;
 
-  const rows=editableGuides(element,model.guideSets);
+  const originalRows=editableGuides(element,model.guideSets);
+  const field=maskedGuideField(element,model);
+  const rows=field?.map(row=>row.guide as typeof originalRows[number]) ?? originalRows;
   rows.forEach((guide, rowIndex) => {
     const start=result.length;
+    const rowClip=field ? {x:guide.baseLine[0].x,y:guide.ascLine[0].y,width:guide.baseLine.at(-1)!.x-guide.baseLine[0].x,height:guide.descLine[0].y-guide.ascLine[0].y} : clipRect;
     if (guideVisible) {
       const paths = guideSetPolylines(guide as GuideLike, `guidelines:${element.id}:row-${rowIndex}`, {
         ticks: settings.script !== 'Copperplate' && exportVerticalGrid,
@@ -580,7 +584,7 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
         nibAngleDeg: settings.penAngleDeg,
         constructionGuides: options.constructionGuides,
       });
-      result.push(...clipPolylinesToRect(paths, clipRect));
+      result.push(...clipPolylinesToRect(paths, rowClip));
     } else if (settings.script !== 'Copperplate') {
       const gridOnly = guideSetPolylines(guide as GuideLike, `guidelines:${element.id}:row-${rowIndex}:grid`, {
         pathKeys: [],
@@ -591,14 +595,14 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
         nibAngleDeg: settings.penAngleDeg,
         constructionGuides: options.constructionGuides,
       });
-      result.push(...clipPolylinesToRect(gridOnly, clipRect));
+      result.push(...clipPolylinesToRect(gridOnly, rowClip));
     }
 
-    if (options.baselineIndicators) {
+    if (options.baselineIndicators && (!field || field[rowIndex].indicator!==undefined)) {
       const x1 = guide.baseLine[0].x;
       const y = (guide.waistLine[0].y + guide.baseLine[0].y) / 2;
-      const indicator = circleOutline(x1 + 3, y, 0.9, `guidelines:${element.id}:baseline-indicator-${rowIndex}`);
-      if (indicator) result.push(...clipPolylineToRect(indicator, clipRect));
+      const indicator = circleOutline(field?.[rowIndex].indicator ?? x1 + 3, y, 0.9, `guidelines:${element.id}:baseline-indicator-${rowIndex}`);
+      if (indicator) result.push(...clipPolylineToRect(indicator, rowClip));
     }
 
     if (settings.script === 'Copperplate' && options.midpointReferences) {
@@ -609,18 +613,25 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
       [midAsc, midDesc].forEach((y, index) => {
         const base = linePolyline({ x: x1, y }, { x: x2, y }, `guidelines:${element.id}:mid-${rowIndex}-${index}`);
         if (!base) return;
-        dashPolyline(base, 6, settings.appearance.midpointDashGap).forEach(dash => result.push(...clipPolylineToRect(dash, clipRect)));
+        dashPolyline(base, 6, settings.appearance.midpointDashGap).forEach(dash => result.push(...clipPolylineToRect(dash, rowClip)));
       });
     }
-    if(element.mask?.enabled && element.mask.arrangement) {
-      const t=guideTransform(element,guide,rowIndex);
+    if(field && options.slantGuides && settings.script==='Copperplate') {
+      const angles=[settings.slant.angle,...(options.secondarySlantGuides && settings.slant.secondEnabled?[settings.slant.secondAngle]:[])];
+      angles.forEach((angle,group)=>fieldSlants(guide,settings.slant.spacingMM,angle,settings.margins.left).forEach((line,index)=>{
+        const path=linePolyline({x:line.x1,y:line.y1},{x:line.x2,y:line.y2},`guidelines:${element.id}:slant-${group}-${rowIndex}-${index}`);
+        if(path) result.push(...clipPolylineToRect(path,rowClip));
+      }));
+    }
+    if(field || element.mask?.enabled && element.mask.arrangement) {
+      const t=field?.[rowIndex].transform ?? guideTransform(element,guide,rowIndex);
       const strokes=result.splice(start);
       const parts=guide.section===undefined?strokes:clipPolylinesToRect(strokes,{...clipRect,x:guide.left!,width:guide.right!-guide.left!});
       for(const part of parts)result.push({...part,points:part.points.map(t.apply)});
     }
   });
 
-  if (settings.script === 'Copperplate' && options.slantGuides) {
+  if (!field && settings.script === 'Copperplate' && options.slantGuides) {
     const angles = [settings.slant.angle, ...(options.secondarySlantGuides && settings.slant.secondEnabled ? [settings.slant.secondAngle] : [])];
     angles.forEach((angle, group) => {
       const slants = buildStraightSlantLines(model.guideSets, box, settings.slant.spacingMM, angle);
@@ -657,7 +668,7 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
       const end1 = linePolyline({ x: endX, y: baselineY }, { x: endX, y: markerBottom }, `guidelines:${element.id}:line-${line.lineId}:end-1`);
       const end2X = endX - LINE_MARKER_DOUBLE_GAP_MM;
       const end2 = linePolyline({ x: end2X, y: baselineY }, { x: end2X, y: markerBottom }, `guidelines:${element.id}:line-${line.lineId}:end-2`);
-      [start, end1, end2].forEach(marker => { if (marker) result.push(...clipPolylineToRect(marker,clipRect).map(part=>({...part,points:part.points.map(guideTransform(element,rows[line.rowIndex!],line.rowIndex!).apply)}))); });
+      [start, end1, end2].forEach(marker => { if (marker) result.push(...clipPolylineToRect(marker,clipRect).map(part=>({...part,points:part.points.map(guideTransform(element,originalRows[line.rowIndex!],line.rowIndex!).apply)}))); });
     });
   }
 
