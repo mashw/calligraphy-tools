@@ -809,7 +809,7 @@ export default function Home() {
     <EditorWorkspace preview={<>
 <section className="">
         <div className="preview-panel  mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4">
-          <PreviewToolbar camera={camera} pageLabel="Fit lines" help={<p>
+          <PreviewToolbar camera={camera} pageLabel="Fit lines" showFitContent={false} help={<p>
                 Copperplate: includes entry stroke before the first letter and (if ending on lowercase) an exit stroke after the last lowercase.
                 Word spaces include exit + gap + entry. Calibration adjusts lowercase scale + spacing.
                 Textura: nib-based widths + spacing.
@@ -1037,7 +1037,6 @@ export default function Home() {
                   </>
                 )}
                 {script === 'InsularMajuscule' && <label className="sm:col-span-3 inline-flex items-center gap-2 text-sm"><Toggle type="checkbox" checked={showInsularGrid} onChange={e => setShowInsularGrid(e.target.checked)} /> Show intermediate grid</label>}
-                 {script !== 'Copperplate' && <div className="sm:col-span-3 rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} compact /></div>}
 
                 <label className="inline-flex items-center gap-2 text-sm text-slate-800 sm:col-span-3">
                   <Toggle
@@ -1065,6 +1064,8 @@ export default function Home() {
                 </div>
               </div>
             </DisclosureSection>
+
+            <ConstructionGuideControls scripts={[script]} value={constructionGuides} onChange={setConstructionGuides} />
 
             {/* STEP 2 — Enter lines */}
             <DisclosureSection title="Text & Placement" defaultOpen headerAction={<InfoTip side="right">Type one line per row.</InfoTip>}>

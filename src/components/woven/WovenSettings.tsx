@@ -1,5 +1,5 @@
 'use client';
-import { NumericInput, Toggle, Button, Select } from '@/components/editor/Controls';
+import { NumericInput, Switch, Button, Select } from '@/components/editor/Controls';
 import DisclosureSection from '@/components/layout/DisclosureSection';
 import ConstructionGuideControls from '@/components/guidelines/ConstructionGuideControls';
 import SlantStyleControl from '@/components/guidelines/SlantStyleControl';
@@ -56,17 +56,7 @@ export default function WovenSettings({design, onChange, model, selected, onSele
       | "secondSlant",
     label: string,
   ) {
-    return (
-      <label className="flex min-h-10 items-center gap-2 text-sm" key={key}>
-        <Toggle
-          type="checkbox"
-          className="accent-indigo-600"
-          checked={design[key]}
-          onChange={(e) => update(key, e.target.checked)}
-        />
-        {label}
-      </label>
-    );
+    return <Switch label={label} checked={design[key]} onChange={checked => update(key, checked)} />;
   }
   function selectScript(script: Design["script"]) {
     setDesign((d) => ({
@@ -90,6 +80,9 @@ export default function WovenSettings({design, onChange, model, selected, onSele
       construction: { ...d.construction, upper: false, lower: false },
     }));
   }
+
+  const gridVisible = design.gridHorizontal || design.gridVertical;
+  const constructionVisible = design.construction.upper || design.construction.lower;
 
   return <>          <DisclosureSection title="Writing guides" defaultOpen>
             <div className="space-y-3">
@@ -126,7 +119,7 @@ export default function WovenSettings({design, onChange, model, selected, onSele
             title={
               design.script === "Copperplate"
                 ? "Slant lines"
-                : "Grid & construction"
+                : "Grid"
             }
             defaultOpen
           >
@@ -134,6 +127,7 @@ export default function WovenSettings({design, onChange, model, selected, onSele
               {design.script === "Copperplate" ? (
                 <>
                   {toggle("slants", "Show slant lines")}
+                  {design.slants && <>
                     <SlantStyleControl value={design.slantStyle} onChange={v=>update("slantStyle",v)} />
                   {numeric("slantAngle", "Slant angle", 1, "°")}
                   {numeric("slantSpacing", "Slant spacing", 0.5, "mm")}
@@ -141,11 +135,14 @@ export default function WovenSettings({design, onChange, model, selected, onSele
                   {toggle("secondSlant", "Second slant angle")}
                   {design.secondSlant &&
                     numeric("secondAngle", "Second angle", 1, "°")}
+                    {numeric("gridThickness", "Slant thickness", 0.01, "mm")}
+                  </>}
                 </>
               ) : (
                 <>
                   {toggle("gridHorizontal", "Horizontal intermediate lines")}
                   {toggle("gridVertical", "Vertical divisions")}
+                  {(gridVisible || constructionVisible) && <>
                   <label className="block space-y-1 text-sm">
                     Grid width
                     <Select
@@ -164,18 +161,14 @@ export default function WovenSettings({design, onChange, model, selected, onSele
                   {design.gridMode === "custom" &&
                     numeric("gridWidth", "Custom grid width", 0.1, "mm")}
                   {numeric("penAngle", "Pen angle", 1, "°")}
-                  {numeric("gridContrast", "Grid contrast", 0.05)}
-                  <ConstructionGuideControls
-                    script={design.script}
-                    value={design.construction}
-                    onChange={(v) => update("construction", v)}
-                    compact
-                  />
+                  </>}
+                  {gridVisible && numeric("gridContrast", "Grid contrast", 0.05)}
+                  {(gridVisible || constructionVisible) && numeric("gridThickness", "Guide thickness", 0.01, "mm")}
                 </>
               )}
-              {numeric("gridThickness", "Guide grid thickness", 0.01, "mm")}
             </div>
           </DisclosureSection>
+          <ConstructionGuideControls scripts={[design.script]} value={design.construction} onChange={value => update("construction", value)} />
 {model && <DisclosureSection title="Route & crossings" defaultOpen>
             <div className="space-y-3">
               {numeric("start", "Start position", 0.5, "%")}

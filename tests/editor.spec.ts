@@ -14,11 +14,12 @@ for (const route of routes) {
       await expect.poll(() => svg.evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThan(100);
     }
     const svg = page.locator('svg.editor-svg');
-    await page.getByRole('button', { name: route === 'align' ? 'Fit lines' : 'Fit page', exact: true }).click();
+    const fit = page.getByRole('button', { name: route === 'align' ? 'Fit lines' : 'Fit page', exact: true });
+    await fit.click();
     const before = await svg.getAttribute('viewBox');
     await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
     await expect(svg).not.toHaveAttribute('viewBox', before!);
-    await page.getByRole('button', { name: 'Reset view', exact: true }).click();
+    await fit.click();
     await expect(svg).toHaveAttribute('viewBox', before!);
     await page.getByRole('button', { name: 'Hide settings', exact: true }).click();
     await expect(page.locator('#tool-inspector')).toBeHidden();

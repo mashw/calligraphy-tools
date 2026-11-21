@@ -2791,13 +2791,13 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       <option value={15}>15°</option><option value={35}>35°</option><option value={40}>40°</option><option value={45}>45°</option>
                     </Select>
                   </InsetLabeledField>
-                  <div className="rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={activeStrap.script} value={activeStrap.constructionGuides} onChange={constructionGuides => updateStrap(activeStrap.id, { constructionGuides })} compact /></div>
                 </>
               )}
 
 
           </div>}
         </DisclosureSection>
+        {activeStrap && <ConstructionGuideControls scripts={[activeStrap.script]} value={activeStrap.constructionGuides} onChange={constructionGuides => updateStrap(activeStrap.id, { constructionGuides })} />}
         <DisclosureSection title="Weave & layer order">
           <p className="mt-1 text-xs text-slate-600">Order controls render stack. First = back, last = front.</p>
           <div className="mt-3 space-y-2">

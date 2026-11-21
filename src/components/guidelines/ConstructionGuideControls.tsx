@@ -1,24 +1,70 @@
 'use client';
 
-import { Toggle, Select, NumericInput } from '@/components/editor/Controls';
-
-import { resolveConstructionGuideSettings, type BlackletterScript, type ConstructionGuideAppearance, type ConstructionGuideSettings } from '@/lib/guides/guide-template';
+import { InfoTip, NumericInput, Select, Switch } from '@/components/editor/Controls';
+import DisclosureSection from '@/components/layout/DisclosureSection';
+import {
+  DEFAULT_CONSTRUCTION_GUIDES,
+  resolveConstructionGuideSettings,
+  type ConstructionGuideAppearance,
+  type ConstructionGuideSettings,
+} from '@/lib/guides/guide-template';
 import type { ScriptId } from '@/lib/scripts';
 
-export default function ConstructionGuideControls({ script, value, onChange, compact = false }: { script: ScriptId; value?: ConstructionGuideSettings; onChange: (value: ConstructionGuideSettings) => void; compact?: boolean }) {
-  if (script === 'Copperplate') return null;
-  const settings = resolveConstructionGuideSettings(script as BlackletterScript, value);
-  const fraktur = script === 'Fraktur';
-  const rows = fraktur ? [
-    ['upper', 'Downstroke start guide', 'Align the right edge of the nib with this guide to establish the start of the main downstroke.'],
-    ['lower', 'Spur guide', 'Marks the height where the main downstroke branches left to form the spur.'],
-  ] as const : [
-    ['upper', 'Upper quadrant start guide', 'Align the left edge of the nib with this guide to establish the start of the upper quadrant.'],
-    ['lower', 'Lower quadrant start guide', 'Align the left edge of the nib with this guide to establish the start of the lower quadrant.'],
+export default function ConstructionGuideControls({ scripts, value, onChange }: {
+  scripts: (ScriptId | false)[];
+  value?: ConstructionGuideSettings;
+  onChange: (value: ConstructionGuideSettings) => void;
+}) {
+  const fraktur = scripts.includes('Fraktur');
+  const textura = scripts.includes('TexturaQuadrata');
+  const insular = scripts.includes('InsularMajuscule');
+  const legacyInsular = insular && !!(value?.upper || value?.lower);
+  if (!fraktur && !textura && !legacyInsular) return null;
+
+  const current = { ...DEFAULT_CONSTRUCTION_GUIDES, ...value };
+  const script = fraktur ? 'Fraktur' : textura ? 'TexturaQuadrata' : 'InsularMajuscule';
+  const settings = resolveConstructionGuideSettings(script, current);
+  const shared = fraktur && (textura || insular);
+  const rows = [
+    { key: 'upper', appearanceKey: 'upperAppearance', label: shared ? 'Upper mark' : fraktur ? 'Downstroke start guide' : 'Upper quadrant start guide' },
+    { key: 'lower', appearanceKey: 'lowerAppearance', label: shared ? 'Lower mark' : fraktur ? 'Spur guide' : 'Lower quadrant start guide' },
   ] as const;
-  return <div className={compact ? 'space-y-2' : 'space-y-3'}>
-    {rows.map(([key, label, tip]) => {const appearanceKey=key==='upper'?'upperAppearance':'lowerAppearance';return <div key={key} className="space-y-1.5"><label className="flex items-center justify-between gap-3 text-sm text-slate-700"><span className="flex items-center gap-1.5">{label}<span title={tip} aria-label={tip} className="cursor-help text-xs text-slate-400">ⓘ</span></span><Toggle type="checkbox" checked={settings[key]} onChange={event => onChange({ ...settings, [key]: event.target.checked })} className="accent-indigo-600" /></label><label className="block space-y-1 pl-4 text-xs font-medium text-slate-600">Appearance<Select disabled={!settings[key]} className="w-full rounded border border-slate-300 bg-white px-2 py-2 text-sm text-slate-700 disabled:bg-slate-100 disabled:text-slate-400" value={settings[appearanceKey]} onChange={event => onChange({ ...settings, [appearanceKey]: event.target.value as ConstructionGuideAppearance })}><option value="nib-edge">Nib-edge mark</option><option value="dots">Dots</option><option value="x">X</option><option value="dashed">Dashed line</option></Select></label></div>})}
-    {((settings.upper && settings.upperAppearance === 'dots') || (settings.lower && settings.lowerAppearance === 'dots')) && <label className="block space-y-1 text-xs font-medium text-slate-600">Dot every <span className="flex items-center gap-2"><NumericInput type="number" min={1} max={12} step={1} className="w-20 rounded border border-slate-300 px-2 py-1.5 text-sm" value={settings.dotEvery} onChange={event => onChange({ ...settings, dotEvery: Math.max(1, Math.min(12, Math.round(Number(event.target.value) || 3))) })} /> uprights</span><span className="block font-normal text-slate-500">Starting from the first upright.</span></label>}
-    <label className="block space-y-1 text-xs font-medium text-slate-600">Construction guide colour<input type="color" className="h-9 w-full rounded border border-slate-300" value={settings.color} onChange={event => onChange({ ...settings, color: event.target.value })} /></label>
-  </div>;
+  const usesDots = rows.some(({ key, appearanceKey }) => settings[key] && settings[appearanceKey] === 'dots');
+
+  const title = fraktur || textura ? 'Construction guides' : 'Existing construction guides';
+  return <DisclosureSection key={title} title={title}>
+    <div className="space-y-3">
+      {scripts.filter(Boolean).length > 1 && <p className="text-xs text-slate-600">
+        These settings apply across enabled bands that use construction marks.
+        {shared && ' The upper and lower marks are the downstroke start and spur in Fraktur, and the quadrant starts in the other script.'}
+      </p>}
+      {rows.map(({ key, appearanceKey, label }) => <div key={key} className="space-y-1.5">
+        <Switch label={label} checked={settings[key]} onChange={checked => onChange({ ...current, [key]: checked })} />
+        {settings[key] && <label className="block space-y-1 text-xs font-medium text-slate-600">
+          {label} appearance
+          <Select className="w-full" value={shared && !current[appearanceKey] && !current.appearance ? 'script-default' : settings[appearanceKey]}
+            onChange={event => {
+              const appearance = event.target.value;
+              onChange({ ...current, [appearanceKey]: appearance === 'script-default' ? undefined : appearance as ConstructionGuideAppearance });
+            }}>
+            {shared && !current.appearance && <option value="script-default">Script default</option>}
+            <option value="nib-edge">Nib-edge mark</option>
+            <option value="dots">Dots</option>
+            <option value="x">X</option>
+            <option value="dashed">Dashed line</option>
+          </Select>
+        </label>}
+      </div>)}
+      {usesDots && <div className="flex items-center gap-2 text-xs text-slate-600">
+        <label>Dot every <NumericInput min={1} max={12} step={1} className="w-16" value={settings.dotEvery}
+          onChange={event => onChange({ ...current, dotEvery: Math.max(1, Math.min(12, Math.round(Number(event.target.value) || 3))) })} /> uprights</label>
+        <InfoTip title="Construction dot spacing">Starts at the first upright.</InfoTip>
+      </div>}
+      {(settings.upper || settings.lower) && <label className="block space-y-1 text-xs font-medium text-slate-600">
+        Construction guide colour
+        <input type="color" className="h-9 w-full rounded border border-slate-300" value={settings.color}
+          onChange={event => onChange({ ...current, color: event.target.value })} />
+      </label>}
+    </div>
+  </DisclosureSection>;
 }
