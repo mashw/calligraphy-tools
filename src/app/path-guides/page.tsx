@@ -1,5 +1,7 @@
 'use client';
 
+import { SheetLabels } from '@/components/preview/SheetLabels';
+import { guideLabel, routeTag } from '@/lib/guides/sheet-labels';
 import { compositionPresets } from '@/lib/paths/composition-presets';
 import { circlePathD, SHAPE_OPTIONS, shapePathD, type ShapeKind } from '@/lib/paths/presets';
 import { InspectorIntro } from '@/components/editor/Controls';
@@ -95,6 +97,7 @@ type ExportedStateV1 = {
   zoom: number;
   pan: { x: number; y: number };
   simplify: boolean;
+  showGuideTags?: boolean;
   highContrastMode?: boolean;
   showCrossings: boolean;
   activeCrossingId: string | null;
@@ -915,6 +918,7 @@ export default function PathGuidesPage() {
   const [error, setError] = useState<string | null>(null);
   const [dragListId, setDragListId] = useState<string | null>(null);
   const [groups, setGroups] = useState<StrapGroup[]>([]);
+  const [showGuideTags, setShowGuideTags] = useState(false);
   const [simplify, setSimplify] = useState(true);
   const [highContrastMode, setHighContrastMode] = useState(false);
   const [showCrossings, setShowCrossings] = useState(true);
@@ -1352,6 +1356,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setZoom(state.zoom);
     setPan(state.pan);
     setSimplify(state.simplify);
+    setShowGuideTags(state.showGuideTags ?? false);
     setHighContrastMode(state.highContrastMode ?? false);
     setShowCrossings(state.showCrossings);
     setActiveCrossingId(state.activeCrossingId);
@@ -1424,7 +1429,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
   }, [selectedPresetId, serializedCurrentState]);
 
   const exportPresetJson = () => {
-    const state = buildExportedState();
+    const state = { ...buildExportedState(), ...(showGuideTags ? { showGuideTags } : {}) };
     const payload = {
       format: 'calligraphy-tools/path-guides-preset',
       version: 1,
@@ -2141,7 +2146,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
               <line data-no-export="true" x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
 
-              {renderData.map(({ strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter }) => {
+              {renderData.map(({ strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter }, index) => {
                 const isSimplifiedForThisStrap = simplify || interactionActive;
                 // Use paint tick so ref-driven translation repaints without heavy recompute.
                 // eslint-disable-next-line @typescript-eslint/no-unused-expressions
@@ -2170,9 +2175,8 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 const gTransform = `${dx || dy ? `translate(${dx} ${dy})` : ''}${scrubTransform}`;
 
                 return (
+                  <g key={strap.id} transform={gTransform.trim() ? gTransform : undefined}>
                   <g
-                    key={strap.id}
-                    transform={gTransform.trim() ? gTransform : undefined}
                     mask={
                       !interactionActive && !isSimplifiedForThisStrap && underCrossings.get(strap.id)?.length
                         ? `url(#mask-${strap.id})`
@@ -2284,6 +2288,14 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                         <text x={pt.x + 1} y={pt.y - 1} fontSize="2.6" fill="#b91c1c">{i}</text>
                       </g>
                     ))}
+                  </g>
+                  {showGuideTags && (() => {
+                    const tag = routeTag(
+                      `Strap ${index + 1} · ${guideLabel(strap.script, metrics.xMM, metrics.nibMM)}`,
+                      transformed, metrics.bandWidthMM + 4, [.5, .32, .68][index % 3],
+                    );
+                    return tag && <SheetLabels tags={[{ ...tag, colour: strap.color }]} />;
+                  })()}
                   </g>
                 );
               })}
@@ -2667,6 +2679,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
           </div>}
         </DisclosureSection>
         <DisclosureSection title="Page setup">
+          <Switch label="Show guide tags" checked={showGuideTags} onChange={setShowGuideTags} />
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <InsetLabeledField label="Paper size" className="sm:col-span-2">
               <Select

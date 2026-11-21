@@ -1,3 +1,4 @@
+import { guideLabel, routeTag } from '@/lib/guides/sheet-labels';
 import { slantPath, clipSlantToBand } from "../guides/slant-paths";
 import { offset } from "@/lib/curve-helpers";
 import { buildGuideSet } from "@/lib/guides/guide-template";
@@ -273,9 +274,11 @@ export function writingStrokes(design: Design, route: import('../guides/slant-pa
 
 export function buildWovenModel(design: Design, { furniture = true }: { furniture?: boolean } = {}) {
   const page = pageSize(design);
-  const { route, crossings, choices, x, asc, desc, start, intervals, warnings, usableLength } = buildWovenRouteModel(design);
+  const { route, crossings, choices, x, asc, desc, start, intervals, warnings, usableLength, halfBand } = buildWovenRouteModel(design);
   const strokes = writingStrokes(design, route, intervals, x, asc, desc);
-  const clean: Scene = { strokes, labels: [], page };
+  const tag = design.showGuideTags ? routeTag(guideLabel(design.script, x, design.nib), route.points, halfBand + 4, .32) : null;
+  const tags = tag ? [tag] : undefined;
+  const clean: Scene = { strokes, labels: [], tags, page };
   const startS = wrap(start + design.gap / 2, route.length);
   const startPoint = atDistance(route, startS);
   const tip = atDistance(route, wrap(startS + 6, route.length));
@@ -283,6 +286,7 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
   const angle = Math.atan2(tip.y - near.y, tip.x - near.x);
   const annotated: Scene = {
     page,
+    tags,
     strokes: [
       ...strokes,
       { points: [startPoint, tip], color: "#9f483b", width: 0.35 },

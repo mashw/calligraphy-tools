@@ -1,4 +1,7 @@
-import { createElement, type ReactNode } from 'react';
+import { createElement, useMemo, type ReactNode } from 'react';
+import { SheetLabels } from '@/components/preview/SheetLabels';
+import { interlaceGuideTags, renderSheet } from '@/lib/interlace/model';
+import { interlaceArtworkBounds } from '@/lib/interlace/layout-source';
 import type { ArtworkElement } from '@/lib/layout/types';
 import { pathHasOnlyClosedSubpaths, type ArtworkNode } from '@/lib/layout/artwork';
 import { PAGE_BACKGROUND } from '@/lib/layout/shape';
@@ -20,11 +23,22 @@ function renderNode(node:ArtworkNode,key:string,occlusion:boolean,closedShapes:b
 }
 export default function ArtworkRenderer({element,frame}:{element:ArtworkElement;frame:ArtworkElement['frame']}){
   const {viewBox,nodes}=element.document,base:Paint={fill:'black',stroke:'none',strokeWidth:'1'};
+  const document = element.interlaceSource?.document;
+  const showTags = element.showGuideTags ?? document?.showGuideTags ?? false;
+  const interlace = useMemo(() => {
+    if (!document || !showTags) return null;
+    const scene = renderSheet(document, undefined, { ruler: false, guideTags: false });
+    if (!scene.strokes.length) return null;
+    return { ...interlaceArtworkBounds(scene.strokes), tags: interlaceGuideTags(document) };
+  }, [document, showTags]);
   const content=(occlusion:boolean)=>nodes.map((node,index)=>renderNode(node,String(index),occlusion,element.settings.occludeClosedShapes,base));
   return <svg x={frame.x} y={frame.y} width={frame.width} height={frame.height} viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`} preserveAspectRatio="none" overflow="visible">
     {usesArtworkBoundsOcclusion(element.settings)
       ? <rect x={viewBox.x} y={viewBox.y} width={viewBox.width} height={viewBox.height} fill={PAGE_BACKGROUND}/>
       : element.settings.occludeLowerLayers&&element.settings.opacity>0&&<g>{content(true)}</g>}
     <g opacity={element.settings.opacity/100}>{content(false)}</g>
+    {interlace && <g transform={`translate(${-interlace.left} ${-interlace.top})`} opacity={element.settings.opacity/100}>
+      <SheetLabels tags={interlace.tags} />
+    </g>}
   </svg>;
 }

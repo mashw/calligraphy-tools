@@ -13,7 +13,7 @@ export type Frame = { x: number; y: number; width: number; height: number };
 export type Margins = { top: number; right: number; bottom: number; left: number };
 export type LayoutPaperId = PaperId | 'Custom';
 type ElementBase = { visible?: boolean; id: string; name: string; frame: Frame; locked: boolean };
-type MovableElementBase = ElementBase & { paddingMM: number; rotationDeg?: number };
+type MovableElementBase = ElementBase & { paddingMM: number; rotationDeg?: number; showGuideTags?: boolean };
 export type PageElement = ElementBase & { id: 'page'; type: 'page'; locked: true; settings: { paper: LayoutPaperId; orientation: Orientation; customWidthMM: number; customHeightMM: number; margins: Margins; centerLines: { vertical: boolean; horizontal: boolean } } };
 export type GuidelinesMaskSettings = { arrangement?:import('./guideline-arrangement').Arrangement;enabled:boolean;kind:ShapeKind|'customSvg';customSvg?:CustomMask;internalPaddingMM?:number;textLayoutRespectsMask:boolean;showOutline:boolean;outlineColor:string;outlineWidthMM:number;cornerRadiusMM:number };
 export const createDefaultGuidelinesMaskSettings=():GuidelinesMaskSettings=>({enabled:false,kind:'circle',textLayoutRespectsMask:true,showOutline:false,outlineColor:'#334155',outlineWidthMM:.5,cornerRadiusMM:3});

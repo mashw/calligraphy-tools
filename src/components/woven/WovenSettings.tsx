@@ -168,6 +168,9 @@ export default function WovenSettings({design, onChange, model, selected, onSele
               )}
             </div>
           </DisclosureSection>
+          {model && <DisclosureSection title="Guide tags">
+            <Switch label="Show guide tags" checked={design.showGuideTags ?? false} onChange={checked => update("showGuideTags", checked)} />
+          </DisclosureSection>}
           <ConstructionGuideControls scripts={[design.script]} value={design.construction} onChange={value => update("construction", value)} />
 {model && <DisclosureSection title="Route & crossings" defaultOpen>
             <div className="space-y-3">

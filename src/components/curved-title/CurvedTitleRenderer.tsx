@@ -1,3 +1,5 @@
+import { SheetLabels } from '@/components/preview/SheetLabels';
+import { curveTags, guideLabel } from '@/lib/guides/sheet-labels';
 import GuideOverlay from '@/components/preview/GuideOverlay';
 import { pathD, pointAt, type Pt } from '@/lib/curve-helpers';
 import { buildCurvedTitleModel, type CurvedTitlePlace, type SpanPoly } from '@/lib/curved-title/model';
@@ -11,7 +13,7 @@ function LetterBoxes({placements,base,arcLen,height,script,prefix}:{placements:C
   return <>{placements.map((pl,i)=>{const mid=Math.min(arcLen,Math.max(0,pl.sMid)),left=Math.max(0,mid-pl.w/2),right=Math.min(arcLen,mid+pl.w/2),steps=Math.max(16,Math.ceil((right-left)/2)),bottom:Pt[]=[],top:Pt[]=[];for(let k=0;k<=steps;k++){const at=left+(right-left)*k/steps,c=pointAt(base,at);bottom.push(c.p);const shift=script==='Copperplate'?height/Math.tan(55*Math.PI/180):0,ct=pointAt(base,Math.max(0,Math.min(arcLen,at+shift)));top.push({x:ct.p.x-ct.n.x*height,y:ct.p.y-ct.n.y*height});}const d=`M ${top.map(p=>`${p.x},${p.y}`).join(' L ')} L ${bottom.reverse().map(p=>`${p.x},${p.y}`).join(' L ')} Z`,cap=pl.ch>='A'&&pl.ch<='Z';return <path key={`${prefix}-${i}`} d={d} fill={cap?'rgba(99,102,241,.10)':'rgba(16,185,129,.10)'} stroke={cap?'#6366f1':'#10b981'} strokeWidth=".35" vectorEffect="non-scaling-stroke"/>})}</>;
 }
 
-export default function CurvedTitleRenderer({box,settings,idPrefix,pageBackground,paddingMM=0,selected=false}:{box:{w:number;h:number};settings:CurvedTitleSettings;idPrefix:string;pageBackground?:string;paddingMM?:number;selected?:boolean}) {
+export default function CurvedTitleRenderer({box,settings,idPrefix,pageBackground,paddingMM=0,selected=false,showGuideTags=false}:{box:{w:number;h:number};settings:CurvedTitleSettings;idPrefix:string;pageBackground?:string;paddingMM?:number;selected?:boolean;showGuideTags?:boolean}) {
   const horizontalGrid=resolveHorizontalGridAppearance(settings.horizontalGridAppearance),model=buildCurvedTitleModel(box,settings),topClip=`${idPrefix}-top`,bottomClip=`${idPrefix}-bottom`,paddingRingMask=`${idPrefix}-padding-ring`,maskInset=Math.max(1,paddingMM+1),maskBounds={x:model.visualBounds.x-maskInset,y:model.visualBounds.y-maskInset,width:model.visualBounds.width+maskInset*2,height:model.visualBounds.height+maskInset*2},style={thin:.38,bold:.65,colors:{thin:'#111827',bold:'#111827',tick:'#e2e8f0',frame:'transparent'},grid:{thin:.35,colors:{tick:'#e2e8f0'},horizontalDash:horizontalGrid.style==='dashed'?horizontalGrid:undefined}},styleFor=(script:ScriptId)=>script==='InsularMajuscule'?{...style,grid:{...style.grid,showHorizontal:settings.showInsularGrid??false,showVertical:settings.showInsularGrid??false}}:script==='Copperplate'?{...style,grid:{...style.grid,horizontalDash:undefined}}:style;
   return <g><defs><clipPath id={topClip}><path d={model.top.clip}/></clipPath><clipPath id={bottomClip}><path d={model.bottom.clip}/></clipPath>{paddingMM>0&&<mask id={paddingRingMask} maskUnits="userSpaceOnUse" x={maskBounds.x} y={maskBounds.y} width={maskBounds.width} height={maskBounds.height}><rect {...maskBounds} fill="black"/><path d={model.footprintD} fill="white" stroke="white" strokeWidth={paddingMM*2} strokeLinejoin="round" strokeLinecap="round"/><path d={model.footprintD} fill="black"/></mask>}</defs>
     {pageBackground&&<><path d={model.footprintD} pointerEvents="fill" fill={pageBackground}/>{paddingMM>0&&<path d={model.footprintD} fill="none" stroke={pageBackground} strokeWidth={paddingMM*2} strokeLinejoin="round" strokeLinecap="round"/>}</>}
@@ -24,5 +26,11 @@ export default function CurvedTitleRenderer({box,settings,idPrefix,pageBackgroun
     {settings.showSpanFill&&model.spanPoly&&<path d={polyD(model.spanPoly)} fill="rgba(148,163,184,.18)" stroke="rgba(100,116,139,.55)" strokeWidth=".35" vectorEffect="non-scaling-stroke"/>}
     {settings.showSpanFill&&model.top.spanPoly&&<path d={polyD(model.top.spanPoly)} fill="rgba(148,163,184,.18)" stroke="rgba(100,116,139,.55)" strokeWidth=".35" vectorEffect="non-scaling-stroke"/>}{settings.showSpanFill&&model.bottom.spanPoly&&<path d={polyD(model.bottom.spanPoly)} fill="rgba(148,163,184,.18)" stroke="rgba(100,116,139,.55)" strokeWidth=".35" vectorEffect="non-scaling-stroke"/>}
     {settings.showBoxes&&<LetterBoxes placements={model.layout.placements} base={model.guideSet.baseLine} arcLen={model.arcLen} height={model.xMM} script={settings.script} prefix={`${idPrefix}-main`}/>} {settings.showBoxes&&model.top.enabled&&<LetterBoxes placements={model.top.layout.placements} base={model.top.guideSet.baseLine} arcLen={model.top.arcLen} height={model.top.xMM} script={settings.topBandScript} prefix={`${idPrefix}-top-box`}/>} {settings.showBoxes&&model.bottom.enabled&&<LetterBoxes placements={model.bottom.layout.placements} base={model.bottom.guideSet.baseLine} arcLen={model.bottom.arcLen} height={model.bottom.xMM} script={settings.bottomBandScript} prefix={`${idPrefix}-bottom-box`}/>}
-  </g></g>;
+  </g>
+  {showGuideTags && <SheetLabels tags={curveTags([
+    { name: 'Main', text: guideLabel(model.script, model.xMM, Number.parseFloat(settings.nibText) || 4), guides: model.guideSet },
+    ...(model.top.enabled ? [{ name: 'Top', text: guideLabel(settings.topBandScript, model.top.xMM, Number.parseFloat(settings.topBandSizeText) || 2), guides: model.top.guideSet }] : []),
+    ...(model.bottom.enabled ? [{ name: 'Bottom', text: guideLabel(settings.bottomBandScript, model.bottom.xMM, Number.parseFloat(settings.bottomBandSizeText) || 2), guides: model.bottom.guideSet }] : []),
+  ])} />}
+  </g>;
 }

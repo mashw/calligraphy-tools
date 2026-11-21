@@ -1,5 +1,7 @@
 'use client';
 
+import { SheetHeader } from '@/components/preview/SheetLabels';
+import { guideLabel } from '@/lib/guides/sheet-labels';
 import { InspectorIntro } from '@/components/editor/Controls';
 
 import { Select, NumericInput, Toggle, Switch, Button } from '@/components/editor/Controls';
@@ -520,6 +522,7 @@ export default function Home() {
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
   const [constructionGuides, setConstructionGuides] = useState<ConstructionGuideSettings>({ upper: false, lower: false, color: '#dc2626' });
 
+  const [showSheetHeader, setShowSheetHeader] = useState(false);
   const [showLetterBoxes, setShowLetterBoxes] = useState(true);
   const [vw, setVw] = useState<number | null>(null);
 
@@ -803,8 +806,9 @@ export default function Home() {
         ? 'text-orange-500'
         : 'text-slate-500';
 
+  const headerHeight = showSheetHeader ? 30 : 0;
   const svgRef = useCameraRef<SVGSVGElement>(null);
- const camera = useEditorCamera(svgRef, {x:0,y:0,w:stageFrame.widthPx,h:stageFrame.heightPx}, {x:0,y:0,w:stageFrame.widthPx,h:stageFrame.heightPx});
+ const camera = useEditorCamera(svgRef, {x:0,y:0,w:stageFrame.widthPx,h:stageFrame.heightPx + headerHeight}, {x:0,y:0,w:stageFrame.widthPx,h:stageFrame.heightPx + headerHeight});
  return (
     <EditorWorkspace preview={<>
 <section className="">
@@ -822,8 +826,12 @@ export default function Home() {
               preserveAspectRatio="xMidYMid meet"
               shapeRendering="crispEdges"
             >
-              <rect x={0} y={0} width={stageFrame.widthPx} height={stageFrame.heightPx} fill="white" />
+              <rect x={0} y={0} width={stageFrame.widthPx} height={stageFrame.heightPx + headerHeight} fill="white" />
 
+              {showSheetHeader && <SheetHeader
+                text={guideLabel(script, guideTemplate === 'blackletter' ? guideHeights.xMM : xHeight, nibMM, script === 'Copperplate' ? undefined : penAngleDeg)}
+                x={10} y={20} width={stageFrame.widthPx - 20} size={13} />}
+              <g transform={`translate(0 ${headerHeight})`}>
               {alignment === 'center' ? (
                 <line
                   x1={stageFrame.centerX}
@@ -868,6 +876,7 @@ export default function Home() {
                   showInsularGrid={showInsularGrid}
                 />
               ))}
+              </g>
             </svg>
           </div>
         </div>
@@ -1268,6 +1277,7 @@ export default function Home() {
       )}
 
         <DisclosureSection title="Preview options">
+          <Switch label="Show sheet header" checked={showSheetHeader} onChange={setShowSheetHeader} />
           <Switch label="Show letter bounding boxes" checked={showLetterBoxes} onChange={setShowLetterBoxes} />
           <Switch label="Normalise preview height (6 mm)" checked={normalizePreviewHeight} onChange={setNormalizePreviewHeight} />
         </DisclosureSection>

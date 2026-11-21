@@ -1,5 +1,7 @@
 'use client';
 
+import { SheetLabels } from '@/components/preview/SheetLabels';
+import { curveTags, guideLabel } from '@/lib/guides/sheet-labels';
 import { InspectorIntro } from '@/components/editor/Controls';
 
 import { Button, Select, Toggle, Switch, NumericInput, Slider } from '@/components/editor/Controls';
@@ -375,6 +377,7 @@ export default function CurvedTitlePage() {
   const [userScaleFactor, setUserScaleFactor] = useState(1);
   const [userSpaceFactor, setUserSpaceFactor] = useState(1);
 
+  const [showGuideTags, setShowGuideTags] = useState(false);
   const [showBoxes, setShowBoxes] = useState(false);
   const [showSpanFill, setShowSpanFill] = useState(true);
 
@@ -1527,6 +1530,11 @@ export default function CurvedTitlePage() {
                   </g>
                 )}
               </g>
+              {showGuideTags && <SheetLabels tags={curveTags([
+                { name: 'Main', text: guideLabel(script, xMM, nibMM), guides: guideSet },
+                ...(topBandEnabled ? [{ name: 'Top', text: guideLabel(topBandScript, topXMM, topBandSizeMM), guides: topGuideSet }] : []),
+                ...(bottomBandEnabled ? [{ name: 'Bottom', text: guideLabel(bottomBandScript, bottomXMM, bottomBandSizeMM), guides: bottomGuideSet }] : []),
+              ])} />}
             </svg>
 
             <div className="pointer-events-none absolute right-3 bottom-2 text-[13px] text-slate-700 text-right space-y-0.5">
@@ -2138,6 +2146,7 @@ export default function CurvedTitlePage() {
 
         </DisclosureSection>
         <DisclosureSection title="Preview options">
+          <Switch label="Show guide tags" checked={showGuideTags} onChange={setShowGuideTags} />
           <Switch label="Letter bounding boxes" checked={showBoxes} onChange={setShowBoxes} />
           <Switch label="Title span fill" checked={showSpanFill} onChange={setShowSpanFill} />
         </DisclosureSection>

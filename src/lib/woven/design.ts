@@ -38,6 +38,7 @@ export type Design = {
   clearance: number;
   fullGuides: boolean;
   annotated: boolean;
+  showGuideTags?: boolean;
   overrides: Record<string, "a" | "b">;
 };
 export const DEFAULT_DESIGN: Design = {
@@ -130,6 +131,7 @@ export function parseDesign(input: unknown): Design {
     "reverse",
     "fullGuides",
     "annotated",
+    "showGuideTags",
     "gridHorizontal",
     "gridVertical",
     "slants",
