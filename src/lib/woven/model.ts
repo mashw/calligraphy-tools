@@ -99,11 +99,12 @@ export function buildWovenRouteModel(design: Design) {
 export function writingStrokes(design: Design, route: import('../guides/slant-paths').SlantRoute,
   intervals: import('./geometry').Interval[], x: number, asc: number, desc: number, invertGuides = false, baselineOffset = x / 2): Stroke[] {
   return writingBands(design,x,asc,desc,invertGuides,baselineOffset).flatMap(b =>
-    singleBandStrokes(b.design,route,intervals,b.x,b.asc,b.desc,invertGuides,b.anchor));
+    singleBandStrokes(b, route, intervals, invertGuides));
 }
 
-function singleBandStrokes(design: Design, route: import('../guides/slant-paths').SlantRoute,
-  intervals: import('./geometry').Interval[], x: number, asc: number, desc: number, invertGuides: boolean, baselineOffset: number): Stroke[] {
+function singleBandStrokes(band: ReturnType<typeof writingBands>[number], route: import('../guides/slant-paths').SlantRoute,
+  intervals: import('./geometry').Interval[], invertGuides: boolean): Stroke[] {
+  const { design, x, asc, desc, anchor: baselineOffset, hiddenExtension } = band;
   const baseline = baselineOffset === 0 ? route.points : offset(route.points, baselineOffset);
   const guides = buildGuideSet(
     design.script === "Copperplate" ? "copperplate" : "blackletter",
@@ -129,13 +130,13 @@ function singleBandStrokes(design: Design, route: import('../guides/slant-paths'
   const rails: Stroke[] = [
     { points: guides.baseLine, color: "#52677c", width: 0.16, guide:"baseline" },
     { points: guides.waistLine, color: "#52677c", width: 0.16, guide:"waist" },
-    ...(design.fullGuides
-      ? [
-          { points: guides.ascLine, color: "#9aa7b3", width: 0.12 },
-          { points: guides.descLine, color: "#9aa7b3", width: 0.12 },
-        ]
-      : []),
   ];
+  if (design.fullGuides) {
+    if (hiddenExtension !== "ascender")
+      rails.push({ points: guides.ascLine, color: "#9aa7b3", width: 0.12 });
+    if (hiddenExtension !== "descender")
+      rails.push({ points: guides.descLine, color: "#9aa7b3", width: 0.12 });
+  }
   const gray = (contrast: number) => {
     const v = Math.round(220 * (1 - contrast));
     return "#" + v.toString(16).padStart(2, "0").repeat(3);
@@ -303,7 +304,7 @@ function borderedStrokes(design: Design, route: ReturnType<typeof makeRoute>, cr
     const stops = [...new Set([a,b,...masks.flatMap(m=>m.interval).filter(s=>s>a && s<b)])].sort((p,q)=>p-q);
     for (let i=1;i<stops.length;i++) {
       const from=stops[i-1],to=stops[i],mid=(from+to)/2;
-      let parts = bands.flatMap(band=>singleBandStrokes(band.design,route,[[from,to]],band.x,band.asc,band.desc,false,band.anchor));
+      let parts = bands.flatMap(band=>singleBandStrokes(band, route, [[from, to]], false));
       for (const mask of masks) if (mid>=mask.interval[0] && mid<=mask.interval[1])
         parts=parts.flatMap(stroke=>clipSlantToBand(stroke.points,mask.polygon,false).map(points=>({...stroke,points})));
       strokes.push(...parts);

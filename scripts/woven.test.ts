@@ -159,3 +159,23 @@ test('bordered figure-eight emits finite writing rails and editable asymmetric c
   assert.ok(first.strokes.filter(s=>s.guide==='baseline').length >= 2);
   assert.notDeepEqual(first.strokes,second.strokes);
 });
+
+test('shared writing borders omit only the extension rail facing the main band', async () => {
+  const { writingStrokes } = await import('../src/lib/woven/model');
+  const route = makeRoute('rosette', 165, 165, .32, 0, false);
+  const border = { enabled: true, xHeight: 2.5, script: 'TexturaQuadrata' as const, share: false, gap: 0 };
+  const design = { ...DEFAULT_DESIGN, fullGuides: true, gridVertical: false, gridHorizontal: false,
+    borders: { outer: border, inner: border } };
+  for (const invert of [false, true]) {
+    const separate = writingStrokes(design, route, [[20, 40]], 10, 4, 2, invert)
+      .filter(stroke => stroke.role === 'primary');
+    assert.equal(separate.length, 12);
+    for (const [side, rail] of [['outer', 7], ['inner', 10]] as const) {
+      // Match the unshared placement by adding back the 1 mm shared allowance.
+      const borders = { ...design.borders, [side]: { ...border, share: true, gap: 1 } };
+      const shared = writingStrokes({ ...design, borders }, route, [[20, 40]], 10, 4, 2, invert)
+        .filter(stroke => stroke.role === 'primary');
+      assert.deepEqual(shared, separate.filter((_, index) => index !== rail));
+    }
+  }
+});
