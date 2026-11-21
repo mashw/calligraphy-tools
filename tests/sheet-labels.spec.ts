@@ -55,7 +55,6 @@ test('Layout guide tags move with their layer', async ({ page }) => {
 test('Interlace tags export and stay attached to editable Layout artwork', async ({ page }) => {
   await captureExportFiles(page);
   await page.goto('/interlace');
-  await page.getByRole('button', { name: 'Add strand', exact: true }).last().click();
   await page.getByRole('switch', { name: 'Show guide tags' }).press('Space');
   const tags = page.locator('[data-guide-label="tag"]');
   await expect(tags.first()).toBeVisible();
