@@ -160,7 +160,7 @@ test('bordered figure-eight emits finite writing rails and editable asymmetric c
   assert.notDeepEqual(first.strokes,second.strokes);
 });
 
-test('shared writing borders omit only the extension rail facing the main band', async () => {
+test('shared writing borders stop guide geometry at the main extension', async () => {
   const { writingStrokes } = await import('../src/lib/woven/model');
   const route = makeRoute('rosette', 165, 165, .32, 0, false);
   const border = { enabled: true, xHeight: 2.5, script: 'TexturaQuadrata' as const, share: false, gap: 0 };
@@ -171,11 +171,14 @@ test('shared writing borders omit only the extension rail facing the main band',
       .filter(stroke => stroke.role === 'primary');
     assert.equal(separate.length, 12);
     for (const [side, rail] of [['outer', 7], ['inner', 10]] as const) {
-      // Match the unshared placement by adding back the 1 mm shared allowance.
+      // Compare unaffected rails at identical band positions.
       const borders = { ...design.borders, [side]: { ...border, share: true, gap: 1 } };
       const shared = writingStrokes({ ...design, borders }, route, [[20, 40]], 10, 4, 2, invert)
         .filter(stroke => stroke.role === 'primary');
       assert.deepEqual(shared, separate.filter((_, index) => index !== rail));
+      const overlapping = { ...design, borders: { ...design.borders, [side]: { ...border, share: true } } };
+      const band = writingBands(overlapping, 10, 4, 2, invert)[side === 'outer' ? 1 : 2];
+      assert.equal(side === 'outer' ? band.desc : band.asc, 0);
     }
   }
 });

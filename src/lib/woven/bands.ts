@@ -15,11 +15,15 @@ export function writingBands(design: Design, x: number, asc: number, desc: numbe
     const extension = unit * (script === 'Copperplate' ? 6 : 2);
     const mainExtension = side === 'outer' ? asc : desc;
     const space = border.gap + (border.share ? Math.max(mainExtension, extension) : mainExtension + extension);
+    // Only the part outside the main extension is available for border guides.
+    const visibleExtension = border.share ? Math.min(extension, space - mainExtension) : extension;
+    const overlapsMain = border.share && space - extension <= mainExtension;
     const base = mainBase + direction * (side === 'outer' ? -x - space : space + border.xHeight);
     bands.push({ design: { ...design, script, nib: script === 'Copperplate' ? 1 : unit,
       penAngle: script === 'InsularMajuscule' ? 15 : script === 'Fraktur' ? 40 : 45 },
-      x: border.xHeight, asc: extension, desc: extension, anchor: base + (invert ? border.xHeight : 0),
-      hiddenExtension: border.share ? (side === 'outer' ? 'descender' : 'ascender') : undefined });
+      x: border.xHeight, asc: side === 'inner' ? visibleExtension : extension,
+      desc: side === 'outer' ? visibleExtension : extension, anchor: base + (invert ? border.xHeight : 0),
+      hiddenExtension: overlapsMain ? (side === 'outer' ? 'descender' : 'ascender') : undefined });
   }
   return bands;
 }
