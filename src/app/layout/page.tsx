@@ -1,5 +1,6 @@
 'use client';
 
+import { GuidelineEditing } from '@/components/layout/GuidelineEditing';
 import EditorWorkspace from '@/components/editor/EditorWorkspace';
 
 import { useState } from 'react';
@@ -8,6 +9,7 @@ import LayoutStage from '@/components/layout/LayoutStage';
 import LayersPanel, { type DesignMessage } from '@/components/layout/LayersPanel';
 import { newElement, pageElement, pageSize, type ElementType, type Frame, type LayoutElement } from '@/lib/layout/types';
 import { buildGuidelinesLineLayoutPlan, buildGuidelinesTextFitPlan, buildGuidelinesVisibilityCacheKey, getCachedGuidelinesCollisionSpans, getCachedGuidelinesPlacementSpans, resolveTextFitColors, TEXT_FIT_COLORS, preferredTextFitColorIndex, type GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
+import { usesCustomMask } from '@/lib/layout/custom-mask';
 import { importArtwork } from '@/lib/layout/import-artwork';
 import { pageContentRect } from '@/lib/layout/geometry';
 import { parseLayoutDesign, serializeLayoutDesign } from '@/lib/layout/design-file';
@@ -21,8 +23,8 @@ export default function LayoutPage() {
   const selected = elements.find(element => element.id === selectedId) ?? elements[elements.length - 1];
   const page = elements.find(element => element.type === 'page')!;
   const allGuidelines=elements.filter((item):item is Extract<LayoutElement,{type:'guidelines'}>=>item.type==='guidelines'),activeGuidelines=allGuidelines.filter(item=>item.textMode==='estimate'?!!item.fitText.trim():item.plannedLines.some(line=>!!line.text.trim())),colors=resolveTextFitColors(allGuidelines.map(item=>item.id).sort());
-  const textFitPlans=activeGuidelines.reduce<Record<string,GuidelinesTextFitEntry>>((plans,item)=>{const index=elements.findIndex(element=>element.id===item.id),key=buildGuidelinesVisibilityCacheKey(item,page,elements.slice(0,index)),collisionSpans=getCachedGuidelinesCollisionSpans(key,item,page,elements),placementSpans=getCachedGuidelinesPlacementSpans(item,page);plans[item.id]=item.textMode==='estimate'?{mode:'estimate',plan:buildGuidelinesTextFitPlan(item,placementSpans),color:colors[item.id]}:{mode:'line-layout',plan:buildGuidelinesLineLayoutPlan(item,placementSpans,page,collisionSpans),color:colors[item.id]};return plans;},{});
-  const selectedTextFitEntry=selected.type==='guidelines'?(textFitPlans[selected.id]??(selected.textMode==='estimate'?{mode:'estimate',plan:buildGuidelinesTextFitPlan(selected,[]),color:TEXT_FIT_COLORS[preferredTextFitColorIndex(selected.id)]}:{mode:'line-layout',plan:buildGuidelinesLineLayoutPlan(selected,[],page),color:TEXT_FIT_COLORS[preferredTextFitColorIndex(selected.id)]})):null;
+  const textFitPlans=activeGuidelines.reduce<Record<string,GuidelinesTextFitEntry>>((plans,item)=>{const index=elements.findIndex(element=>element.id===item.id),key=buildGuidelinesVisibilityCacheKey(item,page,elements.slice(0,index)),collisionSpans=getCachedGuidelinesCollisionSpans(key,item,page,elements),placementSpans=getCachedGuidelinesPlacementSpans(item,page);plans[item.id]=item.textMode==='estimate'?{mode:'estimate',plan:buildGuidelinesTextFitPlan(item,placementSpans),color:colors[item.id]}:{mode:'line-layout',plan:buildGuidelinesLineLayoutPlan(item,placementSpans,page,collisionSpans,elements),color:colors[item.id]};return plans;},{});
+  const selectedTextFitEntry=selected.type==='guidelines'?(textFitPlans[selected.id]??(selected.textMode==='estimate'?{mode:'estimate',plan:buildGuidelinesTextFitPlan(selected,[]),color:TEXT_FIT_COLORS[preferredTextFitColorIndex(selected.id)]}:{mode:'line-layout',plan:buildGuidelinesLineLayoutPlan(selected,usesCustomMask(selected)?getCachedGuidelinesPlacementSpans(selected,page):[],page,[],elements),color:TEXT_FIT_COLORS[preferredTextFitColorIndex(selected.id)]})):null;
   const markEdited=()=>setDesignMessage(null);
   const update = (id: string, fn: (element: LayoutElement) => LayoutElement) => { markEdited(); setElements(current => current.map(element => element.id === id ? fn(element) : element)); };
   const add = (type: Exclude<ElementType, 'page'|'artwork'>) => {
@@ -71,11 +73,11 @@ export default function LayoutPage() {
     }
   };
 
-  return <EditorWorkspace preview={<>
-<LayoutStage editingSnapshot={editingSnapshot} elements={elements} selectedId={selectedId} textFitPlans={textFitPlans} onSelect={setSelectedId} onCommit={commit} onPlannedLinePlacementChange={(guidelinesId,lineId,customStartMM)=>update(guidelinesId,element=>element.type==='guidelines'?{...element,plannedLines:element.plannedLines.map(line=>line.id===lineId?{...line,alignment:'custom',customStartMM}:line)}:element)} />
+  return <GuidelineEditing><EditorWorkspace preview={<>
+<LayoutStage onArrangement={(id,arrangement)=>update(id,e=>e.type==='guidelines'?{...e,mask:{...e.mask,arrangement}}:e)} editingSnapshot={editingSnapshot} elements={elements} selectedId={selectedId} textFitPlans={textFitPlans} onSelect={setSelectedId} onCommit={commit} onPlannedLinePlacementChange={(guidelinesId,lineId,customStartMM)=>update(guidelinesId,element=>element.type==='guidelines'?{...element,plannedLines:element.plannedLines.map(line=>line.id===lineId?{...line,alignment:'custom',customStartMM}:line)}:element)} />
 </>} inspector={<>
 <div onFocusCapture={event=>{if(selected.type==='woven'&&(event.target as HTMLInputElement).type==='number')setEditingSnapshot(current=>current??elements);}} onBlurCapture={()=>setEditingSnapshot(null)} onPointerDownCapture={event=>{if(selected.type==='woven'&&(event.target as HTMLInputElement).type==='range')setEditingSnapshot(current=>current??elements);}} onPointerUpCapture={event=>{if((event.target as HTMLInputElement).type==='range')setEditingSnapshot(null);}} onPointerCancelCapture={()=>setEditingSnapshot(null)} onKeyDownCapture={event=>{if(selected.type==='woven'&&(event.target as HTMLInputElement).type==='range')setEditingSnapshot(current=>current??elements);}} onKeyUpCapture={event=>{if((event.target as HTMLInputElement).type==='range')setEditingSnapshot(null);}}><LayoutInspector element={selected} page={page} textFitEntry={selectedTextFitEntry} onChange={next => update(selected.id, () => next)} /></div>
 </>} layers={<>
 <LayersPanel  elements={elements} selectedId={selectedId} onSelect={setSelectedId} onAdd={add} onAddArtwork={addArtwork} artworkMessage={artworkMessage} onToggleVisibility={id=>update(id,element=>({...element,visible:element.visible===false}))} onToggleLock={id => update(id, element => element.type === 'page' ? element : ({ ...element, locked: !element.locked }))} onMove={move} onDuplicate={duplicate} onDelete={remove} onSaveDesign={saveDesign} onOpenDesign={openDesign} designMessage={designMessage} />
-</>}></EditorWorkspace>;
+</>}></EditorWorkspace></GuidelineEditing>;
 }

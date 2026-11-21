@@ -1,4 +1,6 @@
 'use client';
+import { useRef, useState } from 'react';
+import { ArrangementControls } from './GuidelineEditing';
 import LayoutWovenSettings from '@/components/woven/LayoutWovenSettings';
 import { ActionGroup } from '@/components/editor/Controls';
 
@@ -9,7 +11,7 @@ import DisclosureSection from '@/components/layout/DisclosureSection';
 import { PAPERS_MM, type Orientation } from '@/lib/curve-helpers';
 import { alignContent, normalizeDegrees, pageContentRect, resizeAroundCenter, sizeToPageContent, type Alignment } from '@/lib/layout/geometry';
 import { rotatedElementBounds } from '@/lib/layout/element-transform';
-import { defaultArtworkSize, defaultElementSize, pageSize, type LayoutElement, type LayoutPaperId, type PageElement } from '@/lib/layout/types';
+import { createDefaultGuidelinesMaskSettings, defaultArtworkSize, defaultElementSize, pageSize, type GuidelinesElement, type GuidelinesMaskSettings, type LayoutElement, type LayoutPaperId, type PageElement } from '@/lib/layout/types';
 import { constrainFrameToSquare, createDefaultShapeSettings, isConstrainedShape, SHAPE_OPTIONS, type ShapeAppearance, type ShapeKind } from '@/lib/layout/shape';
 import CurvedTitleSettingsPanel from '@/components/curved-title/CurvedTitleSettingsPanel';
 import CalligramSettingsPanel from '@/components/calligram/CalligramSettingsPanel';
@@ -17,6 +19,8 @@ import { SettingsAccordion } from '@/components/layout/SettingsAccordion';
 import { getNearestCompleteGuidelinesHeight } from '@/lib/guides/straight/model';
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 import ArtworkSettingsPanel from './ArtworkSettingsPanel';
+import { activeCustomMask, CUSTOM_MASK_PADDING_MM, customMaskSize, usesCustomMask } from '@/lib/layout/custom-mask';
+import { importCustomMask } from '@/lib/layout/import-custom-mask';
 
 const input = 'w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm';
 const smallButton = 'rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500';
@@ -32,13 +36,91 @@ function RotationField({value,onChange}:{value:number;onChange:(value:number)=>v
   return <label className="space-y-1 text-xs font-medium text-slate-600">Rotation<div className="relative"><NumericInput className={input} type="number" step="0.1" value={displayed} onChange={event=>{const parsed=Number(event.target.value);if(Number.isFinite(parsed))onChange(normalizeDegrees(parsed));}}/><span className="pointer-events-none absolute right-2 top-1.5 text-slate-400">°</span></div></label>;
 }
 
+function GuidelinesMaskPanel({element,onChange}:{element:GuidelinesElement;onChange:(element:GuidelinesElement)=>void}) {
+  const [error,setError]=useState<string|null>(null);
+  const current=useRef(element);
+  const request=useRef(0);
+  current.current=element;
+  const mask=element.mask??createDefaultGuidelinesMaskSettings();
+  const custom=usesCustomMask(element);
+  const patch=(settings:Partial<GuidelinesMaskSettings>)=>onChange({...element,mask:{...mask,...settings}});
+  async function upload(file:File) {
+    const id=++request.current;
+    setError(null);
+    try {
+      if (file.size>2_000_000) throw new Error('SVG file is larger than the 2 MB limit.');
+      const geometry=importCustomMask(await file.text(),file.name), latest=current.current;
+      if (request.current!==id || !usesCustomMask(latest)) return;
+      const size=customMaskSize(geometry,latest.frame);
+      onChange({...latest,frame:resizeAroundCenter(latest.frame,size),mask:{...latest.mask,customSvg:geometry,
+        internalPaddingMM:latest.mask.internalPaddingMM??CUSTOM_MASK_PADDING_MM}});
+    } catch (cause) {
+      if (request.current===id) setError(cause instanceof Error?cause.message:'Could not import the SVG silhouette.');
+    }
+  }
+  return <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
+    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mask</div>
+    <label className="block space-y-1 text-xs font-medium text-slate-600">Shape mask
+      <Select className={input} value={mask.enabled?mask.kind:'none'} onChange={event=>{
+        const choice=event.target.value;
+        request.current++;
+        setError(null);
+        patch({enabled:choice!=='none',kind:choice==='none'?'circle':choice as GuidelinesMaskSettings['kind']});
+      }}>
+        <option value="none">None</option>
+        {SHAPE_OPTIONS.map(option=><option key={option.kind} value={option.kind}>{option.label}</option>)}
+        <option value="customSvg">Custom SVG</option>
+      </Select>
+    </label>
+    {custom&&<>
+      <label className="block space-y-1 text-xs font-medium text-slate-600">
+        {mask.customSvg?'Replace SVG mask':'Upload SVG mask'}
+        <input className="block w-full text-xs" type="file" accept=".svg,image/svg+xml" onChange={event=>{
+          const file=event.currentTarget.files?.[0];event.currentTarget.value='';
+          if(file) void upload(file);
+        }}/>
+      </label>
+      {error&&<p role="alert" className="text-xs text-rose-700">{error}</p>}
+      {mask.customSvg&&<>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+          <span className="break-all">{mask.customSvg.filename}</span>
+          <Button className={smallButton} onClick={()=>{request.current++;setError(null);patch({customSvg:undefined});}}>Remove SVG</Button>
+        </div>
+        <MillimetreField label="Internal padding" min={0} value={mask.internalPaddingMM??CUSTOM_MASK_PADDING_MM} onChange={internalPaddingMM=>patch({internalPaddingMM})}/>
+      </>}
+    </>}
+    {mask.enabled&&(!custom||mask.customSvg)&&<>
+      <ArrangementControls element={element} save={arrangement=>patch({arrangement})}/>
+      {!custom&&<label className="flex items-center justify-between text-sm text-slate-700">
+        Text layout respects mask
+        <Toggle type="checkbox" className="accent-indigo-600" checked={mask.textLayoutRespectsMask} onChange={event=>patch({textLayoutRespectsMask:event.target.checked})}/>
+      </label>}
+      <label className="flex items-center justify-between text-sm text-slate-700">
+        Show mask outline
+        <Toggle type="checkbox" className="accent-indigo-600" checked={mask.showOutline} onChange={event=>patch({showOutline:event.target.checked})}/>
+      </label>
+      {mask.showOutline&&<>
+        <label className="block space-y-1 text-xs font-medium text-slate-600">Outline colour
+          <input type="color" className="h-9 w-full rounded border border-slate-300" value={mask.outlineColor} onChange={event=>patch({outlineColor:event.target.value})}/>
+        </label>
+        <MillimetreField label="Outline width" min={0} value={mask.outlineWidthMM} onChange={outlineWidthMM=>patch({outlineWidthMM})}/>
+      </>}
+    </>}
+  </div>;
+}
+
 export default function LayoutInspector({ element, page, textFitEntry, onChange }: { element: LayoutElement; page: PageElement; textFitEntry: GuidelinesTextFitEntry | null; onChange: (element: LayoutElement) => void }) {
   const pageRect = pageContentRect(pageSize(page), page.settings.margins);
   const internalMargins = element.type === 'guidelines' ? element.settings.margins : { top: 0, right: 0, bottom: 0, left: 0 };
+  const customMask=element.type==='guidelines'?activeCustomMask(element):undefined;
   const patchFrame = (key: 'x' | 'y' | 'width' | 'height', value: number) => {
     let frame = { ...element.frame, [key]: value };
     if(element.type==='artwork'&&element.settings.lockProportions&&(key==='width'||key==='height')){const ratio=element.frame.width/element.frame.height,cx=element.frame.x+element.frame.width/2,cy=element.frame.y+element.frame.height/2;if(key==='width')frame={...frame,height:value/ratio,y:cy-value/ratio/2};else frame={...frame,width:value*ratio,x:cx-value*ratio/2};}
     if (element.type === 'guidelines' && key === 'height' && !element.allowPartialGuidelines) frame.height = getNearestCompleteGuidelinesHeight(element.settings, value);
+    if (customMask && (key==='width'||key==='height')) {
+      const ratio=customMask.aspectRatio;
+      frame=resizeAroundCenter(element.frame,key==='width'?{width:frame.width,height:frame.width/ratio}:{width:frame.height*ratio,height:frame.height});
+    }
     if (element.type === 'shape' && isConstrainedShape(element.settings) && (key === 'width' || key === 'height')) {
       frame = key === 'width'
         ? { ...frame, height: value, y: element.frame.y + (element.frame.height - value) / 2 }
@@ -61,6 +143,7 @@ export default function LayoutInspector({ element, page, textFitEntry, onChange 
     const raw=element.type==='artwork'?defaultArtworkSize(element.intrinsicAspectRatio,pageRect,element.document.viewBox.width):defaultElementSize(element.type,pageSize(page));
     let size=element.type==='guidelines'&&!element.allowPartialGuidelines?{...raw,height:getNearestCompleteGuidelinesHeight(element.settings,raw.height)}:raw;
     if(element.type==='shape'&&isConstrainedShape(element.settings)){const side=Math.min(size.width,size.height);size={width:side,height:side};}
+    if(customMask) size=customMaskSize(customMask,size);
     const frame=resizeAroundCenter(element.frame,size);
     if(element.type==='calligram'){const radiusMM=Math.max(5,element.settings.radiusMM+(frame.width-element.frame.width)/2);onChange({...element,frame,settings:{...element.settings,radiusMM}});return;}
     onChange({...element,frame});
@@ -73,6 +156,10 @@ export default function LayoutInspector({ element, page, textFitEntry, onChange 
     if (element.type === 'shape' && isConstrainedShape(element.settings)) frame = axis === 'width'
       ? { ...frame, height: frame.width, y: element.frame.y + (element.frame.height - frame.width) / 2 }
       : { ...frame, width: frame.height, x: element.frame.x + (element.frame.width - frame.height) / 2 };
+    if (customMask) {
+      const ratio=customMask.aspectRatio;
+      frame=resizeAroundCenter(frame,axis==='width'?{width:frame.width,height:frame.width/ratio}:{width:frame.height*ratio,height:frame.height});
+    }
     if (element.type === 'guidelines' && axis === 'height') {
       if (fraction === 1) { onChange({ ...element, allowPartialGuidelines: true, frame }); return; }
       if (!element.allowPartialGuidelines) frame.height = getNearestCompleteGuidelinesHeight(element.settings, frame.height);
@@ -112,12 +199,12 @@ export default function LayoutInspector({ element, page, textFitEntry, onChange 
         <DisclosureSection title="Centre lines" className={sectionClass}><div className="space-y-2">{(['vertical', 'horizontal'] as const).map(key => <label key={key} className="flex items-center justify-between text-sm text-slate-700"><span>Show {key} centre line</span><Toggle type="checkbox" className="accent-indigo-600" checked={element.settings.centerLines[key]} onChange={event => onChange({ ...element, settings: { ...element.settings, centerLines: { ...element.settings.centerLines, [key]: event.target.checked } } })} /></label>)}</div></DisclosureSection>
       </> : <>
         <DisclosureSection title="Position & Size" defaultOpen className={sectionClass}>
-          <div className="grid grid-cols-2 gap-3">{(['x', 'y', 'width', 'height'] as const).map(key => <MillimetreField key={key} label={key} whole={element.type!=='woven' && !(element.type==='artwork'&&element.interlaceSource)} min={key === 'width' || key === 'height' ? 4 : undefined} value={element.frame[key]} onChange={value => patchFrame(key, value)} />)}</div>
+          <div className="grid grid-cols-2 gap-3">{(['x', 'y', 'width', 'height'] as const).map(key => <MillimetreField key={key} label={key} whole={!customMask && element.type!=='woven' && !(element.type==='artwork'&&element.interlaceSource)} min={key === 'width' || key === 'height' ? 4 : undefined} value={element.frame[key]} onChange={value => patchFrame(key, value)} />)}</div>
           <div className="control-pair mt-3 grid grid-cols-2 items-end gap-3"><RotationField value={element.rotationDeg??0} onChange={rotationDeg=>onChange({...element,rotationDeg})}/><Button type="button" className={smallButton} onClick={()=>onChange({...element,rotationDeg:0})}>Reset rotation</Button></div>
           <Button type="button" className={`${smallButton} mt-2`} onClick={resetSize}>Reset size</Button>
           {(element.type === 'woven' || element.type === 'guidelines' || element.type === 'shape' || element.type === 'curved-title' || element.type === 'calligram' || element.type === 'artwork') && <><div className="mt-4"><div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Align</div><ActionGroup label="Alignment" columns={6}>{([['left', '←', 'Align left'], ['h-center', '↔', 'Align horizontal centre'], ['right', '→', 'Align right'], ['top', '↑', 'Align top'], ['v-center', '↕', 'Align vertical centre'], ['bottom', '↓', 'Align bottom']] as [Alignment, string, string][]).map(([action, symbol, title]) => <Button key={action} type="button" title={title} aria-label={title} onClick={() => align(action)} className={smallButton}>{symbol}</Button>)}</ActionGroup></div>
             <div className="mt-4"><div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Quick size</div><ActionGroup label="Quick size" columns={2}><Button type="button" title="Set usable guideline width to half the usable page width" onClick={() => quickSize('width', .5)} className={smallButton}>½ Page width</Button><Button type="button" title="Set usable guideline width to the full usable page width" onClick={() => quickSize('width', 1)} className={smallButton}>Full width</Button><Button type="button" title="Set usable guideline height to half the usable page height" onClick={() => quickSize('height', .5)} className={smallButton}>½ Page height</Button><Button type="button" title="Set usable guideline height to the full usable page height" onClick={() => quickSize('height', 1)} className={smallButton}>Full height</Button></ActionGroup></div></>}
-          {element.type === 'guidelines' && <div className="mt-4 space-y-3 border-t border-slate-200 pt-4"><div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Mask</div><label className="block space-y-1 text-xs font-medium text-slate-600">Shape mask<Select className={input} value={element.mask?.enabled ? element.mask.kind : 'none'} onChange={event=>onChange({...element,mask:{...(element.mask??{enabled:false,kind:'circle',textLayoutRespectsMask:true,showOutline:false,outlineColor:'#334155',outlineWidthMM:.5,cornerRadiusMM:3}),enabled:event.target.value!=='none',kind:event.target.value==='none'?'circle':event.target.value as ShapeKind}})}><option value="none">None</option>{SHAPE_OPTIONS.map(option=><option key={option.kind} value={option.kind}>{option.label}</option>)}</Select></label>{element.mask?.enabled&&<><label className="flex items-center justify-between text-sm text-slate-700"><span>Text layout respects mask</span><Toggle type="checkbox" className="accent-indigo-600" checked={element.mask.textLayoutRespectsMask} onChange={event=>onChange({...element,mask:{...element.mask,textLayoutRespectsMask:event.target.checked}})}/></label><label className="flex items-center justify-between text-sm text-slate-700"><span>Show mask outline</span><Toggle type="checkbox" className="accent-indigo-600" checked={element.mask.showOutline} onChange={event=>onChange({...element,mask:{...element.mask,showOutline:event.target.checked}})}/></label>{element.mask.showOutline&&<><label className="block space-y-1 text-xs font-medium text-slate-600">Outline colour<input type="color" className="h-9 w-full rounded border border-slate-300" value={element.mask.outlineColor} onChange={event=>onChange({...element,mask:{...element.mask,outlineColor:event.target.value}})}/></label><MillimetreField label="Outline width" min={0} value={element.mask.outlineWidthMM} onChange={outlineWidthMM=>onChange({...element,mask:{...element.mask,outlineWidthMM}})}/></>}</>}</div>}
+          {element.type==='guidelines'&&<GuidelinesMaskPanel key={element.id} element={element} onChange={onChange}/>}
         </DisclosureSection>
         {element.type === 'woven' ? <LayoutWovenSettings key={element.id} element={element} onChange={onChange}/> : element.type === 'artwork' ? <ArtworkSettingsPanel element={element} onChange={onChange} /> : element.type === 'guidelines' ? <><GuidelinesSettingsPanel key={element.id} value={element.settings} onChange={settings => onChange({ ...element, settings, frame: element.allowPartialGuidelines ? element.frame : { ...element.frame, height: getNearestCompleteGuidelinesHeight(settings, element.frame.height) } })} paddingMM={element.paddingMM} onPaddingChange={paddingMM => onChange({ ...element, paddingMM })} allowPartialGuidelines={element.allowPartialGuidelines} onAllowPartialGuidelinesChange={allowPartialGuidelines => onChange({ ...element, allowPartialGuidelines, frame: allowPartialGuidelines ? element.frame : { ...element.frame, height: getNearestCompleteGuidelinesHeight(element.settings, element.frame.height) } })} fitText={element.fitText} onFitTextChange={fitText=>onChange({...element,fitText})} fitEntry={textFitEntry!} textMode={element.textMode} plannedLines={element.plannedLines} rightAlignMode={element.rightAlignMode} avoidOccludingElements={element.avoidOccludingElements!==false} onPlanningChange={patch=>onChange({...element,...patch})} /></> : element.type === 'shape' ? <>
           <DisclosureSection title="Shape" defaultOpen className={sectionClass} headerAction={<Button type="button" onClick={() => onChange({ ...element, paddingMM: 0, settings: createDefaultShapeSettings() })} className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100">Reset</Button>}><div className="space-y-3"><label className="block space-y-1 text-xs font-medium text-slate-600">Shape type<Select className={input} value={element.settings.kind} onChange={event => changeShapeKind(event.target.value as ShapeKind)}>{SHAPE_OPTIONS.map(option => <option key={option.kind} value={option.kind}>{option.label}</option>)}</Select></label><MillimetreField label="Padding" min={0} value={element.paddingMM} onChange={paddingMM => onChange({ ...element, paddingMM })} />{(element.settings.kind === 'roundedRectangle' || element.settings.kind === 'roundedSquare') && <MillimetreField label="Corner radius" min={0} value={element.settings.cornerRadiusMM} onChange={value => onChange({ ...element, settings: { ...element.settings, cornerRadiusMM: value } })} />}</div></DisclosureSection>

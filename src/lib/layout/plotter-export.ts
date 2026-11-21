@@ -10,6 +10,8 @@ import { expandedShapeFrame, shapeBoundaryPoints, shapeContainsPoint, shapeFootp
 import { pageSize, type Frame, type LayoutElement, type PageElement } from '@/lib/layout/types';
 import type { GuidelinesTextFitEntry } from '@/lib/layout/guidelines-text-fit';
 import { drawableGeometryBounds, serializePlotterSvg, type ExportLayering, type PlotterSvgLayer } from './plotter-svg';
+import { editableGuides, guideTransform } from './guideline-arrangement';
+import { activeCustomMask, clipCustomMaskPolyline, CUSTOM_MASK_PADDING_MM, customMaskContains, customMaskGeometry, usesCustomMask } from './custom-mask';
 import { artworkBoundsContains, usesArtworkBoundsOcclusion } from './artwork-occlusion';
 import { cricutGuidePathSegments, dashHorizontalGuidePoints, dashPolylinePoints } from '../guides/polyline-dash';
 export { CRICUT_PRIMARY_GUIDE_DASH_MM, CRICUT_PRIMARY_GUIDE_GAP_MM } from '../guides/polyline-dash';
@@ -361,8 +363,13 @@ function unrotatedElementOccluders(element: LayoutElement): Occluder[] {
   if (element.type === 'shape') return [shapeOccluder(element)];
   if (element.type === 'guidelines') {
     if(!element.mask?.enabled)return [rectOccluder(occupiedRect(element.frame,element.paddingMM))];
+    const {kind}=element.mask;
+    if(kind==='customSvg'){
+      const custom=activeCustomMask(element), {frame}=element;
+      return custom?[{bounds:frame,contains:p=>customMaskContains(custom,frame,{x:p.x-frame.x,y:p.y-frame.y})}]:[];
+    }
     const bounds=expandedShapeFrame(element.frame,element.paddingMM);
-    return [{bounds,contains:point=>shapeFootprintContains(element.mask.kind,element.frame,point,element.mask.cornerRadiusMM,element.paddingMM)}];
+    return [{bounds,contains:point=>shapeFootprintContains(kind,element.frame,point,element.mask.cornerRadiusMM,element.paddingMM)}];
   }
   if (element.type === 'artwork') {
     if(usesArtworkBoundsOcclusion(element.settings))return [{bounds:element.frame,contains:point=>artworkBoundsContains(element.frame,point)}];
@@ -431,7 +438,7 @@ function clipPolylinesByOccluders(lines: PlotPolyline[], occluders: Occluder[]) 
   return lines.flatMap(line => clipPolylineByOccluders(line, occluders));
 }
 
-function clipPolylineInsideShape(input:PlotPolyline,kind:Extract<LayoutElement,{type:'guidelines'}>['mask']['kind'],width:number,height:number,cornerRadiusMM:number){
+function clipPolylineInsideShape(input:PlotPolyline,kind:Parameters<typeof shapeContainsPoint>[0],width:number,height:number,cornerRadiusMM:number){
   const contains=(p:Pt)=>shapeContainsPoint(kind,width,height,p,cornerRadiusMM),result:PlotPolyline[]=[];let current:Pt[]=[];
   const flush=()=>{const next=polyline(current,input.source);if(next)result.push(next);current=[];};
   const boundary=(a:Pt,b:Pt,aInside:boolean)=>{let lo=a,hi=b;for(let i=0;i<18;i++){const mid=lerp(lo,hi,.5);if(contains(mid)===aInside)lo=mid;else hi=mid;}return aInside?lo:hi;};
@@ -560,7 +567,9 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
   const guideAlpha = settings.appearance.highContrast ? 1 : settings.appearance.xLineContrast;
   const guideVisible = guideAlpha > 0.001;
 
-  model.guideSets.forEach((guide, rowIndex) => {
+  const rows=editableGuides(element,model.guideSets);
+  rows.forEach((guide, rowIndex) => {
+    const start=result.length;
     if (guideVisible) {
       const paths = guideSetPolylines(guide as GuideLike, `guidelines:${element.id}:row-${rowIndex}`, {
         ticks: settings.script !== 'Copperplate' && exportVerticalGrid,
@@ -603,6 +612,12 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
         dashPolyline(base, 6, settings.appearance.midpointDashGap).forEach(dash => result.push(...clipPolylineToRect(dash, clipRect)));
       });
     }
+    if(element.mask?.enabled && element.mask.arrangement) {
+      const t=guideTransform(element,guide,rowIndex);
+      const strokes=result.splice(start);
+      const parts=guide.section===undefined?strokes:clipPolylinesToRect(strokes,{...clipRect,x:guide.left!,width:guide.right!-guide.left!});
+      for(const part of parts)result.push({...part,points:part.points.map(t.apply)});
+    }
   });
 
   if (settings.script === 'Copperplate' && options.slantGuides) {
@@ -612,11 +627,12 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
       slants.forEach((slant, index) => {
         const raw = linePolyline({ x: slant.x1, y: slant.y1 }, { x: slant.x2, y: slant.y2 }, `guidelines:${element.id}:slant-${group}-${index}`);
         if (!raw) return;
-        model.guideSets.forEach(guide => {
+        rows.forEach((guide,rowIndex) => {
           const x1 = guide.baseLine[0].x;
           const x2 = guide.baseLine.at(-1)!.x;
-          const rowRect = { x: x1, y: guide.ascLine[0].y, width: x2 - x1, height: guide.descLine[0].y - guide.ascLine[0].y };
-          clipPolylineToRect(raw, rowRect).forEach(part => result.push(...clipPolylineToRect(part, clipRect)));
+          const rowRect = { x: guide.left??x1, y: guide.ascLine[0].y, width: (guide.right??x2) - (guide.left??x1), height: guide.descLine[0].y - guide.ascLine[0].y };
+          const t=guideTransform(element,guide,rowIndex);
+          for(const part of clipPolylineToRect(raw,rowRect).flatMap(line=>clipPolylineToRect(line,clipRect))) result.push({...part,points:part.points.map(t.apply)});
         });
       });
     });
@@ -628,7 +644,7 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
       { x: box.width / 2, y: box.height - settings.margins.bottom },
       `guidelines:${element.id}:center`,
     );
-    if (center) result.push(...clipPolylineToRect(center, clipRect));
+    if (center) result.push(...clipPolylineToRect(center,clipRect).map(line=>({...line,points:line.points.map(guideTransform(element).apply)})));
   }
 
   if (options.textStartEndMarkers && textFitEntry?.mode === 'line-layout') {
@@ -641,14 +657,25 @@ function straightGuidelinesPolylines(element: Extract<LayoutElement, { type: 'gu
       const end1 = linePolyline({ x: endX, y: baselineY }, { x: endX, y: markerBottom }, `guidelines:${element.id}:line-${line.lineId}:end-1`);
       const end2X = endX - LINE_MARKER_DOUBLE_GAP_MM;
       const end2 = linePolyline({ x: end2X, y: baselineY }, { x: end2X, y: markerBottom }, `guidelines:${element.id}:line-${line.lineId}:end-2`);
-      [start, end1, end2].forEach(marker => { if (marker) result.push(...clipPolylineToRect(marker, clipRect)); });
+      [start, end1, end2].forEach(marker => { if (marker) result.push(...clipPolylineToRect(marker,clipRect).map(part=>({...part,points:part.points.map(guideTransform(element,rows[line.rowIndex!],line.rowIndex!).apply)}))); });
     });
   }
 
   let masked=result;
   if(element.mask?.enabled){
-    masked=result.flatMap(line=>clipPolylineInsideShape(line,element.mask.kind,box.width,box.height,element.mask.cornerRadiusMM));
-    if(element.mask.showOutline){const boundary=closedPolyline(shapeBoundaryPoints(element.mask.kind,box.width,box.height,element.mask.cornerRadiusMM),`guidelines:${element.id}:mask-outline`);if(boundary)masked.push(boundary);}
+    const {kind,showOutline,cornerRadiusMM}=element.mask,custom=activeCustomMask(element);
+    if(kind==='customSvg'){
+      if(!custom) return [];
+      masked=result.flatMap(line=>clipCustomMaskPolyline(custom,box,element.mask.internalPaddingMM??CUSTOM_MASK_PADDING_MM,line.points)
+        .map(points=>({points,source:line.source})));
+    } else {
+      masked=result.flatMap(line=>clipPolylineInsideShape(line,kind,box.width,box.height,cornerRadiusMM));
+    }
+    if(showOutline&&(kind!=='customSvg'||options.shapeOutlines)){
+      const boundary=custom?customMaskGeometry(custom,box).points:kind==='customSvg'?[]:shapeBoundaryPoints(kind,box.width,box.height,cornerRadiusMM);
+      const outline=closedPolyline(boundary,`guidelines:${element.id}:mask-outline`);
+      if(outline)masked.push(outline);
+    }
   }
   return translatePolylines(masked, element.frame.x, element.frame.y);
 }
@@ -822,6 +849,7 @@ function wovenPolylines(element:Extract<LayoutElement,{type:'woven'}>,options:Pl
 
 function elementPolylines(element: LayoutElement, textFitEntry: GuidelinesTextFitEntry | null, warnings: string[], options: PlotterExportOptions) {
   if (element.type === 'page'||element.visible===false) return [];
+  if(element.type==='guidelines'&&usesCustomMask(element)&&!activeCustomMask(element))warnings.push(`${element.name}: upload an SVG mask before plotting these guidelines.`);
   const lines=element.type === 'guidelines'?straightGuidelinesPolylines(element, textFitEntry, options)
     :element.type === 'shape'?(options.shapeOutlines ? shapeBoundaryPolylines(element) : [])
     :element.type === 'curved-title'?curvedTitlePolylines(element, options)

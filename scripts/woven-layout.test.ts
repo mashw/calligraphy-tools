@@ -6,7 +6,7 @@ import { newElement, pageElement, type WovenElement } from '../src/lib/layout/ty
 import { layoutWovenDesign, layoutWovenModel } from '../src/lib/layout/woven.ts';
 import { parseLayoutDesign, serializeLayoutDesign } from '../src/lib/layout/design-file.ts';
 import { buildPlotterExport } from '../src/lib/layout/plotter-export.ts';
-import { wovenLayoutPdf } from '../src/lib/layout/woven-pdf.ts';
+import { layeredLayoutPdf } from '../src/lib/layout/woven-pdf.ts';
 
 for(const preset of ['rosette','figure-eight'] as const) {
   test(`${preset}: moving translates every guide and annotation without changing crossings`,()=>{
@@ -60,7 +60,7 @@ test('Cricut exports Woven centreline vectors with physical transforms, layer id
 
 test('Woven-only Layout PDF contains physical vector paths and no raster images',async()=>{
   const woven=newElement('woven',1,{width:210,height:297}) as WovenElement;woven.rotationDeg=35;
-  const pdf=await (await wovenLayoutPdf(null as unknown as SVGSVGElement,[woven,pageElement()],{width:210,height:297})).text();
+  const pdf=await (await layeredLayoutPdf(null as unknown as SVGSVGElement,[woven,pageElement()],{width:210,height:297})).text();
   assert.match(pdf,/% Woven vector layer/);assert.match(pdf,/MediaBox \[0 0 595\.27559 841\.88976\]/);assert.ok(!pdf.includes('/Subtype /Image'));
   const offset=Number(pdf.match(/startxref\n(\d+)/)![1]);assert.equal(pdf.slice(offset,offset+4),'xref');
 });
