@@ -4,7 +4,7 @@ import { ArrangementControls } from './GuidelineEditing';
 import LayoutWovenSettings from '@/components/woven/LayoutWovenSettings';
 import { ActionGroup } from '@/components/editor/Controls';
 
-import { NumericInput, Select, Button, Toggle } from '@/components/editor/Controls';
+import { NumericInput, Select, Button, Switch, Toggle } from '@/components/editor/Controls';
 
 import GuidelinesSettingsPanel from '@/components/guidelines/GuidelinesSettingsPanel';
 import DisclosureSection from '@/components/layout/DisclosureSection';
@@ -204,6 +204,11 @@ export default function LayoutInspector({ element, page, textFitEntry, onChange 
           {(element.type === 'woven' || element.type === 'guidelines' || element.type === 'shape' || element.type === 'curved-title' || element.type === 'calligram' || element.type === 'artwork') && <><div className="mt-4"><div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Align</div><ActionGroup label="Alignment" columns={6}>{([['left', '←', 'Align left'], ['h-center', '↔', 'Align horizontal centre'], ['right', '→', 'Align right'], ['top', '↑', 'Align top'], ['v-center', '↕', 'Align vertical centre'], ['bottom', '↓', 'Align bottom']] as [Alignment, string, string][]).map(([action, symbol, title]) => <Button key={action} type="button" title={title} aria-label={title} onClick={() => align(action)} className={smallButton}>{symbol}</Button>)}</ActionGroup></div>
             <div className="mt-4"><div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Quick size</div><ActionGroup label="Quick size" columns={2}><Button type="button" title="Set usable guideline width to half the usable page width" onClick={() => quickSize('width', .5)} className={smallButton}>½ Page width</Button><Button type="button" title="Set usable guideline width to the full usable page width" onClick={() => quickSize('width', 1)} className={smallButton}>Full width</Button><Button type="button" title="Set usable guideline height to half the usable page height" onClick={() => quickSize('height', .5)} className={smallButton}>½ Page height</Button><Button type="button" title="Set usable guideline height to the full usable page height" onClick={() => quickSize('height', 1)} className={smallButton}>Full height</Button></ActionGroup></div></>}
         </DisclosureSection>
+        {(['guidelines', 'calligram', 'curved-title'].includes(element.type)
+          || (element.type === 'artwork' && element.interlaceSource)) && <DisclosureSection title="Guide tags">
+          <Switch label="Show guide tags" checked={element.showGuideTags ?? (element.type === 'artwork' && !!element.interlaceSource?.document.showGuideTags)}
+            onChange={showGuideTags => onChange({ ...element, showGuideTags })} />
+        </DisclosureSection>}
         {element.type === 'guidelines' && <DisclosureSection title="Mask" className={sectionClass}>
           <GuidelinesMaskPanel key={element.id} element={element} onChange={onChange} />
         </DisclosureSection>}

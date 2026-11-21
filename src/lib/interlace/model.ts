@@ -1,3 +1,4 @@
+import { guideLabel, routeTag, type SheetTag } from '@/lib/guides/sheet-labels';
 import type { TextPlan } from './text-fit';
 import { clipPolylineToRect } from '../layout/plotter-export';
 import { offset } from "../curve-helpers";
@@ -20,7 +21,7 @@ export type Choice = { a: Passage; b: Passage; over: 'a' | 'b'; handedness?: num
 export type Hit = Choice & { point: Point; sine: number; cosine: number };
 export type Sheet = Pick<Design,'paper'|'orientation'> & {
   format: 'calligraphy-tools/interlace'; version: 1; strands: Strand[]; overrides: Choice[];
-  joins: { from: string; to: string }[]; snap: boolean;
+  joins: { from: string; to: string }[]; snap: boolean; showGuideTags?: boolean;
 };
 export function strand(id: string, name: string, source: Source, design = DEFAULT_DESIGN): Strand {
   return { id, name, source, baselineSource:false, design: {...design}, scale: 100, mirror: false, locked: false,
@@ -266,8 +267,17 @@ export function writingRoutes(sheet:Sheet, graph=topology(sheet)) {
   }
   return routes;
 }
-export function renderSheet(sheet:Sheet, graph=topology(sheet), { ruler = true } = {}) {
-  const page=pageSize(sheet),scene:Scene={page,strokes:[],labels:[]};
+export function interlaceGuideTags(sheet: Sheet, entries = sheet.strands.filter(s => s.visible).map(s => ({ s, route: strandRoute(s, sheet) }))): SheetTag[] {
+  return entries.flatMap(({ s, route }, index) => {
+    const dimensions = metrics(s);
+    const tag = routeTag(s.name + ' · ' + guideLabel(s.design.script, dimensions.x, s.design.nib),
+      route.points, dimensions.band + 4, [.5, .32, .68, .24, .76][index % 5]);
+    return tag ? [{ ...tag, colour: s.color }] : [];
+  });
+}
+
+export function renderSheet(sheet:Sheet, graph=topology(sheet), { ruler = true, guideTags = sheet.showGuideTags } = {}) {
+  const page=pageSize(sheet),scene:Scene={page,strokes:[],labels:[],tags:guideTags ? interlaceGuideTags(sheet, graph.entries) : undefined};
   for(const {root,route,regions} of writingRoutes(sheet,graph)){
     const m=metrics(root);
     for(const {interval,polygons} of regions){

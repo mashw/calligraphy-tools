@@ -1,10 +1,12 @@
 'use client';
 
+import { SheetLabels } from '@/components/preview/SheetLabels';
+import { interlaceGuideTags } from '@/lib/interlace/model';
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import EditorWorkspace from '@/components/editor/EditorWorkspace';
 import PreviewToolbar from '@/components/editor/PreviewToolbar';
 import { useEditorCamera } from '@/components/editor/useEditorCamera';
-import { Button, NumericInput, Select } from '@/components/editor/Controls';
+import { Button, NumericInput, Select, Switch } from '@/components/editor/Controls';
 import DisclosureSection from '@/components/layout/DisclosureSection';
 import WovenSettings from '@/components/woven/WovenSettings';
 import { WovenScene } from '@/components/woven/WovenRenderer';
@@ -59,7 +61,7 @@ export default function InterlaceStudio() {
   const page=pageSize(sheet),frame={x:0,y:0,w:page.w,h:page.h};
   const entries=useMemo(()=>sheet.strands.filter(s=>s.visible).map(s=>({s,route:strandRoute(s,sheet)})),[sheet]);
   const graph=useMemo(()=>busy?null:topology(sheet),[sheet,busy]);
-  const full=useMemo(()=>graph && !simplify?renderSheet(sheet,graph):null,[sheet,graph,simplify]);
+  const full=useMemo(()=>graph && !simplify?renderSheet(sheet,graph,{guideTags:false}):null,[sheet,graph,simplify]);
   const camera=useEditorCamera(svg,frame,pointBounds(entries.flatMap(e=>e.route.points),frame,10));
   const fits=useMemo(()=>graph?sheet.strands.filter(s=>s.visible&&s.textPlan?.text).map(s=>({id:s.id,name:s.name,fit:textFit(sheet,s,graph)})):[],[sheet,graph]);
   const fit=fits.find(f=>f.id===active)?.fit??null;
@@ -213,10 +215,12 @@ export default function InterlaceStudio() {
           fill={sheet.joins.some(link=>link.from===j.from.id&&link.to===j.to.id)?'#16836b':'white'} stroke="#16836b" strokeWidth={.5}
           onClick={()=>toggleJoin(j.from.id,j.to.id)}/>)}
       </g>
+      {sheet.showGuideTags && <SheetLabels tags={interlaceGuideTags(sheet, entries)} />}
     </svg></section>} layers={<div className="space-y-2">
       <DisclosureSection title="Composition" defaultOpen><div className={row}>
         <Select aria-label="Paper" value={sheet.paper} onChange={e=>commit({...sheet,paper:e.target.value as Sheet['paper']})}>{Object.keys(PAPERS_MM).map(p=><option key={p}>{p}</option>)}</Select>
         <Select aria-label="Orientation" value={sheet.orientation} onChange={e=>commit({...sheet,orientation:e.target.value as Sheet['orientation']})}><option>portrait</option><option>landscape</option></Select>
+        <Switch label="Show guide tags" checked={sheet.showGuideTags ?? false} onChange={showGuideTags => commit({...sheet,showGuideTags})} />
         <Button aria-pressed={sheet.snap} onClick={()=>commit({...sheet,snap:!sheet.snap})}>Snap 0.5 mm</Button>
         <Button onClick={()=>{download(JSON.stringify({...sheet,editor:{active,simplify,contrast,camera:camera.snapshot}},null,2),'application/json','interlace.json');setNotice('Design saved.');}}>Save</Button>
         <Button onClick={()=>file.current?.click()}>Open design</Button><input hidden type="file" ref={file} accept=".json" onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)void open(f);}}/>

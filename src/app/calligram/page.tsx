@@ -1,5 +1,7 @@
 'use client';
 
+import { SheetLabels } from '@/components/preview/SheetLabels';
+import { circleTags, guideLabel } from '@/lib/guides/sheet-labels';
 import { InspectorIntro } from '@/components/editor/Controls';
 
 import { Button, Select, Toggle, Switch, Slider, NumericInput } from '@/components/editor/Controls';
@@ -432,6 +434,7 @@ export default function CalligramPage() {
   const [userScaleFactor, setUserScaleFactor] = useState(1);
   const [userSpaceFactor, setUserSpaceFactor] = useState(1);
 
+  const [showGuideTags, setShowGuideTags] = useState(false);
   const [showBoxes, setShowBoxes] = useState(false);
   const [showSpanFill, setShowSpanFill] = useState(true);
   const [highContrastMode, setHighContrastMode] = useState(false);
@@ -1588,6 +1591,11 @@ const innerRadiusMaxMM = useMemo(
 
                 <circle cx={box.w / 2} cy={box.h / 2} r={1.6} fill="#000000" />
               </g>
+              {showGuideTags && <SheetLabels tags={circleTags([
+                { name: 'Main', text: guideLabel(script, xMM, nibMM), guides: guideSet },
+                ...(topBandEnabled ? [{ name: 'Inner', text: guideLabel(topBandScript, topXMM, topBandSizeMM), guides: topGuideSet }] : []),
+                ...(bottomBandEnabled ? [{ name: 'Outer', text: guideLabel(bottomBandScript, bottomXMM, bottomBandSizeMM), guides: bottomGuideSet }] : []),
+              ], { x: box.w / 2, y: box.h / 2 }, Math.min(box.w, box.h) / 2)} />}
             </svg>
 
             <div className="absolute inset-0 pointer-events-none z-30">
@@ -2121,6 +2129,7 @@ const innerRadiusMaxMM = useMemo(
         <ConstructionGuideControls scripts={[script, topBandEnabled && topBandScript, bottomBandEnabled && bottomBandScript]} value={constructionGuides} onChange={setConstructionGuides} />
 
         <DisclosureSection title="Preview options">
+          <Switch label="Show guide tags" checked={showGuideTags} onChange={setShowGuideTags} />
           <Switch label="Letter bounding boxes" checked={showBoxes} onChange={setShowBoxes} />
           <Switch label="Title span fill" checked={showSpanFill} onChange={setShowSpanFill} />
           <Switch label="High contrast" checked={highContrastMode} onChange={setHighContrastMode} />

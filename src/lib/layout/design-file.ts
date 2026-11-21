@@ -72,6 +72,7 @@ function validateBaseElement(value: JsonObject, index: number) {
 
   if (value.type !== 'page') {
     if (!isFiniteNumber(value.paddingMM) || (value.paddingMM as number) < 0) fail(`${label} has invalid padding.`);
+    if (value.showGuideTags !== undefined && typeof value.showGuideTags !== 'boolean') fail(`${label} has an invalid guide tag setting.`);
     if (value.rotationDeg !== undefined && !isFiniteNumber(value.rotationDeg)) fail(`${label} has an invalid rotation.`);
   }
 }

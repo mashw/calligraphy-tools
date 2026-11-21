@@ -1,5 +1,7 @@
 'use client';
 
+import { SheetHeader } from '@/components/preview/SheetLabels';
+import { guideLabel } from '@/lib/guides/sheet-labels';
 import { InspectorIntro } from '@/components/editor/Controls';
 import PreviewMeta from '@/components/editor/PreviewMeta';
 
@@ -599,6 +601,7 @@ const slantAngleDeg = useMemo(() => {
 
   const guideTemplate = script === 'Copperplate' ? 'copperplate' : 'blackletter';
 
+  const [showSheetHeader, setShowSheetHeader] = useState(true);
   const [marginTopMM, setMarginTopMM] = useState(sharedDefaults.margins.top);
   const [marginBottomMM, setMarginBottomMM] = useState(sharedDefaults.margins.bottom);
   const [marginLeftMM, setMarginLeftMM] = useState(sharedDefaults.margins.left);
@@ -606,12 +609,12 @@ const slantAngleDeg = useMemo(() => {
 
   const margins = useMemo(
     () => ({
-      top: marginTopMM,
+      top: showSheetHeader ? Math.max(10, marginTopMM) : marginTopMM,
       bottom: marginBottomMM,
       left: marginLeftMM,
       right: marginRightMM,
     }),
-    [marginTopMM, marginBottomMM, marginLeftMM, marginRightMM],
+    [showSheetHeader, marginTopMM, marginBottomMM, marginLeftMM, marginRightMM],
   );
 
 
@@ -809,6 +812,10 @@ const slantAngleDeg = useMemo(() => {
               {/* Paper */}
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
 
+              {showSheetHeader && <SheetHeader
+                text={guideLabel(script, xMM, nibMM, script === 'Copperplate' ? slantAngleDeg : penAngleDeg)}
+                x={Math.max(2, Math.min(margins.left, box.w - 8))} y={Math.min(box.h - 3, margins.top - 3.5)}
+                width={Math.max(4, box.w - margins.left - margins.right)} />}
               <GuidelinesRenderer box={{ width: box.w, height: box.h }} settings={rendererSettings} idPrefix="standalone-guidelines" />
             </svg>
 
@@ -825,7 +832,7 @@ const slantAngleDeg = useMemo(() => {
           </InspectorIntro>} inspector={<>
 <section className="    mx-auto grid grid-cols-1  items-start gap-6">
         {/* Step 1 */}
-        <DisclosureSection title="Paper & margins" defaultOpen headerAction={<InfoTip side="right">Guidelines are spaced by x-height + ascender + descender.</InfoTip>}>
+        <DisclosureSection title="Paper & margins" defaultOpen headerAction={<InfoTip side="right">The sheet header uses at least 10 mm of top margin.</InfoTip>}>
 
 
           <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -1261,6 +1268,7 @@ const slantAngleDeg = useMemo(() => {
         </DisclosureSection>
 
         <DisclosureSection title="Guide appearance">
+          <Switch label="Show sheet header" checked={showSheetHeader} onChange={setShowSheetHeader} />
           <div className="guide-option-grid">
             <div className="col-span-full space-y-1">
               <Switch label="Baseline indicator" checked={showBaselineIndicator} onChange={setShowBaselineIndicator} />

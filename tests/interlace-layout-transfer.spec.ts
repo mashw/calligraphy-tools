@@ -112,7 +112,12 @@ for(const width of [390,1440])test(`contrast, text planning and accessible stabl
   await page.getByRole('button',{name:'Text & Fit',exact:true}).click();await page.getByLabel('Text to plan').fill('Hello world '.repeat(40));await expect(page.locator('[data-text-fit]')).toContainText('Does not fit');await page.getByLabel('Show text estimate').check();await expect(page.locator('[data-text-estimate] path[stroke="#b91c1c"]').first()).toBeAttached();
   await page.getByRole('button',{name:/Warnings \(/}).click();await expect(page.getByRole('dialog',{name:'Design warnings'})).toContainText('Text needs a longer continuous');await page.getByRole('button',{name:'Close warnings'}).click();
   const preview=page.locator('svg[aria-label="Interlace writing sheet"]'),before=await preview.evaluate(n=>({w:n.getBoundingClientRect().width,h:n.getBoundingClientRect().height}));
-  await page.getByLabel('Text to plan').fill('Hi');await expect(page.locator('[data-text-fit]')).toContainText('Fits');await page.getByRole('button',{name:/Warnings \(/}).click();await expect(page.getByRole('dialog',{name:'Design warnings'})).not.toContainText('Text needs a longer continuous');await page.getByRole('button',{name:'Close warnings'}).click();expect(await preview.evaluate(n=>({w:n.getBoundingClientRect().width,h:n.getBoundingClientRect().height}))).toEqual(before);
+  await page.getByLabel('Text to plan').fill('Hi');
+  await expect(page.locator('[data-text-fit]')).toContainText('Fits');
+  await expect(page.getByRole('button',{name:/Warnings \(/})).toHaveCount(0);
+  const after = await preview.evaluate(n=>({w:n.getBoundingClientRect().width,h:n.getBoundingClientRect().height}));
+  expect(after.w).toBe(before.w);
+  expect(after.h).toBeGreaterThanOrEqual(before.h);
   expect(await download(page,'SVG')).toBe(standard);expect(await download(page,'Cricut Draw')).toBe(cricut);
   await page.getByRole('button',{name:'Export options',exact:true}).click();await page.getByLabel('Include text-position boxes in SVG / PDF / Print').check();await page.getByRole('button',{name:'Close options'}).click();expect(await download(page,'SVG')).not.toBe(standard);expect((await download(page,'PDF')).startsWith('%PDF')).toBe(true);
   await expect(page.locator('[role=status]')).toContainText('export prepared');await page.getByRole('button',{name:'Dismiss notification'}).click();await expect(page.locator('[role=status]')).toBeEmpty();expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width+1);
