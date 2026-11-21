@@ -3,6 +3,10 @@ import { expect, test } from '@playwright/test';
 test('guidelines show only applicable construction and grid settings', async ({ page }) => {
   await page.setViewportSize({ width: 820, height: 900 });
   await page.goto('/guidelines');
+  const dimensions = page.getByRole('button', { name: 'Script & Dimensions', exact: true });
+  await dimensions.click();
+  await expect(dimensions).toHaveAttribute('aria-expanded', 'false');
+  await dimensions.click();
   const script = page.getByRole('combobox', { name: 'Script', exact: true });
   const construction = page.getByRole('button', { name: 'Construction guides', exact: true });
   await script.selectOption('InsularMajuscule');
@@ -49,15 +53,17 @@ for (const [route, section, label] of [
   test(`${route} reveals mixed-script band settings without crowding narrow panes`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 900 });
     await page.goto('/' + route);
-    await page.getByRole('combobox', { name: 'Script', exact: true }).selectOption('Copperplate');
     await page.getByRole('button', { name: section, exact: true }).click();
     const options = page.locator(`[data-settings-section="${section}"]`);
     const enabled = options.getByRole('switch', { name: label });
     const bandScript = options.getByRole('combobox', { name: 'Script', exact: true });
+    const construction = page.getByRole('button', { name: 'Construction guides', exact: true });
+    await expect(enabled).toBeVisible();
+    await page.getByRole('combobox', { name: 'Script', exact: true }).selectOption('Copperplate');
+    await expect(construction).toHaveCount(0);
     await expect(bandScript).toHaveCount(0);
     await enabled.press('Space');
     await bandScript.selectOption('Fraktur');
-    const construction = page.getByRole('button', { name: 'Construction guides', exact: true });
     await expect(construction).toBeVisible();
     if (route === 'calligram') await expect(options.getByRole('slider', { name: /Radius/ })).toBeVisible();
     await expect.poll(() => page.locator('.editor-inspector').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
