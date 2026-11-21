@@ -1,3 +1,5 @@
+import { visitIntervals } from '../woven/passages';
+import { writingBands, bandEdges, borderBendWarning } from '../woven/bands';
 import { guideLabel, routeTag, type SheetTag } from '@/lib/guides/sheet-labels';
 import type { TextPlan } from './text-fit';
 import { clipPolylineToRect } from '../layout/plotter-export';
@@ -142,8 +144,9 @@ function distance(route:Route,t:number) {
 export function metrics(s:Strand) {
   const d=s.design;
   const unit=d.script==='Copperplate'?1:d.nib;
+  const edges=bandEdges(writingBands(d,d.xNib*unit,d.ascNib*unit,d.descNib*unit,s.invert,s.baselineSource?0:d.xNib*unit/2),s.invert);
   return {x:d.xNib*unit,asc:d.ascNib*unit,desc:d.descNib*unit,
-    band:unit*((s.baselineSource?d.xNib:d.xNib/2)+(d.fullGuides?Math.max(d.ascNib,d.descNib):0))};
+    band:Math.max(-edges.top,edges.bottom)};
 }
 function directed(e:Entry) {
   return e.s.design.reverse ? [...e.route.points].reverse() : e.route.points;
@@ -151,7 +154,7 @@ function directed(e:Entry) {
 export function canJoin(a:Entry,b:Entry) {
   if(a===b || a.s.invert!==b.s.invert || !!a.s.baselineSource!==!!b.s.baselineSource || a.route.closed || b.route.closed) return false;
   const da=a.s.design, db=b.s.design;
-  const keys: (keyof Design)[]=['script','nib','xNib','ascNib','descNib','fullGuides','slants','slantStyle','slantAngle','slantSpacing','secondSlant','secondAngle','gridMode','gridWidth','penAngle','construction','gridHorizontal','gridVertical','gridContrast','gridThickness','slantContrast'];
+  const keys: (keyof Design)[]=['borders','script','nib','xNib','ascNib','descNib','fullGuides','slants','slantStyle','slantAngle','slantSpacing','secondSlant','secondAngle','gridMode','gridWidth','penAngle','construction','gridHorizontal','gridVertical','gridContrast','gridThickness','slantContrast'];
   if(keys.some(k=>JSON.stringify(da[k])!==JSON.stringify(db[k]))) return false;
   const p=directed(a),q=directed(b),end=p.at(-1)!,prev=p.at(-2)!,start=q[0],next=q[1];
   if(Math.hypot(end.x-start.x,end.y-start.y)>.3) return false;
@@ -192,24 +195,17 @@ function passageIntervals(entry: Entry, passage: Passage, hits: Hit[]): Interval
   const route = entry.route;
   const visits = hits.flatMap(h=>[h.a,h.b]).filter(p=>p.id===passage.id)
     .map(p=>distance(route,p.t)).sort((a,b)=>a-b);
-  const at = distance(route,passage.t), i = visits.indexOf(at), len = route.length;
-  const left = i ? (at+visits[i-1])/2 : route.closed ? (at+visits[visits.length-1]-len)/2 : 0;
-  const right = i+1<visits.length ? (at+visits[i+1])/2 : route.closed ? (at+visits[0]+len)/2 : len;
-  const parts: Interval[] = [];
-  if(left<0)parts.push([left+len,len]);
-  parts.push([Math.max(left,0),Math.min(right,len)]);
-  if(right>len)parts.push([0,right-len]);
-  return parts;
+  return visitIntervals(visits, distance(route,passage.t), route.length, !!route.closed);
 }
 
 function bandFootprint(entry: Entry, passage: Passage, hits: Hit[], clearance: number) {
   const {s,route}=entry, {x,asc,desc}=metrics(s);
   const sign=s.design.reverse?-1:1;
-  const baseline=s.baselineSource?route.points:offset(route.points,sign*x/2);
-  const top=-x-(s.design.fullGuides?(s.invert?desc:asc):0)-clearance;
-  const bottom=(s.design.fullGuides?(s.invert?asc:desc):0)+clearance;
+  const anchor=s.baselineSource?0:x/2;
+  const edges=bandEdges(writingBands(s.design,x,asc,desc,s.invert,anchor),s.invert);
+  const top=edges.top-clearance, bottom=edges.bottom+clearance;
   const intervals=passageIntervals(entry,passage,hits);
-  const rail=(amount:number)=>{const edge=offset(baseline,amount*sign);return intervals.flatMap(i=>sliceGuide(route,edge,i));};
+  const rail=(amount:number)=>{const edge=offset(route.points,amount*sign);return intervals.flatMap(i=>sliceGuide(route,edge,i));};
   return [...rail(top),...rail(bottom).reverse()];
 }
 
@@ -305,6 +301,14 @@ export function warnings(sheet:Sheet,g:ReturnType<typeof topology>) {
     const pad=metrics(s).band;
     return route.points.some(p=>p.x-pad<0||p.y-pad<0||p.x+pad>page.w||p.y+pad>page.h);
   }))out.push('Guides may extend beyond the paper. Export clips them to the page edge.');
+  for (const entry of g.entries) {
+    const {s} = entry;
+    if (!s.design.borders?.outer?.enabled && !s.design.borders?.inner?.enabled) continue;
+    const {x,asc,desc} = metrics(s);
+    const bands = writingBands(s.design,x,asc,desc,s.invert,s.baselineSource?0:x/2);
+    const warning = borderBendWarning(directed(entry),bands,s.invert);
+    if (warning) out.push(s.name + ' · ' + warning);
+  }
   if(g.conflict) out.push('Some visits cannot alternate consistently.');
   if(g.hits.some(h=>h.sine<.25)) out.push('Shallow crossing: inspect the underpass gap.');
   if(g.entries.some(e=>e.route.closed && minimumRadius(e.route)<1.5*metrics(e.s).band)) out.push('Tight bend for the selected writing size.');

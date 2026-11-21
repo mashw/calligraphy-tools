@@ -1,3 +1,5 @@
+import { visitIntervals } from './passages';
+import { writingBands, bandEdges, borderBendWarning } from './bands';
 import { guideLabel, routeTag } from '@/lib/guides/sheet-labels';
 import { slantPath, clipSlantToBand } from "../guides/slant-paths";
 import { offset } from "@/lib/curve-helpers";
@@ -38,7 +40,9 @@ export function buildWovenRouteModel(design: Design) {
   const x = guideUnit * design.xNib,
     asc = guideUnit * design.ascNib,
     desc = guideUnit * design.descNib;
-  const halfBand = x / 2 + Math.max(asc, desc);
+  const bands = writingBands(design,x,asc,desc);
+  const edges = bandEdges(bands);
+  const halfBand = bands.length > 1 ? Math.max(-edges.top,edges.bottom) : x / 2 + Math.max(asc, desc);
   const start = (design.start / 100) * route.length;
   const cuts = crossingCuts(crossings, choices, halfBand, design.clearance);
   const intervals = visibleIntervals(route.length, [
@@ -46,6 +50,8 @@ export function buildWovenRouteModel(design: Design) {
     { center: start, half: design.gap / 2 },
   ]);
   const warnings: string[] = [];
+  const bendWarning = borderBendWarning(route.points,bands);
+  if (bendWarning) warnings.push(bendWarning);
   if (minimumRadius(route) < halfBand * 1.5)
     warnings.push(
       "Some bends are tight for this lettering size. Reduce the lettering size or enlarge the shape; inspect the inner guides before printing.",
@@ -55,7 +61,7 @@ export function buildWovenRouteModel(design: Design) {
       "A shallow crossing needs a long gap. Adjust the shape or reduce the lettering size.",
     );
   if (
-    [-x / 2 - (design.fullGuides ? asc : 0), x / 2 + (design.fullGuides ? desc : 0)].some(distance =>
+    [edges.top, edges.bottom].some(distance =>
       offset(route.points, distance).some(
         (p) => p.x < 10 || p.x > page.w - 10 || p.y < 25 || p.y > page.h - 27,
       ),
@@ -92,6 +98,12 @@ export function buildWovenRouteModel(design: Design) {
 /** Generate physical strokes for one writing passage. Intervals use its own arc length. */
 export function writingStrokes(design: Design, route: import('../guides/slant-paths').SlantRoute,
   intervals: import('./geometry').Interval[], x: number, asc: number, desc: number, invertGuides = false, baselineOffset = x / 2): Stroke[] {
+  return writingBands(design,x,asc,desc,invertGuides,baselineOffset).flatMap(b =>
+    singleBandStrokes(b.design,route,intervals,b.x,b.asc,b.desc,invertGuides,b.anchor));
+}
+
+function singleBandStrokes(design: Design, route: import('../guides/slant-paths').SlantRoute,
+  intervals: import('./geometry').Interval[], x: number, asc: number, desc: number, invertGuides: boolean, baselineOffset: number): Stroke[] {
   const baseline = baselineOffset === 0 ? route.points : offset(route.points, baselineOffset);
   const guides = buildGuideSet(
     design.script === "Copperplate" ? "copperplate" : "blackletter",
@@ -272,10 +284,40 @@ export function writingStrokes(design: Design, route: import('../guides/slant-pa
   return strokes;
 }
 
+function borderedStrokes(design: Design, route: ReturnType<typeof makeRoute>, crossings: ReturnType<typeof findSelfCrossings>,
+  choices: Record<string,'a'|'b'>, start: number, bands: ReturnType<typeof writingBands>): Stroke[] {
+  const edges = bandEdges(bands);
+  const top = offset(route.points,edges.top-design.clearance);
+  const bottom = offset(route.points,edges.bottom+design.clearance);
+  const visits = crossings.flatMap(c => [c.a,c.b]).sort((a,b)=>a-b);
+  const visit = (at: number) => visitIntervals(visits,at,route.length,true);
+  const masks = crossings.flatMap(c => {
+    const over = choices[c.id] === 'a' ? c.a : c.b;
+    const under = choices[c.id] === 'a' ? c.b : c.a;
+    const region = visit(over);
+    const polygon = [...region.flatMap(i=>sliceGuide(route,top,i)), ...region.flatMap(i=>sliceGuide(route,bottom,i)).reverse()];
+    return visit(under).map(interval=>({interval,polygon}));
+  });
+  const strokes: Stroke[] = [];
+  for (const [a,b] of visibleIntervals(route.length,[{center:start,half:design.gap/2}])) {
+    const stops = [...new Set([a,b,...masks.flatMap(m=>m.interval).filter(s=>s>a && s<b)])].sort((p,q)=>p-q);
+    for (let i=1;i<stops.length;i++) {
+      const from=stops[i-1],to=stops[i],mid=(from+to)/2;
+      let parts = bands.flatMap(band=>singleBandStrokes(band.design,route,[[from,to]],band.x,band.asc,band.desc,false,band.anchor));
+      for (const mask of masks) if (mid>=mask.interval[0] && mid<=mask.interval[1])
+        parts=parts.flatMap(stroke=>clipSlantToBand(stroke.points,mask.polygon,false).map(points=>({...stroke,points})));
+      strokes.push(...parts);
+    }
+  }
+  return strokes;
+}
+
 export function buildWovenModel(design: Design, { furniture = true }: { furniture?: boolean } = {}) {
   const page = pageSize(design);
   const { route, crossings, choices, x, asc, desc, start, intervals, warnings, usableLength, halfBand } = buildWovenRouteModel(design);
-  const strokes = writingStrokes(design, route, intervals, x, asc, desc);
+  const bands = writingBands(design,x,asc,desc);
+  const strokes = bands.length === 1 ? writingStrokes(design, route, intervals, x, asc, desc) :
+    borderedStrokes(design,route,crossings,choices,start,bands);
   const tag = design.showGuideTags ? routeTag(guideLabel(design.script, x, design.nib), route.points, halfBand + 4, .32) : null;
   const tags = tag ? [tag] : undefined;
   const clean: Scene = { strokes, labels: [], tags, page };

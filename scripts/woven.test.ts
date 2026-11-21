@@ -1,3 +1,4 @@
+import { writingBands, bandEdges } from '../src/lib/woven/bands.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRoute, findSelfCrossings, alternateWeave, visibleIntervals, crossingCuts, sliceGuide, atDistance } from '../src/lib/woven/geometry.ts';
@@ -133,4 +134,28 @@ test('paper sizes centre the shape and drive SVG and PDF dimensions in mm', () =
     assert.ok(sceneSvg(model.clean).includes(`width="${page.w}mm" height="${page.h}mm"`));
     assert.ok(new TextDecoder().decode(scenePdf(model.clean)).includes(`/MediaBox [0 0 ${(page.w*72/25.4).toFixed(3)} ${(page.h*72/25.4).toFixed(3)}]`));
   }
+});
+
+test('borders share only facing extension zones and stay on the writing side when inverted', () => {
+  const border = { enabled:true, xHeight:2.5, script:'TexturaQuadrata' as const, share:true, gap:0.5 };
+  const design = { ...DEFAULT_DESIGN, borders:{outer:border,inner:border} };
+  assert.deepEqual(parseDesign(design).borders,design.borders);
+  const bands = writingBands(design,10,4,2);
+  assert.deepEqual(bands.map(b=>b.anchor),[5,-9.5,10]);
+  const inverted = writingBands(design,10,4,2,true);
+  assert.deepEqual(inverted.map(b=>b.anchor),[5,12,-7.5]);
+  const separate = writingBands({...design,borders:{outer:{...border,share:false}}},10,4,2);
+  assert.equal(separate[1].anchor,-10.5);
+  assert.deepEqual(bandEdges(separate),{top:-14,bottom:7});
+});
+
+test('bordered figure-eight emits finite writing rails and editable asymmetric crossings', async () => {
+  const {buildWovenModel} = await import('../src/lib/woven/model');
+  const design = {...DEFAULT_DESIGN,preset:'figure-eight' as const, gridVertical:false,gridHorizontal:false,
+    borders:{outer:{enabled:true,xHeight:1,script:'Fraktur' as const,share:true,gap:0}}};
+  const render = (over:'a'|'b') => buildWovenModel({...design,overrides:{'crossing-0':over}},{furniture:false}).clean;
+  const first=render('a'), second=render('b');
+  assert.ok(first.strokes.every(s=>s.points.every(p=>Number.isFinite(p.x) && Number.isFinite(p.y))));
+  assert.ok(first.strokes.filter(s=>s.guide==='baseline').length >= 2);
+  assert.notDeepEqual(first.strokes,second.strokes);
 });

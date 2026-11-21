@@ -1,7 +1,11 @@
 import type { SlantStyle } from '../guides/slant-paths';
 import { PAPERS_MM } from "../curve-helpers";
 import type { ConstructionGuideSettings } from "../guides/guide-template";
+export type BorderSide = 'outer' | 'inner';
+export type WritingBorder = { enabled: boolean; script: Design['script']; xHeight: number; gap: number; share: boolean };
+export const defaultBorder: WritingBorder = { enabled: false, script: 'TexturaQuadrata', xHeight: 1.5, gap: 0, share: true };
 export type Design = {
+  borders?: Partial<Record<BorderSide, WritingBorder>>;
   centerX?: number;
   centerY?: number;
   slantStyle: SlantStyle;
@@ -225,6 +229,20 @@ export function parseDesign(input: unknown): Design {
     if (obj[key] !== undefined) {
       if (typeof obj[key] !== 'number' || !Number.isFinite(obj[key]) || Math.abs(obj[key]) > 10000) throw new Error('Invalid shape position.');
       result[key] = obj[key];
+    }
+  }
+  if (obj.borders !== undefined) {
+    if (!obj.borders || typeof obj.borders !== 'object' || Array.isArray(obj.borders)) throw new Error('Invalid writing borders.');
+    result.borders = {};
+    for (const side of ['inner', 'outer'] as const) {
+      const border = (obj.borders as Record<string, Partial<WritingBorder>>)[side];
+      if (border === undefined) continue;
+      if (!border || typeof border.enabled !== 'boolean' || typeof border.share !== 'boolean' ||
+          !['Fraktur','TexturaQuadrata','InsularMajuscule','Copperplate'].includes(String(border.script)) ||
+          typeof border.xHeight !== 'number' || !Number.isFinite(border.xHeight) || border.xHeight < .2 || border.xHeight > 40 ||
+          typeof border.gap !== 'number' || !Number.isFinite(border.gap) || border.gap < 0 || border.gap > 40)
+        throw new Error('Invalid ' + side + ' writing border.');
+      result.borders[side] = { ...border } as WritingBorder;
     }
   }
   return result;
