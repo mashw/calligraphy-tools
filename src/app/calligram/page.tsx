@@ -1,8 +1,10 @@
 'use client';
 
+import { SheetLabels } from '@/components/preview/SheetLabels';
+import { circleTags, guideLabel } from '@/lib/guides/sheet-labels';
 import { InspectorIntro } from '@/components/editor/Controls';
 
-import { Button, Select, Toggle, Slider, NumericInput } from '@/components/editor/Controls';
+import { Button, Select, Toggle, Switch, Slider, NumericInput } from '@/components/editor/Controls';
 
 import { InfoTip, InsetLabeledField, INSET_CONTROL_BASE, INSET_CONTROL_MM, INSET_CONTROL_WIDE } from '@/components/editor/Controls';
 
@@ -432,6 +434,7 @@ export default function CalligramPage() {
   const [userScaleFactor, setUserScaleFactor] = useState(1);
   const [userSpaceFactor, setUserSpaceFactor] = useState(1);
 
+  const [showGuideTags, setShowGuideTags] = useState(false);
   const [showBoxes, setShowBoxes] = useState(false);
   const [showSpanFill, setShowSpanFill] = useState(true);
   const [highContrastMode, setHighContrastMode] = useState(false);
@@ -1588,6 +1591,11 @@ const innerRadiusMaxMM = useMemo(
 
                 <circle cx={box.w / 2} cy={box.h / 2} r={1.6} fill="#000000" />
               </g>
+              {showGuideTags && <SheetLabels tags={circleTags([
+                { name: 'Main', text: guideLabel(script, xMM, nibMM), guides: guideSet },
+                ...(topBandEnabled ? [{ name: 'Inner', text: guideLabel(topBandScript, topXMM, topBandSizeMM), guides: topGuideSet }] : []),
+                ...(bottomBandEnabled ? [{ name: 'Outer', text: guideLabel(bottomBandScript, bottomXMM, bottomBandSizeMM), guides: bottomGuideSet }] : []),
+              ], { x: box.w / 2, y: box.h / 2 }, Math.min(box.w, box.h) / 2)} />}
             </svg>
 
             <div className="absolute inset-0 pointer-events-none z-30">
@@ -1618,7 +1626,7 @@ const innerRadiusMaxMM = useMemo(
           </InspectorIntro>} inspector={<>
 <section className="   mx-auto grid grid-cols-1  gap-6">
         {/* Step 1 */}
-        <DisclosureSection title="Document & Script" defaultOpen headerAction={<InfoTip side="right">Circle is fixed at page center.</InfoTip>}>
+        <DisclosureSection title="Main circle" defaultOpen headerAction={<InfoTip side="right">Circle is fixed at page center.</InfoTip>}>
 
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
@@ -1630,6 +1638,33 @@ const innerRadiusMaxMM = useMemo(
                   <option value="TexturaQuadrata">Textura Quadrata</option>
                    <option value="InsularMajuscule">Insular Majuscule</option>
                 </Select>
+              </InsetLabeledField>
+            </div>
+            <InsetLabeledField label="Main text" className="col-span-full">
+              <input className={INSET_CONTROL_BASE} value={text} onChange={e => setText(e.target.value)} placeholder="Enter main text" />
+            </InsetLabeledField>
+            <div className="sm:col-span-2">
+              <InsetLabeledField label="Main radius">
+                <div className=" ">
+                  <Slider
+                    type="range" aria-label="Main radius"
+                    min={10}
+                    max={Math.max(10, Math.floor(Math.min(box.w, box.h) / 2) - 4)}
+                    step={shouldSnapMainRadius ? 0.1 : 1}
+                    value={radiusMM}
+                    onChange={e => {
+                      const min = 10;
+                      const max = Math.max(10, Math.floor(Math.min(box.w, box.h) / 2) - 4);
+                      const raw = Number(e.target.value);
+                      touchedRef.current.main.radius = true;
+                      let next = clamp(raw, min, max);
+                      if (shouldSnapMainRadius) next = snapRadiusToWholeSteps(next, tickStepMM);
+                      setRadiusMM(next);
+                    }}
+                    className="w-full"
+                  />
+                  <div className="text-xs font-medium text-slate-500 mt-1">{radiusMM} mm</div>
+                </div>
               </InsetLabeledField>
             </div>
             {(script === 'InsularMajuscule' || (topBandEnabled && topBandScript === 'InsularMajuscule') || (bottomBandEnabled && bottomBandScript === 'InsularMajuscule')) && <label className="sm:col-span-2 inline-flex items-center gap-2 text-sm"><Toggle type="checkbox" checked={showInsularGrid} onChange={e => setShowInsularGrid(e.target.checked)} /> Show intermediate grid</label>}
@@ -1664,55 +1699,7 @@ const innerRadiusMaxMM = useMemo(
               </InsetLabeledField>
             </div>
 
-            <div className="sm:col-span-2">
-              <div className="my-3 border-t border-slate-200/70" />
-            </div>
 
-            <div className="sm:col-span-2">
-              <div className="mt-1 flex items-center gap-3">
-                <div className="min-w-0 text-sm font-medium text-slate-700">High-contrast</div>
-                <Button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setHighContrastMode(v => !v)}
-                  className={`shrink-0 inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-        ${highContrastMode
-                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                    : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-                >
-                  <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
-        ${highContrastMode ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
-                    <span className="h-3 w-3 rounded-full bg-white shadow" />
-                  </span>
-                  {highContrastMode ? 'On' : 'Off'}
-                </Button>
-              </div>
-            </div>
-
-            <div className="sm:col-span-2">
-              <InsetLabeledField label="Radius">
-                <div className=" ">
-                  <Slider
-                    type="range"
-                    min={10}
-                    max={Math.max(10, Math.floor(Math.min(box.w, box.h) / 2) - 4)}
-                    step={shouldSnapMainRadius ? 0.1 : 1}
-                    value={radiusMM}
-                    onChange={e => {
-                      const min = 10;
-                      const max = Math.max(10, Math.floor(Math.min(box.w, box.h) / 2) - 4);
-                      const raw = Number(e.target.value);
-                      touchedRef.current.main.radius = true;
-                      let next = clamp(raw, min, max);
-                      if (shouldSnapMainRadius) next = snapRadiusToWholeSteps(next, tickStepMM);
-                      setRadiusMM(next);
-                    }}
-                    className="w-full"
-                  />
-                  <div className="text-xs font-medium text-slate-500 mt-1">{radiusMM} mm</div>
-                </div>
-              </InsetLabeledField>
-            </div>
 
 
             {anyBlackletter && (
@@ -1747,7 +1734,6 @@ const innerRadiusMaxMM = useMemo(
 
 
           {(script === 'Copperplate' || (topBandEnabled && topBandScript === 'Copperplate') || (bottomBandEnabled && bottomBandScript === 'Copperplate')) && <SlantStyleControl value={slantStyle} onChange={setSlantStyle} />}
-          {script !== 'Copperplate' && <div className="mt-3 rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} compact /></div>}
 
           {script === 'Copperplate' ? (
             <div className="mt-3 space-y-4">
@@ -1997,30 +1983,20 @@ const innerRadiusMaxMM = useMemo(
             </div>
           )}
 
-          <div className="my-3 border-t border-slate-200/70" />
+        </DisclosureSection>
+
+        <DisclosureSection title="Additional circles">
           <div className="space-y-3">
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-medium text-slate-700">Inner circle</div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <Toggle
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={topBandEnabled}
-                    onChange={e => {
-                      const enabled = e.target.checked;
-                      setTopBandEnabled(enabled);
-                      if (enabled && !topBandEnabled) {
-                        applyDefaultsForBand('inner', topBandScript, 'enable');
-                      }
-                    }}
-                    aria-label="Inner circle"
-                  />
-                  <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
-                  <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
-                </label>
-                <div className="ml-auto flex items-center gap-2 min-w-[14rem]">
-                  <span className="text-xs text-slate-600">Radius</span>
+              <Switch label="Inner circle" checked={topBandEnabled} onChange={enabled => {
+                setTopBandEnabled(enabled);
+                if (enabled && !topBandEnabled) {
+                  applyDefaultsForBand('inner', topBandScript, 'enable');
+                }
+              }} />
+              {topBandEnabled && <div className="space-y-2">
+                <label className="block">
+                  <span className="flex justify-between gap-2 text-xs text-slate-600">Inner radius <span className="tabular-nums">{innerRadiusMM.toFixed(1)} mm</span></span>
                   <Slider
                     type="range"
                     min={innerRadiusMinMM}
@@ -2037,70 +2013,57 @@ const innerRadiusMaxMM = useMemo(
                       const nextOffset = radiusMM - r; // larger radius => smaller inward offset
                       setInnerOffsetMM(Math.max(innerOffsetMinMM, Math.min(nextOffset, innerOffsetMaxMM)));
                     }}
-                    disabled={!topBandEnabled}
-                    className="w-full disabled:opacity-50"
+                    className="w-full"
                   />
-                  <span className="text-xs font-medium text-slate-500 w-[3.5rem] text-right">{innerRadiusMM.toFixed(1)} mm</span>
+                </label>
+                <div className="guide-option-grid">
+                  <InsetLabeledField label="Script">
+                    <Select
+                      className={INSET_CONTROL_BASE}
+                      value={topBandScript}
+                      onChange={e => handleTopBandScriptChange(e.target.value as ScriptId)}
+                    >
+                      <option value="TexturaQuadrata">Textura Quadrata</option>
+                       <option value="InsularMajuscule">Insular Majuscule</option>
+                      <option value="Fraktur">Fraktur</option>
+                      <option value="Copperplate">Copperplate</option>
+                    </Select>
+                  </InsetLabeledField>
+                  <InsetLabeledField label={topBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} rightAdornment="mm">
+                      <NumericInput
+                        type="number"
+                        step="any"
+                        min={0.2}
+                        className={INSET_CONTROL_MM}
+                        value={topBandSizeText}
+                        onChange={e => {
+                          if (topBandScript === 'Copperplate') {
+                            touchedRef.current.inner.xHeight = true;
+                          } else {
+                            touchedRef.current.inner.nib = true;
+                          }
+                          setTopBandSizeText(e.target.value);
+                        }}
+                      />
+                  </InsetLabeledField>
+                  <InsetLabeledField label="Inner text" className="col-span-full">
+                    <input className={INSET_CONTROL_BASE} value={topText} onChange={e => setTopText(e.target.value)} />
+                  </InsetLabeledField>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <InsetLabeledField label="Script" disabled={!topBandEnabled}>
-                  <Select
-                    className={INSET_CONTROL_BASE}
-                    value={topBandScript}
-                    onChange={e => handleTopBandScriptChange(e.target.value as ScriptId)}
-                    disabled={!topBandEnabled}
-                  >
-                    <option value="TexturaQuadrata">TexturaQuadrata</option>
-                     <option value="InsularMajuscule">Insular Majuscule</option>
-                    <option value="Fraktur">Fraktur</option>
-                    <option value="Copperplate">Copperplate</option>
-                  </Select>
-                </InsetLabeledField>
-                <InsetLabeledField label={topBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} disabled={!topBandEnabled} rightAdornment="mm">
-                    <NumericInput
-                      type="number"
-                      step="any"
-                      min={0.2}
-                      className={INSET_CONTROL_MM}
-                      value={topBandSizeText}
-                      onChange={e => {
-                        if (topBandScript === 'Copperplate') {
-                          touchedRef.current.inner.xHeight = true;
-                        } else {
-                          touchedRef.current.inner.nib = true;
-                        }
-                        setTopBandSizeText(e.target.value);
-                      }}
-                      disabled={!topBandEnabled}
-                    />
-                </InsetLabeledField>
-              </div>
+              </div>}
             </div>
 
             <div className="my-3 border-t border-slate-200/70" />
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-medium text-slate-700">Outer circle</div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <Toggle
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={bottomBandEnabled}
-                    onChange={e => {
-                      const enabled = e.target.checked;
-                      setBottomBandEnabled(enabled);
-                      if (enabled && !bottomBandEnabled) {
-                        applyDefaultsForBand('outer', bottomBandScript, 'enable');
-                      }
-                    }}
-                    aria-label="Outer circle"
-                  />
-                  <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
-                  <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
-                </label>
-                <div className="ml-auto flex items-center gap-2 min-w-[14rem]">
-                  <span className="text-xs text-slate-600">Radius</span>
+              <Switch label="Outer circle" checked={bottomBandEnabled} onChange={enabled => {
+                setBottomBandEnabled(enabled);
+                if (enabled && !bottomBandEnabled) {
+                  applyDefaultsForBand('outer', bottomBandScript, 'enable');
+                }
+              }} />
+              {bottomBandEnabled && <div className="space-y-2">
+                <label className="block">
+                  <span className="flex justify-between gap-2 text-xs text-slate-600">Outer radius <span className="tabular-nums">{outerRadiusMM.toFixed(1)} mm</span></span>
                   <Slider
                     type="range"
                     min={radiusMM + outerOffsetMinMM}
@@ -2119,95 +2082,57 @@ const innerRadiusMaxMM = useMemo(
                       const nextOffset = r - radiusMM;
                       setOuterOffsetMM(Math.max(outerOffsetMinMM, Math.min(nextOffset, outerOffsetMaxMM)));
                     }}
-                    disabled={!bottomBandEnabled}
-                    className="w-full disabled:opacity-50"
+                    className="w-full"
                   />
-                  <span className="text-xs font-medium text-slate-500 w-[3.5rem] text-right">{outerRadiusMM.toFixed(1)} mm
-                  </span>
+                </label>
+                <div className="guide-option-grid">
+                  <InsetLabeledField label="Script">
+                    <Select
+                      className={INSET_CONTROL_BASE}
+                      value={bottomBandScript}
+                      onChange={e => handleBottomBandScriptChange(e.target.value as ScriptId)}
+                    >
+                      <option value="TexturaQuadrata">Textura Quadrata</option>
+                       <option value="InsularMajuscule">Insular Majuscule</option>
+                      <option value="Fraktur">Fraktur</option>
+                      <option value="Copperplate">Copperplate</option>
+                    </Select>
+                  </InsetLabeledField>
+                  <InsetLabeledField label={bottomBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} rightAdornment="mm">
+                      <NumericInput
+                        type="number"
+                        step="any"
+                        min={0.2}
+                        className={INSET_CONTROL_MM}
+                        value={bottomBandSizeText}
+                        onChange={e => {
+                          if (bottomBandScript === 'Copperplate') {
+                            touchedRef.current.outer.xHeight = true;
+                          } else {
+                            touchedRef.current.outer.nib = true;
+                          }
+                          setBottomBandSizeText(e.target.value);
+                        }}
+                      />
+                  </InsetLabeledField>
+                  <InsetLabeledField label="Outer text" className="col-span-full">
+                    <input className={INSET_CONTROL_BASE} value={bottomText} onChange={e => setBottomText(e.target.value)} />
+                  </InsetLabeledField>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <InsetLabeledField label="Script" disabled={!bottomBandEnabled}>
-                  <Select
-                    className={INSET_CONTROL_BASE}
-                    value={bottomBandScript}
-                    onChange={e => handleBottomBandScriptChange(e.target.value as ScriptId)}
-                    disabled={!bottomBandEnabled}
-                  >
-                    <option value="TexturaQuadrata">TexturaQuadrata</option>
-                     <option value="InsularMajuscule">Insular Majuscule</option>
-                    <option value="Fraktur">Fraktur</option>
-                    <option value="Copperplate">Copperplate</option>
-                  </Select>
-                </InsetLabeledField>
-                <InsetLabeledField label={bottomBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} disabled={!bottomBandEnabled} rightAdornment="mm">
-                    <NumericInput
-                      type="number"
-                      step="any"
-                      min={0.2}
-                      className={INSET_CONTROL_MM}
-                      value={bottomBandSizeText}
-                      onChange={e => {
-                        if (bottomBandScript === 'Copperplate') {
-                          touchedRef.current.outer.xHeight = true;
-                        } else {
-                          touchedRef.current.outer.nib = true;
-                        }
-                        setBottomBandSizeText(e.target.value);
-                      }}
-                      disabled={!bottomBandEnabled}
-                    />
-                </InsetLabeledField>
-              </div>
+              </div>}
             </div>
           </div>
         </DisclosureSection>
 
 
         {/* Step 3 */}
-        <DisclosureSection title="Text & Placement" defaultOpen headerAction={<InfoTip side="right">Check text fit and preview overlays.</InfoTip>}>
+        <ConstructionGuideControls scripts={[script, topBandEnabled && topBandScript, bottomBandEnabled && bottomBandScript]} value={constructionGuides} onChange={setConstructionGuides} />
 
-
-          <div className="grid grid-cols-1 gap-4 mt-3 select-none">
-            <InsetLabeledField label="Title text">
-              <input className={INSET_CONTROL_BASE} value={text} onChange={e => setText(e.target.value)} placeholder="Enter main text" />
-            </InsetLabeledField>
-
-            {topBandEnabled && (
-              <InsetLabeledField label="Inner text">
-                <input className={INSET_CONTROL_BASE} value={topText} onChange={e => setTopText(e.target.value)} />
-              </InsetLabeledField>
-            )}
-
-            {bottomBandEnabled && (
-              <InsetLabeledField label="Outer text">
-                <input className={INSET_CONTROL_BASE} value={bottomText} onChange={e => setBottomText(e.target.value)} />
-              </InsetLabeledField>
-            )}
-          </div>
-
-          <div className="my-3 border-t border-slate-200/70" />
-          <div className="mt-4 flex flex-wrap items-center gap-4">
-            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-              <Toggle
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                checked={showBoxes}
-                onChange={e => setShowBoxes(e.target.checked)}
-              />
-              Letter bounding boxes
-            </label>
-
-            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-              <Toggle
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                checked={showSpanFill}
-                onChange={e => setShowSpanFill(e.target.checked)}
-              />
-              Title span fill
-            </label>
-          </div>
+        <DisclosureSection title="Preview options">
+          <Switch label="Show guide tags" checked={showGuideTags} onChange={setShowGuideTags} />
+          <Switch label="Letter bounding boxes" checked={showBoxes} onChange={setShowBoxes} />
+          <Switch label="Title span fill" checked={showSpanFill} onChange={setShowSpanFill} />
+          <Switch label="High contrast" checked={highContrastMode} onChange={setHighContrastMode} />
         </DisclosureSection>
       </section>
 </>}></EditorWorkspace>

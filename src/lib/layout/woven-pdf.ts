@@ -5,6 +5,7 @@ import { layoutWovenModel } from './woven';
 import { elementRotationCenter } from './element-transform';
 import { rotatePoint } from './geometry';
 import { computeRasterPxPerMM } from '@/lib/export/raster-export';
+import { pdfTagCommands } from '@/lib/guides/sheet-labels';
 
 const encoder=new TextEncoder();
 const bytes=(s:string)=>encoder.encode(s);
@@ -60,12 +61,25 @@ export async function layeredLayoutPdf(svg:SVGSVGElement,elements:LayoutElement[
       commands.push('% Woven vector layer');
       for(const stroke of scene.strokes){commands.push(`${rgb(stroke.color)} RG ${n(pt(stroke.width))} w`);stroke.points.forEach((p,i)=>{const q=locate(p);commands.push(`${n(pt(q.x))} ${n(height-pt(q.y))} ${i?'l':'m'}`);});commands.push('S');}
       for(const label of scene.labels){const p=locate(label.point),r=-angle*Math.PI/180,text=label.text.replace(/[^\x20-\x7e]/g,'?').replace(/([\\()])/g,'\\$1');commands.push(`BT /F1 ${n(pt(label.size))} Tf ${rgb(label.color)} rg ${n(Math.cos(r))} ${n(Math.sin(r))} ${n(-Math.sin(r))} ${n(Math.cos(r))} ${n(pt(p.x))} ${n(height-pt(p.y))} Tm (${text}) Tj ET`);}
+      for (const tag of scene.tags ?? []) commands.push(pdfTagCommands(tag, locate, page.height, angle));
       continue;
     }
     if(element.type==='guidelines'&&(usesCustomMask(element)||element.mask?.enabled&&element.mask.arrangement)){
       const layer=Array.from(svg.querySelectorAll('[data-layout-id]')).find(node=>node.getAttribute('data-layout-id')===element.id);
       if(layer) {
         commands.push('% Custom SVG mask vector layer',customMaskPdfCommands(layer,element,height,states).join('\n'));
+        const text = layer.querySelector('[data-guide-label="header"]');
+        if (text) {
+          const angle = element.rotationDeg ?? 0, centre = elementRotationCenter(element);
+          const content = text.textContent ?? '';
+          const size = Number(text.getAttribute('font-size'));
+          const x = Number(text.getAttribute('x')), y = Number(text.getAttribute('y'));
+          const available = Number(text.getAttribute('textLength')) || Infinity;
+          const labelSize = Math.min(size, available / Math.max(1, content.length * .61));
+          commands.push(pdfTagCommands({
+            text: content, size: labelSize, point: { x, y }, align: 'start',
+          }, p => rotatePoint(p, centre, angle), page.height, angle));
+        }
       }
       continue;
     }

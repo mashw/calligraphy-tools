@@ -239,8 +239,7 @@ export default function WovenPage() {
             {selected && <span>Crossing {model.crossings.findIndex(c => c.id === selected) + 1} selected</span>}
           </PreviewMeta>
         </section>
-</>} inspector={<>
-<div className="inspector-actions"><details><summary>Related tools</summary><nav aria-label="Related tools">
+</>} help={<CompactHelp label="Related tools" below><nav aria-label="Related tools">
           <Link className={button} href="/calligram">
             Calligram
           </Link>
@@ -250,7 +249,8 @@ export default function WovenPage() {
           <Link className={button} href="/path-guides">
             Path Guides
           </Link>
-        </nav></details><ActionGroup label="Design files">
+        </nav></CompactHelp>} inspector={<>
+<div className="inspector-actions"><ActionGroup label="Design files">
           <Button className={button} onClick={() => fileRef.current?.click()}>
             Open design
           </Button>

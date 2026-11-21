@@ -1,8 +1,10 @@
 'use client';
 
+import { SheetLabels } from '@/components/preview/SheetLabels';
+import { curveTags, guideLabel } from '@/lib/guides/sheet-labels';
 import { InspectorIntro } from '@/components/editor/Controls';
 
-import { Button, Select, Toggle, NumericInput, Slider } from '@/components/editor/Controls';
+import { Button, Select, Toggle, Switch, NumericInput, Slider } from '@/components/editor/Controls';
 
 import { InfoTip, InsetLabeledField, INSET_CONTROL_BASE, INSET_CONTROL_MM, INSET_CONTROL_WIDE } from '@/components/editor/Controls';
 
@@ -375,6 +377,7 @@ export default function CurvedTitlePage() {
   const [userScaleFactor, setUserScaleFactor] = useState(1);
   const [userSpaceFactor, setUserSpaceFactor] = useState(1);
 
+  const [showGuideTags, setShowGuideTags] = useState(false);
   const [showBoxes, setShowBoxes] = useState(false);
   const [showSpanFill, setShowSpanFill] = useState(true);
 
@@ -1527,6 +1530,11 @@ export default function CurvedTitlePage() {
                   </g>
                 )}
               </g>
+              {showGuideTags && <SheetLabels tags={curveTags([
+                { name: 'Main', text: guideLabel(script, xMM, nibMM), guides: guideSet },
+                ...(topBandEnabled ? [{ name: 'Top', text: guideLabel(topBandScript, topXMM, topBandSizeMM), guides: topGuideSet }] : []),
+                ...(bottomBandEnabled ? [{ name: 'Bottom', text: guideLabel(bottomBandScript, bottomXMM, bottomBandSizeMM), guides: bottomGuideSet }] : []),
+              ])} />}
             </svg>
 
             <div className="pointer-events-none absolute right-3 bottom-2 text-[13px] text-slate-700 text-right space-y-0.5">
@@ -1542,6 +1550,39 @@ export default function CurvedTitlePage() {
           </InspectorIntro>} inspector={<>
 <section className="   mx-auto grid grid-cols-1  gap-6">
         {/* Step 1 */}
+        <DisclosureSection title="Text & curve" defaultOpen>
+          <div className="space-y-3">
+            <div className="sm:col-span-2">
+              <InsetLabeledField label="Title text">
+              <input className={INSET_CONTROL_BASE} value={text} onChange={e => setText(e.target.value)} />
+              </InsetLabeledField>
+            </div>
+            <div className="sm:col-span-2">
+              <InsetLabeledField label="Curve">
+                <Select className={INSET_CONTROL_BASE} value={curve} onChange={e => setCurve(e.target.value as CurvePresetId)}>
+                  <option value="simpleArch">Simple Arch</option>
+                  <option value="highArch">High Arch</option>
+                  <option value="shallowArch">Shallow Arch</option>
+                  <option value="compoundArch">Compound Arch</option>
+                  <option value="zanerian">Zanerian Resolution</option>
+                  <option value="custom">Custom</option>
+                </Select>
+              </InsetLabeledField>
+              {curve === 'custom' && <CustomCurveUpload value={customCurve} onChange={setCustomCurve} />}
+            </div>
+
+              <div>
+              <InsetLabeledField label="Text alignment">
+                <Select className={INSET_CONTROL_BASE} value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
+                <option value="start">Start</option>
+                <option value="center">Centered</option>
+                <option value="end">End</option>
+              </Select>
+              </InsetLabeledField>
+            </div>
+          </div>
+        </DisclosureSection>
+
         <DisclosureSection title="Document & Script" defaultOpen headerAction={<InfoTip side="right">Curve guide movement snaps to horizontal centre unless you pull far enough to release.</InfoTip>}>
 
 
@@ -1593,45 +1634,11 @@ export default function CurvedTitlePage() {
               </InsetLabeledField>
             </div>
 
-            <div className="sm:col-span-2">
-              <InsetLabeledField label="Curve">
-                <Select className={INSET_CONTROL_BASE} value={curve} onChange={e => setCurve(e.target.value as CurvePresetId)}>
-                  <option value="simpleArch">Simple Arch</option>
-                  <option value="highArch">High Arch</option>
-                  <option value="shallowArch">Shallow Arch</option>
-                  <option value="compoundArch">Compound Arch</option>
-                  <option value="zanerian">Zanerian Resolution</option>
-                  <option value="custom">Custom</option>
-                </Select>
-              </InsetLabeledField>
-              {curve === 'custom' && <CustomCurveUpload value={customCurve} onChange={setCustomCurve} />}
-            </div>
 
-            <div className="sm:col-span-2">
-              <div className="my-2 border-t border-slate-200/70" />
-            </div>
 
-            <div className="sm:col-span-2">
-              <InsetLabeledField label="Title text">
-              <input className={INSET_CONTROL_BASE} value={text} onChange={e => setText(e.target.value)} />
-              </InsetLabeledField>
-            </div>
 
-            {topBandEnabled && (
-              <div className="sm:col-span-2">
-                <InsetLabeledField label="Top text">
-                <input className={INSET_CONTROL_BASE} value={topText} onChange={e => setTopText(e.target.value)} />
-                </InsetLabeledField>
-              </div>
-            )}
 
-            {bottomBandEnabled && (
-              <div className="sm:col-span-2">
-                <InsetLabeledField label="Bottom text">
-                <input className={INSET_CONTROL_BASE} value={bottomText} onChange={e => setBottomText(e.target.value)} />
-                </InsetLabeledField>
-              </div>
-            )}
+
           </div>
         </DisclosureSection>
 
@@ -1644,7 +1651,6 @@ export default function CurvedTitlePage() {
 
 
           {(script === 'Copperplate' || (topBandEnabled && topBandScript === 'Copperplate') || (bottomBandEnabled && bottomBandScript === 'Copperplate')) && <SlantStyleControl value={slantStyle} onChange={setSlantStyle} />}
-          {script !== 'Copperplate' && <div className="mt-3 rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} compact /></div>}
 
           {script === 'Copperplate' ? (
             <div className="mt-3 space-y-4">
@@ -2031,32 +2037,26 @@ export default function CurvedTitlePage() {
             </div>
           )}
 
-          <div className="my-3 border-t border-slate-200/70" />
+        </DisclosureSection>
+
+        <DisclosureSection title="Additional bands">
           <div className="space-y-3">
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-medium text-slate-700">Top band</div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <Toggle type="checkbox" className="sr-only peer" checked={topBandEnabled} onChange={e => setTopBandEnabled(e.target.checked)} aria-label="Top band" />
-                  <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
-                  <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <InsetLabeledField label="Script" disabled={!topBandEnabled}>
+              <Switch label="Top band" checked={topBandEnabled} onChange={setTopBandEnabled} />
+              {topBandEnabled && <div className="guide-option-grid">
+                <InsetLabeledField label="Script">
                   <Select
                     className={INSET_CONTROL_BASE}
                     value={topBandScript}
                     onChange={e => setTopBandScript(e.target.value as ScriptId)}
-                    disabled={!topBandEnabled}
                   >
-                    <option value="TexturaQuadrata">TexturaQuadrata</option>
+                    <option value="TexturaQuadrata">Textura Quadrata</option>
                      <option value="InsularMajuscule">Insular Majuscule</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="Copperplate">Copperplate</option>
                   </Select>
                 </InsetLabeledField>
-                <InsetLabeledField label={topBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} disabled={!topBandEnabled} rightAdornment="mm">
+                <InsetLabeledField label={topBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} rightAdornment="mm">
                     <NumericInput
                       type="number"
                       step="any"
@@ -2064,37 +2064,31 @@ export default function CurvedTitlePage() {
                       className={INSET_CONTROL_MM}
                       value={topBandSizeText}
                       onChange={e => setTopBandSizeText(e.target.value)}
-                      disabled={!topBandEnabled}
                     />
                 </InsetLabeledField>
-              </div>
+                <InsetLabeledField label="Top text" className="col-span-full">
+                  <input className={INSET_CONTROL_BASE} value={topText} onChange={e => setTopText(e.target.value)} />
+                </InsetLabeledField>
+              </div>}
             </div>
 
             <div className="my-3 border-t border-slate-200/70" />
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-medium text-slate-700">Bottom band</div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <Toggle type="checkbox" className="sr-only peer" checked={bottomBandEnabled} onChange={e => setBottomBandEnabled(e.target.checked)} aria-label="Bottom band" />
-                  <span className="w-9 h-5 bg-slate-300 rounded-full transition-colors peer-checked:bg-indigo-600" />
-                  <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <InsetLabeledField label="Script" disabled={!bottomBandEnabled}>
+              <Switch label="Bottom band" checked={bottomBandEnabled} onChange={setBottomBandEnabled} />
+              {bottomBandEnabled && <div className="guide-option-grid">
+                <InsetLabeledField label="Script">
                   <Select
                     className={INSET_CONTROL_BASE}
                     value={bottomBandScript}
                     onChange={e => setBottomBandScript(e.target.value as ScriptId)}
-                    disabled={!bottomBandEnabled}
                   >
-                    <option value="TexturaQuadrata">TexturaQuadrata</option>
+                    <option value="TexturaQuadrata">Textura Quadrata</option>
                      <option value="InsularMajuscule">Insular Majuscule</option>
                     <option value="Fraktur">Fraktur</option>
                     <option value="Copperplate">Copperplate</option>
                   </Select>
                 </InsetLabeledField>
-                <InsetLabeledField label={bottomBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} disabled={!bottomBandEnabled} rightAdornment="mm">
+                <InsetLabeledField label={bottomBandScript === 'Copperplate' ? 'x-height' : 'Nib size'} rightAdornment="mm">
                     <NumericInput
                       type="number"
                       step="any"
@@ -2102,17 +2096,21 @@ export default function CurvedTitlePage() {
                       className={INSET_CONTROL_MM}
                       value={bottomBandSizeText}
                       onChange={e => setBottomBandSizeText(e.target.value)}
-                      disabled={!bottomBandEnabled}
                     />
                 </InsetLabeledField>
-              </div>
+                <InsetLabeledField label="Bottom text" className="col-span-full">
+                  <input className={INSET_CONTROL_BASE} value={bottomText} onChange={e => setBottomText(e.target.value)} />
+                </InsetLabeledField>
+              </div>}
             </div>
           </div>
         </DisclosureSection>
 
 
         {/* Step 3 */}
-        <DisclosureSection title="Shape, Path & Guides" defaultOpen headerAction={<InfoTip side="right">Rotate and scale the curve.</InfoTip>}>
+        <ConstructionGuideControls scripts={[script, topBandEnabled && topBandScript, bottomBandEnabled && bottomBandScript]} value={constructionGuides} onChange={setConstructionGuides} />
+
+        <DisclosureSection title="Position & transform" defaultOpen headerAction={<InfoTip side="right">Rotate and scale the curve.</InfoTip>}>
 
 
           <div className="grid grid-cols-1 gap-4 mt-3 select-none">
@@ -2146,37 +2144,11 @@ export default function CurvedTitlePage() {
             </div>
           </div>
 
-            <div className="my-3 border-t border-slate-200/70" />
-              <div>
-              <InsetLabeledField label="Text alignment">
-                <Select className={INSET_CONTROL_BASE} value={align} onChange={e => setAlign(e.target.value as AlignMode)}>
-                <option value="start">Start</option>
-                <option value="center">Centered</option>
-                <option value="end">End</option>
-              </Select>
-              </InsetLabeledField>
-            </div>
-          <div className="mt-4 flex items-center gap-4">
-            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-              <Toggle
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                checked={showBoxes}
-                onChange={e => setShowBoxes(e.target.checked)}
-              />
-              Letter bounding boxes
-            </label>
-
-            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-              <Toggle
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                checked={showSpanFill}
-                onChange={e => setShowSpanFill(e.target.checked)}
-              />
-              Title span fill
-            </label>
-          </div>
+        </DisclosureSection>
+        <DisclosureSection title="Preview options">
+          <Switch label="Show guide tags" checked={showGuideTags} onChange={setShowGuideTags} />
+          <Switch label="Letter bounding boxes" checked={showBoxes} onChange={setShowBoxes} />
+          <Switch label="Title span fill" checked={showSpanFill} onChange={setShowSpanFill} />
         </DisclosureSection>
       </section>
 </>}></EditorWorkspace>

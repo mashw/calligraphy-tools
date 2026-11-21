@@ -1,8 +1,11 @@
 'use client';
+import { SheetHeader } from '@/components/preview/SheetLabels';
+import { guideLabel } from '@/lib/guides/sheet-labels';
+import { calculateGuidelinesVerticalMetrics } from '@/lib/guides/straight/model';
 import {LayoutWovenRenderer} from '@/components/woven/WovenRenderer';
 import {layeredLayoutPdf} from '@/lib/layout/woven-pdf';
 
-import { Button, Toggle, Select } from '@/components/editor/Controls';
+import { Button, Switch, Toggle, Select } from '@/components/editor/Controls';
 
 
 import { pointBounds } from '@/lib/editor/camera';
@@ -272,7 +275,11 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
 <Button onClick={()=>setExportModal('svg')} className={`${control} ml-1`}>SVG</Button>
 <Button onClick={exportPdf} className={control}>PDF</Button>
 <Button onClick={() => { setCricutMessage(null); setExportModal('cricut'); }} className={control}>Cricut Draw</Button>
-<label className="flex shrink-0 items-center gap-1 text-xs text-slate-700"><Toggle type="checkbox" checked={showCricutSafeArea} onChange={event => setShowCricutSafeArea(event.target.checked)} />Show Cricut safe area</label>
+<Button popoverTarget="layout-preview-options" aria-haspopup="dialog">Preview options</Button>
+<div id="layout-preview-options" popover="auto" role="dialog" aria-label="Preview options"
+  className="m-auto w-72 max-w-[90vw] rounded border bg-white p-3 shadow-lg">
+  <Switch label="Show Cricut safe area" checked={showCricutSafeArea} onChange={setShowCricutSafeArea} />
+</div>
 <Button onClick={print} className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500">Print</Button></PreviewToolbar>
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-300">
       <svg ref={svgRef} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="editor-svg" style={{ background: '#cbd5e1' }} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}>
@@ -294,6 +301,9 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
             <g data-full-detail="true" style={{display:previewSimplify&&!internal?'none':undefined}}><ElementVisual element={detailElement} frame={previewSimplify?detailElement.frame:frame} simplify={false} selected={element.id === selectedId} textFitEntry={internal&&draft?null:textFitPlans[element.id]??null} onPlannedLinePlacementChange={onPlannedLinePlacementChange}/></g>
             {internal&&detailElement.type==='guidelines'&&<GuidelineHandles element={detailElement} preview={setDraft} commit={a=>onArrangement(element.id,a)}/>}
             {previewSimplify&&!internal&&<g data-no-export="true"><ElementVisual element={element} frame={frame} simplify selected={element.id===selectedId} textFitEntry={textFitPlans[element.id]??null} onPlannedLinePlacementChange={onPlannedLinePlacementChange}/></g>}
+            {element.type === 'guidelines' && element.showGuideTags && <SheetHeader
+              text={guideLabel(element.settings.script, calculateGuidelinesVerticalMetrics(element.settings).xMM, element.settings.nibMM)}
+              x={frame.x} y={frame.y - 2} width={frame.width} />}
           </g>;
         })}
         {showCricutSafeArea && <g data-no-export="true" pointerEvents="none">
@@ -430,7 +440,7 @@ function ElementVisual({ element, frame, simplify, selected, textFitEntry,onPlan
       </g>}
     </>);
   }
-  if (element.type === 'calligram') return <g transform={`translate(${frame.x} ${frame.y})`}><CalligramRenderer box={{w:frame.width,h:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`} pageBackground={(element.settings.transparentWhitespace??true)?PAGE_BACKGROUND:undefined} paddingMM={element.paddingMM} selected={selected}/></g>;
-  if (element.type === 'curved-title') return <g transform={`translate(${frame.x} ${frame.y})`}><CurvedTitleRenderer box={{w:frame.width,h:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`} pageBackground={!(element.settings.transparentWhitespace??true)?PAGE_BACKGROUND:undefined} paddingMM={element.paddingMM} selected={selected} /></g>;
+  if (element.type === 'calligram') return <g transform={`translate(${frame.x} ${frame.y})`}><CalligramRenderer box={{w:frame.width,h:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`} pageBackground={(element.settings.transparentWhitespace??true)?PAGE_BACKGROUND:undefined} paddingMM={element.paddingMM} selected={selected} showGuideTags={element.showGuideTags}/></g>;
+  if (element.type === 'curved-title') return <g transform={`translate(${frame.x} ${frame.y})`}><CurvedTitleRenderer box={{w:frame.width,h:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`} pageBackground={!(element.settings.transparentWhitespace??true)?PAGE_BACKGROUND:undefined} paddingMM={element.paddingMM} selected={selected} showGuideTags={element.showGuideTags} /></g>;
   return <rect {...common} rx="2" fill="#fef3c7" stroke="#d97706" strokeWidth=".8" />;
 }

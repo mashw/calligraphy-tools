@@ -37,7 +37,7 @@ export function createDefaultGuidelinesSettings(): GuidelinesSettings {
     grid: { widthMode: 'effective', customWidthMM: Math.SQRT2, contrast: .5, thickness: 1, horizontal: true, vertical: true, nibAngleGuide: true },
     constructionGuides: { ...DEFAULT_CONSTRUCTION_GUIDES },
     horizontalGridAppearance: { ...DEFAULT_HORIZONTAL_GRID_APPEARANCE },
-    appearance: { baselineIndicator: false, baselineColor: '#111827', waistlineColor: '#111827', xLineContrast: 1, xLineThickness: 1, midpointDashGap: 6, midpointDashContrast: .5, highContrast: false, centerLine: false },
+    appearance: { baselineIndicator: true, baselineColor: '#111827', waistlineColor: '#111827', xLineContrast: 1, xLineThickness: 1, midpointDashGap: 6, midpointDashContrast: .5, highContrast: false, centerLine: false },
   };
 }
 

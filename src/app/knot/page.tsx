@@ -2,7 +2,7 @@
 
 import { InspectorIntro } from '@/components/editor/Controls';
 
-import { Toggle, NumericInput, Select, Button, Slider } from '@/components/editor/Controls';
+import { Switch, NumericInput, Select, Button, Slider } from '@/components/editor/Controls';
 
 import { useRef as useCameraRef } from 'react';
 import { pointBounds } from '@/lib/editor/camera';
@@ -342,15 +342,7 @@ const camera = useEditorCamera(svgRef, {x:0,y:0,w:BOX.w,h:BOX.h}, pointBounds(sa
     <EditorWorkspace preview={<>
 <section className="">
         <div className="preview-panel  mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4">
-          <PreviewToolbar camera={camera}><label className="inline-flex items-center gap-2 cursor-pointer shrink-0   text-sm rounded-lg border border-slate-300 bg-white">
-                <Toggle
-                  type="checkbox"
-                  checked={showShadow}
-                  onChange={e => setShowShadow(e.target.checked)}
-                  className="rounded border-slate-300"
-                />
-                <span className="text-slate-700">Under-shadow</span>
-              </label></PreviewToolbar>
+          <PreviewToolbar camera={camera} />
 
           <div className="relative overflow-x-auto rounded-xl border border-slate-200 bg-slate-300">
             <svg ref={svgRef}
@@ -523,32 +515,24 @@ const camera = useEditorCamera(svgRef, {x:0,y:0,w:BOX.w,h:BOX.h}, pointBounds(sa
             </div>
           </DisclosureSection>
 
-          <DisclosureSection title="Layers & Crossings" defaultOpen>
-
-            <div className="mt-3 space-y-2 max-h-72 overflow-auto pr-1">
-              {crossings.length === 0 ? (
-                <p className="text-sm text-slate-500">No crossings detected with the current shape.</p>
-              ) : crossings.map(c => (
-                <div
-                  key={c.id}
-                  className={`rounded-lg border p-3 ${selectedCrossingId === c.id ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white'}`}
-                >
-                  <Button
-                    onClick={() => setSelectedCrossingId(c.id)}
-                    className="w-full text-left"
-                  >
-                    <div className="text-sm font-medium text-slate-800">Crossing #{c.id}</div>
-                    <div className="text-xs text-slate-500 mt-0.5">Over: Branch {c.over}</div>
+          <DisclosureSection title="Crossings">
+            {crossings.length === 0 ? (
+              <p className="text-sm text-slate-500">No crossings on this knot.</p>
+            ) : <ul className="space-y-1">
+              {crossings.map(crossing => (
+                <li key={crossing.id} className="flex items-center justify-between gap-2">
+                  <Button aria-pressed={selectedCrossingId === crossing.id} className="min-w-0 px-2 text-left"
+                    onClick={() => setSelectedCrossingId(crossing.id)}>
+                    Crossing {crossing.id} <span className="text-xs text-slate-500">· Branch {crossing.over} over</span>
                   </Button>
-                  <Button
-                    onClick={() => flipCrossing(c.id)}
-                    className="mt-2   text-xs rounded-md border border-slate-300 bg-white hover:bg-slate-50"
-                  >
-                    Flip
-                  </Button>
-                </div>
+                  <Button className="shrink-0 px-2" aria-label={`Flip crossing ${crossing.id}`}
+                    onClick={() => flipCrossing(crossing.id)}>Flip</Button>
+                </li>
               ))}
-            </div>
+            </ul>}
+          </DisclosureSection>
+          <DisclosureSection title="Preview options">
+            <Switch label="Under-shadow" checked={showShadow} onChange={setShowShadow} />
           </DisclosureSection>
         </div>
       </section>

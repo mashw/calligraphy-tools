@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 import { Button } from '@/components/editor/Controls';
 
 import type { ElementType, LayoutElement } from '@/lib/layout/types';
@@ -16,10 +17,13 @@ type Props = {
 };
 
 const icons: Record<ElementType, string> = { woven:'⋈', page: '▱', guidelines: '☰', calligram: '◯', 'curved-title': '⌒', shape: '◇', artwork:'✧' };
-const button = 'h-7 w-7 rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30';
+const button = 'layer-action';
 const fileButton = 'rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50';
 
 export default function LayersPanel({ className = '', elements, selectedId, onSelect, onAdd, onAddArtwork, artworkMessage, onToggleLock, onMove, onDuplicate, onDelete, onSaveDesign, onOpenDesign, designMessage, onToggleVisibility }: Props) {
+  const addMenu = useRef<HTMLDetailsElement>(null);
+  const artworkInput = useRef<HTMLInputElement>(null);
+  const closeAddMenu = () => { if (addMenu.current) addMenu.current.open = false; };
   const additions: [Exclude<ElementType, 'page'|'artwork'>, string][] = [['woven','Woven Calligraphy'], ['guidelines', 'Guidelines'], ['calligram', 'Calligram'], ['curved-title', 'Curved title'], ['shape', 'Shape']];
   return <section className={`flex min-h-0 flex-col rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 ${className}`}>
     <div className="flex items-center justify-between gap-3">
@@ -30,20 +34,32 @@ export default function LayersPanel({ className = '', elements, selectedId, onSe
       </div>
     </div>
     {designMessage&&<p className={`mt-2 text-xs ${designMessage.kind==='error'?'text-red-700':'text-emerald-700'}`}>{designMessage.text}</p>}
-    <div className="mt-3 flex flex-wrap gap-2">{additions.map(([type, label]) => <Button key={type} onClick={() => onAdd(type)} className="rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100">+ {label}</Button>)}<label className="cursor-pointer rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100">+ Artwork<input className="sr-only" type="file" accept=".svg,image/svg+xml" multiple onChange={event=>{if(event.target.files?.length)onAddArtwork(event.target.files);event.target.value='';}}/></label></div>
+    <details className="mt-2" ref={addMenu}>
+      <summary className={`${fileButton} cursor-pointer`}>Add element</summary>
+      <div className="guide-option-grid mt-2">
+        {additions.map(([type, label]) => <Button key={type} onClick={() => { onAdd(type); closeAddMenu(); }}>
+          {label}
+        </Button>)}
+        <Button onClick={() => { closeAddMenu(); artworkInput.current?.click(); }}>Artwork</Button>
+      </div>
+    </details>
+    <input ref={artworkInput} hidden type="file" accept=".svg,image/svg+xml" multiple onChange={event => {
+      if (event.target.files?.length) onAddArtwork(event.target.files);
+      event.target.value = '';
+    }} />
     {artworkMessage&&<p className="mt-2 text-xs text-amber-700">{artworkMessage}</p>}
     <div className="mt-3 min-h-0 space-y-1 overflow-y-auto">{elements.map((element, index) => {
       const page = element.type === 'page';
       return <div key={element.id} role="button" tabIndex={0} onClick={() => onSelect(element.id)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onSelect(element.id); }} className={`flex items-center gap-2 rounded-lg border px-2 py-2 ${selectedId === element.id ? 'border-indigo-400 bg-indigo-50' : 'border-transparent hover:bg-slate-50'}`}>
         <span aria-hidden className="w-5 text-center text-slate-500">{icons[element.type]}</span><span className="min-w-0 flex-1 truncate font-medium">{element.name}</span>
-        <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-          <Button aria-label={element.visible===false?'Show element':'Hide element'} disabled={page} onClick={()=>onToggleVisibility(element.id)} className={button}>{element.visible===false?'○':'◉'}</Button>
-          <Button title={element.locked ? 'Unlock' : 'Lock'} aria-label={element.locked ? 'Unlock' : 'Lock'} disabled={page} onClick={() => onToggleLock(element.id)} className={button}>{element.locked ? '🔒' : '♢'}</Button>
-          <Button title="Move up" aria-label="Move up" disabled={page || index === 0} onClick={() => onMove(element.id, -1)} className={button}>↑</Button>
-          <Button title="Move down" aria-label="Move down" disabled={page || elements[index + 1]?.type === 'page'} onClick={() => onMove(element.id, 1)} className={button}>↓</Button>
-          <Button title="Duplicate" aria-label="Duplicate" disabled={page} onClick={() => onDuplicate(element.id)} className={button}>⧉</Button>
-          <Button title="Delete" aria-label="Delete" disabled={page} onClick={() => onDelete(element.id)} className={button}>×</Button>
-        </div>
+        {!page && <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+          <Button aria-label={element.visible===false?'Show element':'Hide element'} onClick={()=>onToggleVisibility(element.id)} className={button}>{element.visible===false?'○':'◉'}</Button>
+          <Button title={element.locked ? 'Unlock' : 'Lock'} aria-label={element.locked ? 'Unlock' : 'Lock'} onClick={() => onToggleLock(element.id)} className={button}>{element.locked ? '🔒' : '♢'}</Button>
+          <Button title="Move up" aria-label="Move up" disabled={index === 0} onClick={() => onMove(element.id, -1)} className={button}>↑</Button>
+          <Button title="Move down" aria-label="Move down" disabled={elements[index + 1]?.type === 'page'} onClick={() => onMove(element.id, 1)} className={button}>↓</Button>
+          <Button title="Duplicate" aria-label="Duplicate" onClick={() => onDuplicate(element.id)} className={button}>⧉</Button>
+          <Button title="Delete" aria-label="Delete" onClick={() => onDelete(element.id)} className={button}>×</Button>
+        </div>}
       </div>;
     })}</div>
   </section>;

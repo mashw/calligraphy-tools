@@ -1,8 +1,10 @@
 'use client';
 
+import { SheetHeader } from '@/components/preview/SheetLabels';
+import { guideLabel } from '@/lib/guides/sheet-labels';
 import { InspectorIntro } from '@/components/editor/Controls';
 
-import { Select, NumericInput, Toggle, Button } from '@/components/editor/Controls';
+import { Select, NumericInput, Toggle, Switch, Button } from '@/components/editor/Controls';
 
 import { InfoTip } from '@/components/editor/Controls';
 
@@ -520,6 +522,7 @@ export default function Home() {
   const [xNib, setXNib] = useState(BLACKLETTER_GUIDE_DEFAULTS.xNib);
   const [constructionGuides, setConstructionGuides] = useState<ConstructionGuideSettings>({ upper: false, lower: false, color: '#dc2626' });
 
+  const [showSheetHeader, setShowSheetHeader] = useState(false);
   const [showLetterBoxes, setShowLetterBoxes] = useState(true);
   const [vw, setVw] = useState<number | null>(null);
 
@@ -803,13 +806,14 @@ export default function Home() {
         ? 'text-orange-500'
         : 'text-slate-500';
 
+  const headerHeight = showSheetHeader ? 30 : 0;
   const svgRef = useCameraRef<SVGSVGElement>(null);
- const camera = useEditorCamera(svgRef, {x:0,y:0,w:stageFrame.widthPx,h:stageFrame.heightPx}, {x:0,y:0,w:stageFrame.widthPx,h:stageFrame.heightPx});
+ const camera = useEditorCamera(svgRef, {x:0,y:0,w:stageFrame.widthPx,h:stageFrame.heightPx + headerHeight}, {x:0,y:0,w:stageFrame.widthPx,h:stageFrame.heightPx + headerHeight});
  return (
     <EditorWorkspace preview={<>
 <section className="">
         <div className="preview-panel  mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4">
-          <PreviewToolbar camera={camera} pageLabel="Fit lines" help={<p>
+          <PreviewToolbar camera={camera} pageLabel="Fit lines" showFitContent={false} help={<p>
                 Copperplate: includes entry stroke before the first letter and (if ending on lowercase) an exit stroke after the last lowercase.
                 Word spaces include exit + gap + entry. Calibration adjusts lowercase scale + spacing.
                 Textura: nib-based widths + spacing.
@@ -822,8 +826,12 @@ export default function Home() {
               preserveAspectRatio="xMidYMid meet"
               shapeRendering="crispEdges"
             >
-              <rect x={0} y={0} width={stageFrame.widthPx} height={stageFrame.heightPx} fill="white" />
+              <rect x={0} y={0} width={stageFrame.widthPx} height={stageFrame.heightPx + headerHeight} fill="white" />
 
+              {showSheetHeader && <SheetHeader
+                text={guideLabel(script, guideTemplate === 'blackletter' ? guideHeights.xMM : xHeight, nibMM, script === 'Copperplate' ? undefined : penAngleDeg)}
+                x={10} y={20} width={stageFrame.widthPx - 20} size={13} />}
+              <g transform={`translate(0 ${headerHeight})`}>
               {alignment === 'center' ? (
                 <line
                   x1={stageFrame.centerX}
@@ -868,6 +876,7 @@ export default function Home() {
                   showInsularGrid={showInsularGrid}
                 />
               ))}
+              </g>
             </svg>
           </div>
         </div>
@@ -876,6 +885,49 @@ export default function Home() {
             Textura Quadrata uses nib-unit widths and spacing.
           </InspectorIntro>} inspector={<>
 <div className="inspector-stack">
+            {/* STEP 2 — Enter lines */}
+            <DisclosureSection title="Text & Placement" defaultOpen headerAction={<InfoTip side="right">Type one line per row.</InfoTip>}>
+
+              <textarea aria-label="Text lines"
+                className="w-full h-36 p-3 mt-2 rounded-lg border border-slate-300 outline-none focus:ring-2 focus:ring-indigo-500"
+                value={linesInput}
+                onChange={(e) => setLinesInput(e.target.value)}
+                placeholder="One line per row"
+              />
+            </DisclosureSection>
+<DisclosureSection title="Measurements & Results" defaultOpen>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border border-slate-200 rounded-lg overflow-hidden">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="text-left p-2 text-slate-700">#</th>
+                  <th className="text-left p-2 text-slate-700">Line</th>
+                  <th className="text-right p-2 text-slate-700">Length</th>
+                  <th className="text-right p-2 text-slate-700">{alignment === 'center' ? 'Start from centre' : 'Start from right edge'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lineMetrics.map((metric, idx) => (
+                  <tr key={idx} className="border-t border-slate-200">
+                    <td className="p-2">{idx + 1}</td>
+                    <td className="p-2">{metric.text || <em>(empty)</em>}</td>
+                    <td className="p-2 text-right">{mm(metric.lengthMM)}</td>
+                    <td className="p-2 text-right">
+                      {mm(
+                        metric.startFromRefMM +
+                        (script === 'Copperplate' && alignment === 'right' && rightAlignMode === 'waist'
+                          ? copperDxMaxMM
+                          : 0)
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DisclosureSection>
+
             {/* STEP 1 — Basics */}
             <DisclosureSection title="Document & Script" defaultOpen headerAction={<InfoTip side="right">Choose script + working sizes and alignment.</InfoTip>}>
 
@@ -1037,48 +1089,16 @@ export default function Home() {
                   </>
                 )}
                 {script === 'InsularMajuscule' && <label className="sm:col-span-3 inline-flex items-center gap-2 text-sm"><Toggle type="checkbox" checked={showInsularGrid} onChange={e => setShowInsularGrid(e.target.checked)} /> Show intermediate grid</label>}
-                 {script !== 'Copperplate' && <div className="sm:col-span-3 rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} compact /></div>}
 
-                <label className="inline-flex items-center gap-2 text-sm text-slate-800 sm:col-span-3">
-                  <Toggle
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                    checked={showLetterBoxes}
-                    onChange={(e) => setShowLetterBoxes(e.target.checked)}
-                  />
-                  Show letter bounding boxes
-                </label>
-
-                <div className="sm:col-span-3">
-                  <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-                    <Toggle
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                      checked={normalizePreviewHeight}
-                      onChange={(e) => setNormalizePreviewHeight(e.target.checked)}
-                    />
-                    Normalize preview height (6mm)
-                  </label>
-                  <p className="ml-6 mt-1 text-[11px] text-slate-400">
-                    Preview only — does not affect measurements.
-                  </p>
-                </div>
               </div>
             </DisclosureSection>
 
-            {/* STEP 2 — Enter lines */}
-            <DisclosureSection title="Text & Placement" defaultOpen headerAction={<InfoTip side="right">Type one line per row.</InfoTip>}>
+            <ConstructionGuideControls scripts={[script]} value={constructionGuides} onChange={setConstructionGuides} />
 
-              <textarea
-                className="w-full h-36 p-3 mt-2 rounded-lg border border-slate-300 outline-none focus:ring-2 focus:ring-indigo-500"
-                value={linesInput}
-                onChange={(e) => setLinesInput(e.target.value)}
-                placeholder="One line per row"
-              />
-            </DisclosureSection>
+
           </div>
 {script === 'Copperplate' && (
-        <DisclosureSection title="Advanced Calibration" defaultOpen>
+        <DisclosureSection title="Advanced Calibration">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
 
@@ -1255,38 +1275,11 @@ export default function Home() {
             </div>
           </DisclosureSection>
       )}
-<DisclosureSection title="Measurements & Results" defaultOpen>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border border-slate-200 rounded-lg overflow-hidden">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="text-left p-2 text-slate-700">#</th>
-                  <th className="text-left p-2 text-slate-700">Line</th>
-                  <th className="text-right p-2 text-slate-700">Length</th>
-                  <th className="text-right p-2 text-slate-700">Start from reference</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lineMetrics.map((metric, idx) => (
-                  <tr key={idx} className="border-t border-slate-200">
-                    <td className="p-2">{idx + 1}</td>
-                    <td className="p-2">{metric.text || <em>(empty)</em>}</td>
-                    <td className="p-2 text-right">{mm(metric.lengthMM)}</td>
-                    <td className="p-2 text-right">
-                      {mm(
-                        metric.startFromRefMM +
-                        (script === 'Copperplate' && alignment === 'right' && rightAlignMode === 'waist'
-                          ? copperDxMaxMM
-                          : 0)
-                      )}{' '}
-                      {alignment === 'center' ? 'from center' : 'from right edge'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <DisclosureSection title="Preview options">
+          <Switch label="Show sheet header" checked={showSheetHeader} onChange={setShowSheetHeader} />
+          <Switch label="Show letter bounding boxes" checked={showLetterBoxes} onChange={setShowLetterBoxes} />
+          <Switch label="Normalise preview height (6 mm)" checked={normalizePreviewHeight} onChange={setNormalizePreviewHeight} />
         </DisclosureSection>
 </>}><style>{`
         .ct-svg-text { font-size: clamp(12.5px, 1.35vw, 14.5px); }

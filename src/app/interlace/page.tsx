@@ -1,10 +1,12 @@
 'use client';
 
+import { SheetLabels } from '@/components/preview/SheetLabels';
+import { interlaceGuideTags } from '@/lib/interlace/model';
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import EditorWorkspace from '@/components/editor/EditorWorkspace';
 import PreviewToolbar from '@/components/editor/PreviewToolbar';
 import { useEditorCamera } from '@/components/editor/useEditorCamera';
-import { Button, NumericInput, Select } from '@/components/editor/Controls';
+import { Button, NumericInput, Select, Switch } from '@/components/editor/Controls';
 import DisclosureSection from '@/components/layout/DisclosureSection';
 import WovenSettings from '@/components/woven/WovenSettings';
 import { WovenScene } from '@/components/woven/WovenRenderer';
@@ -59,7 +61,7 @@ export default function InterlaceStudio() {
   const page=pageSize(sheet),frame={x:0,y:0,w:page.w,h:page.h};
   const entries=useMemo(()=>sheet.strands.filter(s=>s.visible).map(s=>({s,route:strandRoute(s,sheet)})),[sheet]);
   const graph=useMemo(()=>busy?null:topology(sheet),[sheet,busy]);
-  const full=useMemo(()=>graph && !simplify?renderSheet(sheet,graph):null,[sheet,graph,simplify]);
+  const full=useMemo(()=>graph && !simplify?renderSheet(sheet,graph,{guideTags:false}):null,[sheet,graph,simplify]);
   const camera=useEditorCamera(svg,frame,pointBounds(entries.flatMap(e=>e.route.points),frame,10));
   const fits=useMemo(()=>graph?sheet.strands.filter(s=>s.visible&&s.textPlan?.text).map(s=>({id:s.id,name:s.name,fit:textFit(sheet,s,graph)})):[],[sheet,graph]);
   const fit=fits.find(f=>f.id===active)?.fit??null;
@@ -181,15 +183,23 @@ export default function InterlaceStudio() {
       <Button onClick={()=>setPlotOpen(false)}>Close export</Button>
     </section>}
     <PreviewToolbar camera={camera}><Button aria-pressed={simplify} onClick={()=>setSimplify(!simplify)}>Simplify</Button>
-      {(['SVG','PDF','Cricut Draw','Print','Export for Layout'] as const).map(kind=><Button key={kind} onClick={()=>output(kind)}>{kind}</Button>)}
       <Button aria-pressed={contrast} onClick={()=>setContrast(!contrast)}>High contrast</Button>
-      <Button className="min-w-28" popoverTarget="interlace-warnings" aria-haspopup="dialog">Warnings ({warn.length})</Button>
-      <div id="interlace-warnings" popover="auto" role="dialog" aria-label="Design warnings" className="m-auto w-80 max-w-[90vw] rounded border bg-white p-3 shadow-lg"><h2 className="font-semibold">Design warnings</h2>{warn.length?<ul className="space-y-2 text-sm">{warn.map(w=><li key={w}>{w}</li>)}</ul>:<p>No design warnings.</p>}<Button popoverTarget="interlace-warnings" popoverTargetAction="hide">Close warnings</Button></div>
+      {warn.length > 0 && <>
+        <Button popoverTarget="interlace-warnings" aria-haspopup="dialog">Warnings ({warn.length})</Button>
+        <div id="interlace-warnings" popover="auto" role="dialog" aria-label="Design warnings" className="m-auto w-80 max-w-[90vw] rounded border bg-white p-3 shadow-lg">
+          <h2 className="font-semibold">Design warnings</h2>
+          <ul className="space-y-2 text-sm">{warn.map(warning => <li key={warning}>{warning}</li>)}</ul>
+          <Button popoverTarget="interlace-warnings" popoverTargetAction="hide">Close warnings</Button>
+        </div>
+      </>}
+      <div className={row} role="group" aria-label="Export">
+      {(['SVG','PDF','Cricut Draw','Print','Export for Layout'] as const).map(kind=><Button key={kind} onClick={()=>output(kind)}>{kind}</Button>)}
       <Button popoverTarget="interlace-export-options" aria-haspopup="dialog">Export options</Button>
       <div id="interlace-export-options" popover="auto" role="dialog" aria-label="Export options" className="m-auto w-80 max-w-[90vw] rounded border bg-white p-3 shadow-lg"><label><input type="checkbox" checked={includeText} onChange={e=>setIncludeText(e.target.checked)}/> Include text-position boxes in SVG / PDF / Print</label><p className="text-xs">Layout and Cricut exports always contain writing guides only. High contrast is preview only.</p><Button popoverTarget="interlace-export-options" popoverTargetAction="hide">Close options</Button></div>
+      </div>
     </PreviewToolbar>
     <div role="status" aria-label="Action notification" aria-live="polite" aria-atomic="true" className={notice?'pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 max-w-[90vw] items-start gap-2 rounded border bg-white p-3 text-sm shadow-lg':'sr-only'}>{notice}{notice&&<Button className="pointer-events-auto" aria-label="Dismiss notification" onClick={()=>setNotice('')}>×</Button>}</div>
-    <div className={row}>{(['Move','Crossings','Joins'] as const).map(v=><Button key={v} aria-pressed={mode===v} onClick={()=>setMode(v)}>{v}</Button>)}</div>
+    <div className={row} role="group" aria-label="Editing mode">{(['Move','Crossings','Joins'] as const).map(v=><Button key={v} aria-pressed={mode===v} onClick={()=>setMode(v)}>{v}</Button>)}</div>
     <svg ref={svg} className="editor-svg bg-slate-200" viewBox={camera.str} aria-label="Interlace writing sheet"
       onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={()=>{if(drag.current){setSheet(drag.current.sheet);drag.current=null;setBusy(false);}}}>
       <defs><clipPath id="interlace-paper"><rect width={page.w} height={page.h}/></clipPath></defs>
@@ -205,10 +215,13 @@ export default function InterlaceStudio() {
           fill={sheet.joins.some(link=>link.from===j.from.id&&link.to===j.to.id)?'#16836b':'white'} stroke="#16836b" strokeWidth={.5}
           onClick={()=>toggleJoin(j.from.id,j.to.id)}/>)}
       </g>
+      {sheet.showGuideTags && <SheetLabels tags={interlaceGuideTags(sheet, entries)} />}
     </svg></section>} layers={<div className="space-y-2">
       <DisclosureSection title="Composition" defaultOpen><div className={row}>
         <Select aria-label="Paper" value={sheet.paper} onChange={e=>commit({...sheet,paper:e.target.value as Sheet['paper']})}>{Object.keys(PAPERS_MM).map(p=><option key={p}>{p}</option>)}</Select>
         <Select aria-label="Orientation" value={sheet.orientation} onChange={e=>commit({...sheet,orientation:e.target.value as Sheet['orientation']})}><option>portrait</option><option>landscape</option></Select>
+        <Switch label="Show guide tags" checked={sheet.showGuideTags ?? false} onChange={showGuideTags => commit({...sheet,showGuideTags})} />
+        <Button aria-pressed={sheet.snap} onClick={()=>commit({...sheet,snap:!sheet.snap})}>Snap 0.5 mm</Button>
         <Button onClick={()=>{download(JSON.stringify({...sheet,editor:{active,simplify,contrast,camera:camera.snapshot}},null,2),'application/json','interlace.json');setNotice('Design saved.');}}>Save</Button>
         <Button onClick={()=>file.current?.click()}>Open design</Button><input hidden type="file" ref={file} accept=".json" onChange={e=>{const f=e.target.files?.[0];e.target.value='';if(f)void open(f);}}/>
         <Select aria-label="Composition preset" value="" onChange={e=>{
@@ -234,15 +247,17 @@ export default function InterlaceStudio() {
       <DisclosureSection title="Strands" defaultOpen><div className="space-y-1">
         {[...sheet.strands].reverse().map((s,index)=><div key={s.id}
           className={'flex items-center gap-1 rounded px-1 text-sm '+(active===s.id?'bg-indigo-50':'')}>
-          <input type="checkbox" title="Visibility" aria-label={'Show '+s.name} checked={s.visible}
-            onChange={()=>commit({...sheet,strands:sheet.strands.map(v=>v.id===s.id?{...v,visible:!v.visible}:v)})}/>
+          <Button title={s.visible ? 'Hide' : 'Show'} aria-label={(s.visible ? 'Hide ' : 'Show ') + s.name}
+            className="layer-action" onClick={() => commit({...sheet,strands:sheet.strands.map(v=>v.id===s.id?{...v,visible:!v.visible}:v)})}>
+            {s.visible ? '◉' : '○'}
+          </Button>
           <button className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left" aria-pressed={active===s.id} onClick={()=>setActive(s.id)}>
             <span className="h-3 w-1 shrink-0 rounded" style={{background:s.color}}/><span className="truncate">{s.name}</span>
           </button>
-          <button title={s.locked?'Unlock':'Lock'} aria-label={'Toggle lock '+s.name} aria-pressed={s.locked}
-            onClick={()=>commit({...sheet,strands:sheet.strands.map(v=>v.id===s.id?{...v,locked:!v.locked}:v)})}>{s.locked?'🔒':'🔓'}</button>
-          <button className="px-1 disabled:opacity-30" title="Raise" aria-label={'Raise '+s.name} disabled={s.locked||index===0} onClick={()=>reorder(s.id,1)}>↑</button>
-          <button className="px-1 disabled:opacity-30" title="Lower" aria-label={'Lower '+s.name} disabled={s.locked||index===sheet.strands.length-1} onClick={()=>reorder(s.id,-1)}>↓</button>
+          <Button className="layer-action" title={s.locked?'Unlock':'Lock'} aria-label={'Toggle lock '+s.name} aria-pressed={s.locked}
+            onClick={()=>commit({...sheet,strands:sheet.strands.map(v=>v.id===s.id?{...v,locked:!v.locked}:v)})}>{s.locked ? '🔒' : '♢'}</Button>
+          <Button className="layer-action" title="Raise" aria-label={'Raise '+s.name} disabled={s.locked||index===0} onClick={()=>reorder(s.id,1)}>↑</Button>
+          <Button className="layer-action" title="Lower" aria-label={'Lower '+s.name} disabled={s.locked||index===sheet.strands.length-1} onClick={()=>reorder(s.id,-1)}>↓</Button>
         </div>)}
         {current && <div className={row}>
           <Button onClick={()=>add([{...current,id:crypto.randomUUID(),name:current.name+' copy',locked:false,group:'',design:{...current.design,centerX:(current.design.centerX??page.w/2)+5}}])}>Duplicate</Button>
@@ -268,7 +283,7 @@ export default function InterlaceStudio() {
           <div className={row}><Button onClick={()=>design({centerX:page.w/2})}>Centre X</Button><Button onClick={()=>design({centerY:page.h/2})}>Centre Y</Button>
             <Button aria-pressed={current.mirror} onClick={()=>patch({mirror:!current.mirror})}>Mirror</Button>
             <Button aria-pressed={current.invert} onClick={()=>patch({invert:!current.invert})}>Invert guides</Button>
-            <Button aria-pressed={sheet.snap} onClick={()=>commit({...sheet,snap:!sheet.snap})}>Snap 0.5 mm</Button></div>
+</div>
         </div></DisclosureSection>
         <TextFitPanel value={current.textPlan} result={fit} copperplate={current.design.script==='Copperplate'} onChange={textPlan=>patch({textPlan})}/>
         <WovenSettings design={current.design} onChange={d=>patch({design:d})}/>

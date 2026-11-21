@@ -1,9 +1,11 @@
 'use client';
 
+import { SheetHeader } from '@/components/preview/SheetLabels';
+import { guideLabel } from '@/lib/guides/sheet-labels';
 import { InspectorIntro } from '@/components/editor/Controls';
 import PreviewMeta from '@/components/editor/PreviewMeta';
 
-import { Button, Select, NumericInput, Slider, Toggle } from '@/components/editor/Controls';
+import { Button, Select, NumericInput, Slider, Switch } from '@/components/editor/Controls';
 
 import { InfoTip } from '@/components/editor/Controls';
 
@@ -599,6 +601,7 @@ const slantAngleDeg = useMemo(() => {
 
   const guideTemplate = script === 'Copperplate' ? 'copperplate' : 'blackletter';
 
+  const [showSheetHeader, setShowSheetHeader] = useState(true);
   const [marginTopMM, setMarginTopMM] = useState(sharedDefaults.margins.top);
   const [marginBottomMM, setMarginBottomMM] = useState(sharedDefaults.margins.bottom);
   const [marginLeftMM, setMarginLeftMM] = useState(sharedDefaults.margins.left);
@@ -606,12 +609,12 @@ const slantAngleDeg = useMemo(() => {
 
   const margins = useMemo(
     () => ({
-      top: marginTopMM,
+      top: showSheetHeader ? Math.max(10, marginTopMM) : marginTopMM,
       bottom: marginBottomMM,
       left: marginLeftMM,
       right: marginRightMM,
     }),
-    [marginTopMM, marginBottomMM, marginLeftMM, marginRightMM],
+    [showSheetHeader, marginTopMM, marginBottomMM, marginLeftMM, marginRightMM],
   );
 
 
@@ -761,9 +764,7 @@ const slantAngleDeg = useMemo(() => {
     <EditorWorkspace preview={<>
 <section className=" ">
         <div className="preview-panel  mx-auto bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-4 sm:p-6">
-          <PreviewToolbar camera={camera}><Button onMouseDown={e => e.preventDefault()} onClick={camera.top} className="min-h-10   text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
-                Top
-              </Button>
+          <PreviewToolbar camera={camera} showTop>
 <Button onMouseDown={e => e.preventDefault()} onClick={downloadSVG} className="  text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50">
                 SVG
               </Button>
@@ -811,6 +812,10 @@ const slantAngleDeg = useMemo(() => {
               {/* Paper */}
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
 
+              {showSheetHeader && <SheetHeader
+                text={guideLabel(script, xMM, nibMM, script === 'Copperplate' ? slantAngleDeg : penAngleDeg)}
+                x={Math.max(2, Math.min(margins.left, box.w - 8))} y={Math.min(box.h - 3, margins.top - 3.5)}
+                width={Math.max(4, box.w - margins.left - margins.right)} />}
               <GuidelinesRenderer box={{ width: box.w, height: box.h }} settings={rendererSettings} idPrefix="standalone-guidelines" />
             </svg>
 
@@ -827,7 +832,7 @@ const slantAngleDeg = useMemo(() => {
           </InspectorIntro>} inspector={<>
 <section className="    mx-auto grid grid-cols-1  items-start gap-6">
         {/* Step 1 */}
-        <DisclosureSection title="Document & Appearance" defaultOpen headerAction={<InfoTip side="right">Guidelines are spaced by x-height + ascender + descender.</InfoTip>}>
+        <DisclosureSection title="Paper & margins" defaultOpen headerAction={<InfoTip side="right">The sheet header uses at least 10 mm of top margin.</InfoTip>}>
 
 
           <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -935,166 +940,6 @@ const slantAngleDeg = useMemo(() => {
               </div>
             </div>
 
-            <div className="col-span-full">
-              <div className="my-2 border-t border-slate-200/70" />
-            </div>
-
-            <div className="col-span-full">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* Baseline */}
-                <div className="flex min-w-0 flex-col items-stretch gap-2">
-                  <div className="min-w-0 text-sm font-medium text-slate-700">Baseline</div>
-                  <Button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => setShowBaselineIndicator(v => !v)}
-                    className={`shrink-0 inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-        ${showBaselineIndicator
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                        : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
-        ${showBaselineIndicator ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
-                      <span className="h-3 w-3 rounded-full bg-white shadow" />
-                    </span>
-                    {showBaselineIndicator ? 'On' : 'Off'}
-                  </Button>
-                </div>
-
-                {/* High-contrast */}
-                <div className="flex min-w-0 flex-col items-stretch gap-2">
-                  <div className="min-w-0 text-sm font-medium text-slate-700">High-contrast</div>
-                  <Button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => {
-                      setHighContrastMode((prev) => {
-                        const next = !prev;
-                        if (next) {
-                          gridContrastBeforeHigh.current = gridContrast;
-                          setGridContrast(0.75);
-                        } else {
-                          setGridContrast(gridContrastBeforeHigh.current ?? 0.5);
-                          gridContrastBeforeHigh.current = null;
-                        }
-                        return next;
-                      });
-                    }}
-                    className={`shrink-0 inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-        ${highContrastMode
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                        : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
-        ${highContrastMode ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
-                      <span className="h-3 w-3 rounded-full bg-white shadow" />
-                    </span>
-                    {highContrastMode ? 'On' : 'Off'}
-                  </Button>
-                </div>
-
-                {/* Center */}
-                <div className="flex min-w-0 flex-col items-stretch gap-2">
-                  <div className="min-w-0 text-sm font-medium text-slate-700">Center</div>
-                  <Button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => setShowCenterLine(v => !v)}
-                    className={`shrink-0 inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-        ${showCenterLine
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                        : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
-        ${showCenterLine ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
-                      <span className="h-3 w-3 rounded-full bg-white shadow" />
-                    </span>
-                    {showCenterLine ? 'On' : 'Off'}
-                  </Button>
-                </div>
-              </div>
-            </div>
-            <div className="col-span-full">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
-                {/* Baseline color */}
-                <label className="flex items-center justify-between gap-3">
-                  <span className="font-medium text-slate-700">Baseline color</span>
-                  <input
-                    type="color"
-                    className="h-10 w-10 shrink-0 p-0 rounded-md border border-slate-300 bg-white"
-                    value={baselineColor}
-                    onChange={(e) => {
-                      setBaselineColor(e.target.value);
-                      setHighContrastMode(false);
-                    }}
-                  />
-                </label>
-
-                {/* Waistline color */}
-                <label className="flex items-center justify-between gap-3">
-                  <span className="font-medium text-slate-700">Waistline color</span>
-                  <input
-                    type="color"
-                    className="h-10 w-10 shrink-0 p-0 rounded-md border border-slate-300 bg-white"
-                    value={waistlineColor}
-                    onChange={(e) => {
-                      setWaistlineColor(e.target.value);
-                      setHighContrastMode(false);
-                    }}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div className="col-span-full">
-              <div className="my-5 border-t border-slate-200/70" />
-            </div>
-
-            {/* X-line contrast */}
-            <div>
-              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                <label className="font-medium text-slate-700">X-line contrast</label>
-                <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : xLineContrast) * 100)}%</span>
-              </div>
-              <Slider
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                className="mt-2 w-full"
-                value={highContrastMode ? 1 : xLineContrast}
-                onChange={(e) => {
-                  setXLineContrast(parseFloat(e.target.value));
-                  setHighContrastMode(false);
-                }}
-              />
-              <p className="mt-1 text-xs text-slate-500">
-                Affects only ascender, waistline, baseline, descender. Contrast scales alpha; hue is preserved.
-              </p>
-            </div>
-
-            {/* X-line thickness */}
-            <div>
-              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                <label className="font-medium text-slate-700">X-line thickness</label>
-                <span className="text-xs text-slate-500">{(highContrastMode ? 1.8 : xLineThickness).toFixed(2)}×</span>
-              </div>
-              <Slider
-                type="range"
-                min="0.6"
-                max="2.5"
-                step="0.05"
-                className="mt-2 w-full"
-                value={highContrastMode ? 1.8 : xLineThickness}
-                onChange={(e) => {
-                  setXLineThickness(parseFloat(e.target.value));
-                  setHighContrastMode(false);
-                }}
-              />
-              <p className="mt-1 text-xs text-slate-500">Multiplies the stroke thickness of the main four X-lines.</p>
-            </div>
-
-
           </div>
         </DisclosureSection>
 
@@ -1115,6 +960,7 @@ const slantAngleDeg = useMemo(() => {
                 <div className="flex-1 min-w-0">
                   <Select
                     className="w-full p-2 rounded-lg border border-slate-300"
+                    aria-label="Script"
                     value={script}
                     onChange={(e) => setScript(e.target.value as ScriptId)}
                   >
@@ -1385,48 +1231,6 @@ const slantAngleDeg = useMemo(() => {
                       </Select>
                     </div>
 
-                    {/* Grid width */}
-                    {showGridControls ? (
-                      <div className="space-y-2">
-                        <label className="font-medium text-slate-700">Grid width</label>
-                        <Select
-                          className="mt-1 w-full p-2 rounded-lg border border-slate-300"
-                          value={gridWidthMode}
-                          onChange={(e) => setGridWidthMode(e.target.value as 'effective' | 'actual' | 'custom')}
-                        >
-                          <option value="effective">Stroke-width</option>
-                          <option value="actual">Actual nib</option>
-                          <option value="custom">Custom</option>
-                        </Select>
-                        {gridWidthMode === 'custom' && <label className="block font-medium text-slate-700">Custom grid width<div className="relative"><NumericInput className="mt-1 w-full rounded-lg border border-slate-300 p-2 pr-10" type="number" min="0.1" step="0.1" value={customGridWidthMM} onChange={e => { const next = Number(e.target.value); if (Number.isFinite(next) && next >= .1) setCustomGridWidthMM(next); }} /><span className="pointer-events-none absolute right-3 top-3 text-sm text-slate-400">mm</span></div></label>}
-                      </div>
-                    ) : (
-                      <div />
-                    )}
-
-                    {/* Angle guide toggle */}
-                    {showGridControls ? (
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-slate-700">Angle guide</div>
-                        <Button
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => setShowNibAngleGuide((v) => !v)}
-                          className={`mt-1 inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-                            ${showNibAngleGuide
-                              ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                              : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-                        >
-                          <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
-                            ${showNibAngleGuide ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
-                            <span className="h-3 w-3 rounded-full bg-white shadow" />
-                          </span>
-                          {showNibAngleGuide ? 'On' : 'Off'}
-                        </Button>
-                      </div>
-                    ) : (
-                      <div />
-                    )}
                   </div>
 
                   {/* Row 3: ascender / descender */}
@@ -1456,273 +1260,329 @@ const slantAngleDeg = useMemo(() => {
                       />
                     </div>
                   </div>
-                  <div className="rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={script} value={constructionGuides} onChange={setConstructionGuides} /></div>
                 </div>
               </>
             )}
           </div>
 
-          <div className="my-5 border-t border-slate-200/70" />
+        </DisclosureSection>
 
-          {/* Sliders (unchanged) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-6">
-            {script === 'Copperplate' && (
-              <>
-                {/* 1st asc/desc dash spacing */}
-                <div>
-                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                    <label className="font-medium text-slate-700">1st asc/desc spacing</label>
-                    <span className="text-xs text-slate-500">{midlineDashGap.toFixed(1)} mm</span>
-                  </div>
-                  <Slider
-                    type="range"
-                    min="2"
-                    max="14"
-                    step="0.5"
-                    className="mt-2 w-full"
-                    value={midlineDashGap}
-                    onChange={(e) => setMidlineDashGap(parseFloat(e.target.value))}
-                  />
-                  <p className="mt-1 text-xs text-slate-500">
-                    Controls the gap between dashes on the 1st ascender/descender reference lines.
-                  </p>
-                </div>
-
-                {/* 1st asc/desc contrast */}
-                <div>
-                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                    <label className="font-medium text-slate-700">1st asc/desc contrast</label>
-                    <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : midlineDashContrast) * 100)}%</span>
-                  </div>
-                  <Slider
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    className="mt-2 w-full"
-                    value={highContrastMode ? 1 : midlineDashContrast}
+        <DisclosureSection title="Guide appearance">
+          <Switch label="Show sheet header" checked={showSheetHeader} onChange={setShowSheetHeader} />
+          <div className="guide-option-grid">
+            <div className="col-span-full space-y-1">
+              <Switch label="Baseline indicator" checked={showBaselineIndicator} onChange={setShowBaselineIndicator} />
+              <Switch label="High contrast" checked={highContrastMode} onChange={enabled => {
+                if (enabled) {
+                  gridContrastBeforeHigh.current = gridContrast;
+                  setGridContrast(0.75);
+                } else {
+                  setGridContrast(gridContrastBeforeHigh.current ?? 0.5);
+                  gridContrastBeforeHigh.current = null;
+                }
+                setHighContrastMode(enabled);
+              }} />
+              <Switch label="Centre line" checked={showCenterLine} onChange={setShowCenterLine} />
+            </div>
+            <div className="col-span-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                {/* Baseline color */}
+                <label className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-slate-700">Baseline color</span>
+                  <input
+                    type="color"
+                    className="h-10 w-10 shrink-0 p-0 rounded-md border border-slate-300 bg-white"
+                    value={baselineColor}
                     onChange={(e) => {
-                      setMidlineDashContrast(parseFloat(e.target.value));
+                      setBaselineColor(e.target.value);
                       setHighContrastMode(false);
                     }}
                   />
-                  <p className="mt-1 text-xs text-slate-500">
-                    Adjusts only the 1st ascender/descender dashed reference lines.
-                  </p>
-                </div>
-              </>
-            )}
+                </label>
 
-{script === 'Copperplate' && (
-  <>
-    <div className="col-span-full">
-      <div className="my-5 border-t border-slate-200/70" />
-    </div>
-
-    {/* Slant angle */}
-    <div>
-      <div className="flex min-w-0 flex-col items-stretch gap-2">
-        <label className="block font-medium text-slate-700">Slant angle</label>
-        <div className="relative flex-1 min-w-0">
-          <NumericInput
-            type="number"
-            step={1}
-            min={0}
-            max={90}
-            className="w-full p-2 pr-10 rounded-lg border border-slate-300"
-            value={slantAngleText}
-            onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-            onChange={(e) => setSlantAngleText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-              e.preventDefault();
-
-              const current = parseInt(slantAngleText, 10);
-              const safe = Number.isFinite(current) ? current : 55;
-              const dir = e.key === 'ArrowUp' ? 1 : -1;
-              setSlantAngleText(String(safe + dir));
-            }}
-            onBlur={() => {
-              const v = parseInt(slantAngleText, 10);
-              if (!Number.isFinite(v)) {
-                setSlantAngleText('55');
-                return;
-              }
-              setSlantAngleText(String(Math.min(90, Math.max(0, v))));
-            }}
-          />
-          <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-base font-semibold text-slate-600">°</span>
-        </div>
-      </div>
-    </div>
-
-    <div>
-      <div className="flex min-w-0 flex-col items-stretch gap-2">
-        <div className="flex items-center gap-2">
-          <label className="font-medium text-slate-700">Slant 2</label>
-          <Toggle
-            type="checkbox"
-            checked={enableSlant2}
-            onChange={(e) => setEnableSlant2(e.target.checked)}
-          />
-        </div>
-        <div className="relative flex-1 min-w-0">
-          <NumericInput
-            type="number"
-            step={1}
-            min={0}
-            max={90}
-            className={`w-full p-2 pr-10 rounded-lg border border-slate-300 ${enableSlant2 ? '' : 'bg-slate-50 opacity-60 cursor-not-allowed'}`}
-            value={slantAngle2}
-            disabled={!enableSlant2}
-            onChange={(e) => {
-              const v = parseInt(e.target.value, 10);
-              setSlantAngle2(Number.isFinite(v) ? v : 55);
-            }}
-            onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-            onBlur={() => setSlantAngle2((v) => Math.min(90, Math.max(0, v)))}
-          />
-          <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-base font-semibold text-slate-600">°</span>
-        </div>
-      </div>
-    </div>
-
-    {/* Slant spacing */}
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <label className="font-medium text-slate-700">Slant spacing</label>
-        <span className="text-xs text-slate-500">
-          {slantSpacingMM.toFixed(1)} mm
-        </span>
-      </div>
-      <Slider
-        type="range"
-        min="4"
-        max="30"
-        step="0.5"
-        className="mt-2 w-full"
-        value={slantSpacingMM}
-        onChange={(e) => setSlantSpacingMM(parseFloat(e.target.value))}
-      />
-    </div>
-
-    {/* Slant contrast */}
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <label className="font-medium text-slate-700">Slant contrast</label>
-        <span className="text-xs text-slate-500">
-          {Math.round((highContrastMode ? 1 : slantLineContrast) * 100)}%
-        </span>
-      </div>
-      <Slider
-        type="range"
-        min="0"
-        max="1"
-        step="0.01"
-        className="mt-2 w-full"
-        value={highContrastMode ? 1 : slantLineContrast}
-        onChange={(e) => {
-          setSlantLineContrast(parseFloat(e.target.value));
-          setHighContrastMode(false);
-        }}
-      />
-    </div>
-  </>
-)}
-
-
-
-            {showGridControls && (
-              <>
-                <div>
-                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                    <label className="font-medium text-slate-700">Grid contrast</label>
-                    <span className="text-xs text-slate-500">{Math.round(gridContrast * 100)}%</span>
-                  </div>
-                  <Slider
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    className="mt-2 w-full"
-                    value={gridContrast}
+                {/* Waistline color */}
+                <label className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-slate-700">Waistline color</span>
+                  <input
+                    type="color"
+                    className="h-10 w-10 shrink-0 p-0 rounded-md border border-slate-300 bg-white"
+                    value={waistlineColor}
                     onChange={(e) => {
-                      setGridContrast(parseFloat(e.target.value));
+                      setWaistlineColor(e.target.value);
                       setHighContrastMode(false);
                     }}
                   />
-                  <p className="mt-1 text-xs text-slate-500">Controls the contrast of the square grid only.</p>
-                </div>
-
-                <div>
-                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                    <label className="font-medium text-slate-700">Grid thickness</label>
-                    <span className="text-xs text-slate-500">{gridThickness.toFixed(2)}×</span>
-                  </div>
-                  <Slider
-                    type="range"
-                    min="0.6"
-                    max="1.4"
-                    step="0.05"
-                    className="mt-2 w-full"
-                    value={gridThickness}
-                    onChange={(e) => {
-                      setGridThickness(parseFloat(e.target.value));
-                      setHighContrastMode(false);
-                    }}
-                  />
-                  <p className="mt-1 text-xs text-slate-500">Multiplies the square grid stroke thickness.</p>
-                </div>
-              </>
-            )}
-          </div>
-
-          {showGridControls && (
-            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-6">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-medium text-slate-700">Horizontal grid lines</div>
-                <Button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setShowGridHorizontal((v) => !v)}
-                  className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-            ${showGridHorizontal
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                      : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-                >
-                  <span
-                    className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
-              ${showGridHorizontal ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}
-                  >
-                    <span className="h-3 w-3 rounded-full bg-white shadow" />
-                  </span>
-                  {showGridHorizontal ? 'On' : 'Off'}
-                </Button>
-              </div>
-
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-medium text-slate-700">Vertical grid lines</div>
-                <Button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setShowGridVertical((v) => !v)}
-                  className={`inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-            ${showGridVertical
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                      : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-                >
-                  <span
-                    className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
-              ${showGridVertical ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}
-                  >
-                    <span className="h-3 w-3 rounded-full bg-white shadow" />
-                  </span>
-                  {showGridVertical ? 'On' : 'Off'}
-                </Button>
+                </label>
               </div>
             </div>
-          )}
+
+            <div className="col-span-full">
+              <div className="my-5 border-t border-slate-200/70" />
+            </div>
+
+            {/* Main guide line contrast */}
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <label className="font-medium text-slate-700">Main guide line contrast</label>
+                <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : xLineContrast) * 100)}%</span>
+              </div>
+              <Slider
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                className="mt-2 w-full"
+                value={highContrastMode ? 1 : xLineContrast}
+                onChange={(e) => {
+                  setXLineContrast(parseFloat(e.target.value));
+                  setHighContrastMode(false);
+                }}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Affects only ascender, waistline, baseline, descender. Contrast scales alpha; hue is preserved.
+              </p>
+            </div>
+
+            {/* Main guide line thickness */}
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <label className="font-medium text-slate-700">Main guide line thickness</label>
+                <span className="text-xs text-slate-500">{(highContrastMode ? 1.8 : xLineThickness).toFixed(2)}×</span>
+              </div>
+              <Slider
+                type="range"
+                min="0.6"
+                max="2.5"
+                step="0.05"
+                className="mt-2 w-full"
+                value={highContrastMode ? 1.8 : xLineThickness}
+                onChange={(e) => {
+                  setXLineThickness(parseFloat(e.target.value));
+                  setHighContrastMode(false);
+                }}
+              />
+              <p className="mt-1 text-xs text-slate-500">Multiplies the stroke thickness of the four main guide lines.</p>
+            </div>
+
+
+          </div>
         </DisclosureSection>
+
+        {script === 'Copperplate' && <DisclosureSection title="Slant & reference lines" defaultOpen>
+          <div className="guide-option-grid">
+            {/* 1st asc/desc dash spacing */}
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <label className="font-medium text-slate-700">1st asc/desc spacing</label>
+                <span className="text-xs text-slate-500">{midlineDashGap.toFixed(1)} mm</span>
+              </div>
+              <Slider
+                type="range"
+                min="2"
+                max="14"
+                step="0.5"
+                className="mt-2 w-full"
+                value={midlineDashGap}
+                onChange={(e) => setMidlineDashGap(parseFloat(e.target.value))}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Controls the gap between dashes on the 1st ascender/descender reference lines.
+              </p>
+            </div>
+
+            {/* 1st asc/desc contrast */}
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <label className="font-medium text-slate-700">1st asc/desc contrast</label>
+                <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : midlineDashContrast) * 100)}%</span>
+              </div>
+              <Slider
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                className="mt-2 w-full"
+                value={highContrastMode ? 1 : midlineDashContrast}
+                onChange={(e) => {
+                  setMidlineDashContrast(parseFloat(e.target.value));
+                  setHighContrastMode(false);
+                }}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Adjusts only the 1st ascender/descender dashed reference lines.
+              </p>
+            </div>
+
+            {/* Slant angle */}
+            <div>
+              <div className="flex min-w-0 flex-col items-stretch gap-2">
+                <label className="block font-medium text-slate-700">Slant angle</label>
+                <div className="relative flex-1 min-w-0">
+                  <NumericInput
+                    type="number"
+                    step={1}
+                    min={0}
+                    max={90}
+                    className="w-full p-2 pr-10 rounded-lg border border-slate-300"
+                    value={slantAngleText}
+                    onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                    onChange={(e) => setSlantAngleText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                      e.preventDefault();
+
+                      const current = parseInt(slantAngleText, 10);
+                      const safe = Number.isFinite(current) ? current : 55;
+                      const dir = e.key === 'ArrowUp' ? 1 : -1;
+                      setSlantAngleText(String(safe + dir));
+                    }}
+                    onBlur={() => {
+                      const v = parseInt(slantAngleText, 10);
+                      if (!Number.isFinite(v)) {
+                        setSlantAngleText('55');
+                        return;
+                      }
+                      setSlantAngleText(String(Math.min(90, Math.max(0, v))));
+                    }}
+                  />
+                  <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-base font-semibold text-slate-600">°</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex min-w-0 flex-col items-stretch gap-2">
+                <Switch label="Second slant" checked={enableSlant2} onChange={setEnableSlant2} />
+                {enableSlant2 && <div className="relative flex-1 min-w-0">
+                  <NumericInput
+                    type="number"
+                    step={1}
+                    min={0}
+                    max={90}
+                    className="w-full p-2 pr-10 rounded-lg border border-slate-300"
+                    aria-label="Second slant angle"
+                    value={slantAngle2}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      setSlantAngle2(Number.isFinite(v) ? v : 55);
+                    }}
+                    onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                    onBlur={() => setSlantAngle2((v) => Math.min(90, Math.max(0, v)))}
+                  />
+                  <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-base font-semibold text-slate-600">°</span>
+                </div>}
+              </div>
+            </div>
+
+            {/* Slant spacing */}
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <label className="font-medium text-slate-700">Slant spacing</label>
+                <span className="text-xs text-slate-500">
+                  {slantSpacingMM.toFixed(1)} mm
+                </span>
+              </div>
+              <Slider
+                type="range"
+                min="4"
+                max="30"
+                step="0.5"
+                className="mt-2 w-full"
+                value={slantSpacingMM}
+                onChange={(e) => setSlantSpacingMM(parseFloat(e.target.value))}
+              />
+            </div>
+
+            {/* Slant contrast */}
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <label className="font-medium text-slate-700">Slant contrast</label>
+                <span className="text-xs text-slate-500">
+                  {Math.round((highContrastMode ? 1 : slantLineContrast) * 100)}%
+                </span>
+              </div>
+              <Slider
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                className="mt-2 w-full"
+                value={highContrastMode ? 1 : slantLineContrast}
+                onChange={(e) => {
+                  setSlantLineContrast(parseFloat(e.target.value));
+                  setHighContrastMode(false);
+                }}
+              />
+            </div>
+          </div>
+        </DisclosureSection>}
+
+        {showGridControls && <DisclosureSection title="Grid" defaultOpen
+          headerAction={<InfoTip title="Grid help">Contrast and thickness apply to the square grid.</InfoTip>}>
+          <div className="space-y-2">
+            <Switch label="Horizontal grid lines" checked={showGridHorizontal} onChange={setShowGridHorizontal} />
+            <Switch label="Vertical grid lines" checked={showGridVertical} onChange={setShowGridVertical} />
+            <Switch label="Nib angle guide" checked={showNibAngleGuide} onChange={setShowNibAngleGuide} />
+            {(showGridHorizontal || showGridVertical || constructionGuides.upper || constructionGuides.lower) &&
+              <div className="space-y-2">
+                <label htmlFor="grid-width" className="font-medium text-slate-700">Grid width</label>
+                <Select id="grid-width"
+                  className="mt-1 w-full p-2 rounded-lg border border-slate-300"
+                  value={gridWidthMode}
+                  onChange={(e) => setGridWidthMode(e.target.value as 'effective' | 'actual' | 'custom')}
+                >
+                  <option value="effective">Stroke-width</option>
+                  <option value="actual">Actual nib</option>
+                  <option value="custom">Custom</option>
+                </Select>
+                {gridWidthMode === 'custom' && <label className="block font-medium text-slate-700">Custom grid width<div className="relative"><NumericInput className="mt-1 w-full rounded-lg border border-slate-300 p-2 pr-10" type="number" min="0.1" step="0.1" value={customGridWidthMM} onChange={e => { const next = Number(e.target.value); if (Number.isFinite(next) && next >= .1) setCustomGridWidthMM(next); }} /><span className="pointer-events-none absolute right-3 top-3 text-sm text-slate-400">mm</span></div></label>}
+              </div>
+            }
+            {(showGridHorizontal || showGridVertical) && <div className="guide-option-grid">
+              <div>
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <span className="font-medium text-slate-700">Grid contrast</span>
+                  <span className="text-xs text-slate-500">{Math.round(gridContrast * 100)}%</span>
+                </div>
+                <Slider
+                  type="range"
+                  aria-label="Grid contrast"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  className="mt-2 w-full"
+                  value={gridContrast}
+                  onChange={(e) => {
+                    setGridContrast(parseFloat(e.target.value));
+                    setHighContrastMode(false);
+                  }}
+                />
+              </div>
+
+              <div>
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <span className="font-medium text-slate-700">Grid thickness</span>
+                  <span className="text-xs text-slate-500">{gridThickness.toFixed(2)}×</span>
+                </div>
+                <Slider
+                  type="range"
+                  aria-label="Grid thickness"
+                  min="0.6"
+                  max="1.4"
+                  step="0.05"
+                  className="mt-2 w-full"
+                  value={gridThickness}
+                  onChange={(e) => {
+                    setGridThickness(parseFloat(e.target.value));
+                    setHighContrastMode(false);
+                  }}
+                />
+              </div>
+            </div>}
+          </div>
+        </DisclosureSection>}
+
+        <ConstructionGuideControls scripts={[script]} value={constructionGuides} onChange={setConstructionGuides} />
 
       </section>
 </>}></EditorWorkspace>

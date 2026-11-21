@@ -42,7 +42,8 @@ test('Woven custom dimensions, paired controls and proportional scale survive Sa
 for (const width of [390, 1024]) {
 test(`Layout alignment and quick size keep compact rows at ${width}px`,async({page})=>{
   await page.setViewportSize({width,height:768});await page.goto('/layout');
-  await page.getByRole('button',{name:'+ Shape',exact:true}).click();
+  await page.getByText('Add element', { exact: true }).click();
+  await page.getByRole('button',{name:'Shape',exact:true}).click();
   const alignment=page.getByRole('group',{name:'Alignment',exact:true});
   await expect(alignment.getByRole('button')).toHaveCount(6);
   const rows=await alignment.getByRole('button').evaluateAll(buttons=>new Set(buttons.map(b=>Math.round(b.getBoundingClientRect().top))).size);

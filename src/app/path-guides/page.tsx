@@ -1,10 +1,12 @@
 'use client';
 
+import { SheetLabels } from '@/components/preview/SheetLabels';
+import { guideLabel, routeTag } from '@/lib/guides/sheet-labels';
 import { compositionPresets } from '@/lib/paths/composition-presets';
 import { circlePathD, SHAPE_OPTIONS, shapePathD, type ShapeKind } from '@/lib/paths/presets';
 import { InspectorIntro } from '@/components/editor/Controls';
 
-import { Button, NumericInput, Slider, Select, Toggle } from '@/components/editor/Controls';
+import { Button, NumericInput, Slider, Select, Toggle, Switch } from '@/components/editor/Controls';
 
 import { INSET_CONTROL_BASE, INSET_CONTROL_MM, INSET_CONTROL_WIDE, InsetLabeledField } from '@/components/editor/Controls';
 
@@ -95,6 +97,7 @@ type ExportedStateV1 = {
   zoom: number;
   pan: { x: number; y: number };
   simplify: boolean;
+  showGuideTags?: boolean;
   highContrastMode?: boolean;
   showCrossings: boolean;
   activeCrossingId: string | null;
@@ -915,6 +918,7 @@ export default function PathGuidesPage() {
   const [error, setError] = useState<string | null>(null);
   const [dragListId, setDragListId] = useState<string | null>(null);
   const [groups, setGroups] = useState<StrapGroup[]>([]);
+  const [showGuideTags, setShowGuideTags] = useState(false);
   const [simplify, setSimplify] = useState(true);
   const [highContrastMode, setHighContrastMode] = useState(false);
   const [showCrossings, setShowCrossings] = useState(true);
@@ -1352,6 +1356,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     setZoom(state.zoom);
     setPan(state.pan);
     setSimplify(state.simplify);
+    setShowGuideTags(state.showGuideTags ?? false);
     setHighContrastMode(state.highContrastMode ?? false);
     setShowCrossings(state.showCrossings);
     setActiveCrossingId(state.activeCrossingId);
@@ -1424,7 +1429,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
   }, [selectedPresetId, serializedCurrentState]);
 
   const exportPresetJson = () => {
-    const state = buildExportedState();
+    const state = { ...buildExportedState(), ...(showGuideTags ? { showGuideTags } : {}) };
     const payload = {
       format: 'calligraphy-tools/path-guides-preset',
       version: 1,
@@ -2141,7 +2146,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               <rect x={0} y={0} width={box.w} height={box.h} fill="white" stroke="#cbd5e1" strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
               <line data-no-export="true" x1={centerX} y1={0} x2={centerX} y2={box.h} stroke="#e2e8f0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
 
-              {renderData.map(({ strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter }) => {
+              {renderData.map(({ strap, transformed, transformedD, guideSet, bandD, proxyBandD, metrics, localCenter }, index) => {
                 const isSimplifiedForThisStrap = simplify || interactionActive;
                 // Use paint tick so ref-driven translation repaints without heavy recompute.
                 // eslint-disable-next-line @typescript-eslint/no-unused-expressions
@@ -2170,9 +2175,8 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                 const gTransform = `${dx || dy ? `translate(${dx} ${dy})` : ''}${scrubTransform}`;
 
                 return (
+                  <g key={strap.id} transform={gTransform.trim() ? gTransform : undefined}>
                   <g
-                    key={strap.id}
-                    transform={gTransform.trim() ? gTransform : undefined}
                     mask={
                       !interactionActive && !isSimplifiedForThisStrap && underCrossings.get(strap.id)?.length
                         ? `url(#mask-${strap.id})`
@@ -2285,6 +2289,14 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       </g>
                     ))}
                   </g>
+                  {showGuideTags && (() => {
+                    const tag = routeTag(
+                      `Strap ${index + 1} · ${guideLabel(strap.script, metrics.xMM, metrics.nibMM)}`,
+                      transformed, metrics.bandWidthMM + 4, [.5, .32, .68][index % 3],
+                    );
+                    return tag && <SheetLabels tags={[{ ...tag, colour: strap.color }]} />;
+                  })()}
+                  </g>
                 );
               })}
 
@@ -2395,9 +2407,67 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
         <p className=" text-xs text-slate-600">
           {activeStrap ? `Editing strap #${straps.findIndex(strap => strap.id === activeStrap.id) + 1}` : 'No strap selected'}
         </p>
+        <DisclosureSection title="Paths & straps" defaultOpen>
+          <div className="mt-3">
+            <InsetLabeledField label="Composition preset" className="w-full">
+              <Select
+                className={INSET_CONTROL_BASE}
+                value={selectedPresetId}
+                onChange={(e) => {
+                  const nextId = e.target.value;
+                  if (nextId === 'custom') {
+                    setSelectedPresetId('custom');
+                    return;
+                  }
+                  const preset = PATH_GUIDES_PRESETS.find((x) => x.id === nextId);
+                  if (preset) loadPreset(preset);
+                }}
+              >
+                <option value="custom">Custom (current)</option>
+                {PATH_GUIDES_PRESETS.map((preset) => (
+                  <option key={preset.id} value={preset.id}>{preset.name}</option>
+                ))}
+              </Select>
+            </InsetLabeledField>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2 items-end">
+            <InsetLabeledField
+              label="Add shape"
+              className="w-full min-w-0"
+              rightAdornment={(
+                <Button
+                  type="button"
+                  onClick={addShape}
+                  className="h-7 min-w-7 rounded-md border border-slate-300 bg-white  text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  aria-label="Add selected shape"
+                  title="Add selected shape"
+                >
+                  +
+                </Button>
+              )}
+              rightAdornmentInteractive
+              adornmentClassName="right-1 top-[calc(50%+10px)]"
+            >
+              <Select className={INSET_CONTROL_WIDE} value={shapeKind} onChange={(e) => setShapeKind(e.target.value as ShapeKind)}>
+                {SHAPE_OPTIONS.map((shape) => (
+                  <option key={shape.kind} value={shape.kind}>{shape.label}</option>
+                ))}
+              </Select>
+            </InsetLabeledField>
+            <label className="  text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer">Upload SVG(s)
+              <input type="file" accept=".svg" multiple className="hidden" onChange={(e) => { parseUpload(e.target.files); }} />
+            </label>
+          </div>
+          {error && <p className="mt-3 text-sm text-amber-700">{error}</p>}
+
+        </DisclosureSection>
         <DisclosureSection title="Rotation & scale" defaultOpen>
           {!activeStrap && <p className="text-slate-500">Select a strap in the preview or layer list to edit it.</p>}
           {activeStrap && <div className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => centerStrapX(activeStrap.id)}>Centre horizontally</Button>
+                <Button onClick={() => centerStrapY(activeStrap.id)}>Centre vertically</Button>
+              </div>
               <div className="grid grid-cols-1 gap-4 select-none">
                 <div className="grid grid-cols-[minmax(0,1fr)_88px_36px] items-center gap-2 min-w-0 select-none">
                   <label className="font-medium text-slate-700 shrink-0">Rotation</label>
@@ -2608,7 +2678,8 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               </div>
           </div>}
         </DisclosureSection>
-        <DisclosureSection title="Page & straps">
+        <DisclosureSection title="Page setup">
+          <Switch label="Show guide tags" checked={showGuideTags} onChange={setShowGuideTags} />
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <InsetLabeledField label="Paper size" className="sm:col-span-2">
               <Select
@@ -2642,79 +2713,14 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               </Select>
             </InsetLabeledField>
           </div>
-          <div className="mt-3">
-            <label className="inline-flex items-center gap-3 text-sm font-medium text-slate-700 select-none">
-              <span>High-contrast</span>
-              <Button
-                type="button"
-                role="switch"
-                aria-checked={highContrastMode}
-                onClick={() => {
-                  markPresetDirty();
-                  setHighContrastMode((v) => !v);
-                }}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full border transition ${highContrastMode ? 'bg-indigo-600 border-indigo-600' : 'bg-slate-200 border-slate-300'}`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${highContrastMode ? 'translate-x-6' : 'translate-x-1'}`}
-                />
-              </Button>
-            </label>
-          </div>
-          <div className="mt-3">
-            <InsetLabeledField label="Presets:" className="w-full">
-              <Select
-                className={INSET_CONTROL_BASE}
-                value={selectedPresetId}
-                onChange={(e) => {
-                  const nextId = e.target.value;
-                  if (nextId === 'custom') {
-                    setSelectedPresetId('custom');
-                    return;
-                  }
-                  const preset = PATH_GUIDES_PRESETS.find((x) => x.id === nextId);
-                  if (preset) loadPreset(preset);
-                }}
-              >
-                <option value="custom">Custom (current)</option>
-                {PATH_GUIDES_PRESETS.map((preset) => (
-                  <option key={preset.id} value={preset.id}>{preset.name}</option>
-                ))}
-              </Select>
-            </InsetLabeledField>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2 items-end">
-            <InsetLabeledField
-              label="Add shape"
-              className="w-full min-w-0"
-              rightAdornment={(
-                <Button
-                  type="button"
-                  onClick={addShape}
-                  className="h-7 min-w-7 rounded-md border border-slate-300 bg-white  text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                  aria-label="Add selected shape"
-                  title="Add selected shape"
-                >
-                  +
-                </Button>
-              )}
-              rightAdornmentInteractive
-              adornmentClassName="right-1 top-[calc(50%+10px)]"
-            >
-              <Select className={INSET_CONTROL_WIDE} value={shapeKind} onChange={(e) => setShapeKind(e.target.value as ShapeKind)}>
-                {SHAPE_OPTIONS.map((shape) => (
-                  <option key={shape.kind} value={shape.kind}>{shape.label}</option>
-                ))}
-              </Select>
-            </InsetLabeledField>
-            <label className="  text-sm rounded-lg border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer">Upload SVG(s)
-              <input type="file" accept=".svg" multiple className="hidden" onChange={(e) => { parseUpload(e.target.files); }} />
-            </label>
-          </div>
-          {error && <p className="mt-3 text-sm text-amber-700">{error}</p>}
-          <div className="mt-5 border-t border-slate-200 pt-3">
-            <Button onClick={exportPresetJson} className="  text-sm rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100">Export preset JSON (dev)</Button>
-          </div>
+
+          <Switch label="High contrast" checked={highContrastMode} onChange={enabled => {
+            markPresetDirty();
+            setHighContrastMode(enabled);
+          }} />
+        </DisclosureSection>
+        <DisclosureSection title="Developer tools">
+          <Button onClick={exportPresetJson}>Export preset JSON</Button>
         </DisclosureSection>
         <DisclosureSection title="Script & guidelines">
           {!activeStrap && <p className="text-slate-500">Select a strap to edit its guidelines.</p>}
@@ -2791,28 +2797,31 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       <option value={15}>15°</option><option value={35}>35°</option><option value={40}>40°</option><option value={45}>45°</option>
                     </Select>
                   </InsetLabeledField>
-                  <div className="rounded-xl border border-slate-200 p-3"><h3 className="mb-2 text-sm font-semibold text-slate-700">Construction guides</h3><ConstructionGuideControls script={activeStrap.script} value={activeStrap.constructionGuides} onChange={constructionGuides => updateStrap(activeStrap.id, { constructionGuides })} compact /></div>
                 </>
               )}
 
 
           </div>}
         </DisclosureSection>
-        <DisclosureSection title="Weave & layer order">
-          <p className="mt-1 text-xs text-slate-600">Order controls render stack. First = back, last = front.</p>
+        {activeStrap && <ConstructionGuideControls scripts={[activeStrap.script]} value={activeStrap.constructionGuides} onChange={constructionGuides => updateStrap(activeStrap.id, { constructionGuides })} />}
+        <DisclosureSection title="Strap order">
+          <p className="mt-1 text-xs text-slate-600">First strap is at the back. Drag rows to reorder.</p>
           <div className="mt-3 space-y-2">
-            {straps.map((strap) => (
+            {straps.map((strap, index) => (
               <div key={strap.id} draggable onDragStart={() => setDragListId(strap.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => {
                 if (dragListId) reorderStraps(dragListId, strap.id);
                 setDragListId(null);
               }} className="rounded-lg border border-slate-200 p-2 flex flex-wrap items-center gap-2 cursor-move">
                 <span className="w-3 h-3 rounded-full" style={{ backgroundColor: strap.color }} />
-                <Button onPointerDown={(e) => e.stopPropagation()} onClick={() => setActiveId(strap.id)} className={`px-2 py-1 rounded border border-slate-300 ${activeId === strap.id ? 'border-indigo-300 text-indigo-700' : ''}`}>Select</Button>
+                <Button onPointerDown={(e) => e.stopPropagation()} onClick={() => setActiveId(strap.id)} aria-pressed={activeId === strap.id} className="px-2 py-1 rounded border border-slate-300">Strap {index + 1}</Button>
                 <Button onPointerDown={(e) => e.stopPropagation()} onClick={() => duplicateStrapById(strap.id)} className="  rounded border border-slate-300" title="Duplicate strap" aria-label="Duplicate strap">⧉</Button>
-                <Button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapX(strap.id)} className="  rounded border border-slate-300" title="Center on page" aria-label="Center on page">⌖</Button>
-                <Button onPointerDown={(e) => e.stopPropagation()} onClick={() => centerStrapY(strap.id)} className="  rounded border border-slate-300" title="Center vertically" aria-label="Center vertically">↕</Button>
+
+
                 <Button onPointerDown={(e) => e.stopPropagation()} onClick={() => removeStrapById(strap.id)} disabled={straps.length <= 1} className="  rounded border border-slate-300 disabled:opacity-40" title="Delete strap" aria-label="Delete strap">✕</Button>
-                <span className="text-xs text-slate-500 ml-auto">#{straps.findIndex((s) => s.id === strap.id) + 1}</span>
+                <Button aria-label={`Move strap ${index + 1} up`} disabled={index === 0}
+                  onClick={() => reorderStraps(strap.id, straps[index - 1].id)}>↑</Button>
+                <Button aria-label={`Move strap ${index + 1} down`} disabled={index === straps.length - 1}
+                  onClick={() => reorderStraps(strap.id, straps[index + 1].id)}>↓</Button>
               </div>
             ))}
           </div>

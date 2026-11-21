@@ -8,7 +8,9 @@ const file=(name:string,contents:string)=>({name,mimeType:name.endsWith('.svg')?
 
 async function start(page:Page) {
   await page.goto('/layout');
-  await page.getByRole('button',{name:'+ Guidelines',exact:true}).click();
+  await page.getByText('Add element', { exact: true }).click();
+  await page.getByRole('button',{name:'Guidelines',exact:true}).click();
+  await page.getByRole('button',{name:'Mask',exact:true}).click();
   await page.getByLabel('Shape mask').selectOption('customSvg');
 }
 
@@ -45,6 +47,7 @@ test('imports curved and transformed silhouettes, rejects open geometry, and sav
   await expect(page.getByText('Opened custom.json.',{exact:true})).toBeVisible();
   await expect(silhouette).toHaveAttribute('transform',transform!);
   expect(JSON.parse((await download(page,'Save')).toString()).elements).toEqual(saved.elements);
+  await page.getByRole('button',{name:'Mask',exact:true}).click();
   await page.getByRole('button',{name:'Remove SVG',exact:true}).click();
   await expect(silhouette).toHaveCount(0);
 });

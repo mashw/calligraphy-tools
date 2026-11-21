@@ -111,10 +111,13 @@ export function openSheet(value:unknown):{sheet:Sheet; notice:string} {
     const passage=(v:unknown)=>{const p=record(v);return {id:id(p.id),t:num(p.t,0,1)};};
     sheet.overrides=array(obj.overrides,10000).map(v=>{const c=record(v);if(c.over!=='a' && c.over!=='b')throw Error('Invalid crossing.');return {a:passage(c.a),b:passage(c.b),over:c.over,handedness:c.handedness===undefined?undefined:num(c.handedness,-1,1),reach:c.reach===undefined?undefined:num(c.reach,1e-7,.025)};});
     sheet.joins=array(obj.joins,100).map(v=>{const j=record(v);return {from:id(j.from),to:id(j.to)};});
-    sheet.snap=bool(obj.snap); return {sheet,notice:'Composition opened.'};
+    sheet.snap=bool(obj.snap);
+    if (obj.showGuideTags !== undefined) sheet.showGuideTags = bool(obj.showGuideTags);
+    return {sheet,notice:'Composition opened.'};
   }
   if(obj.format==='calligraphy-tools/path-guides-preset') {
     const state=record(obj.state);Object.assign(sheet,header(state));
+    if (state.showGuideTags !== undefined) sheet.showGuideTags = bool(state.showGuideTags);
     sheet.strands=array(state.straps,100).map(v=>{
       const p=record(v),d=string(p.d),pts=samplePathDToPolyline(d,1.25);
       const {center}=pathSource(d,pts),s=fromPath(string(p.name),d,pts),offset=point(p.offset);

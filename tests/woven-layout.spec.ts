@@ -51,7 +51,8 @@ for(const width of [390,1440]) {
 
   test(`Layout native Woven editing and transformations at ${width}px`,async({page})=>{
     test.setTimeout(90_000);await page.setViewportSize({width,height:900});await captureExportFiles(page);await page.goto('/layout');
-    await page.getByRole('button',{name:'+ Woven Calligraphy',exact:true}).click();
+    await page.getByText('Add element', { exact: true }).click();
+    await page.getByRole('button',{name:'Woven Calligraphy',exact:true}).click();
     await expect(page.locator('[data-layout-id] [data-woven-detail]')).toBeVisible();
     const inspector=page.locator('.editor-inspector');
     const x=inspector.getByRole('spinbutton',{name:/^x\b/i}),widthInput=inspector.getByRole('spinbutton',{name:/^width/i});
@@ -83,14 +84,16 @@ for(const width of [390,1440]) {
 
 test('Layout Woven full SVG, PDF, Print and Cricut exports survive Simplify and layering',async({page})=>{
   test.setTimeout(120_000);await page.setViewportSize({width:1440,height:900});await captureExportFiles(page);await page.goto('/layout');
-  await page.getByRole('button',{name:'+ Woven Calligraphy',exact:true}).click();
+  await page.getByText('Add element', { exact: true }).click();
+  await page.getByRole('button',{name:'Woven Calligraphy',exact:true}).click();
   const rendered=await page.locator('[data-woven-detail] path').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('d')));
   await page.getByRole('button',{name:'Simplify',exact:true}).click();
   await page.getByRole('button',{name:'SVG',exact:true}).click();await page.getByRole('button',{name:'Export SVG',exact:true}).click();
   const svg=await exportedText(page,'image/svg+xml');expect(svg).toContain('data-woven-detail');expect(svg).not.toContain('data-woven-simplified');expect(svg).not.toContain('50 mm');expect(svg).not.toContain('WRITING PLAN');expect(svg).not.toContain('display: none');
   expect(await page.evaluate(source=>Array.from(new DOMParser().parseFromString(source,'image/svg+xml').querySelectorAll('[data-woven-detail] path')).map(node=>node.getAttribute('d')),svg)).toEqual(rendered);
   await page.getByRole('button',{name:'PDF',exact:true}).click();await expect.poll(async()=>await exportedText(page,'application/pdf')).toContain('% Woven vector layer');expect(await exportedText(page,'application/pdf')).not.toContain('/Subtype /Image');
-  await page.getByRole('button',{name:'+ Shape',exact:true}).click();await page.getByRole('button',{name:'PDF',exact:true}).click();await expect.poll(async()=>await exportedText(page,'application/pdf'),{timeout:30_000}).toContain('/SMask');
+  await page.getByText('Add element', { exact: true }).click();
+  await page.getByRole('button',{name:'Shape',exact:true}).click();await page.getByRole('button',{name:'PDF',exact:true}).click();await expect.poll(async()=>await exportedText(page,'application/pdf'),{timeout:30_000}).toContain('/SMask');
   await page.evaluate(()=>{Object.assign(window,{__printed:'',open:()=>({document:{open(){},write(html:string){Object.assign(window,{__printed:html});},close(){}},focus(){},print(){}})});});
   await page.getByRole('button',{name:'Print',exact:true}).click();const print=await page.evaluate(()=>Reflect.get(window,'__printed'));expect(print).toContain('data-woven-detail');expect(print).not.toContain('data-woven-simplified');
   await page.getByRole('button',{name:'Cricut Draw',exact:true}).click();await page.getByRole('button',{name:'Export Cricut SVG',exact:true}).click();

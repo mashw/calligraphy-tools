@@ -4,6 +4,17 @@ import { sceneSvg } from '../woven/vector-export';
 
 export const INTERLACE_SOURCE_FORMAT='calligraphy-tools/interlace-source';
 export type InterlaceSource={format:typeof INTERLACE_SOURCE_FORMAT;version:1;document:Sheet};
+export function interlaceArtworkBounds(strokes: ReturnType<typeof renderSheet>['strokes']) {
+  let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+  for (const stroke of strokes) for (const p of stroke.points) {
+    const radius = stroke.width / 2;
+    left = Math.min(left, p.x - radius);
+    top = Math.min(top, p.y - radius);
+    right = Math.max(right, p.x + radius);
+    bottom = Math.max(bottom, p.y + radius);
+  }
+  return { left, top, right, bottom };
+}
 export function validateInterlaceSource(value:unknown):InterlaceSource {
   if(new TextEncoder().encode(JSON.stringify(value)).length>1_000_000)throw Error('Interlace source exceeds the 1 MB limit.');
   const v=value as Partial<InterlaceSource>|null;
@@ -12,10 +23,9 @@ export function validateInterlaceSource(value:unknown):InterlaceSource {
 }
 export function exportForLayout(sheet:Sheet) {
   const source=validateInterlaceSource({format:INTERLACE_SOURCE_FORMAT,version:1,document:sheet});
-  const scene=renderSheet(source.document,undefined,{ruler:false});
+  const scene=renderSheet(source.document,undefined,{ruler:false,guideTags:false});
   if(!scene.strokes.length)throw Error('No visible writing guides to export.');
-  let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
-  for(const s of scene.strokes)for(const p of s.points){left=Math.min(left,p.x-s.width/2);top=Math.min(top,p.y-s.width/2);right=Math.max(right,p.x+s.width/2);bottom=Math.max(bottom,p.y+s.width/2);}
+  const { left, top, right, bottom } = interlaceArtworkBounds(scene.strokes);
   const xml=sceneSvg({...scene,page:{w:right-left,h:bottom-top},strokes:scene.strokes.map(s=>({...s,points:s.points.map(p=>({x:p.x-left,y:p.y-top}))}))},{combineAdjacentStrokes:true});
   const data=JSON.stringify(source).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const result=xml.replace('</svg>',()=>`<metadata id="${INTERLACE_SOURCE_FORMAT}">${data}</metadata></svg>`);
