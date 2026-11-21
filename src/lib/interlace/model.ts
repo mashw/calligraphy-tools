@@ -1,5 +1,5 @@
 import { visitIntervals } from '../woven/passages';
-import { writingBands, bandEdges, borderBendWarning } from '../woven/bands';
+import { writingBands, borderGuideTags, bandEdges, borderBendWarning } from '../woven/bands';
 import { guideLabel, routeTag, type SheetTag } from '@/lib/guides/sheet-labels';
 import type { TextPlan } from './text-fit';
 import { clipPolylineToRect } from '../layout/plotter-export';
@@ -268,7 +268,9 @@ export function interlaceGuideTags(sheet: Sheet, entries = sheet.strands.filter(
     const dimensions = metrics(s);
     const tag = routeTag(s.name + ' · ' + guideLabel(s.design.script, dimensions.x, s.design.nib),
       route.points, dimensions.band + 4, [.5, .32, .68, .24, .76][index % 5]);
-    return tag ? [{ ...tag, colour: s.color }] : [];
+    const bands = writingBands(s.design, dimensions.x, dimensions.asc, dimensions.desc, s.invert, s.baselineSource ? 0 : dimensions.x / 2);
+    const borders = borderGuideTags(bands, directed({ s, route }), !!s.invert, [.5, .32, .68, .24, .76][index % 5], s.name + ' · ');
+    return [...(tag ? [tag] : []), ...borders].map(label => ({ ...label, colour: s.color }));
   });
 }
 

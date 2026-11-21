@@ -1,5 +1,5 @@
 import { visitIntervals } from './passages';
-import { writingBands, bandEdges, borderBendWarning } from './bands';
+import { writingBands, borderGuideTags, bandEdges, borderBendWarning } from './bands';
 import { guideLabel, routeTag } from '@/lib/guides/sheet-labels';
 import { slantPath, clipSlantToBand } from "../guides/slant-paths";
 import { offset } from "@/lib/curve-helpers";
@@ -320,7 +320,7 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
   const strokes = bands.length === 1 ? writingStrokes(design, route, intervals, x, asc, desc) :
     borderedStrokes(design,route,crossings,choices,start,bands);
   const tag = design.showGuideTags ? routeTag(guideLabel(design.script, x, design.nib), route.points, halfBand + 4, .32) : null;
-  const tags = tag ? [tag] : undefined;
+  const tags = tag ? [tag, ...borderGuideTags(bands, route.points, false, .32)] : undefined;
   const clean: Scene = { strokes, labels: [], tags, page };
   const startS = wrap(start + design.gap / 2, route.length);
   const startPoint = atDistance(route, startS);
