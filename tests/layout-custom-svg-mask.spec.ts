@@ -8,7 +8,8 @@ const file=(name:string,contents:string)=>({name,mimeType:name.endsWith('.svg')?
 
 async function start(page:Page) {
   await page.goto('/layout');
-  await page.getByRole('button',{name:'+ Guidelines',exact:true}).click();
+  await page.getByText('Add element', { exact: true }).click();
+  await page.getByRole('button',{name:'Guidelines',exact:true}).click();
   await page.getByRole('button',{name:'Mask',exact:true}).click();
   await page.getByLabel('Shape mask').selectOption('customSvg');
 }

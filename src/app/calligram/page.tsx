@@ -1618,7 +1618,7 @@ const innerRadiusMaxMM = useMemo(
           </InspectorIntro>} inspector={<>
 <section className="   mx-auto grid grid-cols-1  gap-6">
         {/* Step 1 */}
-        <DisclosureSection title="Document & Script" defaultOpen headerAction={<InfoTip side="right">Circle is fixed at page center.</InfoTip>}>
+        <DisclosureSection title="Main circle" defaultOpen headerAction={<InfoTip side="right">Circle is fixed at page center.</InfoTip>}>
 
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
@@ -1630,6 +1630,33 @@ const innerRadiusMaxMM = useMemo(
                   <option value="TexturaQuadrata">Textura Quadrata</option>
                    <option value="InsularMajuscule">Insular Majuscule</option>
                 </Select>
+              </InsetLabeledField>
+            </div>
+            <InsetLabeledField label="Main text" className="col-span-full">
+              <input className={INSET_CONTROL_BASE} value={text} onChange={e => setText(e.target.value)} placeholder="Enter main text" />
+            </InsetLabeledField>
+            <div className="sm:col-span-2">
+              <InsetLabeledField label="Main radius">
+                <div className=" ">
+                  <Slider
+                    type="range" aria-label="Main radius"
+                    min={10}
+                    max={Math.max(10, Math.floor(Math.min(box.w, box.h) / 2) - 4)}
+                    step={shouldSnapMainRadius ? 0.1 : 1}
+                    value={radiusMM}
+                    onChange={e => {
+                      const min = 10;
+                      const max = Math.max(10, Math.floor(Math.min(box.w, box.h) / 2) - 4);
+                      const raw = Number(e.target.value);
+                      touchedRef.current.main.radius = true;
+                      let next = clamp(raw, min, max);
+                      if (shouldSnapMainRadius) next = snapRadiusToWholeSteps(next, tickStepMM);
+                      setRadiusMM(next);
+                    }}
+                    className="w-full"
+                  />
+                  <div className="text-xs font-medium text-slate-500 mt-1">{radiusMM} mm</div>
+                </div>
               </InsetLabeledField>
             </div>
             {(script === 'InsularMajuscule' || (topBandEnabled && topBandScript === 'InsularMajuscule') || (bottomBandEnabled && bottomBandScript === 'InsularMajuscule')) && <label className="sm:col-span-2 inline-flex items-center gap-2 text-sm"><Toggle type="checkbox" checked={showInsularGrid} onChange={e => setShowInsularGrid(e.target.checked)} /> Show intermediate grid</label>}
@@ -1664,55 +1691,7 @@ const innerRadiusMaxMM = useMemo(
               </InsetLabeledField>
             </div>
 
-            <div className="sm:col-span-2">
-              <div className="my-3 border-t border-slate-200/70" />
-            </div>
 
-            <div className="sm:col-span-2">
-              <div className="mt-1 flex items-center gap-3">
-                <div className="min-w-0 text-sm font-medium text-slate-700">High-contrast</div>
-                <Button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => setHighContrastMode(v => !v)}
-                  className={`shrink-0 inline-flex items-center px-3 py-1.5 text-sm rounded-full border transition select-none
-        ${highContrastMode
-                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                    : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}
-                >
-                  <span className={`mr-2 inline-flex h-4 w-7 items-center rounded-full transition
-        ${highContrastMode ? 'bg-indigo-500 justify-end' : 'bg-slate-300 justify-start'}`}>
-                    <span className="h-3 w-3 rounded-full bg-white shadow" />
-                  </span>
-                  {highContrastMode ? 'On' : 'Off'}
-                </Button>
-              </div>
-            </div>
-
-            <div className="sm:col-span-2">
-              <InsetLabeledField label="Radius">
-                <div className=" ">
-                  <Slider
-                    type="range"
-                    min={10}
-                    max={Math.max(10, Math.floor(Math.min(box.w, box.h) / 2) - 4)}
-                    step={shouldSnapMainRadius ? 0.1 : 1}
-                    value={radiusMM}
-                    onChange={e => {
-                      const min = 10;
-                      const max = Math.max(10, Math.floor(Math.min(box.w, box.h) / 2) - 4);
-                      const raw = Number(e.target.value);
-                      touchedRef.current.main.radius = true;
-                      let next = clamp(raw, min, max);
-                      if (shouldSnapMainRadius) next = snapRadiusToWholeSteps(next, tickStepMM);
-                      setRadiusMM(next);
-                    }}
-                    className="w-full"
-                  />
-                  <div className="text-xs font-medium text-slate-500 mt-1">{radiusMM} mm</div>
-                </div>
-              </InsetLabeledField>
-            </div>
 
 
             {anyBlackletter && (
@@ -2009,7 +1988,7 @@ const innerRadiusMaxMM = useMemo(
               }} />
               {topBandEnabled && <div className="space-y-2">
                 <label className="block">
-                  <span className="flex justify-between gap-2 text-xs text-slate-600">Radius <span className="tabular-nums">{innerRadiusMM.toFixed(1)} mm</span></span>
+                  <span className="flex justify-between gap-2 text-xs text-slate-600">Inner radius <span className="tabular-nums">{innerRadiusMM.toFixed(1)} mm</span></span>
                   <Slider
                     type="range"
                     min={innerRadiusMinMM}
@@ -2059,6 +2038,9 @@ const innerRadiusMaxMM = useMemo(
                         }}
                       />
                   </InsetLabeledField>
+                  <InsetLabeledField label="Inner text" className="col-span-full">
+                    <input className={INSET_CONTROL_BASE} value={topText} onChange={e => setTopText(e.target.value)} />
+                  </InsetLabeledField>
                 </div>
               </div>}
             </div>
@@ -2073,7 +2055,7 @@ const innerRadiusMaxMM = useMemo(
               }} />
               {bottomBandEnabled && <div className="space-y-2">
                 <label className="block">
-                  <span className="flex justify-between gap-2 text-xs text-slate-600">Radius <span className="tabular-nums">{outerRadiusMM.toFixed(1)} mm</span></span>
+                  <span className="flex justify-between gap-2 text-xs text-slate-600">Outer radius <span className="tabular-nums">{outerRadiusMM.toFixed(1)} mm</span></span>
                   <Slider
                     type="range"
                     min={radiusMM + outerOffsetMinMM}
@@ -2125,6 +2107,9 @@ const innerRadiusMaxMM = useMemo(
                         }}
                       />
                   </InsetLabeledField>
+                  <InsetLabeledField label="Outer text" className="col-span-full">
+                    <input className={INSET_CONTROL_BASE} value={bottomText} onChange={e => setBottomText(e.target.value)} />
+                  </InsetLabeledField>
                 </div>
               </div>}
             </div>
@@ -2135,49 +2120,10 @@ const innerRadiusMaxMM = useMemo(
         {/* Step 3 */}
         <ConstructionGuideControls scripts={[script, topBandEnabled && topBandScript, bottomBandEnabled && bottomBandScript]} value={constructionGuides} onChange={setConstructionGuides} />
 
-        <DisclosureSection title="Text & Placement" defaultOpen headerAction={<InfoTip side="right">Check text fit and preview overlays.</InfoTip>}>
-
-
-          <div className="grid grid-cols-1 gap-4 mt-3 select-none">
-            <InsetLabeledField label="Title text">
-              <input className={INSET_CONTROL_BASE} value={text} onChange={e => setText(e.target.value)} placeholder="Enter main text" />
-            </InsetLabeledField>
-
-            {topBandEnabled && (
-              <InsetLabeledField label="Inner text">
-                <input className={INSET_CONTROL_BASE} value={topText} onChange={e => setTopText(e.target.value)} />
-              </InsetLabeledField>
-            )}
-
-            {bottomBandEnabled && (
-              <InsetLabeledField label="Outer text">
-                <input className={INSET_CONTROL_BASE} value={bottomText} onChange={e => setBottomText(e.target.value)} />
-              </InsetLabeledField>
-            )}
-          </div>
-
-          <div className="my-3 border-t border-slate-200/70" />
-          <div className="mt-4 flex flex-wrap items-center gap-4">
-            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-              <Toggle
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                checked={showBoxes}
-                onChange={e => setShowBoxes(e.target.checked)}
-              />
-              Letter bounding boxes
-            </label>
-
-            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
-              <Toggle
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                checked={showSpanFill}
-                onChange={e => setShowSpanFill(e.target.checked)}
-              />
-              Title span fill
-            </label>
-          </div>
+        <DisclosureSection title="Preview options">
+          <Switch label="Letter bounding boxes" checked={showBoxes} onChange={setShowBoxes} />
+          <Switch label="Title span fill" checked={showSpanFill} onChange={setShowSpanFill} />
+          <Switch label="High contrast" checked={highContrastMode} onChange={setHighContrastMode} />
         </DisclosureSection>
       </section>
 </>}></EditorWorkspace>

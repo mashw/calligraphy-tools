@@ -825,7 +825,7 @@ const slantAngleDeg = useMemo(() => {
           </InspectorIntro>} inspector={<>
 <section className="    mx-auto grid grid-cols-1  items-start gap-6">
         {/* Step 1 */}
-        <DisclosureSection title="Document & Appearance" defaultOpen headerAction={<InfoTip side="right">Guidelines are spaced by x-height + ascender + descender.</InfoTip>}>
+        <DisclosureSection title="Paper & margins" defaultOpen headerAction={<InfoTip side="right">Guidelines are spaced by x-height + ascender + descender.</InfoTip>}>
 
 
           <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -932,105 +932,6 @@ const slantAngleDeg = useMemo(() => {
                 <span className="pointer-events-none select-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-slate-500">mm</span>
               </div>
             </div>
-
-            <div className="col-span-full">
-              <div className="my-2 border-t border-slate-200/70" />
-            </div>
-
-            <div className="col-span-full space-y-1">
-              <Switch label="Baseline indicator" checked={showBaselineIndicator} onChange={setShowBaselineIndicator} />
-              <Switch label="High contrast" checked={highContrastMode} onChange={enabled => {
-                if (enabled) {
-                  gridContrastBeforeHigh.current = gridContrast;
-                  setGridContrast(0.75);
-                } else {
-                  setGridContrast(gridContrastBeforeHigh.current ?? 0.5);
-                  gridContrastBeforeHigh.current = null;
-                }
-                setHighContrastMode(enabled);
-              }} />
-              <Switch label="Centre line" checked={showCenterLine} onChange={setShowCenterLine} />
-            </div>
-            <div className="col-span-full">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
-                {/* Baseline color */}
-                <label className="flex items-center justify-between gap-3">
-                  <span className="font-medium text-slate-700">Baseline color</span>
-                  <input
-                    type="color"
-                    className="h-10 w-10 shrink-0 p-0 rounded-md border border-slate-300 bg-white"
-                    value={baselineColor}
-                    onChange={(e) => {
-                      setBaselineColor(e.target.value);
-                      setHighContrastMode(false);
-                    }}
-                  />
-                </label>
-
-                {/* Waistline color */}
-                <label className="flex items-center justify-between gap-3">
-                  <span className="font-medium text-slate-700">Waistline color</span>
-                  <input
-                    type="color"
-                    className="h-10 w-10 shrink-0 p-0 rounded-md border border-slate-300 bg-white"
-                    value={waistlineColor}
-                    onChange={(e) => {
-                      setWaistlineColor(e.target.value);
-                      setHighContrastMode(false);
-                    }}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div className="col-span-full">
-              <div className="my-5 border-t border-slate-200/70" />
-            </div>
-
-            {/* X-line contrast */}
-            <div>
-              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                <label className="font-medium text-slate-700">X-line contrast</label>
-                <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : xLineContrast) * 100)}%</span>
-              </div>
-              <Slider
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                className="mt-2 w-full"
-                value={highContrastMode ? 1 : xLineContrast}
-                onChange={(e) => {
-                  setXLineContrast(parseFloat(e.target.value));
-                  setHighContrastMode(false);
-                }}
-              />
-              <p className="mt-1 text-xs text-slate-500">
-                Affects only ascender, waistline, baseline, descender. Contrast scales alpha; hue is preserved.
-              </p>
-            </div>
-
-            {/* X-line thickness */}
-            <div>
-              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                <label className="font-medium text-slate-700">X-line thickness</label>
-                <span className="text-xs text-slate-500">{(highContrastMode ? 1.8 : xLineThickness).toFixed(2)}×</span>
-              </div>
-              <Slider
-                type="range"
-                min="0.6"
-                max="2.5"
-                step="0.05"
-                className="mt-2 w-full"
-                value={highContrastMode ? 1.8 : xLineThickness}
-                onChange={(e) => {
-                  setXLineThickness(parseFloat(e.target.value));
-                  setHighContrastMode(false);
-                }}
-              />
-              <p className="mt-1 text-xs text-slate-500">Multiplies the stroke thickness of the main four X-lines.</p>
-            </div>
-
 
           </div>
         </DisclosureSection>
@@ -1357,6 +1258,106 @@ const slantAngleDeg = useMemo(() => {
             )}
           </div>
 
+        </DisclosureSection>
+
+        <DisclosureSection title="Guide appearance">
+          <div className="guide-option-grid">
+            <div className="col-span-full space-y-1">
+              <Switch label="Baseline indicator" checked={showBaselineIndicator} onChange={setShowBaselineIndicator} />
+              <Switch label="High contrast" checked={highContrastMode} onChange={enabled => {
+                if (enabled) {
+                  gridContrastBeforeHigh.current = gridContrast;
+                  setGridContrast(0.75);
+                } else {
+                  setGridContrast(gridContrastBeforeHigh.current ?? 0.5);
+                  gridContrastBeforeHigh.current = null;
+                }
+                setHighContrastMode(enabled);
+              }} />
+              <Switch label="Centre line" checked={showCenterLine} onChange={setShowCenterLine} />
+            </div>
+            <div className="col-span-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                {/* Baseline color */}
+                <label className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-slate-700">Baseline color</span>
+                  <input
+                    type="color"
+                    className="h-10 w-10 shrink-0 p-0 rounded-md border border-slate-300 bg-white"
+                    value={baselineColor}
+                    onChange={(e) => {
+                      setBaselineColor(e.target.value);
+                      setHighContrastMode(false);
+                    }}
+                  />
+                </label>
+
+                {/* Waistline color */}
+                <label className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-slate-700">Waistline color</span>
+                  <input
+                    type="color"
+                    className="h-10 w-10 shrink-0 p-0 rounded-md border border-slate-300 bg-white"
+                    value={waistlineColor}
+                    onChange={(e) => {
+                      setWaistlineColor(e.target.value);
+                      setHighContrastMode(false);
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="col-span-full">
+              <div className="my-5 border-t border-slate-200/70" />
+            </div>
+
+            {/* Main guide line contrast */}
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <label className="font-medium text-slate-700">Main guide line contrast</label>
+                <span className="text-xs text-slate-500">{Math.round((highContrastMode ? 1 : xLineContrast) * 100)}%</span>
+              </div>
+              <Slider
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                className="mt-2 w-full"
+                value={highContrastMode ? 1 : xLineContrast}
+                onChange={(e) => {
+                  setXLineContrast(parseFloat(e.target.value));
+                  setHighContrastMode(false);
+                }}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Affects only ascender, waistline, baseline, descender. Contrast scales alpha; hue is preserved.
+              </p>
+            </div>
+
+            {/* Main guide line thickness */}
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <label className="font-medium text-slate-700">Main guide line thickness</label>
+                <span className="text-xs text-slate-500">{(highContrastMode ? 1.8 : xLineThickness).toFixed(2)}×</span>
+              </div>
+              <Slider
+                type="range"
+                min="0.6"
+                max="2.5"
+                step="0.05"
+                className="mt-2 w-full"
+                value={highContrastMode ? 1.8 : xLineThickness}
+                onChange={(e) => {
+                  setXLineThickness(parseFloat(e.target.value));
+                  setHighContrastMode(false);
+                }}
+              />
+              <p className="mt-1 text-xs text-slate-500">Multiplies the stroke thickness of the four main guide lines.</p>
+            </div>
+
+
+          </div>
         </DisclosureSection>
 
         {script === 'Copperplate' && <DisclosureSection title="Slant & reference lines" defaultOpen>

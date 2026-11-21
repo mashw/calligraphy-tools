@@ -53,10 +53,11 @@ test('imports original Woven and multi-strap Path Guides downloads',async({page}
   expect(JSON.parse(await downloaded(page,'Save')).overrides).toHaveLength(1);
   await page.goto('/path-guides');
   const menu=page.locator('select').filter({has:page.locator('option[value="woven-double-circle"]')});
-  const panel=page.getByRole('button',{name:'Page & straps',exact:true});
+  const panel=page.getByRole('button',{name:'Paths & straps',exact:true});
   if(await panel.getAttribute('aria-expanded')==='false')await panel.click();
   await menu.selectOption('fraktur-scurve-weave-2');
-  const preset=await downloaded(page,'Export preset JSON (dev)');
+  await page.getByRole('button', { name: 'Developer tools', exact: true }).click();
+  const preset=await downloaded(page,'Export preset JSON');
   await page.goto('/interlace');await upload(page,'preset.json',preset);
   await expect(page.locator('[role=status]')).toContainText('Imported paths');
   const imported=JSON.parse(await downloaded(page,'Save'));
@@ -121,14 +122,15 @@ async function sampledRoutes(paths: Locator) {
 for(const preset of ['fraktur-scurve-weave-2','woven-double-circle']){
   test('composition matches Path Guides preset '+preset,async({page})=>{
     await page.goto('/path-guides');
-    const panel=page.getByRole('button',{name:'Page & straps',exact:true});
+    const panel=page.getByRole('button',{name:'Paths & straps',exact:true});
     if(await panel.getAttribute('aria-expanded')==='false')await panel.click();
     await page.locator('select').filter({has:page.locator('option[value="woven-double-circle"]')}).selectOption(preset);
     const simplify=page.getByRole('button',{name:'Simplify',exact:true});
     if(await simplify.getAttribute('aria-pressed')==='true')await simplify.click();
     const originals=await sampledRoutes(page.locator('svg.editor-svg path[stroke-width="0.9"][vector-effect="non-scaling-stroke"]'));
     expect(originals.length).toBe(2);
-    const legacy=await downloaded(page,'Export preset JSON (dev)');
+    await page.getByRole('button', { name: 'Developer tools', exact: true }).click();
+    const legacy=await downloaded(page,'Export preset JSON');
     await page.goto('/interlace');
     page.once('dialog',d=>d.accept());
     await page.getByLabel('Composition preset').selectOption(preset);

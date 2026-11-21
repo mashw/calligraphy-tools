@@ -175,7 +175,7 @@ export default function WovenSettings({design, onChange, model, selected, onSele
               {numeric("gap", "Start/end gap", 0.5, "mm")}
               {numeric("clearance", "Crossing clearance", 0.1, "mm")}
               {toggle("reverse", "Reverse writing direction")}
-              <div className="flex flex-wrap gap-2">
+              {model.crossings.length > 0 && <div className="flex flex-wrap gap-2">
                 {model.crossings.map((c, i) => (
                   <Button
                     key={c.id}
@@ -188,13 +188,13 @@ export default function WovenSettings({design, onChange, model, selected, onSele
                     {i + 1}
                   </Button>
                 ))}
-              </div>
-              <Button
+              </div>}
+              {model.crossings.some(crossing => Object.hasOwn(design.overrides ?? {}, crossing.id)) && <Button
                 className={button}
                 onClick={() => update("overrides", {})}
               >
                 Restore alternating weave
-              </Button>
+              </Button>}
             </div>
           </DisclosureSection>}
 </>;
