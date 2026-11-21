@@ -62,12 +62,12 @@ export default function WovenSettings({design, onChange, model, selected, onSele
     setDesign((d) => ({
       ...d,
       script,
-      nib: script === "Copperplate" ? 1 : d.nib,
+      nib: script === "Copperplate" ? 1 : script === "InsularMajuscule" ? d.nib : 2,
       xNib:
         script === "InsularMajuscule"
           ? INSULAR_MAJUSCULE_DEFAULTS.xNib
           : script === "TexturaQuadrata"
-            ? 5
+            ? 4.5
             : script === "Copperplate"
               ? 4
               : 4.5,

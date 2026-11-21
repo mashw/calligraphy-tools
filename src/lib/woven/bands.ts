@@ -11,7 +11,7 @@ export function writingBands(design: Design, x: number, asc: number, desc: numbe
     const border = design.borders?.[side];
     if (!border?.enabled) continue;
     const script = border.script;
-    const nibs = script === 'TexturaQuadrata' ? 5 : script === 'Copperplate' ? 4 : 4.5;
+    const nibs = script === 'Copperplate' ? 4 : 4.5;
     const unit = border.xHeight / nibs;
     const extension = unit * (script === 'Copperplate' ? 6 : 2);
     const mainExtension = side === 'outer' ? asc : desc;

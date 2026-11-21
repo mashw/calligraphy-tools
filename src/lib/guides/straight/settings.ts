@@ -60,7 +60,7 @@ export function guidelinesSettingsForScript(current: GuidelinesSettings, script:
     : current.rowGapMM;
   if (script === 'Copperplate') return { ...current, script, rowGapMM };
   return {
-    ...current, script, rowGapMM,
+    ...current, script, rowGapMM, nibMM: 2,
     xNib: BLACKLETTER_GUIDE_DEFAULTS.xNib, ascNib: 2, descNib: 2,
     penAngleDeg: script === 'Fraktur' ? 40 : 45,
     grid: { ...current.grid, horizontal: true, vertical: true, nibAngleGuide: true },

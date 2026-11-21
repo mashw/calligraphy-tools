@@ -798,14 +798,14 @@ function uid(prefix: string) {
 
 const SCRIPT_DEFAULTS = {
   TexturaQuadrata: {
-    nibMMText: '4',
+    nibMMText: '2',
     nibAngleDeg: 45 as const,
-    xNibText: '5',
+    xNibText: '4.5',
     ascNibText: '2',
     descNibText: '2',
   },
   Fraktur: {
-    nibMMText: '4',
+    nibMMText: '2',
     nibAngleDeg: 40 as const,
     xNibText: '4.5',
     ascNibText: '2',

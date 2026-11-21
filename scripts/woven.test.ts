@@ -137,16 +137,16 @@ test('paper sizes centre the shape and drive SVG and PDF dimensions in mm', () =
 });
 
 test('borders share only facing extension zones and stay on the writing side when inverted', () => {
-  const border = { enabled:true, xHeight:2.5, script:'TexturaQuadrata' as const, share:true, gap:0.5 };
+  const border = { enabled:true, xHeight:2.25, script:'TexturaQuadrata' as const, share:true, gap:0.5 };
   const design = { ...DEFAULT_DESIGN, borders:{outer:border,inner:border} };
   assert.deepEqual(parseDesign(design).borders,design.borders);
   const bands = writingBands(design,10,4,2);
-  assert.deepEqual(bands.map(b=>b.anchor),[5,-9.5,10]);
+  assert.deepEqual(bands.map(b=>b.anchor),[5,-9.5,9.75]);
   const inverted = writingBands(design,10,4,2,true);
-  assert.deepEqual(inverted.map(b=>b.anchor),[5,12,-7.5]);
+  assert.deepEqual(inverted.map(b=>b.anchor),[5,11.75,-7.5]);
   const separate = writingBands({...design,borders:{outer:{...border,share:false}}},10,4,2);
   assert.equal(separate[1].anchor,-10.5);
-  assert.deepEqual(bandEdges(separate),{top:-14,bottom:7});
+  assert.deepEqual(bandEdges(separate),{top:-13.75,bottom:7});
 });
 
 test('bordered figure-eight emits finite writing rails and editable asymmetric crossings', async () => {
@@ -163,7 +163,7 @@ test('bordered figure-eight emits finite writing rails and editable asymmetric c
 test('shared writing borders stop guide geometry at the main extension', async () => {
   const { writingStrokes } = await import('../src/lib/woven/model');
   const route = makeRoute('rosette', 165, 165, .32, 0, false);
-  const border = { enabled: true, xHeight: 2.5, script: 'TexturaQuadrata' as const, share: false, gap: 0 };
+  const border = { enabled: true, xHeight: 2.25, script: 'TexturaQuadrata' as const, share: false, gap: 0 };
   const design = { ...DEFAULT_DESIGN, fullGuides: true, gridVertical: false, gridHorizontal: false,
     borders: { outer: border, inner: border } };
   for (const invert of [false, true]) {

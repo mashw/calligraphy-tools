@@ -1,3 +1,6 @@
+import { wovenComposition } from '../interlace/document';
+import { topology, renderSheet, warnings as sheetWarnings } from '../interlace/model';
+import { makeSlantRoute } from '../guides/slant-paths';
 import { visitIntervals } from './passages';
 import { writingBands, borderGuideTags, bandEdges, borderBendWarning } from './bands';
 import { guideLabel, routeTag } from '@/lib/guides/sheet-labels';
@@ -24,6 +27,23 @@ import type { Scene, Stroke } from "./vector-export";
 /** Route and crossing geometry only: safe to regenerate during pointer interactions. */
 export function buildWovenRouteModel(design: Design) {
   const page = pageSize(design);
+  if (design.preset === 'fraktur-scurve-weave-2' || design.preset === 'woven-double-circle') {
+    const sheet = wovenComposition(design), graph = topology(sheet);
+    const route = makeSlantRoute(graph.entries.flatMap(entry => entry.route.points));
+    const intervals: [number, number][] = [];
+    let index = 0;
+    for (const entry of graph.entries) {
+      intervals.push([route.distances[index], route.distances[index + entry.route.points.length - 1]]);
+      index += entry.route.points.length;
+    }
+    const crossings = graph.hits.map((hit,i) => ({...hit, id:'crossing-'+i, a:hit.a.t, b:hit.b.t}));
+    const choices = Object.fromEntries(crossings.map(hit => [hit.id, hit.over])) as Record<string,'a'|'b'>;
+    const unit = design.script === 'Copperplate' ? 1 : design.nib;
+    const x = unit*design.xNib, asc = unit*design.ascNib, desc = unit*design.descNib;
+    return {page,route,crossings,choices,intervals,x,asc,desc,halfBand:x/2+Math.max(asc,desc),start:0,cuts:[],
+      alternate:{choices,conflicts:0},warnings:sheetWarnings(sheet,graph),usableLength:graph.entries.reduce((sum,e)=>sum+e.route.length,0),
+      composition:{sheet,graph}};
+  }
   const route = makeRoute(
     design.preset,
     design.width,
@@ -92,7 +112,7 @@ export function buildWovenRouteModel(design: Design) {
     warnings.push(
       "Crossing gaps occupy more than half the route. Try smaller lettering or less clearance.",
     );
-  return { page, route, crossings, alternate, choices, x, asc, desc, halfBand, start, cuts, intervals, warnings, usableLength };
+  return { composition:undefined, page, route, crossings, alternate, choices, x, asc, desc, halfBand, start, cuts, intervals, warnings, usableLength };
 }
 
 /** Generate physical strokes for one writing passage. Intervals use its own arc length. */
@@ -315,7 +335,14 @@ function borderedStrokes(design: Design, route: ReturnType<typeof makeRoute>, cr
 
 export function buildWovenModel(design: Design, { furniture = true }: { furniture?: boolean } = {}) {
   const page = pageSize(design);
-  const { route, crossings, choices, x, asc, desc, start, intervals, warnings, usableLength, halfBand } = buildWovenRouteModel(design);
+  const model = buildWovenRouteModel(design);
+  const { route, crossings, choices, x, asc, desc, start, intervals, warnings, usableLength, halfBand } = model;
+  if (model.composition) {
+    const {sheet,graph} = model.composition;
+    const clean = renderSheet(sheet,graph,{ruler:furniture});
+    const annotated = {...clean, labels:[...clean.labels,...crossings.map((c,i)=>({point:c.point,text:String(i+1),size:2.5,color:'#9f483b'}))]};
+    return {page,route,crossings,choices,intervals,clean,annotated,startPoint:route.points[0],usableLength,warnings};
+  }
   const bands = writingBands(design,x,asc,desc);
   const strokes = bands.length === 1 ? writingStrokes(design, route, intervals, x, asc, desc) :
     borderedStrokes(design,route,crossings,choices,start,bands);

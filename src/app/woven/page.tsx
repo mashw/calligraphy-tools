@@ -1,5 +1,7 @@
 "use client";
 
+import { selectWovenPreset } from '@/lib/woven/design';
+import { compositionPresets } from '@/lib/paths/composition-presets';
 import { NumericInput, Button, Select, ActionGroup } from '@/components/editor/Controls';
 import NumericSlider from '@/components/editor/NumericSlider';
 import PreviewMeta from '@/components/editor/PreviewMeta';
@@ -304,11 +306,11 @@ export default function WovenPage() {
                   className={field}
                   value={design.preset}
                   onChange={(e) =>
-                    update("preset", e.target.value as Design["preset"])
+                    { setSelected(null); setDesign(selectWovenPreset(design, e.target.value as Design["preset"])); }
                   }
                 >
                   <option value="rosette">Six-loop rosette</option>
-                  <option value="figure-eight">Figure-eight</option>
+                  <option value="figure-eight">Figure-eight</option>{compositionPresets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </Select>
               </label>
               <NumericSlider label="Width" value={design.width} min={LIMITS.width[0]} max={LIMITS.width[1]} step={0.5} unit="mm" onChange={value => setDimension('width', value)} />

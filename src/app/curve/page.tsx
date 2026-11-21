@@ -1593,7 +1593,7 @@ export default function CurvedTitlePage() {
                    const next = e.target.value as ScriptId;
                    setScript(next);
                    if (next === 'InsularMajuscule') { setXNib(5); setAscNib(2); setDescNib(2); setPenAngleDeg(15); setShowInsularGrid(false); }
-                   else if (next === 'Fraktur' || next === 'TexturaQuadrata') { setXNib(4.5); setAscNib(2); setDescNib(2); setPenAngleDeg(next === 'Fraktur' ? 40 : 45); }
+                   else if (next === 'Fraktur' || next === 'TexturaQuadrata') { setNibText('2'); setXNib(4.5); setAscNib(2); setDescNib(2); setPenAngleDeg(next === 'Fraktur' ? 40 : 45); }
                  }}>
                   <option value="Copperplate">Copperplate</option>
                   <option value="Fraktur">Fraktur</option>

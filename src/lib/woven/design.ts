@@ -3,7 +3,7 @@ import { PAPERS_MM } from "../curve-helpers";
 import type { ConstructionGuideSettings } from "../guides/guide-template";
 export type BorderSide = 'outer' | 'inner';
 export type WritingBorder = { enabled: boolean; script: Design['script']; xHeight: number; gap: number; share: boolean };
-export const defaultBorder: WritingBorder = { enabled: false, script: 'TexturaQuadrata', xHeight: 1.5, gap: 0, share: true };
+export const defaultBorder: WritingBorder = { enabled: false, script: 'TexturaQuadrata', xHeight: 9, gap: 0, share: true };
 export type Design = {
   borders?: Partial<Record<BorderSide, WritingBorder>>;
   centerX?: number;
@@ -26,7 +26,7 @@ export type Design = {
   secondAngle: number;
   construction: ConstructionGuideSettings;
   version: 1;
-  preset: "rosette" | "figure-eight";
+  preset: "rosette" | "figure-eight" | "fraktur-scurve-weave-2" | "woven-double-circle";
   width: number;
   height: number;
   loop: number;
@@ -71,8 +71,8 @@ export const DEFAULT_DESIGN: Design = {
   rotation: 0,
   reverse: false,
   script: "TexturaQuadrata",
-  nib: 0.7,
-  xNib: 5,
+  nib: 2,
+  xNib: 4.5,
   ascNib: 2,
   descNib: 2,
   start: 3,
@@ -109,7 +109,7 @@ export function parseDesign(input: unknown): Design {
   const obj = input as Record<string, unknown>;
   if (
     obj.version !== 1 ||
-    !["rosette", "figure-eight"].includes(String(obj.preset)) ||
+    !["rosette", "figure-eight", "fraktur-scurve-weave-2", "woven-double-circle"].includes(String(obj.preset)) ||
     !["Fraktur", "TexturaQuadrata", "InsularMajuscule", "Copperplate"].includes(
       String(obj.script),
     )
@@ -253,4 +253,11 @@ export function pageSize(design: Pick<Design, "paper" | "orientation">) {
   return design.orientation === "portrait"
     ? { w: Math.min(p.w, p.h), h: Math.max(p.w, p.h) }
     : { w: Math.max(p.w, p.h), h: Math.min(p.w, p.h) };
+}
+
+export function selectWovenPreset(design: Design, preset: Design['preset']): Design {
+  const next = { ...design, preset, overrides: {} };
+  if (preset === 'fraktur-scurve-weave-2') return { ...next, script:'Fraktur', nib:2, xNib:4.5, ascNib:2, descNib:2, penAngle:40 };
+  if (preset === 'woven-double-circle') return { ...next, script:'Copperplate', nib:1, xNib:6, ascNib:6, descNib:6 };
+  return next;
 }
