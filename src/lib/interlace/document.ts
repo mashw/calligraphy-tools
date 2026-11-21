@@ -182,8 +182,8 @@ export function openSheet(value:unknown):{sheet:Sheet; notice:string} {
   return {sheet,notice:'Imported Woven geometry, guides and crossing choices. Sheet annotations are omitted.'};
 }
 
-export function wovenComposition(design: Design): Sheet {
-  const preset = compositionPresets.find(item => item.id === design.preset);
+function compositionGeometry(presetId: Design['preset']) {
+  const preset = compositionPresets.find(item => item.id === presetId);
   if (!preset) throw Error('Unknown woven composition.');
   const { sheet } = openSheet({version:1, format:'calligraphy-tools/path-guides-preset', state:preset.state});
   const routes = sheet.strands.map(s => strandRoute(s, sheet));
@@ -191,6 +191,21 @@ export function wovenComposition(design: Design): Sheet {
   const xs = points.map(p => p.x), ys = points.map(p => p.y);
   const left = Math.min(...xs), top = Math.min(...ys);
   const width = Math.max(...xs)-left, height = Math.max(...ys)-top;
+  return {sheet,routes,left,top,width,height};
+}
+
+export function fitWovenPreset(design: Design): Design {
+  let ratio = design.preset === 'figure-eight' ? 1 / .65 : 1;
+  if (design.preset === 'fraktur-scurve-weave-2' || design.preset === 'woven-double-circle') {
+    const geometry = compositionGeometry(design.preset);
+    ratio = geometry.width / geometry.height;
+  }
+  const span = Math.max(design.width, design.height);
+  return {...design,width:span*Math.min(1,ratio),height:span/Math.max(1,ratio)};
+}
+
+export function wovenComposition(design: Design): Sheet {
+  const {sheet,routes,left,top,width,height} = compositionGeometry(design.preset);
   const page = pageSize(design);
   const angle = design.rotation * Math.PI / 180;
   sheet.paper = design.paper;

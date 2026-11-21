@@ -1,5 +1,6 @@
 "use client";
 
+import { fitWovenPreset } from '@/lib/interlace/document';
 import { selectWovenPreset } from '@/lib/woven/design';
 import { compositionPresets } from '@/lib/paths/composition-presets';
 import { NumericInput, Button, Select, ActionGroup } from '@/components/editor/Controls';
@@ -306,7 +307,7 @@ export default function WovenPage() {
                   className={field}
                   value={design.preset}
                   onChange={(e) =>
-                    { setSelected(null); setDesign(selectWovenPreset(design, e.target.value as Design["preset"])); }
+                    { setSelected(null); setDesign(fitWovenPreset(selectWovenPreset(design, e.target.value as Design["preset"]))); }
                   }
                 >
                   <option value="rosette">Six-loop rosette</option>

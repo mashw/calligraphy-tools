@@ -133,3 +133,50 @@ export function pdfTagCommands(tag: SheetTag, locate: (p: Pt) => Pt, pageHeightM
     return `BT /F1 ${n(tag.size * pt)} Tf ${rgb} rg ${c} ${s} ${inverse} ${c} ${n(point.x * pt)} ${n((pageHeightMM - point.y) * pt)} Tm (${char.replace(/([\\()])/g, '\\$1')}) Tj ET`;
   }).filter(Boolean).join('\n');
 }
+
+
+/** Reserve printed stroke extents before looking for a nearby clear label rectangle. */
+export function placeSheetTags(tags: SheetTag[], strokes: {points: Pt[]; width: number}[], page: {w:number; h:number}): SheetTag[] {
+  if (!tags.length) return [];
+  const cell = 2, cols = Math.ceil(page.w/cell), rows = Math.ceil(page.h/cell);
+  const occupied = new Uint8Array(cols*rows);
+  function reserve(left:number, top:number, right:number, bottom:number) {
+    for (let y=Math.max(0,Math.floor(top/cell)); y<=Math.min(rows-1,Math.floor(bottom/cell)); y++)
+      occupied.fill(1,y*cols+Math.max(0,Math.min(cols,Math.floor(left/cell))),y*cols+Math.max(0,Math.min(cols,Math.floor(right/cell)+1)));
+  }
+  for (const stroke of strokes) {
+    const pad = stroke.width/2 + .5;
+    for (let j=1;j<stroke.points.length;j++) {
+      const a=stroke.points[j-1], b=stroke.points[j];
+      const steps=Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/cell));
+      for(let k=0;k<=steps;k++){
+        const x=a.x+(b.x-a.x)*k/steps, y=a.y+(b.y-a.y)*k/steps;
+        reserve(x-pad-cell/2,y-pad-cell/2,x+pad+cell/2,y+pad+cell/2);
+      }
+    }
+  }
+  const placed: SheetTag[] = [];
+  for (const tag of tags) {
+    const width = Math.ceil((tag.text.length*tag.size*.76+2)/cell);
+    const height = Math.ceil((tag.size*1.6+2)/cell);
+    let best: Pt | undefined, nearest=Infinity;
+    for(let y=1;y+height<=Math.floor(page.h/cell)-1;y++){
+      let run=0;
+      for(let x=1;x<Math.floor(page.w/cell)-1;x++){
+        let clear=true;
+        for(let row=y;row<y+height;row++) if(occupied[row*cols+x]) {clear=false;break;}
+        run=clear?run+1:0;
+        if(run<width) continue;
+        const point={x:(x+1-width/2)*cell,y:(y+height/2)*cell+tag.size*.32};
+        const distance=Math.hypot(point.x-tag.point.x,point.y-tag.point.y);
+        if(distance<nearest){nearest=distance;best=point;}
+      }
+    }
+    if(best){
+      const middle=best.y-tag.size*.32;
+      reserve(best.x-width*cell/2,middle-height*cell/2,best.x+width*cell/2,middle+height*cell/2);
+      placed.push({...tag,point:best,path:undefined,angle:0});
+    }
+  }
+  return placed;
+}

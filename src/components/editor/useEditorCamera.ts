@@ -7,16 +7,16 @@ type Mode = 'page' | 'content' | 'custom';
 type CustomView = { frame: Bounds; size: Size };
 export type CameraSnapshot = { mode: Mode; frame: Bounds; size: Size };
 
-export function useEditorCamera(svgRef: RefObject<SVGSVGElement | null>, page: Bounds, content: Bounds = page, backgroundPan = true) {
+export function useEditorCamera(svgRef: RefObject<SVGSVGElement | null>, page: Bounds, content: Bounds = page, backgroundPan = true, onPaperClick?: () => void) {
   const [size, setSize] = useState<Size>({ width: 800, height: 600 });
   const [mode, setMode] = useState<Mode>('page');
   const [custom, setCustom] = useState<CustomView | null>(null);
   const fittedPage = fitBounds(page, size);
   const fittedContent = fitBounds(content, size);
   const frame = mode === 'custom' && custom ? resizeBounds(custom.frame, custom.size, size) : mode === 'content' ? fittedContent : fittedPage;
-  const latest = useRef({ frame, size, fittedPage });
+  const latest = useRef({ frame, size, fittedPage, onPaperClick });
 
-  useEffect(() => { latest.current = { frame, size, fittedPage }; });
+  useEffect(() => { latest.current = { frame, size, fittedPage, onPaperClick }; });
 
   useEffect(() => {
     const svg = svgRef.current;
@@ -40,18 +40,20 @@ export function useEditorCamera(svgRef: RefObject<SVGSVGElement | null>, page: B
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
-    let drag: { pointer: number; x: number; y: number; frame: Bounds; size: Size } | null = null;
+    let drag: { pointer: number; x: number; y: number; frame: Bounds; size: Size; paperClick: boolean; moved: boolean } | null = null;
     const down = (event: PointerEvent) => {
       const target = event.target as Element;
       const background = target === svg || target.id === 'stage-bg' || (target.tagName === 'rect' && !target.closest('[data-camera-interactive]'));
       if (!(event.button === 1 || (event.button === 0 && (event.altKey || (backgroundPan && background))))) return;
       event.preventDefault(); event.stopPropagation();
-      drag = { pointer: event.pointerId, x: event.clientX, y: event.clientY, frame: latest.current.frame, size: latest.current.size };
+      drag = { pointer: event.pointerId, x: event.clientX, y: event.clientY, frame: latest.current.frame, size: latest.current.size, paperClick: target.hasAttribute('data-camera-paper') && event.button === 0 && !event.altKey, moved: false };
       svg.setPointerCapture(event.pointerId);
     };
     const move = (event: PointerEvent) => {
       if (!drag || event.pointerId !== drag.pointer) return;
       event.preventDefault(); event.stopPropagation();
+      if (!drag.moved && Math.hypot(event.clientX-drag.x,event.clientY-drag.y) < 3) return;
+      drag.moved = true;
       const x = drag.frame.x - (event.clientX - drag.x) * drag.frame.w / drag.size.width;
       const y = drag.frame.y - (event.clientY - drag.y) * drag.frame.h / drag.size.height;
       setCustom({ frame: { ...drag.frame, x, y }, size: drag.size }); setMode('custom');
@@ -60,6 +62,7 @@ export function useEditorCamera(svgRef: RefObject<SVGSVGElement | null>, page: B
       if (!drag || event.pointerId !== drag.pointer) return;
       event.stopPropagation();
       if (svg.hasPointerCapture(event.pointerId)) svg.releasePointerCapture(event.pointerId);
+      if (event.type === 'pointerup' && drag.paperClick && !drag.moved) latest.current.onPaperClick?.();
       drag = null;
     };
     const wheel = (event: WheelEvent) => {

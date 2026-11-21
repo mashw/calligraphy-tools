@@ -1,6 +1,6 @@
 import { visitIntervals } from '../woven/passages';
 import { writingBands, borderGuideTags, bandEdges, borderBendWarning } from '../woven/bands';
-import { guideLabel, routeTag, type SheetTag } from '@/lib/guides/sheet-labels';
+import { placeSheetTags, guideLabel, routeTag, type SheetTag } from '@/lib/guides/sheet-labels';
 import type { TextPlan } from './text-fit';
 import { clipPolylineToRect } from '../layout/plotter-export';
 import { offset } from "../curve-helpers";
@@ -274,7 +274,7 @@ export function interlaceGuideTags(sheet: Sheet, entries = sheet.strands.filter(
   });
 }
 
-export function renderSheet(sheet:Sheet, graph=topology(sheet), { ruler = true, guideTags = sheet.showGuideTags } = {}) {
+export function renderSheet(sheet:Sheet, graph=topology(sheet), { ruler = true, guideTags = sheet.showGuideTags, tagBounds = pageSize(sheet) } = {}) {
   const page=pageSize(sheet),scene:Scene={page,strokes:[],labels:[],tags:guideTags ? interlaceGuideTags(sheet, graph.entries) : undefined};
   for(const {root,route,regions} of writingRoutes(sheet,graph)){
     const m=metrics(root);
@@ -294,6 +294,7 @@ export function renderSheet(sheet:Sheet, graph=topology(sheet), { ruler = true, 
     if(stroke.points.every(p=>p.x>=0 && p.x<=page.w && p.y>=0 && p.y<=page.h))return [stroke];
     return clipPolylineToRect({points:stroke.points,source:'interlace'},frame).map(piece=>({...stroke,points:piece.points}));
   });
+  if (scene.tags) scene.tags = placeSheetTags(scene.tags,scene.strokes,tagBounds);
   return scene;
 }
 export function warnings(sheet:Sheet,g:ReturnType<typeof topology>) {

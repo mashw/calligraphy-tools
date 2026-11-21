@@ -3,7 +3,7 @@ import { topology, renderSheet, warnings as sheetWarnings } from '../interlace/m
 import { makeSlantRoute } from '../guides/slant-paths';
 import { visitIntervals } from './passages';
 import { writingBands, borderGuideTags, bandEdges, borderBendWarning } from './bands';
-import { guideLabel, routeTag } from '@/lib/guides/sheet-labels';
+import { placeSheetTags, guideLabel, routeTag } from '@/lib/guides/sheet-labels';
 import { slantPath, clipSlantToBand } from "../guides/slant-paths";
 import { offset } from "@/lib/curve-helpers";
 import { buildGuideSet } from "@/lib/guides/guide-template";
@@ -337,9 +337,10 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
   const page = pageSize(design);
   const model = buildWovenRouteModel(design);
   const { route, crossings, choices, x, asc, desc, start, intervals, warnings, usableLength, halfBand } = model;
+  const tagBounds = furniture ? page : {w:design.width,h:design.height};
   if (model.composition) {
     const {sheet,graph} = model.composition;
-    const clean = renderSheet(sheet,graph,{ruler:furniture});
+    const clean = renderSheet(sheet,graph,{ruler:furniture,tagBounds});
     const annotated = {...clean, labels:[...clean.labels,...crossings.map((c,i)=>({point:c.point,text:String(i+1),size:2.5,color:'#9f483b'}))]};
     return {page,route,crossings,choices,intervals,clean,annotated,startPoint:route.points[0],usableLength,warnings};
   }
@@ -425,6 +426,7 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
       color: "#52677c",
     });
   }
+  if (tags) for (const scene of [clean, annotated]) scene.tags = placeSheetTags(tags,scene.strokes,tagBounds);
   return {
     page,
     route,

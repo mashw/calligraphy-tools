@@ -1,7 +1,7 @@
 'use client';
 
-import { SheetLabels } from '@/components/preview/SheetLabels';
-import { interlaceGuideTags } from '@/lib/interlace/model';
+
+
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import EditorWorkspace from '@/components/editor/EditorWorkspace';
 import PreviewToolbar from '@/components/editor/PreviewToolbar';
@@ -61,7 +61,7 @@ export default function InterlaceStudio() {
   const page=pageSize(sheet),frame={x:0,y:0,w:page.w,h:page.h};
   const entries=useMemo(()=>sheet.strands.filter(s=>s.visible).map(s=>({s,route:strandRoute(s,sheet)})),[sheet]);
   const graph=useMemo(()=>busy?null:topology(sheet),[sheet,busy]);
-  const full=useMemo(()=>graph && !simplify?renderSheet(sheet,graph,{guideTags:false}):null,[sheet,graph,simplify]);
+  const full=useMemo(()=>graph && !simplify?renderSheet(sheet,graph):null,[sheet,graph,simplify]);
   const camera=useEditorCamera(svg,frame,pointBounds(entries.flatMap(e=>e.route.points),frame,10));
   const fits=useMemo(()=>graph?sheet.strands.filter(s=>s.visible&&s.textPlan?.text).map(s=>({id:s.id,name:s.name,fit:textFit(sheet,s,graph)})):[],[sheet,graph]);
   const fit=fits.find(f=>f.id===active)?.fit??null;
@@ -215,7 +215,7 @@ export default function InterlaceStudio() {
           fill={sheet.joins.some(link=>link.from===j.from.id&&link.to===j.to.id)?'#16836b':'white'} stroke="#16836b" strokeWidth={.5}
           onClick={()=>toggleJoin(j.from.id,j.to.id)}/>)}
       </g>
-      {sheet.showGuideTags && <SheetLabels tags={interlaceGuideTags(sheet, entries)} />}
+      
     </svg></section>} layers={<div className="space-y-2">
       <DisclosureSection title="Composition" defaultOpen><div className={row}>
         <Select aria-label="Paper" value={sheet.paper} onChange={e=>commit({...sheet,paper:e.target.value as Sheet['paper']})}>{Object.keys(PAPERS_MM).map(p=><option key={p}>{p}</option>)}</Select>
