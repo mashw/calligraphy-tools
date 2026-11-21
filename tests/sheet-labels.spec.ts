@@ -9,9 +9,12 @@ test('Guidelines header follows the script and is included in SVG only when enab
   const toggle = page.getByRole('switch', { name: 'Show sheet header' });
   await expect(header).toContainText(/Copperplate.*mm x-height/);
   await page.getByRole('combobox', { name: 'Script', exact: true }).selectOption('Fraktur');
-  await expect(header).toContainText(/Fraktur.*mm nib.*mm x-height/);
+  await expect(header).toContainText(/Fraktur.*mm nib.*\d+(?:\.\d+)? nibs x-height/);
+  await expect(header).not.toContainText('mm x-height');
   await page.getByRole('button', { name: 'SVG', exact: true }).click();
-  expect(await exportedText(page, 'image/svg+xml')).toContain('data-guide-label="header"');
+  const svg = await exportedText(page, 'image/svg+xml');
+  expect(svg).toContain('data-guide-label="header"');
+  expect(svg).toContain('nibs x-height');
   await toggle.press('Space');
   await expect(header).toHaveCount(0);
   await page.getByRole('button', { name: 'SVG', exact: true }).click();

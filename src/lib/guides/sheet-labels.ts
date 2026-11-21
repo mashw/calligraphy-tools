@@ -11,7 +11,8 @@ const names: Record<ScriptId, string> = {
 const decimal = (n: number) => String(Math.round(n * 100) / 100);
 
 export function guideLabel(script: ScriptId, xHeight: number, nib: number, angle?: number) {
-  const size = `${decimal(xHeight)} mm x-height`;
+  const height = script === 'Copperplate' ? `${decimal(xHeight)} mm` : `${decimal(xHeight / nib)} nibs`;
+  const size = `${height} x-height`;
   return script === 'Copperplate'
     ? `${names[script]} · ${size}${angle === undefined ? '' : ` · ${decimal(angle)}° slant`}`
     : `${names[script]} · ${decimal(nib)} mm nib · ${size}${angle === undefined ? '' : ` · ${decimal(angle)}° pen`}`;
