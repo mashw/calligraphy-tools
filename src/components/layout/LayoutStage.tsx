@@ -2,7 +2,7 @@
 import {LayoutWovenRenderer} from '@/components/woven/WovenRenderer';
 import {layeredLayoutPdf} from '@/lib/layout/woven-pdf';
 
-import { Button, Toggle, Select } from '@/components/editor/Controls';
+import { Button, Switch, Toggle, Select } from '@/components/editor/Controls';
 
 
 import { pointBounds } from '@/lib/editor/camera';
@@ -272,7 +272,11 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
 <Button onClick={()=>setExportModal('svg')} className={`${control} ml-1`}>SVG</Button>
 <Button onClick={exportPdf} className={control}>PDF</Button>
 <Button onClick={() => { setCricutMessage(null); setExportModal('cricut'); }} className={control}>Cricut Draw</Button>
-<label className="flex shrink-0 items-center gap-1 text-xs text-slate-700"><Toggle type="checkbox" checked={showCricutSafeArea} onChange={event => setShowCricutSafeArea(event.target.checked)} />Show Cricut safe area</label>
+<Button popoverTarget="layout-preview-options" aria-haspopup="dialog">Preview options</Button>
+<div id="layout-preview-options" popover="auto" role="dialog" aria-label="Preview options"
+  className="m-auto w-72 max-w-[90vw] rounded border bg-white p-3 shadow-lg">
+  <Switch label="Show Cricut safe area" checked={showCricutSafeArea} onChange={setShowCricutSafeArea} />
+</div>
 <Button onClick={print} className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500">Print</Button></PreviewToolbar>
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-300">
       <svg ref={svgRef} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="editor-svg" style={{ background: '#cbd5e1' }} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}>

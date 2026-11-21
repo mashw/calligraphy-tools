@@ -276,3 +276,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .switch-row:has(input:disabled) { opacity: .55; cursor: default; }
 .guide-option-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px 12px; }
 @media (prefers-reduced-motion: reduce) { .switch-track::before { transition: none; } }
+
+.layer-action { flex: none; width: 28px; border: 1px solid var(--line); background: white; color: var(--foreground); font-size: 12px; }
+.layer-action:disabled { opacity: .3; }

@@ -65,7 +65,7 @@ for (const [route, section, label] of [
     await enabled.press('Space');
     await bandScript.selectOption('Fraktur');
     await expect(construction).toBeVisible();
-    if (route === 'calligram') await expect(options.getByRole('slider', { name: /Radius/ })).toBeVisible();
+    if (route === 'calligram') await expect(options.getByRole('slider', { name: /Inner radius/ })).toBeVisible();
     await expect.poll(() => page.locator('.editor-inspector').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     await enabled.press('Space');
     await expect(bandScript).toHaveCount(0);
