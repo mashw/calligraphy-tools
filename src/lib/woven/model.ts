@@ -131,12 +131,30 @@ export function buildWovenRouteModel(design: Design) {
 /** Generate physical strokes for one writing passage. Intervals use its own arc length. */
 export function writingStrokes(design: Design, route: import('../guides/slant-paths').SlantRoute,
   intervals: import('./geometry').Interval[], x: number, asc: number, desc: number, invertGuides = false, baselineOffset = x / 2): Stroke[] {
-  return writingBands(design,x,asc,desc,invertGuides,baselineOffset).flatMap(b =>
-    singleBandStrokes(b, route, intervals, invertGuides));
+  const bands = writingBands(design,x,asc,desc,invertGuides,baselineOffset);
+  const last = route.points.length - 1;
+  const turns = new Map<number, number>();
+  for (let i = route.closed ? 0 : 1; i < last; i++) {
+    const a = route.points[i], prev = route.points[i ? i-1 : last-1], next = route.points[i+1];
+    const dx = a.x-prev.x, dy = a.y-prev.y, ex = next.x-a.x, ey = next.y-a.y;
+    const angle = Math.atan2(dx*ey-dy*ex, dx*ex+dy*ey);
+    if (Math.abs(angle) >= Math.PI/6) turns.set(i, Math.tan(angle/2));
+  }
+  if (!turns.size) return bands.flatMap(b => singleBandStrokes(b, route, intervals, invertGuides));
+  const cuts = [0, ...Array.from(turns.keys()).filter(i => i > 0), last];
+  return cuts.slice(1).flatMap((end, index) => {
+    const start = cuts[index], origin = route.distances[start];
+    const local = makeSlantRoute(route.points.slice(start, end+1));
+    const visible: typeof intervals = intervals.map(([a,b]): [number,number] =>
+      [Math.max(0,a-origin), Math.min(local.length,b-origin)]).filter(([a,b]) => b>a);
+    if (!visible.length) return [];
+    return bands.flatMap(band => singleBandStrokes(band, local, visible, invertGuides,
+      turns.get(start) ?? 0, turns.get(end === last && route.closed ? 0 : end) ?? 0));
+  });
 }
 
 function singleBandStrokes(band: ReturnType<typeof writingBands>[number], route: import('../guides/slant-paths').SlantRoute,
-  intervals: import('./geometry').Interval[], invertGuides: boolean): Stroke[] {
+  intervals: import('./geometry').Interval[], invertGuides: boolean, startTurn = 0, endTurn = 0): Stroke[] {
   const { design, x, asc, desc, anchor: baselineOffset, hiddenExtension } = band;
   const baseline = baselineOffset === 0 ? route.points : offset(route.points, baselineOffset);
   const guides = buildGuideSet(
@@ -182,6 +200,30 @@ function singleBandStrokes(band: ReturnType<typeof writingBands>[number], route:
         width: design.gridThickness,
         role: 'grid',
       });
+  const bounds = bandEdges([band], invertGuides);
+  const reach = Math.max(Math.abs(bounds.top), Math.abs(bounds.bottom));
+  // Limit the mitre on very short legs and near-reversals.
+  const limit = Math.min(3, route.length / (4 * Math.max(reach, .001)));
+  const clampTurn = (turn: number) => Math.max(-limit, Math.min(limit, turn));
+  const entry = clampTurn(startTurn), exit = clampTurn(endTurn);
+  const entryZone = Math.abs(entry)*reach*2, exitZone = Math.abs(exit)*reach*2;
+  function joinedRail(points: typeof route.points) {
+    if (!entry && !exit) return points;
+    return points.map((p,i) => {
+      const s = route.distances[i], fromEnd = route.length-s;
+      const nearStart = entryZone > 0 && s < entryZone;
+      if (!nearStart && !(exitZone > 0 && fromEnd < exitZone)) return p;
+      const j = nearStart ? 0 : route.points.length-2;
+      const a = route.points[j], b = route.points[j+1];
+      const len = Math.hypot(b.x-a.x,b.y-a.y) || 1;
+      const tx = (b.x-a.x)/len, ty = (b.y-a.y)/len;
+      const center = route.points[i];
+      const offset = (p.y-center.y)*tx - (p.x-center.x)*ty;
+      const shift = offset * (nearStart ? entry*(1-s/entryZone) : -exit*(1-fromEnd/exitZone));
+      return { x:p.x+shift*tx, y:p.y+shift*ty };
+    });
+  }
+  for (const rail of rails) rail.points = joinedRail(rail.points);
   const strokes: Stroke[] = rails.flatMap((rail) =>
     intervals.map((interval) => ({
       ...rail,
@@ -189,6 +231,18 @@ function singleBandStrokes(band: ReturnType<typeof writingBands>[number], route:
       points: sliceGuide(route, rail.points, interval),
     })),
   );
+  if (entry && design.cornerMode === 'restart' && intervals.some(([a]) => a === 0)) {
+    const outer = rails.map(rail => rail.points[0]);
+    let ends = [outer[0], outer[0]], longest = 0;
+    for (const a of outer) for (const b of outer) {
+      const length = Math.hypot(a.x-b.x, a.y-b.y);
+      if (length > longest) { ends = [a,b]; longest = length; }
+    }
+    strokes.push({ points:ends, color:'#52677c', width:.16, role:'primary' });
+  }
+  // Leave the fold clear of transverse grid lines, slants and pen markers.
+  intervals = intervals.map(([a,b]): [number,number] =>
+    [Math.max(a,entryZone/2), Math.min(b,route.length-exitZone/2)]).filter(([a,b]) => b>a);
   let slantBand: { x: number; y: number }[] | null = null;
   let locatedRole: Stroke['role'] = 'slant';
   const addLocated = (
