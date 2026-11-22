@@ -1,3 +1,5 @@
+import { compositionPresets } from '../paths/composition-presets';
+import type { Design } from '../woven/design';
 import { readTextPlan } from './text-fit';
 import { findCrossingsForStraps, slotOrderForPair } from '../paths/intersections';
 import { samplePathDToPolyline } from '../paths/sample-svg-path';
@@ -161,7 +163,9 @@ export function openSheet(value:unknown):{sheet:Sheet; notice:string} {
     return {sheet,notice:'Imported paths, writing dimensions and '+sheet.overrides.length+' crossing choices.'+
       (missing?' '+missing+' unmatched choices omitted.':'')+' Only compatible end-to-start joins are carried over.'};
   }
-  const d=parseDesign(obj); Object.assign(sheet,header(d)); const s=strand('woven',d.preset,{kind:d.preset},{...d,overrides:{}});
+  const d=parseDesign(obj);
+  if (d.preset === 'woven-double-circle' || d.preset === 'fraktur-scurve-weave-2') return {sheet: wovenComposition(d), notice:'Imported woven composition.'};
+  Object.assign(sheet,header(d)); const s=strand('woven',d.preset,{kind:d.preset},{...d,overrides:{}});
   sheet.strands=[s];
   const old=makeRoute(d.preset,d.width,d.height,d.loop,d.rotation,d.reverse);
   const canonical=strandRoute(s,sheet), hits=topology(sheet).hits;
@@ -176,4 +180,50 @@ export function openSheet(value:unknown):{sheet:Sheet; notice:string} {
     }
   }
   return {sheet,notice:'Imported Woven geometry, guides and crossing choices. Sheet annotations are omitted.'};
+}
+
+function compositionGeometry(presetId: Design['preset']) {
+  const preset = compositionPresets.find(item => item.id === presetId);
+  if (!preset) throw Error('Unknown woven composition.');
+  const { sheet } = openSheet({version:1, format:'calligraphy-tools/path-guides-preset', state:preset.state});
+  const routes = sheet.strands.map(s => strandRoute(s, sheet));
+  const points = routes.flatMap(route => route.points);
+  const xs = points.map(p => p.x), ys = points.map(p => p.y);
+  const left = Math.min(...xs), top = Math.min(...ys);
+  const width = Math.max(...xs)-left, height = Math.max(...ys)-top;
+  return {sheet,routes,left,top,width,height};
+}
+
+export function fitWovenPreset(design: Design): Design {
+  let ratio = design.preset === 'figure-eight' ? 1 / .65 : 1;
+  if (design.preset === 'fraktur-scurve-weave-2' || design.preset === 'woven-double-circle') {
+    const geometry = compositionGeometry(design.preset);
+    ratio = geometry.width / geometry.height;
+  }
+  const span = Math.max(design.width, design.height);
+  return {...design,width:span*Math.min(1,ratio),height:span/Math.max(1,ratio)};
+}
+
+export function wovenComposition(design: Design): Sheet {
+  const {sheet,routes,left,top,width,height} = compositionGeometry(design.preset);
+  const page = pageSize(design);
+  const angle = design.rotation * Math.PI / 180;
+  sheet.paper = design.paper;
+  sheet.orientation = design.orientation;
+  sheet.showGuideTags = design.showGuideTags;
+  sheet.strands.forEach((s,i) => {
+    const transformed = routes[i].points.map(p => {
+      const x = ((p.x-left)/width-.5)*design.width, y = ((p.y-top)/height-.5)*design.height;
+      return {x:(design.centerX ?? page.w/2)+x*Math.cos(angle)-y*Math.sin(angle),
+        y:(design.centerY ?? page.h/2)+x*Math.sin(angle)+y*Math.cos(angle)};
+    });
+    const {source,center} = pathSource(s.source.kind === 'path' ? s.source.d : '', transformed);
+    s.source = source;
+    s.scale = 100;
+    s.mirror = false;
+    s.design = {...design, preset:'rosette', width:source.width, height:source.height, centerX:center.x, centerY:center.y, rotation:0};
+  });
+  const hits = topology(sheet).hits;
+  sheet.overrides = hits.map((hit,i) => ({...hit, over:design.overrides['crossing-'+i] ?? hit.over}));
+  return sheet;
 }

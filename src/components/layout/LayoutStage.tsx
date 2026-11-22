@@ -173,7 +173,7 @@ export default function LayoutStage({ onArrangement, editingSnapshot, elements, 
   const page = pageSize(pageElement);
   const cricutSafeRect = getCricutSafeRect(page, cricutMat);
   const pageRect = pageContentRect(page, pageElement.settings.margins);
-  const camera = useEditorCamera(svgRef, {x:0,y:0,w:page.width,h:page.height}, pointBounds(elements.filter(e=>e.type!=="page"&&e.visible!==false).flatMap(e=>{const b=rotatedElementBounds(e);return [{x:b.x,y:b.y},{x:b.x+b.width,y:b.y+b.height}]}),{x:0,y:0,w:page.width,h:page.height},5));
+  const camera = useEditorCamera(svgRef, {x:0,y:0,w:page.width,h:page.height}, pointBounds(elements.filter(e=>e.type!=="page"&&e.visible!==false).flatMap(e=>{const b=rotatedElementBounds(e);return [{x:b.x,y:b.y},{x:b.x+b.width,y:b.y+b.height}]}),{x:0,y:0,w:page.width,h:page.height},5), true, () => onSelect('page'));
   const vb = camera;
   const zoom = camera.zoom;
   const begin = (e: React.PointerEvent<SVGElement>, element: LayoutElement, handle?: ResizeHandle) => {
@@ -284,7 +284,7 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-300">
       <svg ref={svgRef} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="editor-svg" style={{ background: '#cbd5e1' }} onPointerMove={onMove} onPointerUp={finish} onPointerCancel={finish}>
         <rect id="stage-bg" x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill="#cbd5e1" pointerEvents="none" />
-        <rect x="0" y="0" width={page.width} height={page.height} data-camera-interactive="true" fill={PAGE_BACKGROUND} stroke="#94a3b8" strokeWidth=".3" onPointerDown={e => { e.stopPropagation(); onSelect('page'); }} style={{ cursor: 'default' }} />
+        <rect x="0" y="0" width={page.width} height={page.height} data-camera-paper="true" fill={PAGE_BACKGROUND} stroke="#94a3b8" strokeWidth=".3" style={{ cursor: 'grab' }} />
         {[...elements].reverse().filter((element):element is Exclude<LayoutElement,{type:'page'}> => element.type !== 'page'&&element.visible!==false).map(element => {
           const internal=element.id===editing?.id&&element.type==='guidelines';
           const detailElement=internal&&draft?{...element,mask:{...element.mask,arrangement:draft}}:editingSnapshot?.find(item=>item.id===element.id)??element;

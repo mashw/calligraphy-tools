@@ -1,4 +1,9 @@
-import { guideLabel, routeTag } from '@/lib/guides/sheet-labels';
+import { wovenComposition } from '../interlace/document';
+import { topology, renderSheet, warnings as sheetWarnings } from '../interlace/model';
+import { makeSlantRoute } from '../guides/slant-paths';
+import { visitIntervals } from './passages';
+import { writingBands, borderGuideTags, bandEdges, borderBendWarning } from './bands';
+import { placeSheetTags, guideLabel, routeTag } from '@/lib/guides/sheet-labels';
 import { slantPath, clipSlantToBand } from "../guides/slant-paths";
 import { offset } from "@/lib/curve-helpers";
 import { buildGuideSet } from "@/lib/guides/guide-template";
@@ -22,6 +27,34 @@ import type { Scene, Stroke } from "./vector-export";
 /** Route and crossing geometry only: safe to regenerate during pointer interactions. */
 export function buildWovenRouteModel(design: Design) {
   const page = pageSize(design);
+  if (design.preset === 'fraktur-scurve-weave-2' || design.preset === 'woven-double-circle') {
+    let compositionDesign = design;
+    if (design.layoutFrame) {
+      const unit = design.script === 'Copperplate' ? 1 : design.nib;
+      const bands = writingBands(design,design.xNib*unit,design.ascNib*unit,design.descNib*unit,false,0);
+      const edges = bandEdges(bands);
+      const margin = Math.max(-edges.top,edges.bottom)+1;
+      const tagCount = design.showGuideTags ? bands.length*2 : 0;
+      const footer = Math.min(design.height*.4, tagCount*8+(tagCount ? 6 : 0));
+      const scale = Math.max(.01, Math.min((design.width-2*margin)/design.width,(design.height-2*margin-footer)/design.height));
+      compositionDesign = {...design,width:design.width*scale,height:design.height*scale,centerY:design.height/2-footer/2};
+    }
+    const sheet = wovenComposition(compositionDesign), graph = topology(sheet);
+    const route = makeSlantRoute(graph.entries.flatMap(entry => entry.route.points));
+    const intervals: [number, number][] = [];
+    let index = 0;
+    for (const entry of graph.entries) {
+      intervals.push([route.distances[index], route.distances[index + entry.route.points.length - 1]]);
+      index += entry.route.points.length;
+    }
+    const crossings = graph.hits.map((hit,i) => ({...hit, id:'crossing-'+i, a:hit.a.t, b:hit.b.t}));
+    const choices = Object.fromEntries(crossings.map(hit => [hit.id, hit.over])) as Record<string,'a'|'b'>;
+    const unit = design.script === 'Copperplate' ? 1 : design.nib;
+    const x = unit*design.xNib, asc = unit*design.ascNib, desc = unit*design.descNib;
+    return {page,route,crossings,choices,intervals,x,asc,desc,halfBand:x/2+Math.max(asc,desc),start:0,cuts:[],
+      alternate:{choices,conflicts:0},warnings:sheetWarnings(sheet,graph),usableLength:graph.entries.reduce((sum,e)=>sum+e.route.length,0),
+      composition:{sheet,graph}};
+  }
   const route = makeRoute(
     design.preset,
     design.width,
@@ -38,7 +71,9 @@ export function buildWovenRouteModel(design: Design) {
   const x = guideUnit * design.xNib,
     asc = guideUnit * design.ascNib,
     desc = guideUnit * design.descNib;
-  const halfBand = x / 2 + Math.max(asc, desc);
+  const bands = writingBands(design,x,asc,desc);
+  const edges = bandEdges(bands);
+  const halfBand = bands.length > 1 ? Math.max(-edges.top,edges.bottom) : x / 2 + Math.max(asc, desc);
   const start = (design.start / 100) * route.length;
   const cuts = crossingCuts(crossings, choices, halfBand, design.clearance);
   const intervals = visibleIntervals(route.length, [
@@ -46,6 +81,8 @@ export function buildWovenRouteModel(design: Design) {
     { center: start, half: design.gap / 2 },
   ]);
   const warnings: string[] = [];
+  const bendWarning = borderBendWarning(route.points,bands);
+  if (bendWarning) warnings.push(bendWarning);
   if (minimumRadius(route) < halfBand * 1.5)
     warnings.push(
       "Some bends are tight for this lettering size. Reduce the lettering size or enlarge the shape; inspect the inner guides before printing.",
@@ -55,7 +92,7 @@ export function buildWovenRouteModel(design: Design) {
       "A shallow crossing needs a long gap. Adjust the shape or reduce the lettering size.",
     );
   if (
-    [-x / 2 - (design.fullGuides ? asc : 0), x / 2 + (design.fullGuides ? desc : 0)].some(distance =>
+    [edges.top, edges.bottom].some(distance =>
       offset(route.points, distance).some(
         (p) => p.x < 10 || p.x > page.w - 10 || p.y < 25 || p.y > page.h - 27,
       ),
@@ -86,12 +123,19 @@ export function buildWovenRouteModel(design: Design) {
     warnings.push(
       "Crossing gaps occupy more than half the route. Try smaller lettering or less clearance.",
     );
-  return { page, route, crossings, alternate, choices, x, asc, desc, halfBand, start, cuts, intervals, warnings, usableLength };
+  return { composition:undefined, page, route, crossings, alternate, choices, x, asc, desc, halfBand, start, cuts, intervals, warnings, usableLength };
 }
 
 /** Generate physical strokes for one writing passage. Intervals use its own arc length. */
 export function writingStrokes(design: Design, route: import('../guides/slant-paths').SlantRoute,
   intervals: import('./geometry').Interval[], x: number, asc: number, desc: number, invertGuides = false, baselineOffset = x / 2): Stroke[] {
+  return writingBands(design,x,asc,desc,invertGuides,baselineOffset).flatMap(b =>
+    singleBandStrokes(b, route, intervals, invertGuides));
+}
+
+function singleBandStrokes(band: ReturnType<typeof writingBands>[number], route: import('../guides/slant-paths').SlantRoute,
+  intervals: import('./geometry').Interval[], invertGuides: boolean): Stroke[] {
+  const { design, x, asc, desc, anchor: baselineOffset, hiddenExtension } = band;
   const baseline = baselineOffset === 0 ? route.points : offset(route.points, baselineOffset);
   const guides = buildGuideSet(
     design.script === "Copperplate" ? "copperplate" : "blackletter",
@@ -117,13 +161,13 @@ export function writingStrokes(design: Design, route: import('../guides/slant-pa
   const rails: Stroke[] = [
     { points: guides.baseLine, color: "#52677c", width: 0.16, guide:"baseline" },
     { points: guides.waistLine, color: "#52677c", width: 0.16, guide:"waist" },
-    ...(design.fullGuides
-      ? [
-          { points: guides.ascLine, color: "#9aa7b3", width: 0.12 },
-          { points: guides.descLine, color: "#9aa7b3", width: 0.12 },
-        ]
-      : []),
   ];
+  if (design.fullGuides) {
+    if (hiddenExtension !== "ascender")
+      rails.push({ points: guides.ascLine, color: "#9aa7b3", width: 0.12 });
+    if (hiddenExtension !== "descender")
+      rails.push({ points: guides.descLine, color: "#9aa7b3", width: 0.12 });
+  }
   const gray = (contrast: number) => {
     const v = Math.round(220 * (1 - contrast));
     return "#" + v.toString(16).padStart(2, "0").repeat(3);
@@ -272,12 +316,50 @@ export function writingStrokes(design: Design, route: import('../guides/slant-pa
   return strokes;
 }
 
+function borderedStrokes(design: Design, route: ReturnType<typeof makeRoute>, crossings: ReturnType<typeof findSelfCrossings>,
+  choices: Record<string,'a'|'b'>, start: number, bands: ReturnType<typeof writingBands>): Stroke[] {
+  const edges = bandEdges(bands);
+  const top = offset(route.points,edges.top-design.clearance);
+  const bottom = offset(route.points,edges.bottom+design.clearance);
+  const visits = crossings.flatMap(c => [c.a,c.b]).sort((a,b)=>a-b);
+  const visit = (at: number) => visitIntervals(visits,at,route.length,true);
+  const masks = crossings.flatMap(c => {
+    const over = choices[c.id] === 'a' ? c.a : c.b;
+    const under = choices[c.id] === 'a' ? c.b : c.a;
+    const region = visit(over);
+    const polygon = [...region.flatMap(i=>sliceGuide(route,top,i)), ...region.flatMap(i=>sliceGuide(route,bottom,i)).reverse()];
+    return visit(under).map(interval=>({interval,polygon}));
+  });
+  const strokes: Stroke[] = [];
+  for (const [a,b] of visibleIntervals(route.length,[{center:start,half:design.gap/2}])) {
+    const stops = [...new Set([a,b,...masks.flatMap(m=>m.interval).filter(s=>s>a && s<b)])].sort((p,q)=>p-q);
+    for (let i=1;i<stops.length;i++) {
+      const from=stops[i-1],to=stops[i],mid=(from+to)/2;
+      let parts = bands.flatMap(band=>singleBandStrokes(band, route, [[from, to]], false));
+      for (const mask of masks) if (mid>=mask.interval[0] && mid<=mask.interval[1])
+        parts=parts.flatMap(stroke=>clipSlantToBand(stroke.points,mask.polygon,false).map(points=>({...stroke,points})));
+      strokes.push(...parts);
+    }
+  }
+  return strokes;
+}
+
 export function buildWovenModel(design: Design, { furniture = true }: { furniture?: boolean } = {}) {
   const page = pageSize(design);
-  const { route, crossings, choices, x, asc, desc, start, intervals, warnings, usableLength, halfBand } = buildWovenRouteModel(design);
-  const strokes = writingStrokes(design, route, intervals, x, asc, desc);
+  const model = buildWovenRouteModel(design);
+  const { route, crossings, choices, x, asc, desc, start, intervals, warnings, usableLength, halfBand } = model;
+  const tagBounds = furniture ? page : {w:design.width,h:design.height};
+  if (model.composition) {
+    const {sheet,graph} = model.composition;
+    const clean = renderSheet(sheet,graph,{ruler:furniture,tagBounds,clipToPage:!design.layoutFrame});
+    const annotated = {...clean, labels:[...clean.labels,...crossings.map((c,i)=>({point:c.point,text:String(i+1),size:2.5,color:'#9f483b'}))]};
+    return {page,route,crossings,choices,intervals,clean,annotated,startPoint:route.points[0],usableLength,warnings};
+  }
+  const bands = writingBands(design,x,asc,desc);
+  const strokes = bands.length === 1 ? writingStrokes(design, route, intervals, x, asc, desc) :
+    borderedStrokes(design,route,crossings,choices,start,bands);
   const tag = design.showGuideTags ? routeTag(guideLabel(design.script, x, design.nib), route.points, halfBand + 4, .32) : null;
-  const tags = tag ? [tag] : undefined;
+  const tags = tag ? [tag, ...borderGuideTags(bands, route.points, false, .32)] : undefined;
   const clean: Scene = { strokes, labels: [], tags, page };
   const startS = wrap(start + design.gap / 2, route.length);
   const startPoint = atDistance(route, startS);
@@ -355,6 +437,7 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
       color: "#52677c",
     });
   }
+  if (tags) for (const scene of [clean, annotated]) scene.tags = placeSheetTags(tags,scene.strokes,tagBounds);
   return {
     page,
     route,

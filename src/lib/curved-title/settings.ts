@@ -41,6 +41,7 @@ export function createDefaultCurvedTitleSettings(): CurvedTitleSettings {
 
 // Keep the Insular 2:5:2 geometry when chosen in the layout editor.
 export function curvedTitleSettingsForScript(current: CurvedTitleSettings, script: ScriptId): CurvedTitleSettings {
+  if (script === 'Fraktur' || script === 'TexturaQuadrata') return { ...current, script, nibText: '2', xNib: 4.5, penAngleDeg: script === 'Fraktur' ? 40 : 45 };
   if (script !== 'InsularMajuscule') return { ...current, script };
   return { ...current, script, xNib: 5, ascNib: 2, descNib: 2, penAngleDeg: 15, showInsularGrid: false };
 }

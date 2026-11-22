@@ -64,8 +64,8 @@ type DefaultsResolver = (args: {
 }) => BandDefaults | null;
 
 const MAIN_DEFAULTS = {
-  Fraktur: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 40 as const, xNib: 4.5, ascNib: 2, descNib: 2 },
-  TexturaQuadrata: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 45 as const, xNib: 5, ascNib: 2, descNib: 2 },
+  Fraktur: { radiusMM: 45, nibMMText: '2', nibAngleDeg: 40 as const, xNib: 4.5, ascNib: 2, descNib: 2 },
+  TexturaQuadrata: { radiusMM: 45, nibMMText: '2', nibAngleDeg: 45 as const, xNib: 4.5, ascNib: 2, descNib: 2 },
   InsularMajuscule: { radiusMM: 45, nibMMText: '4', nibAngleDeg: 15 as const, xNib: 5, ascNib: 2, descNib: 2 },
   Copperplate: { radiusMM: 60, nibMMText: '4', nibAngleDeg: 45 as const, xHeightMMText: '6.0', ratioId: '3:2:3' as const },
 };
@@ -434,7 +434,7 @@ export default function CalligramPage() {
   const [userScaleFactor, setUserScaleFactor] = useState(1);
   const [userSpaceFactor, setUserSpaceFactor] = useState(1);
 
-  const [showGuideTags, setShowGuideTags] = useState(false);
+  const [showGuideTags, setShowGuideTags] = useState(true);
   const [showBoxes, setShowBoxes] = useState(false);
   const [showSpanFill, setShowSpanFill] = useState(true);
   const [highContrastMode, setHighContrastMode] = useState(false);

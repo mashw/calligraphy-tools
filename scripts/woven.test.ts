@@ -1,3 +1,4 @@
+import { writingBands, bandEdges } from '../src/lib/woven/bands.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRoute, findSelfCrossings, alternateWeave, visibleIntervals, crossingCuts, sliceGuide, atDistance } from '../src/lib/woven/geometry.ts';
@@ -132,5 +133,52 @@ test('paper sizes centre the shape and drive SVG and PDF dimensions in mm', () =
     assert.ok(Math.abs((Math.min(...ys)+Math.max(...ys))/2-page.h/2)<.01);
     assert.ok(sceneSvg(model.clean).includes(`width="${page.w}mm" height="${page.h}mm"`));
     assert.ok(new TextDecoder().decode(scenePdf(model.clean)).includes(`/MediaBox [0 0 ${(page.w*72/25.4).toFixed(3)} ${(page.h*72/25.4).toFixed(3)}]`));
+  }
+});
+
+test('borders share only facing extension zones and stay on the writing side when inverted', () => {
+  const border = { enabled:true, xHeight:2.25, script:'TexturaQuadrata' as const, share:true, gap:0.5 };
+  const design = { ...DEFAULT_DESIGN, borders:{outer:border,inner:border} };
+  assert.deepEqual(parseDesign(design).borders,design.borders);
+  const bands = writingBands(design,10,4,2);
+  assert.deepEqual(bands.map(b=>b.anchor),[5,-9.5,9.75]);
+  const inverted = writingBands(design,10,4,2,true);
+  assert.deepEqual(inverted.map(b=>b.anchor),[5,11.75,-7.5]);
+  const separate = writingBands({...design,borders:{outer:{...border,share:false}}},10,4,2);
+  assert.equal(separate[1].anchor,-10.5);
+  assert.deepEqual(bandEdges(separate),{top:-13.75,bottom:7});
+});
+
+test('bordered figure-eight emits finite writing rails and editable asymmetric crossings', async () => {
+  const {buildWovenModel} = await import('../src/lib/woven/model');
+  const design = {...DEFAULT_DESIGN,preset:'figure-eight' as const, gridVertical:false,gridHorizontal:false,
+    borders:{outer:{enabled:true,xHeight:1,script:'Fraktur' as const,share:true,gap:0}}};
+  const render = (over:'a'|'b') => buildWovenModel({...design,overrides:{'crossing-0':over}},{furniture:false}).clean;
+  const first=render('a'), second=render('b');
+  assert.ok(first.strokes.every(s=>s.points.every(p=>Number.isFinite(p.x) && Number.isFinite(p.y))));
+  assert.ok(first.strokes.filter(s=>s.guide==='baseline').length >= 2);
+  assert.notDeepEqual(first.strokes,second.strokes);
+});
+
+test('shared writing borders stop guide geometry at the main extension', async () => {
+  const { writingStrokes } = await import('../src/lib/woven/model');
+  const route = makeRoute('rosette', 165, 165, .32, 0, false);
+  const border = { enabled: true, xHeight: 2.25, script: 'TexturaQuadrata' as const, share: false, gap: 0 };
+  const design = { ...DEFAULT_DESIGN, fullGuides: true, gridVertical: false, gridHorizontal: false,
+    borders: { outer: border, inner: border } };
+  for (const invert of [false, true]) {
+    const separate = writingStrokes(design, route, [[20, 40]], 10, 4, 2, invert)
+      .filter(stroke => stroke.role === 'primary');
+    assert.equal(separate.length, 12);
+    for (const [side, rail] of [['outer', 7], ['inner', 10]] as const) {
+      // Compare unaffected rails at identical band positions.
+      const borders = { ...design.borders, [side]: { ...border, share: true, gap: 1 } };
+      const shared = writingStrokes({ ...design, borders }, route, [[20, 40]], 10, 4, 2, invert)
+        .filter(stroke => stroke.role === 'primary');
+      assert.deepEqual(shared, separate.filter((_, index) => index !== rail));
+      const overlapping = { ...design, borders: { ...design.borders, [side]: { ...border, share: true } } };
+      const band = writingBands(overlapping, 10, 4, 2, invert)[side === 'outer' ? 1 : 2];
+      assert.equal(side === 'outer' ? band.desc : band.asc, 0);
+    }
   }
 });

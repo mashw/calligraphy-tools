@@ -4,7 +4,7 @@ import DisclosureSection from '@/components/layout/DisclosureSection';
 import ConstructionGuideControls from '@/components/guidelines/ConstructionGuideControls';
 import SlantStyleControl from '@/components/guidelines/SlantStyleControl';
 import { INSULAR_MAJUSCULE_DEFAULTS } from '@/lib/guides/straight/blackletter';
-import { LIMITS, type Design } from '@/lib/woven/design';
+import { LIMITS, defaultBorder, type WritingBorder, type Design } from '@/lib/woven/design';
 import type { buildWovenRouteModel } from '@/lib/woven/model';
 const field='w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500';
 const button='min-h-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-indigo-500';
@@ -62,12 +62,12 @@ export default function WovenSettings({design, onChange, model, selected, onSele
     setDesign((d) => ({
       ...d,
       script,
-      nib: script === "Copperplate" ? 1 : d.nib,
+      nib: script === "Copperplate" ? 1 : script === "InsularMajuscule" ? d.nib : 2,
       xNib:
         script === "InsularMajuscule"
           ? INSULAR_MAJUSCULE_DEFAULTS.xNib
           : script === "TexturaQuadrata"
-            ? 5
+            ? 4.5
             : script === "Copperplate"
               ? 4
               : 4.5,
@@ -85,6 +85,7 @@ export default function WovenSettings({design, onChange, model, selected, onSele
   const constructionVisible = design.construction.upper || design.construction.lower;
 
   return <>          <DisclosureSection title="Writing guides" defaultOpen>
+            {model && <Switch label="Show guide tags" checked={design.showGuideTags ?? true} onChange={checked => update("showGuideTags", checked)} />}
             <div className="space-y-3">
               <label className="block space-y-1 text-sm">
                 Script
@@ -115,6 +116,33 @@ export default function WovenSettings({design, onChange, model, selected, onSele
               {toggle("fullGuides", "Show ascender and descender guides")}
             </div>
           </DisclosureSection>
+    <DisclosureSection title="Writing borders">
+      {(['outer', 'inner'] as const).map(side => {
+        const border = design.borders?.[side] ?? defaultBorder;
+        const change = (patch: Partial<WritingBorder>) => update('borders', {
+          ...design.borders, [side]: { ...border, ...patch },
+        });
+        return <fieldset key={side} className="space-y-2 py-2">
+          <Switch label={side === 'outer' ? 'Outer border · ascender side' : 'Inner border · descender side'}
+            checked={border.enabled} onChange={enabled => change({ enabled })} />
+          {border.enabled && <>
+            <label className="block">Border script<Select className={field} value={border.script}
+              onChange={e => change({script: e.target.value as Design['script']})}>
+              <option value="TexturaQuadrata">Textura Quadrata</option><option value="Fraktur">Fraktur</option>
+              <option value="InsularMajuscule">Insular Majuscule</option><option value="Copperplate">Copperplate</option>
+            </Select></label>
+            {(['xHeight', 'gap'] as const).map(key => <label key={key} className="block">
+              {key === 'gap' ? 'Extra gap (mm)' : 'Border x-height (mm)'}
+              <NumericInput className={field} type="number" step={0.1} min={key === 'gap' ? 0 : .2} max={40}
+                value={border[key]} onChange={e => { const v=e.target.valueAsNumber;
+                  if (Number.isFinite(v) && v >= (key === 'gap' ? 0 : .2) && v <= 40) change({[key]:v});
+                }} />
+            </label>)}
+            <Switch label="Share ascender and descender space" checked={border.share} onChange={share => change({share})} />
+          </>}
+        </fieldset>;
+      })}
+    </DisclosureSection>
           <DisclosureSection
             title={
               design.script === "Copperplate"
@@ -168,9 +196,6 @@ export default function WovenSettings({design, onChange, model, selected, onSele
               )}
             </div>
           </DisclosureSection>
-          {model && <DisclosureSection title="Guide tags">
-            <Switch label="Show guide tags" checked={design.showGuideTags ?? false} onChange={checked => update("showGuideTags", checked)} />
-          </DisclosureSection>}
           <ConstructionGuideControls scripts={[design.script]} value={design.construction} onChange={value => update("construction", value)} />
 {model && <DisclosureSection title="Route & crossings" defaultOpen>
             <div className="space-y-3">
