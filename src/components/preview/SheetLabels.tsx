@@ -13,8 +13,8 @@ export function SheetLabels({ tags }: { tags: (SheetTag | null)[] }) {
         <text data-guide-label="tag" fontSize={tag.size} textAnchor="middle" fill={guideTagColour(tag.colour)}>
           <textPath href={`#${id}`} startOffset="50%">{tag.text}</textPath>
         </text>
-      </g> : <text key={index} data-guide-label="tag" fontSize={tag.size} textAnchor="middle" fill={guideTagColour(tag.colour)}
-        transform={`translate(${tag.point.x} ${tag.point.y}) rotate(${tag.angle ?? 0})`}>{tag.text}</text>;
+      </g> : <g key={index}>{tag.backing && <rect x={tag.point.x-tag.backing.width/2} y={tag.point.y-tag.size} width={tag.backing.width} height={tag.backing.height} fill="white"/>}<text data-guide-label="tag" fontSize={tag.size} textAnchor="middle" fill={guideTagColour(tag.colour)}
+        transform={`translate(${tag.point.x} ${tag.point.y}) rotate(${tag.angle ?? 0})`}>{tag.text}</text></g>;
     })}
   </g>;
 }

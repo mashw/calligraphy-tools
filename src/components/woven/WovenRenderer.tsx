@@ -40,7 +40,7 @@ export function WovenScene({scene}:{scene:Scene}) {
   return <g data-woven-detail="true" pointerEvents="none">
     {scene.strokes.map((stroke,i)=><path key={i} d={pointsD(stroke.points)} fill="none" stroke={stroke.color} strokeWidth={stroke.width} strokeLinejoin="round" strokeLinecap="round"/>)}
     {scene.tags && <SheetLabels tags={scene.tags} />}
-    {scene.labels.map((label,i)=><text key={i} x={label.point.x} y={label.point.y} fill={label.color} fontSize={label.size} fontFamily="Helvetica,Arial,sans-serif">{label.text}</text>)}
+    {scene.labels.map((label,i)=><text key={i} data-no-export={label.previewOnly ? 'true' : undefined} x={label.point.x} y={label.point.y} fill={label.color} fontSize={label.size} fontFamily="Helvetica,Arial,sans-serif">{label.text}</text>)}
   </g>;
 }
 

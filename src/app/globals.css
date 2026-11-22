@@ -279,3 +279,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 .layer-action { flex: none; width: 28px; border: 1px solid var(--line); background: white; color: var(--foreground); font-size: 12px; }
 .layer-action:disabled { opacity: .3; }
+
+@media screen {
+  .editor-preview:has(.preview-toolbar[data-preview-contrast="high"]) svg.editor-svg {
+    filter: brightness(.66) contrast(3.2);
+  }
+}

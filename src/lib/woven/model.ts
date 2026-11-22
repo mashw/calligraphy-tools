@@ -404,7 +404,7 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
   if (model.composition) {
     const {sheet,graph} = model.composition;
     const clean = renderSheet(sheet,graph,{ruler:furniture,tagBounds,clipToPage:!design.layoutFrame});
-    const annotated = {...clean, labels:[...clean.labels,...crossings.map((c,i)=>({point:c.point,text:String(i+1),size:2.5,color:'#9f483b'}))]};
+    const annotated = {...clean, labels:[...clean.labels,...crossings.map((c,i)=>({previewOnly:true,point:c.point,text:String(i+1),size:2.5,color:'#9f483b'}))]};
     return {page,route,crossings,choices,intervals,clean,annotated,startPoint:route.points[0],usableLength,warnings};
   }
   const bands = writingBands(design,x,asc,desc);
@@ -457,6 +457,7 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
   };
   crossings.forEach((c, i) =>
     annotated.labels.push({
+      previewOnly:true,
       point: { x: c.point.x + 3, y: c.point.y - 3 },
       text: String(i + 1),
       size: 2.5,

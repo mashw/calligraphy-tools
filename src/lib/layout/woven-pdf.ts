@@ -60,7 +60,7 @@ export async function layeredLayoutPdf(svg:SVGSVGElement,elements:LayoutElement[
       const locate=(p:{x:number;y:number})=>rotatePoint({x:p.x+element.frame.x,y:p.y+element.frame.y},center,angle);
       commands.push('% Woven vector layer');
       for(const stroke of scene.strokes){commands.push(`${rgb(stroke.color)} RG ${n(pt(stroke.width))} w`);stroke.points.forEach((p,i)=>{const q=locate(p);commands.push(`${n(pt(q.x))} ${n(height-pt(q.y))} ${i?'l':'m'}`);});commands.push('S');}
-      for(const label of scene.labels){const p=locate(label.point),r=-angle*Math.PI/180,text=label.text.replace(/[^\x20-\x7e]/g,'?').replace(/([\\()])/g,'\\$1');commands.push(`BT /F1 ${n(pt(label.size))} Tf ${rgb(label.color)} rg ${n(Math.cos(r))} ${n(Math.sin(r))} ${n(-Math.sin(r))} ${n(Math.cos(r))} ${n(pt(p.x))} ${n(height-pt(p.y))} Tm (${text}) Tj ET`);}
+      for(const label of scene.labels){if(label.previewOnly)continue;const p=locate(label.point),r=-angle*Math.PI/180,text=label.text.replace(/[^\x20-\x7e]/g,'?').replace(/([\\()])/g,'\\$1');commands.push(`BT /F1 ${n(pt(label.size))} Tf ${rgb(label.color)} rg ${n(Math.cos(r))} ${n(Math.sin(r))} ${n(-Math.sin(r))} ${n(Math.cos(r))} ${n(pt(p.x))} ${n(height-pt(p.y))} Tm (${text}) Tj ET`);}
       for (const tag of layoutWovenTags(scene, element.frame, angle, page)) commands.push(pdfTagCommands(tag, p => p, page.height));
       continue;
     }

@@ -2048,7 +2048,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
     <EditorWorkspace preview={<>
 <section aria-label="Guideline preview" className="min-w-0  ">
         <div className="preview-panel bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 p-3 sm:p-4">
-          <PreviewToolbar camera={camera}><Button aria-pressed={simplify} onClick={() => setSimplify((v) => !v)} className={`px-2 py-1 text-sm rounded-lg border ${simplify ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white'}`}>Simplify</Button>
+          <PreviewToolbar camera={camera} contrast={highContrastMode} onContrastChange={enabled=>{markPresetDirty();setHighContrastMode(enabled);}}><Button aria-pressed={simplify} onClick={() => setSimplify((v) => !v)} className={`px-2 py-1 text-sm rounded-lg border ${simplify ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white'}`}>Simplify</Button>
 <Button onClick={() => setShowCrossings((v) => !v)} className={`px-2 py-1 text-sm rounded-lg border ${showCrossings ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white'}`}>Crossings</Button>
 <Button
                 onMouseDown={(e) => e.preventDefault()}
@@ -2291,7 +2291,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                   </g>
                   {showGuideTags && (() => {
                     const tag = routeTag(
-                      `Strap ${index + 1} · ${guideLabel(strap.script, metrics.xMM, metrics.nibMM)}`,
+                      `Strap ${index + 1} � ${guideLabel(strap.script, metrics.xMM, metrics.nibMM)}`,
                       transformed, metrics.bandWidthMM + 4, [.5, .32, .68][index % 3],
                     );
                     return tag && <SheetLabels tags={[{ ...tag, colour: strap.color }]} />;
@@ -2394,7 +2394,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     strokeWidth={0.5}
                     vectorEffect="non-scaling-stroke"
                   />
-                  <text x={candidate.x} y={candidate.y + 1.05} textAnchor="middle" fontSize="3.1" fill="#111827" paintOrder="stroke" stroke="white" strokeWidth={0.2}>{candidate.alreadyJoined ? '−' : '+'}</text>
+                  <text x={candidate.x} y={candidate.y + 1.05} textAnchor="middle" fontSize="3.1" fill="#111827" paintOrder="stroke" stroke="white" strokeWidth={0.2}>{candidate.alreadyJoined ? '-' : '+'}</text>
                 </g>
               ))}
 
@@ -2519,7 +2519,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       }}
                     />
                     <span className="pointer-events-none select-none absolute right-2 top-1 text-[10px] leading-none text-indigo-400">
-                      °
+                      �
                     </span>
                   </div>
 
@@ -2533,7 +2533,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     title="Reset rotation"
                     aria-label="Reset rotation"
                   >
-                    ↺
+                    ?
                   </Button>
 
                   <Slider
@@ -2608,7 +2608,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                     title="Reset scale"
                     aria-label="Reset scale"
                   >
-                    ↺
+                    ?
                   </Button>
 
                   <Slider
@@ -2714,10 +2714,7 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
             </InsetLabeledField>
           </div>
 
-          <Switch label="High contrast" checked={highContrastMode} onChange={enabled => {
-            markPresetDirty();
-            setHighContrastMode(enabled);
-          }} />
+          
         </DisclosureSection>
         <DisclosureSection title="Developer tools">
           <Button onClick={exportPresetJson}>Export preset JSON</Button>
@@ -2792,9 +2789,9 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
                       <NumericInput type="number" step="0.5" min={0} className={INSET_CONTROL_WIDE} value={activeStrap.descNibText ?? '2'} onChange={(e) => updateStrap(activeStrap.id, { descNibText: e.target.value })} onWheel={(e) => e.currentTarget.blur()} onKeyDown={(e) => { if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return; e.preventDefault(); const safe = Number.parseFloat(activeStrap.descNibText ?? '2') || 2; const next = Math.max(0, stepHalfFrom(safe, e.key === 'ArrowUp' ? 1 : -1)); updateStrap(activeStrap.id, { descNibText: String(next) }); }} onBlur={() => { const parsed = Number.parseFloat(activeStrap.descNibText ?? ''); const next = Number.isFinite(parsed) ? Math.max(0, snapHalf(parsed)) : 2; updateStrap(activeStrap.id, { descNibText: String(next) }); }} />
                     </InsetLabeledField>
                   </div>
-                  <InsetLabeledField label="Nib angle (°)">
+                  <InsetLabeledField label="Nib angle (�)">
                     <Select className={INSET_CONTROL_BASE} value={activeStrap.nibAngleDeg} onChange={(e) => updateStrap(activeStrap.id, { nibAngleDeg: Number(e.target.value) as 15 | 35 | 40 | 45 })}>
-                      <option value={15}>15°</option><option value={35}>35°</option><option value={40}>40°</option><option value={45}>45°</option>
+                      <option value={15}>15�</option><option value={35}>35�</option><option value={40}>40�</option><option value={45}>45�</option>
                     </Select>
                   </InsetLabeledField>
                 </>
@@ -2814,14 +2811,14 @@ const setCrossingOver = (crossing: Crossing, overId: string) => {
               }} className="rounded-lg border border-slate-200 p-2 flex flex-wrap items-center gap-2 cursor-move">
                 <span className="w-3 h-3 rounded-full" style={{ backgroundColor: strap.color }} />
                 <Button onPointerDown={(e) => e.stopPropagation()} onClick={() => setActiveId(strap.id)} aria-pressed={activeId === strap.id} className="px-2 py-1 rounded border border-slate-300">Strap {index + 1}</Button>
-                <Button onPointerDown={(e) => e.stopPropagation()} onClick={() => duplicateStrapById(strap.id)} className="  rounded border border-slate-300" title="Duplicate strap" aria-label="Duplicate strap">⧉</Button>
+                <Button onPointerDown={(e) => e.stopPropagation()} onClick={() => duplicateStrapById(strap.id)} className="  rounded border border-slate-300" title="Duplicate strap" aria-label="Duplicate strap">?</Button>
 
 
-                <Button onPointerDown={(e) => e.stopPropagation()} onClick={() => removeStrapById(strap.id)} disabled={straps.length <= 1} className="  rounded border border-slate-300 disabled:opacity-40" title="Delete strap" aria-label="Delete strap">✕</Button>
+                <Button onPointerDown={(e) => e.stopPropagation()} onClick={() => removeStrapById(strap.id)} disabled={straps.length <= 1} className="  rounded border border-slate-300 disabled:opacity-40" title="Delete strap" aria-label="Delete strap">?</Button>
                 <Button aria-label={`Move strap ${index + 1} up`} disabled={index === 0}
-                  onClick={() => reorderStraps(strap.id, straps[index - 1].id)}>↑</Button>
+                  onClick={() => reorderStraps(strap.id, straps[index - 1].id)}></Button>
                 <Button aria-label={`Move strap ${index + 1} down`} disabled={index === straps.length - 1}
-                  onClick={() => reorderStraps(strap.id, straps[index + 1].id)}>↓</Button>
+                  onClick={() => reorderStraps(strap.id, straps[index + 1].id)}></Button>
               </div>
             ))}
           </div>

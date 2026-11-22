@@ -14,11 +14,12 @@ export function guideLabel(script: ScriptId, xHeight: number, nib: number, angle
   const height = script === 'Copperplate' ? `${decimal(xHeight)} mm` : `${decimal(xHeight / nib)} nibs`;
   const size = `${height} x-height`;
   return script === 'Copperplate'
-    ? `${names[script]} · ${size}${angle === undefined ? '' : ` · ${decimal(angle)}° slant`}`
-    : `${names[script]} · ${decimal(nib)} mm nib · ${size}${angle === undefined ? '' : ` · ${decimal(angle)}° pen`}`;
+    ? `${names[script]} � ${size}${angle === undefined ? '' : ` � ${decimal(angle)}� slant`}`
+    : `${names[script]} � ${decimal(nib)} mm nib � ${size}${angle === undefined ? '' : ` � ${decimal(angle)}� pen`}`;
 }
 
 export type SheetTag = {
+  backing?: {width:number;height:number};
   text: string;
   size: number;
   path?: Pt[];
@@ -66,7 +67,7 @@ export function circleTags(bands: TagBand[], centre: Pt, maxRadius = Infinity): 
     const radius = Math.max(1, outside ? outer + 4 : inner - 1.5);
     // Alternate arcs when several bands are enabled so adjacent labels have room.
     const middle = name === 'Inner' ? -Math.PI * .85 : name === 'Outer' ? -Math.PI * .15 : -Math.PI / 2;
-    const label = `${name} · ${text}`;
+    const label = `${name} � ${text}`;
     const sweep = Math.min(Math.PI * .9, Math.max(1, estimate(label) * 1.4 / radius));
     const points = Array.from({ length: 65 }, (_, n) => {
       const angle = middle + (n / 64 - .5) * sweep;
@@ -83,7 +84,7 @@ export function curveTags(bands: TagBand[]): SheetTag[] {
     const edge = lower ? guides.descLine : guides.ascLine;
     // On stacked bands stagger the labels away from the middle writing area.
     const fraction = bands.length === 1 ? .5 : lower ? .58 : index === 0 ? .24 : .68;
-    const tag = pathTag(bands.length === 1 ? text : `${name} · ${text}`, offset(edge, lower ? 6 : -3), fraction);
+    const tag = pathTag(bands.length === 1 ? text : `${name} � ${text}`, offset(edge, lower ? 6 : -3), fraction);
     return tag ? [tag] : [];
   });
 }
@@ -107,14 +108,16 @@ export function pdfTagCommands(tag: SheetTag, locate: (p: Pt) => Pt, pageHeightM
   const pt = 72 / 25.4, n = (value: number) => value.toFixed(4);
   const colour = guideTagColour(tag.colour);
   const rgb = [1, 3, 5].map(index => n(parseInt(colour.slice(index, index + 2), 16) / 255)).join(' ');
-  const text = tag.text.replace(/·/g, '-').replace(/°/g, ' deg').replace(/[^ -~]/g, '?');
+  const text = tag.text.replace(/�/g, '-').replace(/�/g, ' deg').replace(/[^ -~]/g, '?');
   const width = (char: string) => (/[ ilI.,:!'|]/.test(char) ? .278 : /[MW@]/.test(char) ? .88 : /[A-Z]/.test(char) ? .667 : .556) * tag.size;
   const total = Array.from(text).reduce((sum, char) => sum + width(char), 0);
   const pathLength = tag.path ? lengthPoly(tag.path) : 0;
   const path = pathLength >= total ? tag.path : undefined;
   let cursor = tag.align === 'start' ? 0 : -total / 2;
   const radians = (angle: number) => angle * Math.PI / 180;
-  return Array.from(text, char => {
+  const origin=locate(tag.point);
+  const backing=tag.backing ? `q 1 g ${n((origin.x-tag.backing.width/2)*pt)} ${n((pageHeightMM-origin.y+tag.size-tag.backing.height)*pt)} ${n(tag.backing.width*pt)} ${n(tag.backing.height*pt)} re f Q\n` : '';
+  return backing + Array.from(text, char => {
     const centre = cursor + width(char) / 2;
     cursor += width(char);
     if (char === ' ') return '';
@@ -161,7 +164,8 @@ export function placeSheetTags(tags: SheetTag[], strokes: {points: Pt[]; width: 
     const available = (Math.floor(page.w/cell)-3)*cell-2;
     const size = Math.min(original.size, available / (original.text.length*.76));
     if (size <= 0) { break; }
-    const tag = {...original,size};
+    for (const factor of [1,.85,.7]) {
+    const tag = {...original,backing:undefined,size:size*factor};
     const width = Math.ceil((tag.text.length*tag.size*.76+2)/cell);
     const height = Math.ceil((tag.size*1.6+2)/cell);
     let best: Pt | undefined, nearest=Infinity;
@@ -181,14 +185,19 @@ export function placeSheetTags(tags: SheetTag[], strokes: {points: Pt[]; width: 
       const middle=best.y-tag.size*.32;
       reserve(best.x-width*cell/2,middle-height*cell/2,best.x+width*cell/2,middle+height*cell/2);
       placed.push({...tag,point:best,path:undefined,angle:0});
+      break;
+    }
     }
   }
   if (placed.length < tags.length) {
     // A full sheet can have no empty cells. Keep a compact legend inside its bottom edge.
     const row = Math.min(5, page.h / (tags.length + 1));
-    return tags.map((tag,i) => ({...tag, path:undefined, angle:0, align:undefined,
-      size:Math.min(tag.size,row*.65,page.w*.94/(Math.max(1,tag.text.length)*.76)),
-      point:{x:page.w/2,y:page.h-(tags.length-i-.5)*row}}));
+    return tags.map((tag,i) => {
+      const size=Math.min(tag.size,row*.65,page.w*.94/(Math.max(1,tag.text.length)*.76));
+      return {...tag,path:undefined,angle:0,align:undefined,size,
+        backing:{width:Math.min(page.w,tag.text.length*size*.76+1),height:size*1.35},
+        point:{x:page.w/2,y:page.h-(tags.length-i-.5)*row}};
+    });
   }
   return placed;
 }

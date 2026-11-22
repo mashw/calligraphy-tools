@@ -175,15 +175,14 @@ export default function WovenComposer({initial,onApply,onClose,onFinish}:{initia
       ] as const).map(([key,label])=><label key={key} className="mr-3 inline-flex gap-1">
         <input type="checkbox" checked={plotOptions[key]} onChange={e=>setPlotOptions({...plotOptions,[key]:e.target.checked})}/>{label}
       </label>)}
-      <p className="text-xs">Safe drawing area {plot.safety.safeRect.width} × {plot.safety.safeRect.height} mm, starting at {plot.safety.safeRect.x} mm from the top and left.</p>
+      <p className="text-xs">Safe drawing area {plot.safety.safeRect.width} � {plot.safety.safeRect.height} mm, starting at {plot.safety.safeRect.x} mm from the top and left.</p>
       {[...plot.safety.reasons,...plot.warnings].map((message,i)=><p role="alert" key={i}>{message}</p>)}
       <Button disabled={plot.safety.reasons.length>0 || plot.polylineCount<=1} onClick={()=>{
         download(plot.svg,'image/svg+xml','interlace-draw.svg');setNotice('Cricut SVG exported.');setPlotOpen(false);
       }}>Export Cricut SVG</Button>
       <Button onClick={()=>setPlotOpen(false)}>Close export</Button>
     </section>}
-    <PreviewToolbar camera={camera}><Button aria-pressed={simplify} onClick={()=>setSimplify(!simplify)}>Simplify</Button>
-      <Button aria-pressed={contrast} onClick={()=>setContrast(!contrast)}>High contrast</Button>
+    <PreviewToolbar camera={camera} contrast={contrast} onContrastChange={setContrast}><Button aria-pressed={simplify} onClick={()=>setSimplify(!simplify)}>Simplify</Button>
       {warn.length > 0 && <>
         <Button popoverTarget="interlace-warnings" aria-haspopup="dialog">Warnings ({warn.length})</Button>
         <div id="interlace-warnings" popover="auto" role="dialog" aria-label="Design warnings" className="m-auto w-80 max-w-[90vw] rounded border bg-white p-3 shadow-lg">
@@ -209,7 +208,7 @@ export default function WovenComposer({initial,onApply,onClose,onFinish}:{initia
       <div id="interlace-export-options" popover="auto" role="dialog" aria-label="Export options" className="m-auto w-80 max-w-[90vw] rounded border bg-white p-3 shadow-lg"><label><input type="checkbox" checked={includeText} onChange={e=>setIncludeText(e.target.checked)}/> Include text-position boxes in SVG / PDF / Print</label><p className="text-xs">Layout and Cricut exports always contain writing guides only. High contrast is preview only.</p><Button popoverTarget="interlace-export-options" popoverTargetAction="hide">Close options</Button></div>
       </div>
     </PreviewToolbar>
-    <div role="status" aria-label="Action notification" aria-live="polite" aria-atomic="true" className={notice?'pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 max-w-[90vw] items-start gap-2 rounded border bg-white p-3 text-sm shadow-lg':'sr-only'}>{notice}{notice&&<Button className="pointer-events-auto" aria-label="Dismiss notification" onClick={()=>setNotice('')}>×</Button>}</div>
+    <div role="status" aria-label="Action notification" aria-live="polite" aria-atomic="true" className={notice?'pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 max-w-[90vw] items-start gap-2 rounded border bg-white p-3 text-sm shadow-lg':'sr-only'}>{notice}{notice&&<Button className="pointer-events-auto" aria-label="Dismiss notification" onClick={()=>setNotice('')}>�</Button>}</div>
     <div className={row} role="group" aria-label="Editing mode">{(['Move','Crossings','Joins'] as const).map(v=><Button key={v} aria-pressed={mode===v} onClick={()=>setMode(v)}>{v}</Button>)}</div>
     <svg ref={svg} className="editor-svg bg-slate-200" viewBox={camera.str} aria-label="Interlace writing sheet"
       onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={()=>{if(drag.current){setSheet(drag.current.sheet);drag.current=null;setBusy(false);}}}>
@@ -242,7 +241,7 @@ export default function WovenComposer({initial,onApply,onClose,onFinish}:{initia
             const result=openSheet(fitWovenPreset(selectWovenPreset(DEFAULT_DESIGN,preset.id)));
             setSheet(result.sheet);setActive(result.sheet.strands[0]?.id ?? '');setPicked(null);setMode('Move');camera.restore(undefined);setNotice(result.notice);
           }catch(error){setNotice(String(error));}
-        }}><option value="">Composition presets…</option>{wovenCompositionOptions.map(p=><option value={p.id} key={p.id}>{p.name}</option>)}</Select>
+        }}><option value="">Composition presets.</option>{wovenCompositionOptions.map(p=><option value={p.id} key={p.id}>{p.name}</option>)}</Select>
       </div></DisclosureSection>
       <DisclosureSection title="Add strand" defaultOpen><div className={row}>
         <Select aria-label="Strand source" value={source} onChange={e=>setSource(e.target.value)}><option value="rosette">Six-loop rosette</option><option value="figure-eight">Figure-eight</option>
@@ -260,15 +259,15 @@ export default function WovenComposer({initial,onApply,onClose,onFinish}:{initia
           className={'flex items-center gap-1 rounded px-1 text-sm '+(active===s.id?'bg-indigo-50':'')}>
           <Button title={s.visible ? 'Hide' : 'Show'} aria-label={(s.visible ? 'Hide ' : 'Show ') + s.name}
             className="layer-action" onClick={() => commit({...sheet,strands:sheet.strands.map(v=>v.id===s.id?{...v,visible:!v.visible}:v)})}>
-            {s.visible ? '◉' : '○'}
+            {s.visible ? '?' : '	'}
           </Button>
           <button className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left" aria-pressed={active===s.id} onClick={()=>setActive(s.id)}>
             <span className="h-3 w-1 shrink-0 rounded" style={{background:s.color}}/><span className="truncate">{s.name}</span>
           </button>
           <Button className="layer-action" title={s.locked?'Unlock':'Lock'} aria-label={'Toggle lock '+s.name} aria-pressed={s.locked}
-            onClick={()=>commit({...sheet,strands:sheet.strands.map(v=>v.id===s.id?{...v,locked:!v.locked}:v)})}>{s.locked ? '🔒' : '♢'}</Button>
-          <Button className="layer-action" title="Raise" aria-label={'Raise '+s.name} disabled={s.locked||index===0} onClick={()=>reorder(s.id,1)}>↑</Button>
-          <Button className="layer-action" title="Lower" aria-label={'Lower '+s.name} disabled={s.locked||index===sheet.strands.length-1} onClick={()=>reorder(s.id,-1)}>↓</Button>
+            onClick={()=>commit({...sheet,strands:sheet.strands.map(v=>v.id===s.id?{...v,locked:!v.locked}:v)})}>{s.locked ? '??' : '?'}</Button>
+          <Button className="layer-action" title="Raise" aria-label={'Raise '+s.name} disabled={s.locked||index===0} onClick={()=>reorder(s.id,1)}></Button>
+          <Button className="layer-action" title="Lower" aria-label={'Lower '+s.name} disabled={s.locked||index===sheet.strands.length-1} onClick={()=>reorder(s.id,-1)}></Button>
         </div>)}
         {current && <div className={row}>
           <Button onClick={()=>add([{...current,id:crypto.randomUUID(),name:current.name+' copy',locked:false,group:'',design:{...current.design,centerX:(current.design.centerX??page.w/2)+5}}])}>Duplicate</Button>
@@ -289,7 +288,7 @@ export default function WovenComposer({initial,onApply,onClose,onFinish}:{initia
           {measure('Width (mm)',current.design.width,v=>design({width:v}),.01,10000,.5)}
           {measure('Height (mm)',current.design.height,v=>design({height:v}),.01,10000,.5)}
           {measure('Scale (%)',current.scale,v=>patch({scale:v}),.01,1000)}
-          <input type="range" aria-label="Rotate strand" min={-180} max={180} step={1} value={current.design.rotation} onChange={e=>design({rotation:Number(e.target.value)})}/>{measure('Rotation (°)',current.design.rotation,v=>design({rotation:v}),-180,180)}
+          <input type="range" aria-label="Rotate strand" min={-180} max={180} step={1} value={current.design.rotation} onChange={e=>design({rotation:Number(e.target.value)})}/>{measure('Rotation (�)',current.design.rotation,v=>design({rotation:v}),-180,180)}
           {current.source.kind==='rosette' && measure('Loop depth',current.design.loop,v=>design({loop:v}),.22,.42,.01)}</div>
           <div className={row}><Button onClick={()=>design({centerX:page.w/2})}>Centre X</Button><Button onClick={()=>design({centerY:page.h/2})}>Centre Y</Button>
             <Button aria-pressed={current.mirror} onClick={()=>patch({mirror:!current.mirror})}>Mirror</Button>
@@ -307,14 +306,14 @@ export default function WovenComposer({initial,onApply,onClose,onFinish}:{initia
       </fieldset>}
       {mode==='Crossings' && graph && <DisclosureSection title="Crossing order" defaultOpen>
         <label><input type="checkbox" checked={onlySelected} onChange={e=>setOnlySelected(e.target.checked)}/> Selected strand only</label><div className={row}>{graph.hits.map((h,i)=>(!onlySelected||h.a.id===active||h.b.id===active)&&<Button key={i} aria-pressed={!!picked&&sameCrossing(picked,h,.025)} onClick={()=>setPicked(h)}>{i+1}</Button>)}</div>
-        {graph.hits.filter(h=>picked && sameCrossing(h,picked,.025)).map((h,i)=><Button key={i} onClick={()=>flip(h)}>Flip · {sheet.strands.find(s=>s.id===h[h.over].id)?.name} over ({h.over.toUpperCase()})</Button>)}
+        {graph.hits.filter(h=>picked && sameCrossing(h,picked,.025)).map((h,i)=><Button key={i} onClick={()=>flip(h)}>Flip � {sheet.strands.find(s=>s.id===h[h.over].id)?.name} over ({h.over.toUpperCase()})</Button>)}
         <Button onClick={()=>commit({...sheet,overrides:[]})}>Restore alternating weave</Button></DisclosureSection>}
       {mode==='Joins' && <DisclosureSection title="Endpoint joins" defaultOpen><p className="text-xs">Align the end of one open strand with the start of another using the same writing settings.</p>
         {current && !closed && <Button disabled={current.locked} onClick={()=>{
           const next=alignEndpoint(sheet,current);
           if(next)commit(next);else setNotice('No compatible writing endpoint within 10 mm.');
         }}>Align nearest endpoint</Button>}
-        {joins.map(j=><Button key={j.from.id+j.to.id} aria-pressed={sheet.joins.some(k=>k.from===j.from.id&&k.to===j.to.id)} onClick={()=>toggleJoin(j.from.id,j.to.id)}>{j.from.name} → {j.to.name}</Button>)}
+        {joins.map(j=><Button key={j.from.id+j.to.id} aria-pressed={sheet.joins.some(k=>k.from===j.from.id&&k.to===j.to.id)} onClick={()=>toggleJoin(j.from.id,j.to.id)}>{j.from.name}  {j.to.name}</Button>)}
         {sheet.joins.filter(j=>!joins.some(k=>k.from.id===j.from&&k.to.id===j.to)).map(j=><Button key={j.from+j.to} onClick={()=>toggleJoin(j.from,j.to)}>Remove inactive join</Button>)}
       </DisclosureSection>}
     </>}/>;
