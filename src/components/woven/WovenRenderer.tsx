@@ -1,4 +1,7 @@
 'use client';
+import { TEXT_SPAN_STYLE } from '@/lib/guides/text-span-style';
+import { DEFAULT_TEXT_PLAN, textFit } from '@/lib/interlace/text-fit';
+import { initialSheet, strand, topology } from '@/lib/interlace/model';
 import { SheetLabels } from '@/components/preview/SheetLabels';
 import { interlaceGuideTags } from '@/lib/interlace/model';
 import { guideLabel, routeTag } from '@/lib/guides/sheet-labels';
@@ -10,6 +13,31 @@ import { sliceGuide } from '@/lib/woven/geometry';
 import { pointsD, type Scene } from '@/lib/woven/vector-export';
 import type { Frame, WovenElement } from '@/lib/layout/types';
 import { layoutWovenTags, wovenDesignForFrame } from '@/lib/layout/woven';
+
+export function WovenFitSpan({fit}:{fit:ReturnType<typeof textFit>}) {
+  return <g data-no-export="true" pointerEvents="none">{fit.lines.map((line,index) =>
+    line.spanPolygon.length > 2 && <path key={index} d={pointsD(line.spanPolygon)+' Z'} {...TEXT_SPAN_STYLE} strokeWidth=".35" vectorEffect="non-scaling-stroke"/>
+  )}</g>;
+}
+
+export function WovenFitPreview({design,model}:{design:Design;model:ReturnType<typeof buildWovenRouteModel>}) {
+  const fits = useMemo(() => {
+    if (model.composition) {
+      const {sheet,graph} = model.composition;
+      return sheet.strands.filter(s=>s.visible && s.textPlan?.text).map(s=>textFit(sheet,s,graph));
+    }
+    const text = design.strapTexts?.woven;
+    if (!text) return [];
+    const sheet = initialSheet();
+    sheet.paper = design.paper;
+    sheet.orientation = design.orientation;
+    const s = strand('woven','Main strap',{kind:design.preset==='figure-eight'?'figure-eight':'rosette'},design);
+    s.textPlan = {...DEFAULT_TEXT_PLAN,text};
+    sheet.strands = [s];
+    return [textFit(sheet,s,topology(sheet))];
+  },[design,model]);
+  return <>{fits.map((fit,i)=><WovenFitSpan key={i} fit={fit}/>)}</>;
+}
 
 export function LayoutWovenRenderer({element,frame,simplify,page,rotation}:{page:{width:number;height:number};rotation:number;element:WovenElement;frame:Frame;simplify:boolean}) {
   const settings=element.settings, {width,height}=frame;
@@ -30,6 +58,7 @@ export function LayoutWovenRenderer({element,frame,simplify,page,rotation}:{page
   return <>
     <g transform={`translate(${frame.x} ${frame.y})`}>
       {simplify ? <WovenSimplified model={route}/> : scene && <WovenScene scene={{...scene,tags:undefined}}/>}
+      {!simplify && <WovenFitPreview design={design} model={route}/>}
       <path data-woven-hit="true" data-no-export="true" d={pointsD(route.route.points)} fill="none" stroke="transparent" strokeWidth={Math.max(5,route.halfBand*2)} pointerEvents="stroke"/>
     </g>
     <g pointerEvents="none" transform={`rotate(${-rotation} ${frame.x+width/2} ${frame.y+height/2})`}><SheetLabels tags={tags}/></g>

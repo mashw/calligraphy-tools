@@ -77,7 +77,11 @@ export function textFit(sheet:Sheet,selected:Strand,graph=topology(sheet)) {
     const result=layout(span),available=span.end-span.start;
     const placements=result.placements.map(p=>{const at=pointAt(span.points,Math.min(available,p.sMid));return {...p,point:at.p,tangent:at.t,collision:p.sMid+p.w/2>available+1e-7};});
     const start=options.align==='center'?Math.max(0,(available-result.needed)/2):options.align==='end'?Math.max(0,available-result.needed):0;
-    return {text,needed:result.needed,available,remaining:available-result.needed,fits:result.needed<=available+1e-7,placements,start:pointAt(span.points,start).p,end:pointAt(span.points,Math.min(available,start+result.needed)).p};
+    const stop = Math.min(available,start+result.needed);
+    const base = stop > start ? sliceGuide(makeSlantRoute(span.points),span.points,[start,stop]) : [];
+    const direction = (selected.invert ? 1 : -1) * (options.reverse ? -1 : 1);
+    const spanPolygon = [...base,...offset(base,direction*m.x).reverse()];
+    return {spanPolygon,text,needed:result.needed,available,remaining:available-result.needed,fits:result.needed<=available+1e-7,placements,start:pointAt(span.points,start).p,end:pointAt(span.points,Math.min(available,start+result.needed)).p};
   });
   const needed=lines.reduce((n,l)=>n+l.needed,0),available=space.spans.reduce((n,s)=>n+s.end-s.start,0);
   return {...space,lines,needed,available,remaining:available-needed,percent:available?needed/available*100:needed?Infinity:0,fits:lines.every(l=>l.fits)};

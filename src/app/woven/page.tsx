@@ -26,7 +26,7 @@ import {
   parseDesign,
   type Design,
 } from "@/lib/woven/design";
-import { WovenScene, WovenSimplified } from '@/components/woven/WovenRenderer';
+import { WovenFitPreview, WovenScene, WovenSimplified } from '@/components/woven/WovenRenderer';
 import { sliceGuide } from '@/lib/woven/geometry';
 import { buildWovenModel, buildWovenRouteModel } from "@/lib/woven/model";
 import { pointsD, scenePdf, sceneSvg } from "@/lib/woven/vector-export";
@@ -200,7 +200,7 @@ export default function WovenPage() {
               </defs>
               <rect width={model.page.w} height={model.page.h} fill="white" />
               <g clipPath="url(#woven-page)">
-                {scene?<WovenScene scene={scene}/>:<WovenSimplified model={routeModel}/>}
+                {scene?<><WovenScene scene={scene}/><WovenFitPreview design={design} model={routeModel}/></>:<WovenSimplified model={routeModel}/>}
                 <g data-woven-shape="true" data-camera-interactive="true" fill="none" stroke="transparent" strokeWidth={Math.max(5,routeModel.halfBand*2)} pointerEvents="stroke" style={{cursor:'move'}}>
                   {routeModel.intervals.map((interval,i)=><path key={i} d={pointsD(sliceGuide(routeModel.route,routeModel.route.points,interval))}/>)}
                 </g>

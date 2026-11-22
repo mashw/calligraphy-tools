@@ -2,6 +2,7 @@
 
 
 
+import { WovenFitSpan } from './WovenRenderer';
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import EditorWorkspace from '@/components/editor/EditorWorkspace';
 import PreviewToolbar from '@/components/editor/PreviewToolbar';
@@ -214,7 +215,7 @@ export default function WovenComposer({initial,onApply,onClose,onFinish}:{initia
       onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={()=>{if(drag.current){setSheet(drag.current.sheet);drag.current=null;setBusy(false);}}}>
       <defs><clipPath id="interlace-paper"><rect width={page.w} height={page.h}/></clipPath></defs>
       <rect width={page.w} height={page.h} fill="white"/>
-      <g clipPath="url(#interlace-paper)">{previewScene&&<WovenScene scene={previewScene}/>}{estimate&&!busy&&!simplify&&<g data-text-estimate="" pointerEvents="none"><WovenScene scene={estimate}/>{fit?.lines.flatMap((line,i)=>line.placements.filter(p=>p.sMid<=line.available+p.w/2).map((p,j)=><text key={i+':'+j} transform={`translate(${p.point.x} ${p.point.y}) rotate(${Math.atan2(p.tangent.y,p.tangent.x)*180/Math.PI})`} y={-p.h*.3} textAnchor="middle" fontSize={Math.max(1.5,p.h*.55)} fill={p.collision?'#b91c1c':'#312e81'}>{p.ch}</text>))}</g>}
+      <g clipPath="url(#interlace-paper)">{previewScene&&<WovenScene scene={previewScene}/>}{estimate&&!busy&&!simplify&&<g data-text-estimate="" pointerEvents="none">{fit && <WovenFitSpan fit={fit}/>}<WovenScene scene={estimate}/>{fit?.lines.flatMap((line,i)=>line.placements.filter(p=>p.sMid<=line.available+p.w/2).map((p,j)=><text key={i+':'+j} transform={`translate(${p.point.x} ${p.point.y}) rotate(${Math.atan2(p.tangent.y,p.tangent.x)*180/Math.PI})`} y={-p.h*.3} textAnchor="middle" fontSize={Math.max(1.5,p.h*.55)} fill={p.collision?'#b91c1c':'#312e81'}>{p.ch}</text>))}</g>}
         {entries.map(({s,route})=><path key={s.id} data-camera-interactive="" aria-label={s.name} d={pointsD(route.points)} fill="none"
           stroke={contrast?(s.id===active?'#1e40af':'#111827'):s.color} strokeWidth={full?7:contrast?1.4:1} strokeOpacity={full?0:1} pointerEvents={mode==='Move'?'stroke':'none'}
           style={{cursor:s.locked?'default':'move'}} onPointerDown={e=>start(e,s)}/>)}

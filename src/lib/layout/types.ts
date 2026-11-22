@@ -55,7 +55,7 @@ export function newElement(type: Exclude<ElementType,'page'|'artwork'>, count:nu
   if(type==='guidelines') { const settings=createDefaultGuidelinesSettings(); settings.margins={top:0,right:0,bottom:0,left:0}; return {...base,type,allowPartialGuidelines:true,fitText:'',textMode:'estimate',plannedLines:[],rightAlignMode:'waist',avoidOccludingElements:true,mask:createDefaultGuidelinesMaskSettings(),settings}; }
   if(type==='woven')return {...base,type,settings:createDefaultWovenSettings()};
   if(type==='shape') return {...base,type,settings:createDefaultShapeSettings()};
-  if(type==='curved-title') return {...base,type,settings:createDefaultCurvedTitleSettings()};
+  if(type==='curved-title') return {...base,type,settings:{...createDefaultCurvedTitleSettings(),text:''}};
   if(type==='calligram') return {...base,type,settings:createDefaultCalligramSettings()};
   throw new Error(`Unsupported element type: ${type satisfies never}`);
 }
