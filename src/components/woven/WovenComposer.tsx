@@ -68,7 +68,7 @@ export default function WovenComposer({initial,onApply,onClose,onFinish}:{initia
   const fit=fits.find(f=>f.id===active)?.fit??null;
   const previewScene=useMemo(()=>full&&contrast?highContrastScene(full):full,[full,contrast]);
   const estimate=useMemo(()=>fit&&current?.textPlan?.preview?textEstimateScene(fit):null,[fit,current]);
-  const warn=busy?heldWarnings:[...(graph?warnings(sheet,graph):[]),...fits.filter(f=>!f.fit.fits).map(f=>f.name+': Text needs a longer continuous writing interval.')];
+  const warn=busy?heldWarnings:[...(graph?warnings(sheet,graph):[]),...fits.filter(f=>!f.fit.fits).map(f=>f.name+': Text extends beyond the available strap.')];
   function setBusy(value:boolean){if(value)setHeldWarnings(warn);setBusyState(value);}
   function commit(next:Sheet) {
     if(next.overrides.length) {

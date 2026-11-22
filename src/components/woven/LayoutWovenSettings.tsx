@@ -60,7 +60,7 @@ export default function LayoutWovenSettings({element,onChange}:{element:WovenEle
       {straps.length>1 && <label className="block text-sm">Writing strap<Select value={selected.id} onChange={event=>setStrapId(event.target.value)}>{straps.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</Select></label>}
       <label className="block text-sm">Strap text<textarea className="block w-full rounded border p-2" value={text} onChange={event=>changeText(event.target.value)}/></label>
       <p className="text-xs">{fit.needed.toFixed(1)} of {fit.available.toFixed(1)} mm</p>
-      {!fit.fits && <p className="text-xs text-rose-600">A line exceeds its continuous writing space.</p>}
+      {!fit.fits && <p className="text-xs text-rose-600">Text extends beyond the available strap.</p>}
     </div></DisclosureSection>}
   </>;
 }

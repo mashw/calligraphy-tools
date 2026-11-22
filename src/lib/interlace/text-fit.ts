@@ -67,14 +67,11 @@ export function textFit(sheet:Sheet,selected:Strand,graph=topology(sheet)) {
   const options=selected.textPlan??DEFAULT_TEXT_PLAN,d=selected.design,m=metrics(selected),space=writingSpace(sheet,selected,graph);
   const ctx=d.script==='Copperplate'?buildCopperplateContext({xHeightMM:m.x,capStyle:options.capStyle,calibration:{enabled:options.calibration,calWordLowerMM:options.lowerMM||undefined,calWordDoubleMM:options.doubleMM||undefined}}).ctx:{xHeightMM:m.x,nibMM:d.nib*Math.cos(d.penAngle*Math.PI/180),scale:1,spaceMult:1,capStyle:options.capStyle};
   ctx.spaceMult*=options.spacing;let cursor=0;
-  const lines=options.text.split(/\r?\n/).filter(t=>t.length).map(text=>{
-    const run=measureRun(text,SCRIPT_PROFILES[d.script],ctx);
-    const layout=(span:Span)=>computeCurvedTitleLayout(run,span.points,span.end-span.start,m.x,ctx.nibMM,m.x+m.asc,d.script,options.align);
-    let index=space.spans.findIndex((s,i)=>i>=cursor&&layout(s).needed<=s.end-s.start+1e-7);
-    if(index<0)index=cursor<space.spans.length?cursor:-1;
-    const end=space.spans.at(-1)?.points.at(-1)??{x:0,y:0};
-    const span=index<0?{start:0,end:0,points:[end,end]}:space.spans[index];cursor=index<0?space.spans.length:index+1;
-    const result=layout(span),available=span.end-span.start;
+  function measure(text:string,span:Span) {
+    return computeCurvedTitleLayout(measureRun(text,SCRIPT_PROFILES[d.script],ctx),span.points,span.end-span.start,m.x,ctx.nibMM,m.x+m.asc,d.script,options.align);
+  }
+  function fragment(text:string,span:Span,result:ReturnType<typeof measure>) {
+    const available=span.end-span.start;
     const placements=result.placements.map(p=>{const at=pointAt(span.points,Math.min(available,p.sMid));return {...p,point:at.p,tangent:at.t,collision:p.sMid+p.w/2>available+1e-7};});
     const start=options.align==='center'?Math.max(0,(available-result.needed)/2):options.align==='end'?Math.max(0,available-result.needed):0;
     const stop = Math.min(available,start+result.needed);
@@ -82,7 +79,39 @@ export function textFit(sheet:Sheet,selected:Strand,graph=topology(sheet)) {
     const direction = (selected.invert ? 1 : -1) * (options.reverse ? -1 : 1);
     const spanPolygon = [...base,...offset(base,direction*m.x).reverse()];
     return {spanPolygon,text,needed:result.needed,available,remaining:available-result.needed,fits:result.needed<=available+1e-7,placements,start:pointAt(span.points,start).p,end:pointAt(span.points,Math.min(available,start+result.needed)).p};
-  });
+  }
+  const lines:ReturnType<typeof fragment>[]=[];
+  for (const paragraph of options.text.split(/\r?\n/).filter(Boolean)) {
+    const chars=Array.from(paragraph);
+    let first=0;
+    while (first<chars.length && cursor<space.spans.length) {
+      const span=space.spans[cursor++];
+      const available=span.end-span.start;
+      const remaining=chars.length-first;
+      const prefix=(count:number)=>chars.slice(first,first+count).join('');
+      let count=0, upper=1;
+      while (measure(prefix(upper),span).needed<=available+1e-7) {
+        count=upper;
+        if (count===remaining) break;
+        upper=Math.min(remaining,upper*2);
+      }
+      while (upper-count>1) {
+        const mid=Math.floor((count+upper)/2);
+        if (measure(prefix(mid),span).needed<=available+1e-7) count=mid;
+        else upper=mid;
+      }
+      if (!count) continue;
+      const text=prefix(count);
+      lines.push(fragment(text,span,measure(text,span)));
+      first+=count;
+    }
+    if (first<chars.length) {
+      const point=space.spans.at(-1)?.points.at(-1)??{x:0,y:0};
+      const exhausted={start:0,end:0,points:[point,point]};
+      const tail=chars.slice(first).join('');
+      lines.push(fragment(tail,exhausted,measure(tail,exhausted)));
+    }
+  }
   const needed=lines.reduce((n,l)=>n+l.needed,0),available=space.spans.reduce((n,s)=>n+s.end-s.start,0);
   return {...space,lines,needed,available,remaining:available-needed,percent:available?needed/available*100:needed?Infinity:0,fits:lines.every(l=>l.fits)};
 }

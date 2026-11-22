@@ -56,10 +56,10 @@ test('open offsets, margins, reversal, alignment and overflow use physical posit
   s.textPlan.reverse=true;const reverse=textFit(sheet,s);assert.equal(reverse.available,78);assert.ok(reverse.lines[0].placements[0].point.x<100);
   s.textPlan.text='overpainting '.repeat(50);const long=textFit(sheet,s);assert.equal(long.fits,false);assert.ok(long.lines[0].placements.some(p=>p.collision));
 });
-test('disconnected intervals cannot be summed to claim a continuous phrase fits',()=>{
+test('text resumes on the same strap beyond an under-crossing',()=>{
   const sheet=lineSheet(),s=sheet.strands[0];s.design.clearance=0;const cross={...structuredClone(s),id:'cross',design:{...s.design,rotation:90,xNib:20}};sheet.strands.push(cross);
   const h=topology(sheet).hits[0];sheet.overrides=[{...h,over:h.a.id==='cross'?'a':'b'}];s.textPlan={...DEFAULT_TEXT_PLAN,text:'overpainting'};
-  const fit=textFit(sheet,s);assert.equal(fit.spans.length,2);assert.ok(Math.abs(fit.available-80)<1e-7);assert.ok(fit.needed<fit.available);assert.equal(fit.fits,false);
+  const fit=textFit(sheet,s);assert.equal(fit.spans.length,2);assert.ok(Math.abs(fit.available-80)<1e-7);assert.ok(fit.needed<fit.available);assert.equal(fit.fits,true);assert.equal(fit.lines.map(line=>line.text).join(""),"overpainting");assert.equal(fit.lines.length,2);
   sheet.overrides[0].over=sheet.overrides[0].over==='a'?'b':'a';assert.equal(textFit(sheet,s).fits,true);
 });
 test('joined routes carry text over seams but retain crossing gaps and round-trip settings',()=>{
