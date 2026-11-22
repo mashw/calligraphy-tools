@@ -51,7 +51,7 @@ export function defaultArtworkSize(intrinsicAspectRatio:number, usable:Frame, so
 
 export function newElement(type: Exclude<ElementType,'page'|'artwork'>, count:number, page:{width:number;height:number}): LayoutElement {
   const {width,height}=defaultElementSize(type,page);
-  const base={id:`${type}-${crypto.randomUUID()}`,type,name:`${labels[type]} ${count}`,locked:false,paddingMM:0,rotationDeg:0,frame:{x:Math.max(5,(page.width-width)/2),y:type==='curved-title'?Math.max(5,(page.height-height)*.2):Math.max(5,(page.height-height)/2),width,height}};
+  const base={id:`${type}-${crypto.randomUUID()}`,type,name:`${labels[type]} ${count}`,locked:false,paddingMM:0,rotationDeg:0,...(['guidelines','calligram','curved-title'].includes(type) ? {showGuideTags:true} : {}),frame:{x:Math.max(5,(page.width-width)/2),y:type==='curved-title'?Math.max(5,(page.height-height)*.2):Math.max(5,(page.height-height)/2),width,height}};
   if(type==='guidelines') { const settings=createDefaultGuidelinesSettings(); settings.margins={top:0,right:0,bottom:0,left:0}; return {...base,type,allowPartialGuidelines:true,fitText:'',textMode:'estimate',plannedLines:[],rightAlignMode:'waist',avoidOccludingElements:true,mask:createDefaultGuidelinesMaskSettings(),settings}; }
   if(type==='woven')return {...base,type,settings:createDefaultWovenSettings()};
   if(type==='shape') return {...base,type,settings:createDefaultShapeSettings()};

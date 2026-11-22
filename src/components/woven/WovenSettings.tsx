@@ -85,6 +85,7 @@ export default function WovenSettings({design, onChange, model, selected, onSele
   const constructionVisible = design.construction.upper || design.construction.lower;
 
   return <>          <DisclosureSection title="Writing guides" defaultOpen>
+            {model && <Switch label="Show guide tags" checked={design.showGuideTags ?? true} onChange={checked => update("showGuideTags", checked)} />}
             <div className="space-y-3">
               <label className="block space-y-1 text-sm">
                 Script
@@ -195,9 +196,6 @@ export default function WovenSettings({design, onChange, model, selected, onSele
               )}
             </div>
           </DisclosureSection>
-          {model && <DisclosureSection title="Guide tags">
-            <Switch label="Show guide tags" checked={design.showGuideTags ?? false} onChange={checked => update("showGuideTags", checked)} />
-          </DisclosureSection>}
           <ConstructionGuideControls scripts={[design.script]} value={design.construction} onChange={value => update("construction", value)} />
 {model && <DisclosureSection title="Route & crossings" defaultOpen>
             <div className="space-y-3">

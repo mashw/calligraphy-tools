@@ -156,7 +156,12 @@ export function placeSheetTags(tags: SheetTag[], strokes: {points: Pt[]; width: 
     }
   }
   const placed: SheetTag[] = [];
-  for (const tag of tags) {
+  for (const original of tags) {
+    // Fit long strap names inside the printable width of smaller Layout elements.
+    const available = (Math.floor(page.w/cell)-3)*cell-2;
+    const size = Math.min(original.size, available / (original.text.length*.76));
+    if (size <= 0) continue;
+    const tag = {...original,size};
     const width = Math.ceil((tag.text.length*tag.size*.76+2)/cell);
     const height = Math.ceil((tag.size*1.6+2)/cell);
     let best: Pt | undefined, nearest=Infinity;

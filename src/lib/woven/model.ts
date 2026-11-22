@@ -28,7 +28,18 @@ import type { Scene, Stroke } from "./vector-export";
 export function buildWovenRouteModel(design: Design) {
   const page = pageSize(design);
   if (design.preset === 'fraktur-scurve-weave-2' || design.preset === 'woven-double-circle') {
-    const sheet = wovenComposition(design), graph = topology(sheet);
+    let compositionDesign = design;
+    if (design.layoutFrame) {
+      const unit = design.script === 'Copperplate' ? 1 : design.nib;
+      const bands = writingBands(design,design.xNib*unit,design.ascNib*unit,design.descNib*unit,false,0);
+      const edges = bandEdges(bands);
+      const margin = Math.max(-edges.top,edges.bottom)+1;
+      const tagCount = design.showGuideTags ? bands.length*2 : 0;
+      const footer = Math.min(design.height*.4, tagCount*8+(tagCount ? 6 : 0));
+      const scale = Math.max(.01, Math.min((design.width-2*margin)/design.width,(design.height-2*margin-footer)/design.height));
+      compositionDesign = {...design,width:design.width*scale,height:design.height*scale,centerY:design.height/2-footer/2};
+    }
+    const sheet = wovenComposition(compositionDesign), graph = topology(sheet);
     const route = makeSlantRoute(graph.entries.flatMap(entry => entry.route.points));
     const intervals: [number, number][] = [];
     let index = 0;
@@ -340,7 +351,7 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
   const tagBounds = furniture ? page : {w:design.width,h:design.height};
   if (model.composition) {
     const {sheet,graph} = model.composition;
-    const clean = renderSheet(sheet,graph,{ruler:furniture,tagBounds});
+    const clean = renderSheet(sheet,graph,{ruler:furniture,tagBounds,clipToPage:!design.layoutFrame});
     const annotated = {...clean, labels:[...clean.labels,...crossings.map((c,i)=>({point:c.point,text:String(i+1),size:2.5,color:'#9f483b'}))]};
     return {page,route,crossings,choices,intervals,clean,annotated,startPoint:route.points[0],usableLength,warnings};
   }

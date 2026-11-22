@@ -5,6 +5,8 @@ export type BorderSide = 'outer' | 'inner';
 export type WritingBorder = { enabled: boolean; script: Design['script']; xHeight: number; gap: number; share: boolean };
 export const defaultBorder: WritingBorder = { enabled: false, script: 'TexturaQuadrata', xHeight: 9, gap: 0, share: true };
 export type Design = {
+  /** Set by Layout when rendering inside an element frame. */
+  layoutFrame?: boolean;
   borders?: Partial<Record<BorderSide, WritingBorder>>;
   centerX?: number;
   centerY?: number;
@@ -80,6 +82,7 @@ export const DEFAULT_DESIGN: Design = {
   clearance: 0.6,
   fullGuides: true,
   annotated: true,
+  showGuideTags: true,
   overrides: {},
 };
 export const LIMITS = {

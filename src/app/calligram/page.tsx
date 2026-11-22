@@ -434,7 +434,7 @@ export default function CalligramPage() {
   const [userScaleFactor, setUserScaleFactor] = useState(1);
   const [userSpaceFactor, setUserSpaceFactor] = useState(1);
 
-  const [showGuideTags, setShowGuideTags] = useState(false);
+  const [showGuideTags, setShowGuideTags] = useState(true);
   const [showBoxes, setShowBoxes] = useState(false);
   const [showSpanFill, setShowSpanFill] = useState(true);
   const [highContrastMode, setHighContrastMode] = useState(false);

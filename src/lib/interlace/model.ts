@@ -31,7 +31,7 @@ export function strand(id: string, name: string, source: Source, design = DEFAUL
 }
 export function initialSheet(): Sheet {
   return { format: 'calligraphy-tools/interlace', version: 1, paper:'A4', orientation:'portrait',
-    strands:[strand('rosette', 'Six-loop rosette', {kind:'rosette'})], overrides:[], joins:[], snap:false };
+    strands:[strand('rosette', 'Six-loop rosette', {kind:'rosette'})], overrides:[], joins:[], snap:false, showGuideTags:true };
 }
 export function strandRoute(s: Strand, sheet: Sheet) {
   const d = s.design, page = pageSize(sheet);
@@ -274,7 +274,7 @@ export function interlaceGuideTags(sheet: Sheet, entries = sheet.strands.filter(
   });
 }
 
-export function renderSheet(sheet:Sheet, graph=topology(sheet), { ruler = true, guideTags = sheet.showGuideTags, tagBounds = pageSize(sheet) } = {}) {
+export function renderSheet(sheet:Sheet, graph=topology(sheet), { ruler = true, guideTags = sheet.showGuideTags, tagBounds = pageSize(sheet), clipToPage = true } = {}) {
   const page=pageSize(sheet),scene:Scene={page,strokes:[],labels:[],tags:guideTags ? interlaceGuideTags(sheet, graph.entries) : undefined};
   for(const {root,route,regions} of writingRoutes(sheet,graph)){
     const m=metrics(root);
@@ -290,7 +290,7 @@ export function renderSheet(sheet:Sheet, graph=topology(sheet), { ruler = true, 
   for(let i=0;i<=5;i++) scene.strokes.push({points:[{x:12+i*10,y:y-1},{x:12+i*10,y:y+1}],width:.18,color:'#52677c'});
   }
   const frame={x:0,y:0,width:page.w,height:page.h};
-  scene.strokes=scene.strokes.flatMap(stroke=>{
+  if (clipToPage) scene.strokes=scene.strokes.flatMap(stroke=>{
     if(stroke.points.every(p=>p.x>=0 && p.x<=page.w && p.y>=0 && p.y<=page.h))return [stroke];
     return clipPolylineToRect({points:stroke.points,source:'interlace'},frame).map(piece=>({...stroke,points:piece.points}));
   });
