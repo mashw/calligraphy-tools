@@ -85,12 +85,6 @@ export default function WovenSettings({design, onChange, model, selected, onSele
   const constructionVisible = design.construction.upper || design.construction.lower;
 
   return <>          <DisclosureSection title="Writing guides" defaultOpen>
-            <label className="block space-y-1 text-sm">Tight corners
-              <Select className={field} value={design.cornerMode ?? 'flow'} onChange={e => update('cornerMode', e.target.value === 'restart' ? 'restart' : 'flow')}>
-                <option value="flow">Flow through corner</option>
-                <option value="restart">Restart at mitre</option>
-              </Select>
-            </label>
             {model && <Switch label="Show guide tags" checked={design.showGuideTags ?? true} onChange={checked => update("showGuideTags", checked)} />}
             <div className="space-y-3">
               <label className="block space-y-1 text-sm">

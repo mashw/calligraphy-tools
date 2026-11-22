@@ -21,7 +21,6 @@ export type Design = {
   borders?: Partial<Record<BorderSide, WritingBorder>>;
   centerX?: number;
   centerY?: number;
-  cornerMode?: 'flow' | 'restart';
   slantStyle: SlantStyle;
   paper: keyof typeof PAPERS_MM;
   orientation: "portrait" | "landscape";
@@ -232,10 +231,6 @@ export function parseDesign(input: unknown): Design {
     )
       throw new Error("Invalid marker spacing.");
     result.construction = { ...c };
-  }
-  if (obj.cornerMode !== undefined) {
-    if (obj.cornerMode !== 'flow' && obj.cornerMode !== 'restart') throw Error('Invalid corner treatment.');
-    result.cornerMode = obj.cornerMode;
   }
   if (obj.slantStyle !== undefined) {
     if (obj.slantStyle !== 'classic' && obj.slantStyle !== 'flowing') throw new Error('Invalid slant style.');

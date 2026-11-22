@@ -8,7 +8,6 @@ import { slantPath, clipSlantToBand } from "../guides/slant-paths";
 import { offset } from "@/lib/curve-helpers";
 import { buildGuideSet } from "@/lib/guides/guide-template";
 import { isWovenCompositionPreset, pageSize, type Design } from "./design";
-import { gothicCapStrands, gothicCapWeave } from "./gothic-cap-weave";
 import { resolveBlackletterGridWidthMM } from "@/lib/guides/straight/blackletter";
 import { dashPolylinePoints } from "@/lib/guides/polyline-dash";
 import { clipPassage, routeFrame } from "./curved-guides";
@@ -35,11 +34,8 @@ export function buildWovenRouteModel(design: Design) {
       const bands = writingBands(design,design.xNib*unit,design.ascNib*unit,design.descNib*unit,false,0);
       const edges = bandEdges(bands);
       const margin = Math.max(-edges.top,edges.bottom)+1;
-      const strandCount = design.preset === gothicCapWeave.id ? gothicCapStrands.length : 2;
-      const tagCount = design.showGuideTags ? bands.length*strandCount : 0;
-      const footer = Math.min(design.height*.4, tagCount*8+(tagCount ? 6 : 0));
-      const scale = Math.max(.01, Math.min((design.width-2*margin)/design.width,(design.height-2*margin-footer)/design.height));
-      compositionDesign = {...design,width:design.width*scale,height:design.height*scale,centerY:design.height/2-footer/2};
+      const scale = Math.max(.01, Math.min((design.width-2*margin)/design.width,(design.height-2*margin)/design.height));
+      compositionDesign = {...design,width:design.width*scale,height:design.height*scale,centerY:design.height/2};
     }
     const sheet = wovenComposition(compositionDesign), graph = topology(sheet);
     const route = makeSlantRoute(graph.entries.flatMap(entry => entry.route.points));
@@ -231,7 +227,7 @@ function singleBandStrokes(band: ReturnType<typeof writingBands>[number], route:
       points: sliceGuide(route, rail.points, interval),
     })),
   );
-  if (entry && design.cornerMode === 'restart' && intervals.some(([a]) => a === 0)) {
+  if (entry && intervals.some(([a]) => a === 0)) {
     const outer = rails.map(rail => rail.points[0]);
     let ends = [outer[0], outer[0]], longest = 0;
     for (const a of outer) for (const b of outer) {
