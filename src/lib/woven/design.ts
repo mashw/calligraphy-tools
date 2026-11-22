@@ -1,6 +1,17 @@
+import { compositionPresets } from '../paths/composition-presets';
+import { gothicCapWeave } from './gothic-cap-weave';
+
 import type { SlantStyle } from '../guides/slant-paths';
 import { PAPERS_MM } from "../curve-helpers";
 import type { ConstructionGuideSettings } from "../guides/guide-template";
+
+export const wovenCompositionOptions = [...compositionPresets, gothicCapWeave] as const;
+type WovenCompositionPreset = typeof wovenCompositionOptions[number]['id'];
+
+export function isWovenCompositionPreset(preset: string): preset is WovenCompositionPreset {
+  return wovenCompositionOptions.some(option => option.id === preset);
+}
+
 export type BorderSide = 'outer' | 'inner';
 export type WritingBorder = { enabled: boolean; script: Design['script']; xHeight: number; gap: number; share: boolean };
 export const defaultBorder: WritingBorder = { enabled: false, script: 'TexturaQuadrata', xHeight: 9, gap: 0, share: true };
@@ -28,7 +39,7 @@ export type Design = {
   secondAngle: number;
   construction: ConstructionGuideSettings;
   version: 1;
-  preset: "rosette" | "figure-eight" | "fraktur-scurve-weave-2" | "woven-double-circle";
+  preset: "rosette" | "figure-eight" | WovenCompositionPreset;
   width: number;
   height: number;
   loop: number;
@@ -112,7 +123,7 @@ export function parseDesign(input: unknown): Design {
   const obj = input as Record<string, unknown>;
   if (
     obj.version !== 1 ||
-    !["rosette", "figure-eight", "fraktur-scurve-weave-2", "woven-double-circle"].includes(String(obj.preset)) ||
+    !(obj.preset === "rosette" || obj.preset === "figure-eight" || isWovenCompositionPreset(String(obj.preset))) ||
     !["Fraktur", "TexturaQuadrata", "InsularMajuscule", "Copperplate"].includes(
       String(obj.script),
     )
@@ -260,6 +271,11 @@ export function pageSize(design: Pick<Design, "paper" | "orientation">) {
 
 export function selectWovenPreset(design: Design, preset: Design['preset']): Design {
   const next = { ...design, preset, overrides: {} };
+  if (preset === gothicCapWeave.id) {
+    const span = Math.max(design.width, design.height);
+    const nib = Math.max(LIMITS.nib[0], Math.min(LIMITS.nib[1], span * 43 / (770 * 8.5)));
+    return { ...next, script:'Fraktur', nib, xNib:4.5, ascNib:2, descNib:2, penAngle:40, gap:0, clearance:0.15 };
+  }
   if (preset === 'fraktur-scurve-weave-2') return { ...next, script:'Fraktur', nib:2, xNib:4.5, ascNib:2, descNib:2, penAngle:40 };
   if (preset === 'woven-double-circle') return { ...next, script:'Copperplate', nib:1, xNib:6, ascNib:6, descNib:6 };
   return next;

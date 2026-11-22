@@ -7,7 +7,8 @@ import { placeSheetTags, guideLabel, routeTag } from '@/lib/guides/sheet-labels'
 import { slantPath, clipSlantToBand } from "../guides/slant-paths";
 import { offset } from "@/lib/curve-helpers";
 import { buildGuideSet } from "@/lib/guides/guide-template";
-import { pageSize, type Design } from "./design";
+import { isWovenCompositionPreset, pageSize, type Design } from "./design";
+import { gothicCapStrands, gothicCapWeave } from "./gothic-cap-weave";
 import { resolveBlackletterGridWidthMM } from "@/lib/guides/straight/blackletter";
 import { dashPolylinePoints } from "@/lib/guides/polyline-dash";
 import { clipPassage, routeFrame } from "./curved-guides";
@@ -27,14 +28,15 @@ import type { Scene, Stroke } from "./vector-export";
 /** Route and crossing geometry only: safe to regenerate during pointer interactions. */
 export function buildWovenRouteModel(design: Design) {
   const page = pageSize(design);
-  if (design.preset === 'fraktur-scurve-weave-2' || design.preset === 'woven-double-circle') {
+  if (isWovenCompositionPreset(design.preset)) {
     let compositionDesign = design;
     if (design.layoutFrame) {
       const unit = design.script === 'Copperplate' ? 1 : design.nib;
       const bands = writingBands(design,design.xNib*unit,design.ascNib*unit,design.descNib*unit,false,0);
       const edges = bandEdges(bands);
       const margin = Math.max(-edges.top,edges.bottom)+1;
-      const tagCount = design.showGuideTags ? bands.length*2 : 0;
+      const strandCount = design.preset === gothicCapWeave.id ? gothicCapStrands.length : 2;
+      const tagCount = design.showGuideTags ? bands.length*strandCount : 0;
       const footer = Math.min(design.height*.4, tagCount*8+(tagCount ? 6 : 0));
       const scale = Math.max(.01, Math.min((design.width-2*margin)/design.width,(design.height-2*margin-footer)/design.height));
       compositionDesign = {...design,width:design.width*scale,height:design.height*scale,centerY:design.height/2-footer/2};

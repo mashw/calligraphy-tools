@@ -3,8 +3,9 @@ import type { Design } from '../woven/design';
 import { readTextPlan } from './text-fit';
 import { findCrossingsForStraps, slotOrderForPair } from '../paths/intersections';
 import { samplePathDToPolyline } from '../paths/sample-svg-path';
-import { PAPERS_MM } from '../curve-helpers';
-import { parseDesign, DEFAULT_DESIGN, pageSize } from '../woven/design';
+import { PAPERS_MM, pathD } from '../curve-helpers';
+import { parseDesign, DEFAULT_DESIGN, isWovenCompositionPreset, LIMITS, pageSize } from '../woven/design';
+import { gothicCapCrossings, gothicCapStrands, gothicCapWeave } from '../woven/gothic-cap-weave';
 import { findSelfCrossings, makeRoute, type Point } from '../woven/geometry';
 import { canJoin, initialSheet, strand, strandRoute, topology, type Source, type Strand, type Sheet } from './model';
 
@@ -164,7 +165,7 @@ export function openSheet(value:unknown):{sheet:Sheet; notice:string} {
       (missing?' '+missing+' unmatched choices omitted.':'')+' Only compatible end-to-start joins are carried over.'};
   }
   const d=parseDesign(obj);
-  if (d.preset === 'woven-double-circle' || d.preset === 'fraktur-scurve-weave-2') return {sheet: wovenComposition(d), notice:'Imported woven composition.'};
+  if (isWovenCompositionPreset(d.preset)) return {sheet: wovenComposition(d), notice:'Imported woven composition.'};
   Object.assign(sheet,header(d)); const s=strand('woven',d.preset,{kind:d.preset},{...d,overrides:{}});
   sheet.strands=[s];
   const old=makeRoute(d.preset,d.width,d.height,d.loop,d.rotation,d.reverse);
@@ -184,8 +185,19 @@ export function openSheet(value:unknown):{sheet:Sheet; notice:string} {
 
 function compositionGeometry(presetId: Design['preset']) {
   const preset = compositionPresets.find(item => item.id === presetId);
-  if (!preset) throw Error('Unknown woven composition.');
-  const { sheet } = openSheet({version:1, format:'calligraphy-tools/path-guides-preset', state:preset.state});
+  let sheet: Sheet;
+  if (presetId === gothicCapWeave.id) {
+    sheet = initialSheet();
+    sheet.strands = gothicCapStrands.map(({ id, name, points }) => {
+      const { source, center } = pathSource(pathD(points), points);
+      return strand(id, name, source, {
+        ...DEFAULT_DESIGN, width:source.width, height:source.height, centerX:center.x, centerY:center.y,
+      });
+    });
+  } else {
+    if (!preset) throw Error('Unknown woven composition.');
+    ({ sheet } = openSheet({version:1, format:'calligraphy-tools/path-guides-preset', state:preset.state}));
+  }
   const routes = sheet.strands.map(s => strandRoute(s, sheet));
   const points = routes.flatMap(route => route.points);
   const xs = points.map(p => p.x), ys = points.map(p => p.y);
@@ -196,12 +208,17 @@ function compositionGeometry(presetId: Design['preset']) {
 
 export function fitWovenPreset(design: Design): Design {
   let ratio = design.preset === 'figure-eight' ? 1 / .65 : 1;
-  if (design.preset === 'fraktur-scurve-weave-2' || design.preset === 'woven-double-circle') {
+  if (isWovenCompositionPreset(design.preset)) {
     const geometry = compositionGeometry(design.preset);
     ratio = geometry.width / geometry.height;
   }
-  const span = Math.max(design.width, design.height);
-  return {...design,width:span*Math.min(1,ratio),height:span/Math.max(1,ratio)};
+  const widthScale = Math.min(1, ratio);
+  const heightScale = 1 / Math.max(1, ratio);
+  const minSpan = design.preset === gothicCapWeave.id && !design.layoutFrame
+    ? Math.max(LIMITS.width[0] / widthScale, LIMITS.height[0] / heightScale)
+    : 0;
+  const span = Math.max(design.width, design.height, minSpan);
+  return {...design,width:span*widthScale,height:span*heightScale};
 }
 
 export function wovenComposition(design: Design): Sheet {
@@ -221,9 +238,22 @@ export function wovenComposition(design: Design): Sheet {
     s.source = source;
     s.scale = 100;
     s.mirror = false;
-    s.design = {...design, preset:'rosette', width:source.width, height:source.height, centerX:center.x, centerY:center.y, rotation:0};
+    const nibScale = design.preset === gothicCapWeave.id ? gothicCapStrands[i].nibScale : 1;
+    s.design = {...design, nib:Math.max(LIMITS.nib[0], design.nib*nibScale), preset:'rosette', width:source.width, height:source.height,
+      centerX:center.x, centerY:center.y, rotation:0};
   });
   const hits = topology(sheet).hits;
-  sheet.overrides = hits.map((hit,i) => ({...hit, over:design.overrides['crossing-'+i] ?? hit.over}));
+  const visits = new Map<string, number>();
+  sheet.overrides = hits.map((hit, i) => {
+    let over = hit.over;
+    if (design.preset === gothicCapWeave.id) {
+      const pair = hit.a.id + '|' + hit.b.id;
+      const visit = visits.get(pair) ?? 0;
+      visits.set(pair, visit + 1);
+      const authored = gothicCapCrossings[pair]?.[visit];
+      if (authored === 'a' || authored === 'b') over = authored;
+    }
+    return { ...hit, over:design.overrides['crossing-'+i] ?? over };
+  });
   return sheet;
 }

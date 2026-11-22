@@ -1,8 +1,7 @@
 "use client";
 
 import { fitWovenPreset } from '@/lib/interlace/document';
-import { selectWovenPreset } from '@/lib/woven/design';
-import { compositionPresets } from '@/lib/paths/composition-presets';
+import { selectWovenPreset, wovenCompositionOptions } from '@/lib/woven/design';
 import { NumericInput, Button, Select, ActionGroup } from '@/components/editor/Controls';
 import NumericSlider from '@/components/editor/NumericSlider';
 import PreviewMeta from '@/components/editor/PreviewMeta';
@@ -307,11 +306,16 @@ export default function WovenPage() {
                   className={field}
                   value={design.preset}
                   onChange={(e) =>
-                    { setSelected(null); setDesign(fitWovenPreset(selectWovenPreset(design, e.target.value as Design["preset"]))); }
+                    {
+                      const next = fitWovenPreset(selectWovenPreset(design, e.target.value as Design["preset"]));
+                      setSelected(null);
+                      setDesign(next);
+                      setScaleBase({ width: next.width, height: next.height });
+                    }
                   }
                 >
                   <option value="rosette">Six-loop rosette</option>
-                  <option value="figure-eight">Figure-eight</option>{compositionPresets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  <option value="figure-eight">Figure-eight</option>{wovenCompositionOptions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </Select>
               </label>
               <NumericSlider label="Width" value={design.width} min={LIMITS.width[0]} max={LIMITS.width[1]} step={0.5} unit="mm" onChange={value => setDimension('width', value)} />

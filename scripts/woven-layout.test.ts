@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_DESIGN, parseDesign } from '../src/lib/woven/design.ts';
+import { DEFAULT_DESIGN, parseDesign, selectWovenPreset } from '../src/lib/woven/design.ts';
 import { buildWovenModel, buildWovenRouteModel } from '../src/lib/woven/model.ts';
 import { newElement, pageElement, type WovenElement } from '../src/lib/layout/types.ts';
-import { layoutWovenDesign, layoutWovenModel } from '../src/lib/layout/woven.ts';
+import { fitWovenPreset } from '../src/lib/interlace/document.ts';
+import { layoutWovenDesign, layoutWovenModel, wovenSettings } from '../src/lib/layout/woven.ts';
 import { parseLayoutDesign, serializeLayoutDesign } from '../src/lib/layout/design-file.ts';
 import { buildPlotterExport } from '../src/lib/layout/plotter-export.ts';
 import { layeredLayoutPdf } from '../src/lib/layout/woven-pdf.ts';
@@ -63,4 +64,26 @@ test('Woven-only Layout PDF contains physical vector paths and no raster images'
   const pdf=await (await layeredLayoutPdf(null as unknown as SVGSVGElement,[woven,pageElement()],{width:210,height:297})).text();
   assert.match(pdf,/% Woven vector layer/);assert.match(pdf,/MediaBox \[0 0 595\.27559 841\.88976\]/);assert.ok(!pdf.includes('/Subtype /Image'));
   const offset=Number(pdf.match(/startxref\n(\d+)/)![1]);assert.equal(pdf.slice(offset,offset+4),'xref');
+});
+
+test('Gothic cap weave keeps four closed straps and 32 editable crossings in Woven and Layout', () => {
+  const design = fitWovenPreset(selectWovenPreset(DEFAULT_DESIGN, 'gothic-cap-weave'));
+  const model = buildWovenRouteModel(parseDesign(design));
+  assert.equal(model.crossings.length, 32);
+  const entries = model.composition?.graph.entries;
+  assert.equal(entries?.length, 4);
+  assert.ok(entries?.every(entry => entry.route.closed));
+  assert.equal(entries[2].s.design.nib, entries[0].s.design.nib * (2 / 3));
+  assert.equal(model.choices['crossing-0'], 'b');
+  const changed = buildWovenRouteModel({...design, overrides:{'crossing-0':'a'}});
+  assert.equal(changed.choices['crossing-0'], 'a');
+
+  const element = newElement('woven', 1, {width:210, height:297}) as WovenElement;
+  element.settings = wovenSettings(design);
+  element.frame = {...element.frame, width:design.width, height:design.height};
+  const reopened = parseLayoutDesign(serializeLayoutDesign([element, pageElement()], element.id));
+  const restored = reopened.elements.find(item => item.type === 'woven');
+  assert.ok(restored);
+  assert.equal(restored.settings.preset, 'gothic-cap-weave');
+  assert.deepEqual(buildWovenRouteModel(layoutWovenDesign(restored)).choices, model.choices);
 });
