@@ -3,7 +3,11 @@
 import { GuidelineEditing } from '@/components/layout/GuidelineEditing';
 import EditorWorkspace from '@/components/editor/EditorWorkspace';
 
-import { useState } from 'react';
+import WovenComposer from '@/components/woven/WovenComposer';
+import { designFromComposition, editableComposition, openSheet } from '@/lib/interlace/document';
+import type { Sheet } from '@/lib/interlace/model';
+import { layoutWovenDesign, wovenSettings } from '@/lib/layout/woven';
+import { useEffect, useState } from 'react';
 import LayoutInspector from '@/components/layout/LayoutInspector';
 import LayoutStage from '@/components/layout/LayoutStage';
 import LayersPanel, { type DesignMessage } from '@/components/layout/LayersPanel';
@@ -16,12 +20,31 @@ import { parseLayoutDesign, serializeLayoutDesign } from '@/lib/layout/design-fi
 
 export default function LayoutPage() {
   const [elements, setElements] = useState<LayoutElement[]>(() => [pageElement()]);
+  const [editingWeave,setEditingWeave] = useState<{id:string;sheet:Sheet}|null>(null);
   const [selectedId, setSelectedId] = useState('page');
   const [editingSnapshot,setEditingSnapshot]=useState<LayoutElement[]|null>(null);
   const [artworkMessage,setArtworkMessage]=useState<string|null>(null);
   const [designMessage,setDesignMessage]=useState<DesignMessage|null>(null);
   const selected = elements.find(element => element.id === selectedId) ?? elements[elements.length - 1];
   const page = elements.find(element => element.type === 'page')!;
+  useEffect(()=>{
+    const key = new URLSearchParams(location.search).get('composition');
+    if (!key?.startsWith('woven-transfer-')) return;
+    try {
+      const raw=sessionStorage.getItem(key);
+      if (!raw) return;
+      const source=designFromComposition(openSheet(JSON.parse(raw)).sheet);
+      const size=pageSize(pageElement());
+      const element=newElement('woven',1,size);
+      if (element.type !== 'woven') return;
+      const scale=Math.min(1,(size.width-20)/source.width,(size.height-20)/source.height);
+      const width=source.width*scale,height=source.height*scale;
+      element.frame={x:(size.width-width)/2,y:(size.height-height)/2,width,height};
+      element.settings=wovenSettings(source);
+      setElements(current=>[element,...current]);setSelectedId(element.id);
+      sessionStorage.removeItem(key);history.replaceState(null,'','/layout');
+    } catch(error) {setArtworkMessage(error instanceof Error?error.message:'Could not open composition.');}
+  },[]);
   const allGuidelines=elements.filter((item):item is Extract<LayoutElement,{type:'guidelines'}>=>item.type==='guidelines'),activeGuidelines=allGuidelines.filter(item=>item.textMode==='estimate'?!!item.fitText.trim():item.plannedLines.some(line=>!!line.text.trim())),colors=resolveTextFitColors(allGuidelines.map(item=>item.id).sort());
   const textFitPlans=activeGuidelines.reduce<Record<string,GuidelinesTextFitEntry>>((plans,item)=>{const index=elements.findIndex(element=>element.id===item.id),key=buildGuidelinesVisibilityCacheKey(item,page,elements.slice(0,index)),collisionSpans=getCachedGuidelinesCollisionSpans(key,item,page,elements),placementSpans=getCachedGuidelinesPlacementSpans(item,page);plans[item.id]=item.textMode==='estimate'?{mode:'estimate',plan:buildGuidelinesTextFitPlan(item,placementSpans),color:colors[item.id]}:{mode:'line-layout',plan:buildGuidelinesLineLayoutPlan(item,placementSpans,page,collisionSpans,elements),color:colors[item.id]};return plans;},{});
   const selectedTextFitEntry=selected.type==='guidelines'?(textFitPlans[selected.id]??(selected.textMode==='estimate'?{mode:'estimate',plan:buildGuidelinesTextFitPlan(selected,[]),color:TEXT_FIT_COLORS[preferredTextFitColorIndex(selected.id)]}:{mode:'line-layout',plan:buildGuidelinesLineLayoutPlan(selected,usesCustomMask(selected)?getCachedGuidelinesPlacementSpans(selected,page):[],page,[],elements),color:TEXT_FIT_COLORS[preferredTextFitColorIndex(selected.id)]})):null;
@@ -33,7 +56,17 @@ export default function LayoutPage() {
     const element = newElement(type, count, pageSize(page));
     setElements(current => [element, ...current]); setSelectedId(element.id);
   };
-  const addArtwork=async(files:FileList)=>{markEdited();const imported:Extract<LayoutElement,{type:'artwork'}>[]=[];const messages:string[]=[];const usable=pageContentRect(pageSize(page),page.settings.margins);for(const file of [...files]){try{const {document,intrinsicAspectRatio:ratio,interlaceSource,size:{width,height}}=importArtwork(await file.text(),usable);imported.push({id:`artwork-${crypto.randomUUID()}`,type:'artwork',name:file.name.replace(/\.svg$/i,''),locked:false,paddingMM:0,rotationDeg:0,sourceFilename:file.name,document,interlaceSource,intrinsicAspectRatio:ratio,settings:{lockProportions:true,opacity:100,occludeLowerLayers:true,occludeClosedShapes:true,occlusionArea:'visible-artwork',textFitExclusion:'bounds'},frame:{x:usable.x+(usable.width-width)/2,y:usable.y+(usable.height-height)/2,width,height}});if(document.warning)messages.push(`${file.name}: ${document.warning}`);}catch(error){messages.push(`${file.name}: ${error instanceof Error?error.message:'Could not import SVG.'}`);}}if(imported.length){setElements(current=>[...imported,...current]);setSelectedId(imported.at(-1)!.id);}setArtworkMessage(messages.join(' ')||null);};
+  const addArtwork=async(files:FileList)=>{markEdited();const imported:Extract<LayoutElement,{type:'artwork'|'woven'}>[]=[];const messages:string[]=[];const usable=pageContentRect(pageSize(page),page.settings.margins);for(const file of [...files]){try{const xml=await file.text();const {document,intrinsicAspectRatio:ratio,interlaceSource,size:{width,height}}=importArtwork(xml,usable);
+      if(interlaceSource && new DOMParser().parseFromString(xml,'image/svg+xml').documentElement.getAttribute('data-woven-composition')==='1'){
+        const element=newElement('woven',1,pageSize(page));
+        if(element.type==='woven'){
+          element.settings=wovenSettings(designFromComposition(interlaceSource.document));
+          element.name=file.name.replace(/\.svg$/i,'');
+          element.frame={x:usable.x+(usable.width-width)/2,y:usable.y+(usable.height-height)/2,width,height};
+          imported.push(element);continue;
+        }
+      }
+      imported.push({id:`artwork-${crypto.randomUUID()}`,type:'artwork',name:file.name.replace(/\.svg$/i,''),locked:false,paddingMM:0,rotationDeg:0,sourceFilename:file.name,document,interlaceSource,intrinsicAspectRatio:ratio,settings:{lockProportions:true,opacity:100,occludeLowerLayers:true,occludeClosedShapes:true,occlusionArea:'visible-artwork',textFitExclusion:'bounds'},frame:{x:usable.x+(usable.width-width)/2,y:usable.y+(usable.height-height)/2,width,height}});if(document.warning)messages.push(`${file.name}: ${document.warning}`);}catch(error){messages.push(`${file.name}: ${error instanceof Error?error.message:'Could not import SVG.'}`);}}if(imported.length){setElements(current=>[...imported,...current]);setSelectedId(imported.at(-1)!.id);}setArtworkMessage(messages.join(' ')||null);};
   const move = (id: string, direction: -1 | 1) => { markEdited(); setElements(current => {
     const index = current.findIndex(element => element.id === id); const target = index + direction;
     if (index < 0 || target < 0 || target >= current.length || current[target].type === 'page') return current;
@@ -73,10 +106,18 @@ export default function LayoutPage() {
     }
   };
 
+  if (editingWeave) return <WovenComposer initial={editingWeave.sheet} onClose={()=>setEditingWeave(null)} onApply={sheet=>{
+    const settings=wovenSettings(designFromComposition(sheet));
+    update(editingWeave.id,e=>e.type==='woven'?{...e,settings}:e);
+    setEditingWeave(null);
+  }}/>;
   return <GuidelineEditing><EditorWorkspace preview={<>
 <LayoutStage onArrangement={(id,arrangement)=>update(id,e=>e.type==='guidelines'?{...e,mask:{...e.mask,arrangement}}:e)} editingSnapshot={editingSnapshot} elements={elements} selectedId={selectedId} textFitPlans={textFitPlans} onSelect={setSelectedId} onCommit={commit} onPlannedLinePlacementChange={(guidelinesId,lineId,customStartMM)=>update(guidelinesId,element=>element.type==='guidelines'?{...element,plannedLines:element.plannedLines.map(line=>line.id===lineId?{...line,alignment:'custom',customStartMM}:line)}:element)} />
 </>} inspector={<>
-<div onFocusCapture={event=>{if(selected.type==='woven'&&(event.target as HTMLInputElement).type==='number')setEditingSnapshot(current=>current??elements);}} onBlurCapture={()=>setEditingSnapshot(null)} onPointerDownCapture={event=>{if(selected.type==='woven'&&(event.target as HTMLInputElement).type==='range')setEditingSnapshot(current=>current??elements);}} onPointerUpCapture={event=>{if((event.target as HTMLInputElement).type==='range')setEditingSnapshot(null);}} onPointerCancelCapture={()=>setEditingSnapshot(null)} onKeyDownCapture={event=>{if(selected.type==='woven'&&(event.target as HTMLInputElement).type==='range')setEditingSnapshot(current=>current??elements);}} onKeyUpCapture={event=>{if((event.target as HTMLInputElement).type==='range')setEditingSnapshot(null);}}><LayoutInspector element={selected} page={page} textFitEntry={selectedTextFitEntry} onChange={next => update(selected.id, () => next)} /></div>
+<div onFocusCapture={event=>{if(selected.type==='woven'&&(event.target as HTMLInputElement).type==='number')setEditingSnapshot(current=>current??elements);}} onBlurCapture={()=>setEditingSnapshot(null)} onPointerDownCapture={event=>{if(selected.type==='woven'&&(event.target as HTMLInputElement).type==='range')setEditingSnapshot(current=>current??elements);}} onPointerUpCapture={event=>{if((event.target as HTMLInputElement).type==='range')setEditingSnapshot(null);}} onPointerCancelCapture={()=>setEditingSnapshot(null)} onKeyDownCapture={event=>{if(selected.type==='woven'&&(event.target as HTMLInputElement).type==='range')setEditingSnapshot(current=>current??elements);}} onKeyUpCapture={event=>{if((event.target as HTMLInputElement).type==='range')setEditingSnapshot(null);}}>{selected.type==='woven' && <button className="rounded border px-3 py-2 text-sm" onClick={()=>{
+    try {setEditingWeave({id:selected.id,sheet:editableComposition(layoutWovenDesign(selected))});}
+    catch(error){setArtworkMessage(error instanceof Error?error.message:'Could not open composition.');}
+  }}>Edit in Woven</button>}<LayoutInspector element={selected} page={page} textFitEntry={selectedTextFitEntry} onChange={next => update(selected.id, () => next)} /></div>
 </>} layers={<>
 <LayersPanel  elements={elements} selectedId={selectedId} onSelect={setSelectedId} onAdd={add} onAddArtwork={addArtwork} artworkMessage={artworkMessage} onToggleVisibility={id=>update(id,element=>({...element,visible:element.visible===false}))} onToggleLock={id => update(id, element => element.type === 'page' ? element : ({ ...element, locked: !element.locked }))} onMove={move} onDuplicate={duplicate} onDelete={remove} onSaveDesign={saveDesign} onOpenDesign={openDesign} designMessage={designMessage} />
 </>}></EditorWorkspace></GuidelineEditing>;

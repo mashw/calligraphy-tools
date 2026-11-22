@@ -1,3 +1,5 @@
+import type { Sheet } from '../interlace/model';
+import { openSheet } from '../interlace/document';
 import { compositionPresets } from '../paths/composition-presets';
 import { gothicCapWeave } from './gothic-cap-weave';
 
@@ -6,10 +8,10 @@ import { PAPERS_MM } from "../curve-helpers";
 import type { ConstructionGuideSettings } from "../guides/guide-template";
 
 export const wovenCompositionOptions = [...compositionPresets, gothicCapWeave] as const;
-type WovenCompositionPreset = typeof wovenCompositionOptions[number]['id'];
+type WovenCompositionPreset = typeof wovenCompositionOptions[number]['id'] | 'custom-composition';
 
 export function isWovenCompositionPreset(preset: string): preset is WovenCompositionPreset {
-  return wovenCompositionOptions.some(option => option.id === preset);
+  return preset === 'custom-composition' || wovenCompositionOptions.some(option => option.id === preset);
 }
 
 export type BorderSide = 'outer' | 'inner';
@@ -23,6 +25,7 @@ export function strapLettering(design: Design): StrapLettering {
   return Object.fromEntries(letteringKeys.map(key => [key, design[key]])) as StrapLettering;
 }
 export type Design = {
+  composition?: Sheet;
   independentStraps?: boolean;
   strapStyles?: Record<string, StrapLettering>;
   /** Set by Layout when rendering inside an element frame. */
@@ -283,6 +286,11 @@ export function parseDesign(input: unknown): Design {
       return [id, strapLettering(checked)];
     }));
   }
+  if (result.preset === 'custom-composition') {
+    const source = obj.composition as Partial<Sheet> | undefined;
+    if (source?.format !== 'calligraphy-tools/interlace' || !source.strands?.length) throw Error('Missing Woven composition.');
+    result.composition = openSheet(source).sheet;
+  }
   return result;
 }
 
@@ -294,7 +302,7 @@ export function pageSize(design: Pick<Design, "paper" | "orientation">) {
 }
 
 export function selectWovenPreset(design: Design, preset: Design['preset']): Design {
-  const next = { ...design, preset, overrides: {}, independentStraps:undefined, strapStyles:undefined };
+  const next = { ...design, preset, composition:undefined, overrides: {}, independentStraps:undefined, strapStyles:undefined };
   if (preset === gothicCapWeave.id) {
     const span = Math.max(design.width, design.height);
     const nib = Math.max(LIMITS.nib[0], Math.min(LIMITS.nib[1], span * 43 / (770 * 8.5)));

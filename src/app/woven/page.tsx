@@ -1,6 +1,8 @@
 "use client";
 
-import { fitWovenPreset } from '@/lib/interlace/document';
+import WovenComposer from '@/components/woven/WovenComposer';
+import { initialSheet, type Sheet } from '@/lib/interlace/model';
+import { designFromComposition, editableComposition, openSheet, fitWovenPreset } from '@/lib/interlace/document';
 import { selectWovenPreset, wovenCompositionOptions } from '@/lib/woven/design';
 import { NumericInput, Button, Select, ActionGroup } from '@/components/editor/Controls';
 import NumericSlider from '@/components/editor/NumericSlider';
@@ -43,6 +45,8 @@ function download(content: BlobPart, type: string, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 export default function WovenPage() {
+  const [composition,setComposition] = useState<Sheet|null>(null);
+  React.useEffect(()=>{if(new URLSearchParams(location.search).has('compose'))setComposition(initialSheet());},[]);
   const [design, setDesign] = useState<Design>(DEFAULT_DESIGN);
   const [scaleBase, setScaleBase] = useState<ShapeDimensions>({ width: DEFAULT_DESIGN.width, height: DEFAULT_DESIGN.height });
   const [selected, setSelected] = useState<string | null>(null);
@@ -139,6 +143,7 @@ export default function WovenPage() {
     if(e.type==='pointercancel'){setDesign(current=>({...current,centerX:d.center.x,centerY:d.center.y}));return;}
     if(!d.moved&&d.crossing)flip(d.crossing);
   }
+  if (composition) return <WovenComposer initial={composition} onFinish={sheet=>{const next=fitWovenPreset({...designFromComposition(sheet),width:design.width,height:design.height});setDesign(next);setScaleBase(next);setSelected(null);setComposition(null);}}/>;
   return (
     <EditorWorkspace preview={<>
 <section
@@ -279,8 +284,9 @@ export default function WovenPage() {
           const file = e.target.files?.[0];
           if (!file) return;
           try {
-            if (file.size > 100000) throw Error("Design file is too large.");
-            const loaded = parseDesign(JSON.parse(await file.text()));
+            const raw = JSON.parse(await file.text());
+            if (raw?.format) { setComposition(openSheet(raw).sheet); return; }
+            const loaded = parseDesign(raw);
             setDesign(loaded);
             setScaleBase({ width: loaded.width, height: loaded.height });
             setSelected(null);
@@ -291,10 +297,11 @@ export default function WovenPage() {
               error instanceof Error ? error.message : "Could not open design.",
             );
           }
-          e.target.value = "";
+          fileRef.current && (fileRef.current.value = "");
         }}
       />
 <div className="grid items-start gap-4  ">
+          <Button className={button} onClick={()=>setComposition(editableComposition(design))}>Compose straps</Button>
           <DisclosureSection title="Shape" defaultOpen headerAction={<CompactHelp label="Shape controls help" below><p>Type custom values or use the sliders. Scale changes width and height together, preserving their ratio.</p><p>Editing either dimension or opening a design sets the current size as the new 100% reference. Preset, loop depth and direction changes reset crossing choices.</p></CompactHelp>}>
             <div className="space-y-3" onPointerDownCapture={event=>{if((event.target as HTMLInputElement).type==='range'){camera.freeze();setInteracting(true);}}} onPointerUpCapture={()=>setInteracting(false)} onPointerCancelCapture={()=>setInteracting(false)} onFocusCapture={event=>{if((event.target as HTMLInputElement).type==='number'){camera.freeze();setInteracting(true);}}} onBlurCapture={()=>setInteracting(false)} onKeyDownCapture={event=>{if((event.target as HTMLInputElement).type==='range'&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){camera.freeze();setInteracting(true);}}} onKeyUpCapture={()=>setInteracting(false)}>
               <div className="grid grid-cols-2 gap-2">{(['centerX','centerY'] as const).map((key,i)=><label key={key} className="text-sm">{i===0?'X position':'Y position'} (mm)<NumericInput className={field} aria-label={i===0?'X position':'Y position'} step="any" value={design[key]??(i===0?model.page.w:model.page.h)/2} onChange={event=>{if(Number.isFinite(event.target.valueAsNumber))update(key,event.target.valueAsNumber);}}/></label>)}</div>
@@ -315,7 +322,7 @@ export default function WovenPage() {
                   }
                 >
                   <option value="rosette">Six-loop rosette</option>
-                  <option value="figure-eight">Figure-eight</option>{wovenCompositionOptions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {design.preset === "custom-composition" && <option value="custom-composition">Custom composition</option>}<option value="figure-eight">Figure-eight</option>{wovenCompositionOptions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </Select>
               </label>
               <NumericSlider label="Width" value={design.width} min={LIMITS.width[0]} max={LIMITS.width[1]} step={0.5} unit="mm" onChange={value => setDimension('width', value)} />
