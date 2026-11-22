@@ -95,7 +95,7 @@ export default function WovenSettings({design: group, onChange, model, selected,
   const gridVisible = design.gridHorizontal || design.gridVertical;
   const constructionVisible = design.construction.upper || design.construction.lower;
 
-  return <>          <DisclosureSection title="Writing guides" defaultOpen>
+  return <>          <DisclosureSection title="Script & nib" defaultOpen>
             {straps.length > 1 && <div className="space-y-2">
               <Switch label="Edit straps individually" checked={released} onChange={independentStraps => onChange({...group,independentStraps})}/>
               {active && <label className="block text-sm">Editing strap<Select className={field} value={active.id}

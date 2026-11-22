@@ -27,6 +27,7 @@ export function strapLettering(design: Design): StrapLettering {
 export type Design = {
   composition?: Sheet;
   independentStraps?: boolean;
+  strapTexts?: Record<string, string>;
   strapStyles?: Record<string, StrapLettering>;
   /** Set by Layout when rendering inside an element frame. */
   layoutFrame?: boolean;
@@ -275,6 +276,13 @@ export function parseDesign(input: unknown): Design {
     if (typeof obj.independentStraps !== 'boolean') throw Error('Invalid strap editing mode.');
     result.independentStraps = obj.independentStraps;
   }
+  if (obj.strapTexts !== undefined) {
+    if (!obj.strapTexts || typeof obj.strapTexts !== 'object' || Array.isArray(obj.strapTexts)) throw Error('Invalid strap text.');
+    result.strapTexts = Object.fromEntries(Object.entries(obj.strapTexts).map(([id,text]) => {
+      if (typeof text !== 'string') throw Error('Invalid strap text.');
+      return [id,text];
+    }));
+  }
   if (obj.strapStyles !== undefined) {
     const styles = obj.strapStyles;
     if (!styles || typeof styles !== 'object' || Array.isArray(styles) || Object.keys(styles).length > 100)
@@ -302,7 +310,7 @@ export function pageSize(design: Pick<Design, "paper" | "orientation">) {
 }
 
 export function selectWovenPreset(design: Design, preset: Design['preset']): Design {
-  const next = { ...design, preset, composition:undefined, overrides: {}, independentStraps:undefined, strapStyles:undefined };
+  const next = { ...design, preset, strapTexts:undefined, composition:undefined, overrides: {}, independentStraps:undefined, strapStyles:undefined };
   if (preset === gothicCapWeave.id) {
     const span = Math.max(design.width, design.height);
     const nib = Math.max(LIMITS.nib[0], Math.min(LIMITS.nib[1], span * 43 / (770 * 8.5)));

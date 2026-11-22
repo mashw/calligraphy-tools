@@ -285,3 +285,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     filter: brightness(.66) contrast(3.2);
   }
 }
+
+@media screen {
+  .editor-preview:has(.preview-toolbar[data-preview-contrast="high"]) [data-writing-guides] [stroke]:not([stroke="transparent"], [stroke="none"], [pointer-events="stroke"], [stroke="rgba(0,0,0,0)"]) {
+    stroke: black;
+    stroke-opacity: 1;
+    stroke-width: 1px;
+  }
+}

@@ -5,6 +5,8 @@ import { useMemo, useState } from 'react';
 import { Select } from '@/components/editor/Controls';
 import NumericSlider from '@/components/editor/NumericSlider';
 import DisclosureSection from '@/components/layout/DisclosureSection';
+import { DEFAULT_TEXT_PLAN, textFit } from '@/lib/interlace/text-fit';
+import { initialSheet, strand, topology } from '@/lib/interlace/model';
 import WovenSettings from './WovenSettings';
 import { layoutWovenDesign, wovenSettings } from '@/lib/layout/woven';
 import { buildWovenRouteModel } from '@/lib/woven/model';
@@ -14,6 +16,31 @@ export default function LayoutWovenSettings({element,onChange}:{element:WovenEle
   const [scale,setScale]=useState(100);
   const design=useMemo(()=>layoutWovenDesign(element),[element]);
   const model=useMemo(()=>buildWovenRouteModel(design),[design]);
+  const [strapId,setStrapId] = useState('');
+  const sheet = useMemo(() => {
+    if (model.composition) return model.composition.sheet;
+    const sheet = initialSheet();
+    sheet.paper = design.paper;
+    sheet.orientation = design.orientation;
+    sheet.strands = [strand('woven','Main strap',{kind:design.preset === 'figure-eight' ? 'figure-eight' : 'rosette'},design)];
+    return sheet;
+  },[design,model]);
+  const graph = useMemo(() => model.composition?.graph ?? topology(sheet),[model,sheet]);
+  const straps = sheet.strands.filter(strap => strap.visible);
+  const selected = straps.find(strap => strap.id === strapId) ?? straps[0];
+  const plan = selected?.textPlan ?? DEFAULT_TEXT_PLAN;
+  const text = design.strapTexts?.[selected?.id] ?? plan.text;
+  const fit = useMemo(() => selected && textFit(sheet,{...selected,textPlan:{...plan,text}},graph),[sheet,selected,plan,text,graph]);
+  function changeText(text:string) {
+    if (!selected) return;
+    const composition = design.composition;
+    if (composition) {
+      const strands = composition.strands.map(s => s.id === selected.id ? {...s,textPlan:{...(s.textPlan??DEFAULT_TEXT_PLAN),text}} : s);
+      onChange({...element,settings:{...element.settings,composition:{...composition,strands}}});
+    } else {
+      onChange({...element,settings:{...element.settings,strapTexts:{...design.strapTexts,[selected.id]:text}}});
+    }
+  }
   return <>
     <DisclosureSection title="Shape & Geometry" defaultOpen>
       <div className="space-y-3">
@@ -29,5 +56,11 @@ export default function LayoutWovenSettings({element,onChange}:{element:WovenEle
       </div>
     </DisclosureSection>
     <WovenSettings design={design} model={model} onChange={next=>onChange({...element,settings:wovenSettings(next)})}/>
+    {selected && fit && <DisclosureSection title="Text fit"><div className="space-y-2">
+      {straps.length>1 && <label className="block text-sm">Writing strap<Select value={selected.id} onChange={event=>setStrapId(event.target.value)}>{straps.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</Select></label>}
+      <label className="block text-sm">Strap text<textarea className="block w-full rounded border p-2" value={text} onChange={event=>changeText(event.target.value)}/></label>
+      <p className="text-xs">{fit.needed.toFixed(1)} of {fit.available.toFixed(1)} mm</p>
+      {!fit.fits && <p className="text-xs text-rose-600">A line exceeds its continuous writing space.</p>}
+    </div></DisclosureSection>}
   </>;
 }

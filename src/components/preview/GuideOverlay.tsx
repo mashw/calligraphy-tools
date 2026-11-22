@@ -106,7 +106,7 @@ export default function GuideOverlay({
   })();
 
   return (
-    <g>
+    <g data-writing-guides="true">
       {bandClipD && (
         <defs>
           <clipPath id={bandClipId} clipPathUnits="userSpaceOnUse">

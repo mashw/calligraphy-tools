@@ -134,3 +134,13 @@ test('custom Woven composition returns from Layout with authored strands, text a
   assert.equal(buildWovenRouteModel(design).choices['crossing-0'],sheet.overrides[0].over);
   assert.equal(restored.overrides[0].over,sheet.overrides[0].over);
 });
+
+test('Layout strap text survives reopening single and multi-strap presets in Woven', () => {
+  for (const preset of ['rosette','gothic-cap-weave'] as const) {
+    const design = selectWovenPreset(DEFAULT_DESIGN,preset);
+    const straps = editableComposition(design).strands;
+    const strapTexts = Object.fromEntries(straps.map(s => [s.id, 'Text for '+s.id]));
+    const reopened = editableComposition(parseDesign({...design,strapTexts}));
+    for (const s of reopened.strands) assert.equal(s.textPlan?.text,strapTexts[s.id]);
+  }
+});

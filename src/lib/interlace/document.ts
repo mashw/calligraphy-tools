@@ -1,6 +1,6 @@
 import { compositionPresets } from '../paths/composition-presets';
 import type { Design } from '../woven/design';
-import { readTextPlan } from './text-fit';
+import { DEFAULT_TEXT_PLAN, readTextPlan } from './text-fit';
 import { findCrossingsForStraps, slotOrderForPair } from '../paths/intersections';
 import { samplePathDToPolyline } from '../paths/sample-svg-path';
 import { PAPERS_MM, pathD } from '../curve-helpers';
@@ -168,6 +168,7 @@ export function openSheet(value:unknown):{sheet:Sheet; notice:string} {
   const d=parseDesign(obj);
   if (isWovenCompositionPreset(d.preset)) return {sheet: wovenComposition(d), notice:'Imported woven composition.'};
   Object.assign(sheet,header(d)); const s=strand('woven',d.preset,{kind:d.preset},{...d,overrides:{}});
+  if (d.strapTexts?.[s.id] !== undefined) s.textPlan = {...DEFAULT_TEXT_PLAN,text:d.strapTexts[s.id]};
   sheet.strands=[s];
   const old=makeRoute(d.preset,d.width,d.height,d.loop,d.rotation,d.reverse);
   const canonical=strandRoute(s,sheet), hits=topology(sheet).hits;
@@ -241,6 +242,7 @@ export function wovenComposition(design: Design): Sheet {
     });
     const {source,center} = pathSource(s.source.kind === 'path' ? s.source.d : '', transformed);
     s.source = source;
+    if (design.strapTexts?.[s.id] !== undefined) s.textPlan = {...(s.textPlan??DEFAULT_TEXT_PLAN),text:design.strapTexts[s.id]};
     s.scale = 100;
     s.mirror = false;
     const nibScale = design.preset === gothicCapWeave.id ? gothicCapStrands[i].nibScale : 1;
