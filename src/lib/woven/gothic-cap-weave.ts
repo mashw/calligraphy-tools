@@ -49,10 +49,14 @@ export const gothicCapStrands = [
 
 // Each pair is listed in visit order along its first strap, from its cap.
 export const gothicCapCrossings: Readonly<Record<string, string>> = {
+  'gothic-1|gothic-1': 'a',
   'gothic-1|gothic-2': 'bbabaa',
   'gothic-1|gothic-3': 'aaba',
   'gothic-1|gothic-4': 'bbabaa',
+  'gothic-2|gothic-2': 'a',
   'gothic-2|gothic-3': 'bbabaa',
   'gothic-2|gothic-4': 'aaba',
+  'gothic-3|gothic-3': 'a',
   'gothic-3|gothic-4': 'bbabaa',
+  'gothic-4|gothic-4': 'a',
 };

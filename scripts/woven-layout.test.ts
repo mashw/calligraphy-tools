@@ -66,17 +66,17 @@ test('Woven-only Layout PDF contains physical vector paths and no raster images'
   const offset=Number(pdf.match(/startxref\n(\d+)/)![1]);assert.equal(pdf.slice(offset,offset+4),'xref');
 });
 
-test('Gothic cap weave keeps four closed straps and 32 editable crossings in Woven and Layout', () => {
+test('Gothic cap weave keeps four closed straps and 36 editable crossings in Woven and Layout', () => {
   const design = fitWovenPreset(selectWovenPreset(DEFAULT_DESIGN, 'gothic-cap-weave'));
   const model = buildWovenRouteModel(parseDesign(design));
-  assert.equal(model.crossings.length, 32);
+  assert.equal(model.crossings.length, 36);
   const entries = model.composition?.graph.entries;
   assert.equal(entries?.length, 4);
   assert.ok(entries?.every(entry => entry.route.closed));
   assert.equal(entries[2].s.design.nib, entries[0].s.design.nib * (2 / 3));
-  assert.equal(model.choices['crossing-0'], 'b');
-  const changed = buildWovenRouteModel({...design, overrides:{'crossing-0':'a'}});
-  assert.equal(changed.choices['crossing-0'], 'a');
+  assert.equal(model.choices['crossing-1'], 'b');
+  const changed = buildWovenRouteModel({...design, overrides:{'crossing-1':'a'}});
+  assert.equal(changed.choices['crossing-1'], 'a');
 
   const element = newElement('woven', 1, {width:210, height:297}) as WovenElement;
   element.settings = wovenSettings(design);
