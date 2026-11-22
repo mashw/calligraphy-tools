@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_DESIGN, parseDesign, selectWovenPreset } from '../src/lib/woven/design.ts';
+import { DEFAULT_DESIGN, parseDesign, selectWovenPreset, strapLettering } from '../src/lib/woven/design.ts';
 import { buildWovenModel, buildWovenRouteModel } from '../src/lib/woven/model.ts';
 import { newElement, pageElement, type WovenElement } from '../src/lib/layout/types.ts';
 import { fitWovenPreset } from '../src/lib/interlace/document.ts';
-import { layoutWovenDesign, layoutWovenModel, wovenSettings } from '../src/lib/layout/woven.ts';
+import { layoutWovenDesign, layoutWovenModel, layoutWovenTags, wovenSettings } from '../src/lib/layout/woven.ts';
 import { parseLayoutDesign, serializeLayoutDesign } from '../src/lib/layout/design-file.ts';
 import { buildPlotterExport } from '../src/lib/layout/plotter-export.ts';
 import { layeredLayoutPdf } from '../src/lib/layout/woven-pdf.ts';
@@ -86,4 +86,34 @@ test('Gothic cap weave keeps four closed straps and 36 editable crossings in Wov
   assert.ok(restored);
   assert.equal(restored.settings.preset, 'gothic-cap-weave');
   assert.deepEqual(buildWovenRouteModel(layoutWovenDesign(restored)).choices, model.choices);
+});
+
+test('released lettering survives save/open and relinking keeps crossing choices', () => {
+  const design = fitWovenPreset(selectWovenPreset(DEFAULT_DESIGN, 'gothic-cap-weave'));
+  const initial = buildWovenRouteModel(design);
+  const narrow = initial.composition!.sheet.strands[2];
+  const style = {...strapLettering(narrow.design),script:'Copperplate' as const,nib:1,xNib:3};
+  const saved = parseDesign(JSON.parse(JSON.stringify({...design,independentStraps:true,strapStyles:{[narrow.id]:style}})));
+  const released = buildWovenRouteModel(saved);
+  assert.deepEqual(released.choices,initial.choices);
+  const strands = released.composition!.sheet.strands;
+  assert.equal(strands[2].design.script,'Copperplate');
+  assert.equal(strands[2].design.xNib,3);
+  assert.equal(strands[1].design.script,'Fraktur');
+  assert.equal(buildWovenRouteModel({...saved,independentStraps:false}).composition!.sheet.strands[2].design.nib,narrow.design.nib);
+});
+
+test('rotated oversized Woven tags fit on the actual page even when all cells contain ink', () => {
+  const page = {width:80,height:60};
+  const frame = {x:-20,y:-25,width:120,height:110};
+  const tags = ['Wide upper','Narrow lower'].map(text => ({text,size:3,point:{x:200,y:180}}));
+  const scene = {tags,strokes:[{points:[{x:0,y:55},{x:120,y:55}],width:250,color:'#000'}]};
+  const placed = layoutWovenTags(scene,frame,90,page);
+  assert.equal(placed.length,tags.length);
+  assert.notEqual(placed[0].point.y,placed[1].point.y);
+  for(const t of placed) {
+    const half = t.text.length*t.size*.76/2;
+    assert.ok(t.point.x-half >= 0 && t.point.x+half <= page.width);
+    assert.ok(t.point.y-t.size >= 0 && t.point.y+t.size*.3 <= page.height);
+  }
 });

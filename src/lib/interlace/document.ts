@@ -239,7 +239,7 @@ export function wovenComposition(design: Design): Sheet {
     s.scale = 100;
     s.mirror = false;
     const nibScale = design.preset === gothicCapWeave.id ? gothicCapStrands[i].nibScale : 1;
-    s.design = {...design, nib:Math.max(LIMITS.nib[0], design.nib*nibScale), preset:'rosette', width:source.width, height:source.height,
+    s.design = {...design, nib:Math.max(LIMITS.nib[0], design.nib*nibScale), ...(design.independentStraps ? design.strapStyles?.[s.id] : {}), independentStraps:undefined, strapStyles:undefined, preset:'rosette', width:source.width, height:source.height,
       centerX:center.x, centerY:center.y, rotation:0};
   });
   const hits = topology(sheet).hits;

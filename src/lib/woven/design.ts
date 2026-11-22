@@ -15,7 +15,16 @@ export function isWovenCompositionPreset(preset: string): preset is WovenComposi
 export type BorderSide = 'outer' | 'inner';
 export type WritingBorder = { enabled: boolean; script: Design['script']; xHeight: number; gap: number; share: boolean };
 export const defaultBorder: WritingBorder = { enabled: false, script: 'TexturaQuadrata', xHeight: 9, gap: 0, share: true };
+const letteringKeys = ['script','nib','xNib','ascNib','descNib','penAngle','gridHorizontal','gridVertical',
+  'gridMode','gridWidth','gridContrast','gridThickness','slants','slantStyle','slantAngle','slantSpacing',
+  'slantContrast','secondSlant','secondAngle','construction','fullGuides','borders'] as const;
+export type StrapLettering = Pick<Design, typeof letteringKeys[number]>;
+export function strapLettering(design: Design): StrapLettering {
+  return Object.fromEntries(letteringKeys.map(key => [key, design[key]])) as StrapLettering;
+}
 export type Design = {
+  independentStraps?: boolean;
+  strapStyles?: Record<string, StrapLettering>;
   /** Set by Layout when rendering inside an element frame. */
   layoutFrame?: boolean;
   borders?: Partial<Record<BorderSide, WritingBorder>>;
@@ -259,6 +268,21 @@ export function parseDesign(input: unknown): Design {
       result.borders[side] = { ...border } as WritingBorder;
     }
   }
+  if (obj.independentStraps !== undefined) {
+    if (typeof obj.independentStraps !== 'boolean') throw Error('Invalid strap editing mode.');
+    result.independentStraps = obj.independentStraps;
+  }
+  if (obj.strapStyles !== undefined) {
+    const styles = obj.strapStyles;
+    if (!styles || typeof styles !== 'object' || Array.isArray(styles) || Object.keys(styles).length > 100)
+      throw Error('Invalid strap lettering.');
+    result.strapStyles = Object.fromEntries(Object.entries(styles).map(([id, raw]) => {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw Error('Invalid strap lettering.');
+      const fields = Object.fromEntries(Object.entries(raw).filter(([key]) => letteringKeys.some(k => k === key)));
+      const checked = parseDesign({...DEFAULT_DESIGN, ...fields});
+      return [id, strapLettering(checked)];
+    }));
+  }
   return result;
 }
 
@@ -270,7 +294,7 @@ export function pageSize(design: Pick<Design, "paper" | "orientation">) {
 }
 
 export function selectWovenPreset(design: Design, preset: Design['preset']): Design {
-  const next = { ...design, preset, overrides: {} };
+  const next = { ...design, preset, overrides: {}, independentStraps:undefined, strapStyles:undefined };
   if (preset === gothicCapWeave.id) {
     const span = Math.max(design.width, design.height);
     const nib = Math.max(LIMITS.nib[0], Math.min(LIMITS.nib[1], span * 43 / (770 * 8.5)));

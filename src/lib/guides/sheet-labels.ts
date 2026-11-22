@@ -160,7 +160,7 @@ export function placeSheetTags(tags: SheetTag[], strokes: {points: Pt[]; width: 
     // Fit long strap names inside the printable width of smaller Layout elements.
     const available = (Math.floor(page.w/cell)-3)*cell-2;
     const size = Math.min(original.size, available / (original.text.length*.76));
-    if (size <= 0) continue;
+    if (size <= 0) { break; }
     const tag = {...original,size};
     const width = Math.ceil((tag.text.length*tag.size*.76+2)/cell);
     const height = Math.ceil((tag.size*1.6+2)/cell);
@@ -182,6 +182,13 @@ export function placeSheetTags(tags: SheetTag[], strokes: {points: Pt[]; width: 
       reserve(best.x-width*cell/2,middle-height*cell/2,best.x+width*cell/2,middle+height*cell/2);
       placed.push({...tag,point:best,path:undefined,angle:0});
     }
+  }
+  if (placed.length < tags.length) {
+    // A full sheet can have no empty cells. Keep a compact legend inside its bottom edge.
+    const row = Math.min(5, page.h / (tags.length + 1));
+    return tags.map((tag,i) => ({...tag, path:undefined, angle:0, align:undefined,
+      size:Math.min(tag.size,row*.65,page.w*.94/(Math.max(1,tag.text.length)*.76)),
+      point:{x:page.w/2,y:page.h-(tags.length-i-.5)*row}}));
   }
   return placed;
 }
