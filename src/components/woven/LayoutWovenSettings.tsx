@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { Select } from '@/components/editor/Controls';
 import NumericSlider from '@/components/editor/NumericSlider';
 import DisclosureSection from '@/components/layout/DisclosureSection';
-import { DEFAULT_TEXT_PLAN, textFit, wovenStrandTextPlan } from '@/lib/interlace/text-fit';
+import { DEFAULT_TEXT_PLAN, textFit, wovenCompositionTextFit, wovenStrandTextPlan } from '@/lib/interlace/text-fit';
 import { initialSheet, strand } from '@/lib/interlace/model';
 import WovenSettings from './WovenSettings';
 import { layoutWovenPreview, withWovenTextSettings, wovenSettings } from '@/lib/layout/woven';
@@ -30,7 +30,11 @@ export default function LayoutWovenSettings({element,onChange}:{element:WovenEle
   const plan = selected ? wovenStrandTextPlan(design, selected) : DEFAULT_TEXT_PLAN;
   const text = design.strapTexts?.[selected?.id] ?? plan.text;
   const countHidden=design.hiddenTextStraps?.includes(selected?.id) ?? plan.countHidden ?? false;
-  const fit = useMemo(() => selected && textFit(sheet,{...selected,textPlan:{...plan,text,countHidden}},graph,model.composition?undefined:model),[model,sheet,selected,plan,text,countHidden,graph]);
+  const fit = useMemo(() => {
+    if (!selected) return null;
+    const member = { ...selected, textPlan: { ...plan, text, countHidden } };
+    return graph ? wovenCompositionTextFit(design, sheet, member, graph) : textFit(sheet, member, undefined, model);
+  }, [design, model, sheet, selected, plan, text, countHidden, graph]);
   function changeText(text:string,hidden=countHidden) {
     if (!selected) return;
     const composition = design.composition;

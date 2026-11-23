@@ -1,6 +1,6 @@
 'use client';
 import { TEXT_SPAN_STYLE } from '@/lib/guides/text-span-style';
-import { DEFAULT_TEXT_PLAN, textFit, wovenStrandTextPlan } from '@/lib/interlace/text-fit';
+import { DEFAULT_TEXT_PLAN, textFit, wovenCompositionTextFit, wovenStrandTextPlan } from '@/lib/interlace/text-fit';
 import { initialSheet, strand } from '@/lib/interlace/model';
 import { SheetLabels } from '@/components/preview/SheetLabels';
 import { interlaceGuideTags } from '@/lib/interlace/model';
@@ -27,7 +27,7 @@ export const WovenFitPreview = memo(function WovenFitPreview({design,model}:{des
       return sheet.strands.flatMap(s => {
         if (!s.visible) return [];
         const textPlan = wovenStrandTextPlan(design, s);
-        return textPlan.text ? [textFit(sheet, { ...s, textPlan }, graph)] : [];
+        return textPlan.text ? [wovenCompositionTextFit(design, sheet, { ...s, textPlan }, graph)] : [];
       });
     }
     const text = design.strapTexts?.woven;

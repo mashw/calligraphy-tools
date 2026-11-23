@@ -124,13 +124,40 @@ function presetWritingSpace(model:RouteModel, gap:number, includeHidden=false) {
 }
 
 export function textFit(sheet: Sheet, selected: Strand, graph?: ReturnType<typeof topology>, preset?: RouteModel) {
+  return fitOnWritingSpace(selected, includeHidden => preset
+    ? presetWritingSpace(preset, selected.design.gap, includeHidden)
+    : cachedWritingSpace(sheet, selected, graph ??= topology(sheet), includeHidden));
+}
+
+/** The S-curve preset is authored as two weaving straps. Keep each strap's
+ * clipping and start with the selected strap, then use the other for overflow.
+ */
+export function wovenCompositionTextFit(design: Design, sheet: Sheet, selected: Strand, graph: ReturnType<typeof topology>) {
+  if (design.preset !== 'fraktur-scurve-weave-2') return textFit(sheet, selected, graph);
+
+  const remaining = sheet.strands.filter(strand => strand.visible && strand.id !== selected.id);
+  return fitOnWritingSpace(selected, includeHidden => {
+    let total = 0;
+    const spans: Span[] = [];
+    for (const member of [selected, ...remaining]) {
+      const textPlan = { ...(selected.textPlan ?? DEFAULT_TEXT_PLAN), connected: false };
+      const space = cachedWritingSpace(sheet, { ...member, textPlan }, graph, includeHidden);
+      for (const span of space.spans) {
+        spans.push({ start: total + span.start, end: total + span.end, points: span.points });
+      }
+      total += space.total;
+    }
+    return { total, spans, closed: false };
+  });
+}
+
+function fitOnWritingSpace(
+  selected: Strand,
+  resolveSpace: (includeHidden: boolean) => ReturnType<typeof writingSpace>,
+) {
   const options = selected.textPlan ?? DEFAULT_TEXT_PLAN, d = selected.design, m = metrics(selected);
-  function resolveSpace(includeHidden = false) {
-    return preset ? presetWritingSpace(preset, d.gap, includeHidden)
-      : cachedWritingSpace(sheet, selected, graph ??= topology(sheet), includeHidden);
-  }
-  const space = resolveSpace(options.countHidden);
-  const visible = options.countHidden ? resolveSpace().spans : undefined;
+  const space = resolveSpace(!!options.countHidden);
+  const visible = options.countHidden ? resolveSpace(false).spans : undefined;
   const ctx=d.script==='Copperplate'?buildCopperplateContext({xHeightMM:m.x,capStyle:options.capStyle,calibration:{enabled:options.calibration,calWordLowerMM:options.lowerMM||undefined,calWordDoubleMM:options.doubleMM||undefined}}).ctx:{xHeightMM:m.x,nibMM:d.nib*Math.cos(d.penAngle*Math.PI/180),scale:1,spaceMult:1,capStyle:options.capStyle};
   ctx.spaceMult*=options.spacing;let cursor=0;
   const samplers = new WeakMap<Span, ReturnType<typeof createPolylineSampler>>();
