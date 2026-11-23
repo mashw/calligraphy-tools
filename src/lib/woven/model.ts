@@ -1,3 +1,4 @@
+import type { Interval as CrossingInterval } from './geometry';
 import { wovenComposition } from '../interlace/document';
 import { topology, renderSheet, warnings as sheetWarnings } from '../interlace/model';
 import { makeSlantRoute } from '../guides/slant-paths';
@@ -74,10 +75,7 @@ export function buildWovenRouteModel(design: Design) {
   const halfBand = bands.length > 1 ? Math.max(-edges.top,edges.bottom) : x / 2 + Math.max(asc, desc);
   const start = (design.start / 100) * route.length;
   const cuts = crossingCuts(crossings, choices, halfBand, design.clearance);
-  const intervals = visibleIntervals(route.length, [
-    ...cuts,
-    { center: start, half: design.gap / 2 },
-  ]);
+  const intervals = clippedCentreIntervals(route,visibleIntervals(route.length,[{center:start,half:design.gap/2}]),crossingMasks(design,route,crossings,choices,bands));
   const warnings: string[] = [];
   const bendWarning = borderBendWarning(route.points,bands);
   if (bendWarning) warnings.push(bendWarning);
@@ -368,20 +366,50 @@ function singleBandStrokes(band: ReturnType<typeof writingBands>[number], route:
   return strokes;
 }
 
-function borderedStrokes(design: Design, route: ReturnType<typeof makeRoute>, crossings: ReturnType<typeof findSelfCrossings>,
-  choices: Record<string,'a'|'b'>, start: number, bands: ReturnType<typeof writingBands>): Stroke[] {
+function crossingMasks(design: Design, route: ReturnType<typeof makeRoute>, crossings: ReturnType<typeof findSelfCrossings>,
+  choices: Record<string,'a'|'b'>, bands: ReturnType<typeof writingBands>) {
   const edges = bandEdges(bands);
   const top = offset(route.points,edges.top-design.clearance);
   const bottom = offset(route.points,edges.bottom+design.clearance);
   const visits = crossings.flatMap(c => [c.a,c.b]).sort((a,b)=>a-b);
   const visit = (at: number) => visitIntervals(visits,at,route.length,true);
-  const masks = crossings.flatMap(c => {
+  return crossings.flatMap(c => {
     const over = choices[c.id] === 'a' ? c.a : c.b;
     const under = choices[c.id] === 'a' ? c.b : c.a;
     const region = visit(over);
     const polygon = [...region.flatMap(i=>sliceGuide(route,top,i)), ...region.flatMap(i=>sliceGuide(route,bottom,i)).reverse()];
     return visit(under).map(interval=>({interval,polygon}));
   });
+}
+
+function clippedCentreIntervals(route:ReturnType<typeof makeRoute>, intervals:CrossingInterval[], masks:ReturnType<typeof crossingMasks>) {
+  const result:CrossingInterval[]=[];
+  for(const [from,to] of intervals) for(let i=1;i<route.points.length;i++) {
+    const a=Math.max(from,route.distances[i-1]), b=Math.min(to,route.distances[i]);
+    if(b<=a) continue;
+    const stops=[a,...masks.flatMap(m=>m.interval).filter(v=>v>a && v<b).sort((x,y)=>x-y),b];
+    for(let j=1;j<stops.length;j++) {
+      const lo=stops[j-1],hi=stops[j];
+      if(hi<=lo) continue;
+      const p=atDistance(route,lo),q=atDistance(route,hi);
+      let parts=[[p,q]];
+      for(const mask of masks) if(lo>=mask.interval[0] && hi<=mask.interval[1])
+        parts=parts.flatMap(part=>clipSlantToBand(part,mask.polygon,false));
+      for(const part of parts) {
+        const start=lo+Math.hypot(part[0].x-p.x,part[0].y-p.y);
+        const end=lo+Math.hypot(part.at(-1)!.x-p.x,part.at(-1)!.y-p.y);
+        const last=result.at(-1);
+        if(last && Math.abs(last[1]-start)<1e-7) last[1]=end;
+        else result.push([start,end]);
+      }
+    }
+  }
+  return result;
+}
+
+function borderedStrokes(design: Design, route: ReturnType<typeof makeRoute>, crossings: ReturnType<typeof findSelfCrossings>,
+  choices: Record<string,'a'|'b'>, start: number, bands: ReturnType<typeof writingBands>): Stroke[] {
+  const masks=crossingMasks(design,route,crossings,choices,bands);
   const strokes: Stroke[] = [];
   for (const [a,b] of visibleIntervals(route.length,[{center:start,half:design.gap/2}])) {
     const stops = [...new Set([a,b,...masks.flatMap(m=>m.interval).filter(s=>s>a && s<b)])].sort((p,q)=>p-q);
@@ -404,12 +432,16 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
   if (model.composition) {
     const {sheet,graph} = model.composition;
     const clean = renderSheet(sheet,graph,{ruler:furniture,tagBounds,clipToPage:!design.layoutFrame});
-    const annotated = {...clean, labels:[...clean.labels,...crossings.map((c,i)=>({point:c.point,text:String(i+1),size:2.5,color:'#9f483b'}))]};
+    const annotated = {...clean, labels:[...clean.labels,...crossings.map((c,i)=>({previewOnly:true,point:c.point,text:String(i+1),size:2.5,color:'#9f483b'}))]};
     return {page,route,crossings,choices,intervals,clean,annotated,startPoint:route.points[0],usableLength,warnings};
   }
   const bands = writingBands(design,x,asc,desc);
-  const strokes = bands.length === 1 ? writingStrokes(design, route, intervals, x, asc, desc) :
-    borderedStrokes(design,route,crossings,choices,start,bands);
+  // Clip in the same coordinate system for every placement, including tangent contacts.
+  const localRoute=makeRoute(design.preset==="figure-eight"?"figure-eight":"rosette",design.width,design.height,design.loop,design.rotation,design.reverse,{x:0,y:0});
+  const localCrossings=findSelfCrossings(localRoute);
+  const dx=design.centerX??page.w/2,dy=design.centerY??page.h/2;
+  const strokes=borderedStrokes(design,localRoute,localCrossings,choices,design.start/100*localRoute.length,bands)
+    .map(stroke=>({...stroke,points:stroke.points.map(p=>({x:p.x+dx,y:p.y+dy}))}));
   const tag = design.showGuideTags ? routeTag(guideLabel(design.script, x, design.nib), route.points, halfBand + 4, .32) : null;
   const tags = tag ? [tag, ...borderGuideTags(bands, route.points, false, .32)] : undefined;
   const clean: Scene = { strokes, labels: [], tags, page };
@@ -457,6 +489,7 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
   };
   crossings.forEach((c, i) =>
     annotated.labels.push({
+      previewOnly:true,
       point: { x: c.point.x + 3, y: c.point.y - 3 },
       text: String(i + 1),
       size: 2.5,

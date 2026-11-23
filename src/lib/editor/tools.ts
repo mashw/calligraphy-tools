@@ -5,8 +5,7 @@ export const TOOLS = [
   ['/calligram', 'Calligram', 'Compose circular lettering'],
   ['/path-guides', 'Custom Path Guidelines', 'Import paths and arrange straps'],
   ['/layout', 'Layout Editor', 'Arrange layers on a physical page'],
-  ['/interlace', 'Interlace Studio', 'Compose and weave writing strands'],
-  ['/woven', 'Woven Calligraphy', 'Shape routes and plan crossings'],
+  ['/woven', 'Woven Calligraphy', 'Compose woven straps, lettering and crossings'],
   ['/knot', 'Knot Generator', 'Explore procedural interlacing'],
   ['/borders/dev', 'Border Laboratory', 'Experimental ornament studies'],
 ] as const;

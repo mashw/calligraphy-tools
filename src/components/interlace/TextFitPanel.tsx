@@ -7,7 +7,8 @@ export default function TextFitPanel({value=DEFAULT_TEXT_PLAN,result,onChange,co
   const field=(label:string,key:'startMM'|'startGapMM'|'endGapMM'|'spacing'|'lowerMM'|'doubleMM',max=10000,min=0)=><label className="flex items-center justify-between gap-2">{label}<NumericInput aria-label={label} type="number" className="w-24" value={value[key]} min={min} max={max} step={.1} onChange={e=>{const n=e.target.valueAsNumber;if(Number.isFinite(n)&&n>=min&&n<=max)patch({[key]:n});}}/></label>;
   return <DisclosureSection title="Text & Fit"><div className="space-y-2 text-xs">
     <label className="block">Text to plan<textarea aria-label="Text to plan" className="block w-full rounded border p-2" rows={3} maxLength={10000} value={value.text} onChange={e=>patch({text:e.target.value})}/></label>
-    <p>Each line uses the next continuous interval that fits. Widths and letter boxes are estimates.</p>
+    <label className="block text-sm"><input type="checkbox" checked={!!value.countHidden} onChange={event=>patch({countHidden:event.target.checked})}/> Count hidden lettering</label>
+      <p className="text-xs text-slate-600">Allow space for letters beneath each crossing before the text reappears.</p>
     <label className="flex justify-between">Route<Select aria-label="Text route" value={value.connected?'joined':'strand'} onChange={e=>patch({connected:e.target.value==='joined'})}><option value="strand">Selected strand</option><option value="joined">Connected writing route</option></Select></label>
     <label className="flex justify-between">Alignment<Select aria-label="Text alignment" value={value.align} onChange={e=>patch({align:e.target.value as TextPlan['align']})}><option value="start">Start</option><option value="center">Centre</option><option value="end">End</option></Select></label>
     {field('Text start (mm)','startMM')}{field('Start margin (mm)','startGapMM')}{field('End margin (mm)','endGapMM')}{field('Letter spacing','spacing',3,.1)}

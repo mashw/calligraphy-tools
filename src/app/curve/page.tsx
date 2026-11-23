@@ -1,5 +1,6 @@
 'use client';
 
+import { TEXT_SPAN_STYLE } from '@/lib/guides/text-span-style';
 import { SheetLabels } from '@/components/preview/SheetLabels';
 import { curveTags, guideLabel } from '@/lib/guides/sheet-labels';
 import { InspectorIntro } from '@/components/editor/Controls';
@@ -1418,8 +1419,8 @@ export default function CurvedTitlePage() {
                         .reverse()
                         .map(p => `${p.x},${p.y}`)
                         .join(' L ')} Z`}
-                      fill="rgba(148,163,184,0.18)"
-                      stroke={isCurveDragging ? '#7c3aed' : 'rgba(100,116,139,0.55)'}
+                      fill={TEXT_SPAN_STYLE.fill}
+                      stroke={isCurveDragging ? '#7c3aed' : TEXT_SPAN_STYLE.stroke}
                       strokeWidth={swThin}
                       vectorEffect="non-scaling-stroke"
                     />
@@ -1445,8 +1446,8 @@ export default function CurvedTitlePage() {
                         .reverse()
                         .map(p => `${p.x},${p.y}`)
                         .join(' L ')} Z`}
-                      fill="rgba(148,163,184,0.18)"
-                      stroke={isCurveDragging ? '#7c3aed' : 'rgba(100,116,139,0.55)'}
+                      fill={TEXT_SPAN_STYLE.fill}
+                      stroke={isCurveDragging ? '#7c3aed' : TEXT_SPAN_STYLE.stroke}
                       strokeWidth={swThin}
                       vectorEffect="non-scaling-stroke"
                     />
@@ -1473,8 +1474,8 @@ export default function CurvedTitlePage() {
                         .reverse()
                         .map(p => `${p.x},${p.y}`)
                         .join(' L ')} Z`}
-                      fill="rgba(148,163,184,0.18)"
-                      stroke={isCurveDragging ? '#7c3aed' : 'rgba(100,116,139,0.55)'}
+                      fill={TEXT_SPAN_STYLE.fill}
+                      stroke={isCurveDragging ? '#7c3aed' : TEXT_SPAN_STYLE.stroke}
                       strokeWidth={swThin}
                       vectorEffect="non-scaling-stroke"
                     />

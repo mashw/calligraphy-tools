@@ -1,3 +1,5 @@
+import type { Sheet } from '../interlace/model';
+import { openSheet } from '../interlace/document';
 import { compositionPresets } from '../paths/composition-presets';
 import { gothicCapWeave } from './gothic-cap-weave';
 
@@ -6,10 +8,10 @@ import { PAPERS_MM } from "../curve-helpers";
 import type { ConstructionGuideSettings } from "../guides/guide-template";
 
 export const wovenCompositionOptions = [...compositionPresets, gothicCapWeave] as const;
-type WovenCompositionPreset = typeof wovenCompositionOptions[number]['id'];
+type WovenCompositionPreset = typeof wovenCompositionOptions[number]['id'] | 'custom-composition';
 
 export function isWovenCompositionPreset(preset: string): preset is WovenCompositionPreset {
-  return wovenCompositionOptions.some(option => option.id === preset);
+  return preset === 'custom-composition' || wovenCompositionOptions.some(option => option.id === preset);
 }
 
 export type BorderSide = 'outer' | 'inner';
@@ -23,7 +25,10 @@ export function strapLettering(design: Design): StrapLettering {
   return Object.fromEntries(letteringKeys.map(key => [key, design[key]])) as StrapLettering;
 }
 export type Design = {
+  composition?: Sheet;
   independentStraps?: boolean;
+  hiddenTextStraps?: string[];
+  strapTexts?: Record<string, string>;
   strapStyles?: Record<string, StrapLettering>;
   /** Set by Layout when rendering inside an element frame. */
   layoutFrame?: boolean;
@@ -98,8 +103,8 @@ export const DEFAULT_DESIGN: Design = {
   ascNib: 2,
   descNib: 2,
   start: 3,
-  gap: 8,
-  clearance: 0.6,
+  gap: 0,
+  clearance: 0,
   fullGuides: true,
   annotated: true,
   showGuideTags: true,
@@ -272,6 +277,17 @@ export function parseDesign(input: unknown): Design {
     if (typeof obj.independentStraps !== 'boolean') throw Error('Invalid strap editing mode.');
     result.independentStraps = obj.independentStraps;
   }
+  if (obj.hiddenTextStraps !== undefined) {
+    if (!Array.isArray(obj.hiddenTextStraps) || !obj.hiddenTextStraps.every(id=>typeof id==='string')) throw Error('Invalid strap IDs.');
+    result.hiddenTextStraps=[...obj.hiddenTextStraps];
+  }
+  if (obj.strapTexts !== undefined) {
+    if (!obj.strapTexts || typeof obj.strapTexts !== 'object' || Array.isArray(obj.strapTexts)) throw Error('Invalid strap text.');
+    result.strapTexts = Object.fromEntries(Object.entries(obj.strapTexts).map(([id,text]) => {
+      if (typeof text !== 'string') throw Error('Invalid strap text.');
+      return [id,text];
+    }));
+  }
   if (obj.strapStyles !== undefined) {
     const styles = obj.strapStyles;
     if (!styles || typeof styles !== 'object' || Array.isArray(styles) || Object.keys(styles).length > 100)
@@ -282,6 +298,11 @@ export function parseDesign(input: unknown): Design {
       const checked = parseDesign({...DEFAULT_DESIGN, ...fields});
       return [id, strapLettering(checked)];
     }));
+  }
+  if (result.preset === 'custom-composition') {
+    const source = obj.composition as Partial<Sheet> | undefined;
+    if (source?.format !== 'calligraphy-tools/interlace' || !source.strands?.length) throw Error('Missing Woven composition.');
+    result.composition = openSheet(source).sheet;
   }
   return result;
 }
@@ -294,11 +315,11 @@ export function pageSize(design: Pick<Design, "paper" | "orientation">) {
 }
 
 export function selectWovenPreset(design: Design, preset: Design['preset']): Design {
-  const next = { ...design, preset, overrides: {}, independentStraps:undefined, strapStyles:undefined };
+  const next = { ...design, preset, clearance:0, hiddenTextStraps:undefined, strapTexts:undefined, composition:undefined, overrides: {}, independentStraps:undefined, strapStyles:undefined };
   if (preset === gothicCapWeave.id) {
     const span = Math.max(design.width, design.height);
     const nib = Math.max(LIMITS.nib[0], Math.min(LIMITS.nib[1], span * 43 / (770 * 8.5)));
-    return { ...next, script:'Fraktur', nib, xNib:4.5, ascNib:2, descNib:2, penAngle:40, gap:0, clearance:0.15 };
+    return { ...next, script:'Fraktur', nib, xNib:4.5, ascNib:2, descNib:2, penAngle:40, gap:0, clearance:0 };
   }
   if (preset === 'fraktur-scurve-weave-2') return { ...next, script:'Fraktur', nib:2, xNib:4.5, ascNib:2, descNib:2, penAngle:40 };
   if (preset === 'woven-double-circle') return { ...next, script:'Copperplate', nib:1, xNib:6, ascNib:6, descNib:6 };

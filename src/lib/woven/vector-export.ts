@@ -1,7 +1,7 @@
 import type { Point } from './geometry';
 import { guideTagColour, pdfTagCommands, sheetLabelFont, type SheetTag } from '@/lib/guides/sheet-labels';
 export type Stroke = { points: Point[]; color: string; width: number; role?: 'primary'|'grid'|'slant'|'construction'|'annotation'; guide?:'baseline'|'waist' };
-export type Label = { point: Point; text: string; size: number; color: string };
+export type Label = { previewOnly?:boolean; point: Point; text: string; size: number; color: string };
 export type Scene = { strokes: Stroke[]; labels: Label[]; tags?: SheetTag[]; page?: { w: number; h: number } };
 const n = (value: number) => value.toFixed(3);
 export const pointsD = (points: Point[]) => points.map((p, i) => `${i ? 'L' : 'M'}${n(p.x)} ${n(p.y)}`).join(' ');
@@ -25,9 +25,9 @@ export function sceneSvg(scene: Scene, { combineAdjacentStrokes = false } = {}):
     const style = `data-guide-label="tag" font-family="${sheetLabelFont}" font-size="${tag.size}" fill="${guideTagColour(tag.colour)}" text-anchor="middle"`;
     return tag.path
       ? `<defs><path id="${id}" d="${pointsD(tag.path)}"/></defs><text ${style}><textPath href="#${id}" startOffset="50%">${text}</textPath></text>`
-      : `<text ${style} transform="translate(${n(tag.point.x)} ${n(tag.point.y)}) rotate(${n(tag.angle ?? 0)})">${text}</text>`;
+      : `${tag.backing ? `<rect x="${n(tag.point.x-tag.backing.width/2)}" y="${n(tag.point.y-tag.size)}" width="${n(tag.backing.width)}" height="${n(tag.backing.height)}" fill="white"/>` : ''}<text ${style} transform="translate(${n(tag.point.x)} ${n(tag.point.y)}) rotate(${n(tag.angle ?? 0)})">${text}</text>`;
   }).join('') ?? '';
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}"><title>Woven Calligraphy writing guides</title>${geometry}${scene.labels.map(l => `<text x="${n(l.point.x)}" y="${n(l.point.y)}" font-family="Helvetica,Arial,sans-serif" font-size="${l.size}" fill="${l.color}">${escapeXml(l.text)}</text>`).join('')}${tags}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}"><title>Woven Calligraphy writing guides</title>${geometry}${scene.labels.filter(l=>!l.previewOnly).map(l => `<text x="${n(l.point.x)}" y="${n(l.point.y)}" font-family="Helvetica,Arial,sans-serif" font-size="${l.size}" fill="${l.color}">${escapeXml(l.text)}</text>`).join('')}${tags}</svg>`;
 }
 /** Small vector-only PDF writer. Coordinates and pen widths remain physical mm. */
 export function scenePdf(scene: Scene): Uint8Array {
@@ -40,6 +40,7 @@ export function scenePdf(scene: Scene): Uint8Array {
     commands.push(`${rgb(s.color)} RG ${px(s.width)} w`, ...s.points.map((p, i) => `${px(p.x)} ${py(p.y)} ${i ? 'l' : 'm'}`), 'S');
   }
   for (const l of scene.labels) {
+    if (l.previewOnly) continue;
     const text = l.text.replace(/[^\x20-\x7e]/g, '?').replace(/([\\()])/g, '\\$1');
     commands.push(`BT /F1 ${px(l.size)} Tf ${rgb(l.color)} rg ${px(l.point.x)} ${py(l.point.y)} Td (${text}) Tj ET`);
   }

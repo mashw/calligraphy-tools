@@ -1,3 +1,4 @@
+import { TEXT_SPAN_STYLE } from '../guides/text-span-style';
 import { buildCopperplateContext } from '@/lib/copperplate/context';
 import { calculateStraightGuidelines } from '@/lib/guides/straight/model';
 import { measureRun } from '@/lib/measure/measure-run';
@@ -29,7 +30,7 @@ export const TEXT_FIT_COLORS: readonly TextFitColor[] = [
   {fill:'rgba(99, 102, 241, 0.20)',stroke:'rgba(79, 70, 229, 0.70)'},
   {fill:'rgba(14, 165, 233, 0.18)',stroke:'rgba(2, 132, 199, 0.70)'},
   {fill:'rgba(13, 148, 136, 0.18)',stroke:'rgba(15, 118, 110, 0.70)'},
-  {fill:'rgba(139, 92, 246, 0.18)',stroke:'rgba(124, 58, 237, 0.70)'},
+  TEXT_SPAN_STYLE,
   {fill:'rgba(217, 119, 6, 0.16)',stroke:'rgba(180, 83, 9, 0.68)'},
   {fill:'rgba(6, 182, 212, 0.17)',stroke:'rgba(8, 145, 178, 0.70)'},
 ];

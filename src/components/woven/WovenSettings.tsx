@@ -13,7 +13,7 @@ export default function WovenSettings({design: group, onChange, model, selected,
   const [strapId,setStrapId] = useState('');
   const straps = model?.composition?.sheet.strands ?? [];
   const released = !!group.independentStraps && straps.length > 1;
-  const active = released ? straps.find(s => s.id === strapId) ?? straps[0] : undefined;
+  const active = (released || (group.preset === 'custom-composition' && group.independentStraps && straps.length === 1)) ? straps.find(s => s.id === strapId) ?? straps[0] : undefined;
   const design = active ? {...group,...strapLettering(active.design)} : group;
   function setDesign(fn:(design:Design)=>Design) {
     const next = fn(design);
@@ -95,7 +95,7 @@ export default function WovenSettings({design: group, onChange, model, selected,
   const gridVisible = design.gridHorizontal || design.gridVertical;
   const constructionVisible = design.construction.upper || design.construction.lower;
 
-  return <>          <DisclosureSection title="Writing guides" defaultOpen>
+  return <>          <DisclosureSection title="Script & nib" defaultOpen>
             {straps.length > 1 && <div className="space-y-2">
               <Switch label="Edit straps individually" checked={released} onChange={independentStraps => onChange({...group,independentStraps})}/>
               {active && <label className="block text-sm">Editing strap<Select className={field} value={active.id}

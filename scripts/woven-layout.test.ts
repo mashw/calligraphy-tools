@@ -1,9 +1,10 @@
+import { DEFAULT_TEXT_PLAN } from '../src/lib/interlace/text-fit.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_DESIGN, parseDesign, selectWovenPreset, strapLettering } from '../src/lib/woven/design.ts';
 import { buildWovenModel, buildWovenRouteModel } from '../src/lib/woven/model.ts';
 import { newElement, pageElement, type WovenElement } from '../src/lib/layout/types.ts';
-import { fitWovenPreset } from '../src/lib/interlace/document.ts';
+import { designFromComposition, editableComposition, openSheet, fitWovenPreset } from '../src/lib/interlace/document.ts';
 import { layoutWovenDesign, layoutWovenModel, layoutWovenTags, wovenSettings } from '../src/lib/layout/woven.ts';
 import { parseLayoutDesign, serializeLayoutDesign } from '../src/lib/layout/design-file.ts';
 import { buildPlotterExport } from '../src/lib/layout/plotter-export.ts';
@@ -115,5 +116,31 @@ test('rotated oversized Woven tags fit on the actual page even when all cells co
     const half = t.text.length*t.size*.76/2;
     assert.ok(t.point.x-half >= 0 && t.point.x+half <= page.width);
     assert.ok(t.point.y-t.size >= 0 && t.point.y+t.size*.3 <= page.height);
+  }
+});
+
+test('custom Woven composition returns from Layout with authored strands, text and crossings', () => {
+  const sheet = openSheet(fitWovenPreset(selectWovenPreset(DEFAULT_DESIGN,'gothic-cap-weave'))).sheet;
+  sheet.overrides[0].over = sheet.overrides[0].over === 'a' ? 'b' : 'a';
+  sheet.strands[0].textPlan = {...DEFAULT_TEXT_PLAN,text:'Example', preview:true};
+  const element = newElement('woven',1,{width:210,height:297}) as WovenElement;
+  element.settings = wovenSettings(designFromComposition(sheet));
+  const doc = parseLayoutDesign(serializeLayoutDesign([element,pageElement()],element.id));
+  const item = doc.elements.find(e=>e.type==='woven')!;
+  const design = layoutWovenDesign(item);
+  const restored = editableComposition(design);
+  assert.equal(restored.strands[0].textPlan?.text,'Example');
+  assert.deepEqual(restored.strands.map(s=>s.id),sheet.strands.map(s=>s.id));
+  assert.equal(buildWovenRouteModel(design).choices['crossing-0'],sheet.overrides[0].over);
+  assert.equal(restored.overrides[0].over,sheet.overrides[0].over);
+});
+
+test('Layout strap text survives reopening single and multi-strap presets in Woven', () => {
+  for (const preset of ['rosette','gothic-cap-weave'] as const) {
+    const design = selectWovenPreset(DEFAULT_DESIGN,preset);
+    const straps = editableComposition(design).strands;
+    const strapTexts = Object.fromEntries(straps.map(s => [s.id, 'Text for '+s.id]));
+    const reopened = editableComposition(parseDesign({...design,strapTexts}));
+    for (const s of reopened.strands) assert.equal(s.textPlan?.text,strapTexts[s.id]);
   }
 });
