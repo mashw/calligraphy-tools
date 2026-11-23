@@ -2,6 +2,7 @@ import React, { useId } from 'react';
 
 import { pathD } from '@/lib/curve-helpers';
 import { CONSTRUCTION_GUIDE_DOT_RADIUS_MM, constructionGuideDotPoints, type GuideSet } from '@/lib/guides/guide-template';
+import { gridStrokeWidthMM } from '@/lib/guides/grid-stroke';
 import { dashPolylinePoints } from '@/lib/guides/polyline-dash';
 
 type GuideOverlayProps = {
@@ -24,6 +25,7 @@ type GuideOverlayProps = {
     };
     grid?: {
       thin: number;
+      widthScale?: number;
       showHorizontal?: boolean;
       showVertical?: boolean;
       showNibAngleGuide?: boolean;
@@ -58,6 +60,10 @@ export default function GuideOverlay({
 }: GuideOverlayProps) {
   const colors = { ...defaultColors, ...style.colors };
   const gridThin = style.grid?.thin;
+  const gridMM = guideSet.gridNibMM;
+  const gridStroke = gridMM !== undefined && gridMM > 0
+    ? { strokeWidth: gridStrokeWidthMM(gridMM) * (style.grid?.widthScale ?? 1) }
+    : { strokeWidth: gridThin ?? style.thin, vectorEffect: "non-scaling-stroke" };
   const gridColors = style.grid?.colors ?? {};
   const showGridHorizontal = style.grid?.showHorizontal ?? true;
   const showGridVertical = style.grid?.showVertical ?? true;
@@ -141,8 +147,7 @@ export default function GuideOverlay({
               x2={tick.b.x}
               y2={tick.b.y}
               stroke={gridColors.tick ?? colors.tick}
-              strokeWidth={gridThin ?? style.thin}
-              vectorEffect="non-scaling-stroke"
+              {...gridStroke}
             />
             {interactive?.onGuidePointerDown && (
               <line
@@ -174,8 +179,7 @@ export default function GuideOverlay({
                   points={segment.map((p) => `${p.x},${p.y}`).join(' ')}
                   fill="none"
                   stroke={gridColors.tick ?? colors.tick}
-                  strokeWidth={gridThin ?? style.thin}
-                  vectorEffect="non-scaling-stroke"
+                  {...gridStroke}
                 />
               ))}
               {interactive?.onGuidePointerDown && (

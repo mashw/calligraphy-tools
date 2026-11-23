@@ -170,6 +170,36 @@ export function lengthPoly(pts: Pt[]): number {
   return sum;
 }
 
+/** Build an arc-length index for repeated samples of the same polyline. */
+export function createPolylineSampler(pts: Pt[]) {
+  if (pts.length < 2) return (_s: number) => ({
+    p: pts[0] ?? { x: 0, y: 0 }, n: { x: 0, y: -1 }, t: { x: 1, y: 0 }, idx: 0,
+  });
+
+  const distances = [0];
+  for (let i = 1; i < pts.length; i++) {
+    distances.push(distances[i - 1] + dist(pts[i - 1], pts[i]));
+  }
+  const total = distances.at(-1)!;
+  return (s: number): ReturnType<typeof pointAt> => {
+    const target = Math.max(0, Math.min(total, s));
+    let lo = 1, hi = distances.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (distances[mid] >= target) hi = mid;
+      else lo = mid + 1;
+    }
+    const a = pts[lo - 1], b = pts[lo];
+    const segment = dist(a, b);
+    const ratio = Number.isNaN(target) ? 1 : segment > 0 ? (target - distances[lo - 1]) / segment : 0;
+    const t = tangent(a, b);
+    return {
+      p: { x: a.x + (b.x - a.x) * ratio, y: a.y + (b.y - a.y) * ratio },
+      t, n: { x: -t.y, y: t.x }, idx: lo,
+    };
+  };
+}
+
 /**
  * Get point and normal at arclength `s` (mm) along a polyline.
  * `s` is clamped to [0, total length].
@@ -188,7 +218,7 @@ export function pointAt(
       t: { x: 1, y: 0 },
       idx: 0,
     };
-  }  
+  }
 
   const total = lengthPoly(pts);
   const target = Math.max(0, Math.min(total, s));

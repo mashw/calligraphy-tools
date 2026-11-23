@@ -1,5 +1,5 @@
 import { flowingSlants, type SlantStyle } from './slant-paths';
-import { lengthPoly, offset, pointAt, pointAtExtended } from '@/lib/curve-helpers';
+import { createPolylineSampler, lengthPoly, offset, pointAt, pointAtExtended } from '@/lib/curve-helpers';
 import { blackletterConstructionDistances } from '@/lib/guides/construction-guide-offsets';
 import { BLACKLETTER_GUIDE_DEFAULTS } from '@/lib/guides/straight/blackletter';
 import { nibEdgeMarkerSegment, resolveConstructionGuideSettings, xMarkerSegments, type ConstructionGuideAppearance, type ConstructionGuideSettings } from '@/lib/guides/construction-guide-markers';
@@ -17,6 +17,8 @@ export type GuideSet = {
   waistLine: Pt[];
   baseLine: Pt[];
   descLine: Pt[];
+  // The actual nib for broad-edge grids, independent of grid spacing.
+  gridNibMM?: number;
   // optional perpendicular ticks/markers (each tick is a line segment)
   ticks?: { a: Pt; b: Pt }[];
   slantGuides?: Pt[][];
@@ -77,6 +79,7 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
   const ticks: { a: Pt; b: Pt }[] = [];
   const uprightSamples: { p: Pt; n: Pt; t: Pt }[] = [];
   const arcLen = lengthPoly(baseline);
+  const sampleBaseline = createPolylineSampler(baseline);
 
   const isClosed = (() => {
     if (baseline.length < 3) return false;
@@ -104,7 +107,7 @@ function buildBlackletterGuideSet(params: GuideTemplateParams): GuideSet {
         // Closed loops: avoid drawing both s=0 and s=arcLen (same physical seam).
         if (isClosed && sClamped >= arcLen - 1e-9) continue;
 
-    const { p, n, t } = pointAt(baseline, sClamped);
+    const { p, n, t } = sampleBaseline(sClamped);
     uprightSamples.push({ p, n, t });
 
     ticks.push({
@@ -236,7 +239,7 @@ if (
   const EPS = 1e-2;
   const specialOffsets = constructionGuides.map(guide => guide.offsetMM);
   const filteredHGuides = hGuides.filter((_, index) => !specialOffsets.some(d => Math.abs(d - hGuideOffsets[index]) < EPS));
-  return { ascLine, waistLine, baseLine, descLine, ticks, hGuides: filteredHGuides, constructionGuides };
+  return { ascLine, waistLine, baseLine, descLine, gridNibMM: actualNibMM, ticks, hGuides: filteredHGuides, constructionGuides };
 }
 
 

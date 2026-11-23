@@ -207,7 +207,7 @@ export default function WovenSettings({design: group, onChange, model, selected,
                   {numeric("penAngle", "Pen angle", 1, "°")}
                   </>}
                   {gridVisible && numeric("gridContrast", "Grid contrast", 0.05)}
-                  {(gridVisible || constructionVisible) && numeric("gridThickness", "Guide thickness", 0.01, "mm")}
+                  {(gridVisible || constructionVisible) && numeric("gridThickness", gridVisible ? "Grid thickness at 2 mm nib" : "Guide thickness", 0.01, "mm")}
                 </>
               )}
             </div>

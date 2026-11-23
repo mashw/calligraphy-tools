@@ -1,3 +1,4 @@
+import { gridStrokeWidthMM } from '../guides/grid-stroke';
 import type { Interval as CrossingInterval } from './geometry';
 import { wovenComposition } from '../interlace/document';
 import { topology, renderSheet, warnings as sheetWarnings } from '../interlace/model';
@@ -186,12 +187,13 @@ function singleBandStrokes(band: ReturnType<typeof writingBands>[number], route:
     const v = Math.round(220 * (1 - contrast));
     return "#" + v.toString(16).padStart(2, "0").repeat(3);
   };
+  const gridWidthMM = gridStrokeWidthMM(design.nib, design.gridThickness);
   if (design.script !== "Copperplate" && design.gridHorizontal)
     for (const points of guides.hGuides ?? [])
       rails.push({
         points,
         color: gray(design.gridContrast),
-        width: design.gridThickness,
+        width: gridWidthMM,
         role: 'grid',
       });
   const bounds = bandEdges([band], invertGuides);
@@ -309,7 +311,7 @@ function singleBandStrokes(band: ReturnType<typeof writingBands>[number], route:
           { x: f.p.x + f.n.x * bottom, y: f.p.y + f.n.y * bottom, s },
         ],
         gray(design.gridContrast),
-        design.gridThickness,
+        gridWidthMM,
       );
     }
   locatedRole = 'construction';
@@ -424,9 +426,11 @@ function borderedStrokes(design: Design, route: ReturnType<typeof makeRoute>, cr
   return strokes;
 }
 
-export function buildWovenModel(design: Design, { furniture = true }: { furniture?: boolean } = {}) {
-  const page = pageSize(design);
-  const model = buildWovenRouteModel(design);
+export function buildWovenModel(design: Design, {
+  furniture = true,
+  routeModel: model = buildWovenRouteModel(design),
+}: { furniture?: boolean; routeModel?: ReturnType<typeof buildWovenRouteModel> } = {}) {
+  const page = model.page;
   const { route, crossings, choices, x, asc, desc, start, intervals, warnings, usableLength, halfBand } = model;
   const tagBounds = furniture ? page : {w:design.width,h:design.height};
   if (model.composition) {

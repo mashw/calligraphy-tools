@@ -1,3 +1,4 @@
+import { DEFAULT_GRID_STROKE_MM } from '../guides/grid-stroke';
 import type { Sheet } from '../interlace/model';
 import { openSheet } from '../interlace/document';
 import { compositionPresets } from '../paths/composition-presets';
@@ -82,7 +83,7 @@ export const DEFAULT_DESIGN: Design = {
   gridMode: "effective",
   gridWidth: 1,
   gridContrast: 0.5,
-  gridThickness: 0.12,
+  gridThickness: DEFAULT_GRID_STROKE_MM,
   slants: true,
   slantAngle: 55,
   slantSpacing: 10,

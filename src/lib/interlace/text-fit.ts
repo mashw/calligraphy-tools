@@ -1,14 +1,21 @@
-import { offset, pointAt } from '../curve-helpers';
+import { createPolylineSampler, offset } from '../curve-helpers';
 import { buildCopperplateContext } from '../copperplate/context';
 import { measureRun } from '../measure/measure-run';
 import { SCRIPT_PROFILES } from '../scripts';
 import { computeCurvedTitleLayout } from '../curved-title/model';
 import { clipSlantToBand, makeSlantRoute } from '../guides/slant-paths';
 import { sliceGuide, visibleIntervals, type Interval, type Point } from '../woven/geometry';
-import { pageSize } from '../woven/design';
+import { pageSize, type Design } from '../woven/design';
 import { metrics, topology, writingRoutes, type Sheet, type Strand } from './model';
 export type TextPlan={countHidden?:boolean;text:string;connected:boolean;align:'start'|'center'|'end';startMM:number;reverse:boolean;startGapMM:number;endGapMM:number;spacing:number;preview:boolean;capStyle:'simple'|'flourished';calibration:boolean;lowerMM:number;doubleMM:number};
 export const DEFAULT_TEXT_PLAN:TextPlan={text:'',connected:false,align:'start',startMM:0,reverse:false,startGapMM:0,endGapMM:0,spacing:1,preview:false,capStyle:'simple',calibration:false,lowerMM:0,doubleMM:0};
+export function wovenStrandTextPlan(design: Design, strand: Strand): TextPlan {
+  const original = design.composition?.strands.find(item => item.id === strand.id);
+  const plan = original?.textPlan ?? strand.textPlan ?? DEFAULT_TEXT_PLAN;
+  const text = design.strapTexts?.[strand.id];
+  return text === undefined ? plan : { ...plan, text, countHidden: design.hiddenTextStraps?.includes(strand.id) };
+}
+
 export function readTextPlan(value:unknown):TextPlan {
   if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid Text & Fit settings.');
   const v=value as Record<string,unknown>,out={...DEFAULT_TEXT_PLAN};
@@ -64,6 +71,31 @@ export function writingSpace(sheet:Sheet,selected:Strand,graph=topology(sheet), 
   }
   return {total,spans:ordered,closed:!!route.closed};
 }
+// Text edits leave the writing surface unchanged. Bound the cache per graph so
+// scrubbing start/gap controls cannot retain all previous clipped polylines.
+const writingSpaces = new WeakMap<ReturnType<typeof topology>, WeakMap<Sheet['joins'], Map<string, ReturnType<typeof writingSpace>>>>();
+
+function cachedWritingSpace(sheet: Sheet, selected: Strand, graph: ReturnType<typeof topology>, includeHidden = false) {
+  let graphSpaces = writingSpaces.get(graph);
+  if (!graphSpaces) {
+    graphSpaces = new WeakMap();
+    writingSpaces.set(graph, graphSpaces);
+  }
+  let spaces = graphSpaces.get(sheet.joins);
+  if (!spaces) {
+    spaces = new Map();
+    graphSpaces.set(sheet.joins, spaces);
+  }
+  const { connected, reverse, startMM, startGapMM, endGapMM } = selected.textPlan ?? DEFAULT_TEXT_PLAN;
+  const key = JSON.stringify([selected.id, sheet.paper, sheet.orientation, connected, reverse, startMM, startGapMM, endGapMM, includeHidden]);
+  const cached = spaces.get(key);
+  if (cached) return cached;
+  const space = writingSpace(sheet, selected, graph, includeHidden);
+  if (spaces.size >= 32) spaces.delete(spaces.keys().next().value!);
+  spaces.set(key, space);
+  return space;
+}
+
 type RouteModel = ReturnType<typeof import('../woven/model').buildWovenRouteModel>;
 
 /** Single-strap presets draw their guides directly from these centreline intervals. */
@@ -91,20 +123,35 @@ function presetWritingSpace(model:RouteModel, gap:number, includeHidden=false) {
   return {total,closed:true,spans:merge(spans)};
 }
 
-export function textFit(sheet:Sheet,selected:Strand,graph=topology(sheet),preset?:RouteModel) {
-  const options=selected.textPlan??DEFAULT_TEXT_PLAN,d=selected.design,m=metrics(selected),space=preset ? presetWritingSpace(preset,d.gap,options.countHidden) : writingSpace(sheet,selected,graph,options.countHidden);
-  const visible=options.countHidden ? (preset ? presetWritingSpace(preset,d.gap) : writingSpace(sheet,selected,graph)).spans : undefined;
+export function textFit(sheet: Sheet, selected: Strand, graph?: ReturnType<typeof topology>, preset?: RouteModel) {
+  const options = selected.textPlan ?? DEFAULT_TEXT_PLAN, d = selected.design, m = metrics(selected);
+  function resolveSpace(includeHidden = false) {
+    return preset ? presetWritingSpace(preset, d.gap, includeHidden)
+      : cachedWritingSpace(sheet, selected, graph ??= topology(sheet), includeHidden);
+  }
+  const space = resolveSpace(options.countHidden);
+  const visible = options.countHidden ? resolveSpace().spans : undefined;
   const ctx=d.script==='Copperplate'?buildCopperplateContext({xHeightMM:m.x,capStyle:options.capStyle,calibration:{enabled:options.calibration,calWordLowerMM:options.lowerMM||undefined,calWordDoubleMM:options.doubleMM||undefined}}).ctx:{xHeightMM:m.x,nibMM:d.nib*Math.cos(d.penAngle*Math.PI/180),scale:1,spaceMult:1,capStyle:options.capStyle};
   ctx.spaceMult*=options.spacing;let cursor=0;
+  const samplers = new WeakMap<Span, ReturnType<typeof createPolylineSampler>>();
+  function sampler(span: Span) {
+    let sample = samplers.get(span);
+    if (!sample) {
+      sample = createPolylineSampler(span.points);
+      samplers.set(span, sample);
+    }
+    return sample;
+  }
   function measure(text:string,span:Span) {
-    return computeCurvedTitleLayout(measureRun(text,SCRIPT_PROFILES[d.script],ctx),span.points,span.end-span.start,m.x,ctx.nibMM,m.x+m.asc,d.script,options.align);
+    return computeCurvedTitleLayout(measureRun(text,SCRIPT_PROFILES[d.script],ctx),span.points,span.end-span.start,m.x,ctx.nibMM,m.x+m.asc,d.script,options.align,sampler(span));
   }
   function fragment(text:string,span:Span,result:ReturnType<typeof measure>) {
     const available=span.end-span.start;
+    const sample = sampler(span);
     const ranges = visible ? visible.flatMap(part => (space.closed ? [-space.total,0,space.total] : [0]).map(shift => ({
       from:Math.max(0,part.start+shift-span.start),to:Math.min(available,part.end+shift-span.start)
     })).filter(range=>range.to>range.from)) : [{from:0,to:available}];
-    const placements=result.placements.filter(p=>!visible || ranges.some(r=>p.sMid-p.w/2>=r.from-1e-7 && p.sMid+p.w/2<=r.to+1e-7)).map(p=>{const at=pointAt(span.points,Math.min(available,p.sMid));return {...p,point:at.p,tangent:at.t,collision:p.sMid+p.w/2>available+1e-7};});
+    const placements=result.placements.filter(p=>!visible || ranges.some(r=>p.sMid-p.w/2>=r.from-1e-7 && p.sMid+p.w/2<=r.to+1e-7)).map(p=>{const at=sample(Math.min(available,p.sMid));return {...p,point:at.p,tangent:at.t,collision:p.sMid+p.w/2>available+1e-7};});
     const start=options.align==='center'?Math.max(0,(available-result.needed)/2):options.align==='end'?Math.max(0,available-result.needed):0;
     const stop = Math.min(available,start+result.needed);
     const route=makeSlantRoute(span.points);
@@ -115,7 +162,7 @@ export function textFit(sheet:Sheet,selected:Strand,graph=topology(sheet),preset
       const base=sliceGuide(route,span.points,[from,to]);
       return [[...base,...offset(base,direction*m.x).reverse()]];
     });
-    return {spanPolygons,text,needed:result.needed,available,remaining:available-result.needed,fits:result.needed<=available+1e-7,placements,start:pointAt(span.points,start).p,end:pointAt(span.points,Math.min(available,start+result.needed)).p};
+    return {spanPolygons,text,needed:result.needed,available,remaining:available-result.needed,fits:result.needed<=available+1e-7,placements,start:sample(start).p,end:sample(Math.min(available,start+result.needed)).p};
   }
   const lines:ReturnType<typeof fragment>[]=[];
   for (const paragraph of options.text.split(/\r?\n/).filter(Boolean)) {

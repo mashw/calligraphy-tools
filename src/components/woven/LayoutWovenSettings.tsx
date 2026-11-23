@@ -5,30 +5,29 @@ import { useMemo, useState } from 'react';
 import { Select } from '@/components/editor/Controls';
 import NumericSlider from '@/components/editor/NumericSlider';
 import DisclosureSection from '@/components/layout/DisclosureSection';
-import { DEFAULT_TEXT_PLAN, textFit } from '@/lib/interlace/text-fit';
-import { initialSheet, strand, topology } from '@/lib/interlace/model';
+import { DEFAULT_TEXT_PLAN, textFit, wovenStrandTextPlan } from '@/lib/interlace/text-fit';
+import { initialSheet, strand } from '@/lib/interlace/model';
 import WovenSettings from './WovenSettings';
-import { layoutWovenDesign, wovenSettings } from '@/lib/layout/woven';
-import { buildWovenRouteModel } from '@/lib/woven/model';
+import { layoutWovenPreview, withWovenTextSettings, wovenSettings } from '@/lib/layout/woven';
 import type { WovenElement } from '@/lib/layout/types';
 
 export default function LayoutWovenSettings({element,onChange}:{element:WovenElement;onChange:(element:WovenElement)=>void}) {
   const [scale,setScale]=useState(100);
-  const design=useMemo(()=>layoutWovenDesign(element),[element]);
-  const model=useMemo(()=>buildWovenRouteModel(design),[design]);
+  const { settings, frame: { width, height } } = element;
+  const { design, geometryDesign, route: model } = useMemo(() => layoutWovenPreview(settings, width, height), [settings, width, height]);
   const [strapId,setStrapId] = useState('');
   const sheet = useMemo(() => {
     if (model.composition) return model.composition.sheet;
     const sheet = initialSheet();
-    sheet.paper = design.paper;
-    sheet.orientation = design.orientation;
-    sheet.strands = [strand('woven','Main strap',{kind:design.preset === 'figure-eight' ? 'figure-eight' : 'rosette'},design)];
+    sheet.paper = geometryDesign.paper;
+    sheet.orientation = geometryDesign.orientation;
+    sheet.strands = [strand('woven','Main strap',{kind:geometryDesign.preset === 'figure-eight' ? 'figure-eight' : 'rosette'},geometryDesign)];
     return sheet;
-  },[design,model]);
-  const graph = useMemo(() => model.composition?.graph ?? topology(sheet),[model,sheet]);
+  },[geometryDesign,model]);
+  const graph = model.composition?.graph;
   const straps = sheet.strands.filter(strap => strap.visible);
   const selected = straps.find(strap => strap.id === strapId) ?? straps[0];
-  const plan = selected?.textPlan ?? DEFAULT_TEXT_PLAN;
+  const plan = selected ? wovenStrandTextPlan(design, selected) : DEFAULT_TEXT_PLAN;
   const text = design.strapTexts?.[selected?.id] ?? plan.text;
   const countHidden=design.hiddenTextStraps?.includes(selected?.id) ?? plan.countHidden ?? false;
   const fit = useMemo(() => selected && textFit(sheet,{...selected,textPlan:{...plan,text,countHidden}},graph,model.composition?undefined:model),[model,sheet,selected,plan,text,countHidden,graph]);
@@ -37,9 +36,9 @@ export default function LayoutWovenSettings({element,onChange}:{element:WovenEle
     const composition = design.composition;
     if (composition) {
       const strands = composition.strands.map(s => s.id === selected.id ? {...s,textPlan:{...(s.textPlan??DEFAULT_TEXT_PLAN),text,countHidden:hidden}} : s);
-      onChange({...element,settings:{...element.settings,composition:{...composition,strands}}});
+      onChange({...element,settings:withWovenTextSettings(settings, {...settings,composition:{...composition,strands}})});
     } else {
-      onChange({...element,settings:{...element.settings,hiddenTextStraps:[...(design.hiddenTextStraps??[]).filter(id=>id!==selected.id),...(hidden?[selected.id]:[])],strapTexts:{...design.strapTexts,[selected.id]:text}}});
+      onChange({...element,settings:withWovenTextSettings(settings, {...settings,hiddenTextStraps:[...(design.hiddenTextStraps??[]).filter(id=>id!==selected.id),...(hidden?[selected.id]:[])],strapTexts:{...design.strapTexts,[selected.id]:text}})});
     }
   }
   return <>

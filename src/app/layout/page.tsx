@@ -7,7 +7,7 @@ import WovenComposer from '@/components/woven/WovenComposer';
 import { designFromComposition, editableComposition, openSheet } from '@/lib/interlace/document';
 import type { Sheet } from '@/lib/interlace/model';
 import { layoutWovenDesign, wovenSettings } from '@/lib/layout/woven';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import LayoutInspector from '@/components/layout/LayoutInspector';
 import LayoutStage from '@/components/layout/LayoutStage';
 import LayersPanel, { type DesignMessage } from '@/components/layout/LayersPanel';
@@ -45,11 +45,47 @@ export default function LayoutPage() {
       sessionStorage.removeItem(key);history.replaceState(null,'','/layout');
     } catch(error) {setArtworkMessage(error instanceof Error?error.message:'Could not open composition.');}
   },[]);
-  const allGuidelines=elements.filter((item):item is Extract<LayoutElement,{type:'guidelines'}>=>item.type==='guidelines'),activeGuidelines=allGuidelines.filter(item=>item.textMode==='estimate'?!!item.fitText.trim():item.plannedLines.some(line=>!!line.text.trim())),colors=resolveTextFitColors(allGuidelines.map(item=>item.id).sort());
-  const textFitPlans=activeGuidelines.reduce<Record<string,GuidelinesTextFitEntry>>((plans,item)=>{const index=elements.findIndex(element=>element.id===item.id),key=buildGuidelinesVisibilityCacheKey(item,page,elements.slice(0,index)),collisionSpans=getCachedGuidelinesCollisionSpans(key,item,page,elements),placementSpans=getCachedGuidelinesPlacementSpans(item,page);plans[item.id]=item.textMode==='estimate'?{mode:'estimate',plan:buildGuidelinesTextFitPlan(item,placementSpans),color:colors[item.id]}:{mode:'line-layout',plan:buildGuidelinesLineLayoutPlan(item,placementSpans,page,collisionSpans,elements),color:colors[item.id]};return plans;},{});
-  const selectedTextFitEntry=selected.type==='guidelines'?(textFitPlans[selected.id]??(selected.textMode==='estimate'?{mode:'estimate',plan:buildGuidelinesTextFitPlan(selected,[]),color:TEXT_FIT_COLORS[preferredTextFitColorIndex(selected.id)]}:{mode:'line-layout',plan:buildGuidelinesLineLayoutPlan(selected,usesCustomMask(selected)?getCachedGuidelinesPlacementSpans(selected,page):[],page,[],elements),color:TEXT_FIT_COLORS[preferredTextFitColorIndex(selected.id)]})):null;
+  const textFitPlans = useMemo(() => {
+    const guidelines = elements.filter((item): item is Extract<LayoutElement, { type: 'guidelines' }> => item.type === 'guidelines');
+    const colors = resolveTextFitColors(guidelines.map(item => item.id).sort());
+    const plans: Record<string, GuidelinesTextFitEntry> = {};
+    for (const item of guidelines) {
+      const color = colors[item.id];
+      if (item.textMode === 'estimate') {
+        if (!item.fitText.trim()) continue;
+        const spans = getCachedGuidelinesPlacementSpans(item, page);
+        plans[item.id] = { mode: 'estimate', plan: buildGuidelinesTextFitPlan(item, spans), color };
+      } else if (item.plannedLines.some(line => line.text.trim())) {
+        const spans = getCachedGuidelinesPlacementSpans(item, page);
+        const higher = elements.slice(0, elements.indexOf(item));
+        const key = buildGuidelinesVisibilityCacheKey(item, page, higher);
+        const collisions = getCachedGuidelinesCollisionSpans(key, item, page, elements);
+        plans[item.id] = { mode: 'line-layout', plan: buildGuidelinesLineLayoutPlan(item, spans, page, collisions, elements), color };
+      }
+    }
+    return plans;
+  }, [elements, page]);
+  const selectedTextFitEntry = useMemo(() => {
+    if (selected.type !== 'guidelines') return null;
+    if (textFitPlans[selected.id]) return textFitPlans[selected.id];
+    const color = TEXT_FIT_COLORS[preferredTextFitColorIndex(selected.id)];
+    if (selected.textMode === 'estimate') {
+      return { mode: 'estimate' as const, plan: buildGuidelinesTextFitPlan(selected, []), color };
+    }
+    const spans = usesCustomMask(selected) ? getCachedGuidelinesPlacementSpans(selected, page) : [];
+    return { mode: 'line-layout' as const, plan: buildGuidelinesLineLayoutPlan(selected, spans, page, [], elements), color };
+  }, [selected, textFitPlans, page, elements]);
   const markEdited=()=>setDesignMessage(null);
-  const update = (id: string, fn: (element: LayoutElement) => LayoutElement) => { markEdited(); setElements(current => current.map(element => element.id === id ? fn(element) : element)); };
+  const update = useCallback((id: string, fn: (element: LayoutElement) => LayoutElement) => {
+    setDesignMessage(null);
+    setElements(current => current.map(element => element.id === id ? fn(element) : element));
+  }, []);
+  const placePlannedLine = useCallback((guidelinesId: string, lineId: string, customStartMM: number) => {
+    update(guidelinesId, element => element.type === 'guidelines' ? {
+      ...element,
+      plannedLines: element.plannedLines.map(line => line.id === lineId ? { ...line, alignment: 'custom', customStartMM } : line),
+    } : element);
+  }, [update]);
   const add = (type: Exclude<ElementType, 'page'|'artwork'>) => {
     markEdited();
     const count = elements.filter(element => element.type === type).length + 1;
@@ -112,7 +148,7 @@ export default function LayoutPage() {
     setEditingWeave(null);
   }}/>;
   return <GuidelineEditing><EditorWorkspace preview={<>
-<LayoutStage onArrangement={(id,arrangement)=>update(id,e=>e.type==='guidelines'?{...e,mask:{...e.mask,arrangement}}:e)} editingSnapshot={editingSnapshot} elements={elements} selectedId={selectedId} textFitPlans={textFitPlans} onSelect={setSelectedId} onCommit={commit} onPlannedLinePlacementChange={(guidelinesId,lineId,customStartMM)=>update(guidelinesId,element=>element.type==='guidelines'?{...element,plannedLines:element.plannedLines.map(line=>line.id===lineId?{...line,alignment:'custom',customStartMM}:line)}:element)} />
+<LayoutStage onArrangement={(id,arrangement)=>update(id,e=>e.type==='guidelines'?{...e,mask:{...e.mask,arrangement}}:e)} editingSnapshot={editingSnapshot} elements={elements} selectedId={selectedId} textFitPlans={textFitPlans} onSelect={setSelectedId} onCommit={commit} onPlannedLinePlacementChange={placePlannedLine} />
 </>} inspector={<>
 <div onFocusCapture={event=>{if(selected.type==='woven'&&(event.target as HTMLInputElement).type==='number')setEditingSnapshot(current=>current??elements);}} onBlurCapture={()=>setEditingSnapshot(null)} onPointerDownCapture={event=>{if(selected.type==='woven'&&(event.target as HTMLInputElement).type==='range')setEditingSnapshot(current=>current??elements);}} onPointerUpCapture={event=>{if((event.target as HTMLInputElement).type==='range')setEditingSnapshot(null);}} onPointerCancelCapture={()=>setEditingSnapshot(null)} onKeyDownCapture={event=>{if(selected.type==='woven'&&(event.target as HTMLInputElement).type==='range')setEditingSnapshot(current=>current??elements);}} onKeyUpCapture={event=>{if((event.target as HTMLInputElement).type==='range')setEditingSnapshot(null);}}>{selected.type==='woven' && <button className="rounded border px-3 py-2 text-sm" onClick={()=>{
     try {setEditingWeave({id:selected.id,sheet:editableComposition(layoutWovenDesign(selected))});}
