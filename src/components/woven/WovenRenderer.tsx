@@ -34,7 +34,7 @@ export function WovenFitPreview({design,model}:{design:Design;model:ReturnType<t
     const s = strand('woven','Main strap',{kind:design.preset==='figure-eight'?'figure-eight':'rosette'},design);
     s.textPlan = {...DEFAULT_TEXT_PLAN,text,countHidden:design.hiddenTextStraps?.includes(s.id)};
     sheet.strands = [s];
-    return [textFit(sheet,s,topology(sheet))];
+    return [textFit(sheet,s,topology(sheet),model)];
   },[design,model]);
   return <>{fits.map((fit,i)=><WovenFitSpan key={i} fit={fit}/>)}</>;
 }

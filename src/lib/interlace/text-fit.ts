@@ -4,7 +4,7 @@ import { measureRun } from '../measure/measure-run';
 import { SCRIPT_PROFILES } from '../scripts';
 import { computeCurvedTitleLayout } from '../curved-title/model';
 import { clipSlantToBand, makeSlantRoute } from '../guides/slant-paths';
-import { sliceGuide, type Point } from '../woven/geometry';
+import { sliceGuide, visibleIntervals, type Interval, type Point } from '../woven/geometry';
 import { pageSize } from '../woven/design';
 import { metrics, topology, writingRoutes, type Sheet, type Strand } from './model';
 export type TextPlan={countHidden?:boolean;text:string;connected:boolean;align:'start'|'center'|'end';startMM:number;reverse:boolean;startGapMM:number;endGapMM:number;spacing:number;preview:boolean;capStyle:'simple'|'flourished';calibration:boolean;lowerMM:number;doubleMM:number};
@@ -64,9 +64,36 @@ export function writingSpace(sheet:Sheet,selected:Strand,graph=topology(sheet), 
   }
   return {total,spans:ordered,closed:!!route.closed};
 }
-export function textFit(sheet:Sheet,selected:Strand,graph=topology(sheet)) {
-  const options=selected.textPlan??DEFAULT_TEXT_PLAN,d=selected.design,m=metrics(selected),space=writingSpace(sheet,selected,graph,options.countHidden);
-  const visible=options.countHidden ? writingSpace(sheet,selected,graph).spans : undefined;
+type RouteModel = ReturnType<typeof import('../woven/model').buildWovenRouteModel>;
+
+/** Single-strap presets draw their guides directly from these centreline intervals. */
+function presetWritingSpace(model:RouteModel, gap:number, includeHidden=false) {
+  const {route,start,x}=model;
+  const baseline=offset(route.points,x/2);
+  const distances=makeSlantRoute(baseline).distances;
+  const distanceAt=(s:number)=>{
+    let i=1;
+    while(i<route.distances.length-1 && route.distances[i]<s) i++;
+    const t=(s-route.distances[i-1])/(route.distances[i]-route.distances[i-1] || 1);
+    return distances[i-1]+t*(distances[i]-distances[i-1]);
+  };
+  const origin=(start+gap/2)%route.length, zero=distanceAt(origin),total=distances.at(-1)!;
+  const intervals=includeHidden ? visibleIntervals(route.length,[{center:start,half:gap/2}]) : model.intervals;
+  const spans:Span[]=[];
+  for(const [lo,hi] of [[origin,route.length],[0,origin]] as Interval[]) {
+    for(const [a,b] of intervals) {
+      const from=Math.max(lo,a),to=Math.min(hi,b);
+      if(to<=from) continue;
+      const shift=lo===origin?-zero:total-zero;
+      spans.push({start:distanceAt(from)+shift,end:distanceAt(to)+shift,points:sliceGuide(route,baseline,[from,to])});
+    }
+  }
+  return {total,closed:true,spans:merge(spans)};
+}
+
+export function textFit(sheet:Sheet,selected:Strand,graph=topology(sheet),preset?:RouteModel) {
+  const options=selected.textPlan??DEFAULT_TEXT_PLAN,d=selected.design,m=metrics(selected),space=preset ? presetWritingSpace(preset,d.gap,options.countHidden) : writingSpace(sheet,selected,graph,options.countHidden);
+  const visible=options.countHidden ? (preset ? presetWritingSpace(preset,d.gap) : writingSpace(sheet,selected,graph)).spans : undefined;
   const ctx=d.script==='Copperplate'?buildCopperplateContext({xHeightMM:m.x,capStyle:options.capStyle,calibration:{enabled:options.calibration,calWordLowerMM:options.lowerMM||undefined,calWordDoubleMM:options.doubleMM||undefined}}).ctx:{xHeightMM:m.x,nibMM:d.nib*Math.cos(d.penAngle*Math.PI/180),scale:1,spaceMult:1,capStyle:options.capStyle};
   ctx.spaceMult*=options.spacing;let cursor=0;
   function measure(text:string,span:Span) {

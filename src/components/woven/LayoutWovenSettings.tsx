@@ -31,7 +31,7 @@ export default function LayoutWovenSettings({element,onChange}:{element:WovenEle
   const plan = selected?.textPlan ?? DEFAULT_TEXT_PLAN;
   const text = design.strapTexts?.[selected?.id] ?? plan.text;
   const countHidden=design.hiddenTextStraps?.includes(selected?.id) ?? plan.countHidden ?? false;
-  const fit = useMemo(() => selected && textFit(sheet,{...selected,textPlan:{...plan,text,countHidden}},graph),[sheet,selected,plan,text,countHidden,graph]);
+  const fit = useMemo(() => selected && textFit(sheet,{...selected,textPlan:{...plan,text,countHidden}},graph,model.composition?undefined:model),[model,sheet,selected,plan,text,countHidden,graph]);
   function changeText(text:string,hidden=countHidden) {
     if (!selected) return;
     const composition = design.composition;
