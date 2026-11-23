@@ -30,15 +30,16 @@ export default function LayoutWovenSettings({element,onChange}:{element:WovenEle
   const selected = straps.find(strap => strap.id === strapId) ?? straps[0];
   const plan = selected?.textPlan ?? DEFAULT_TEXT_PLAN;
   const text = design.strapTexts?.[selected?.id] ?? plan.text;
-  const fit = useMemo(() => selected && textFit(sheet,{...selected,textPlan:{...plan,text}},graph),[sheet,selected,plan,text,graph]);
-  function changeText(text:string) {
+  const countHidden=design.hiddenTextStraps?.includes(selected?.id) ?? plan.countHidden ?? false;
+  const fit = useMemo(() => selected && textFit(sheet,{...selected,textPlan:{...plan,text,countHidden}},graph),[sheet,selected,plan,text,countHidden,graph]);
+  function changeText(text:string,hidden=countHidden) {
     if (!selected) return;
     const composition = design.composition;
     if (composition) {
-      const strands = composition.strands.map(s => s.id === selected.id ? {...s,textPlan:{...(s.textPlan??DEFAULT_TEXT_PLAN),text}} : s);
+      const strands = composition.strands.map(s => s.id === selected.id ? {...s,textPlan:{...(s.textPlan??DEFAULT_TEXT_PLAN),text,countHidden:hidden}} : s);
       onChange({...element,settings:{...element.settings,composition:{...composition,strands}}});
     } else {
-      onChange({...element,settings:{...element.settings,strapTexts:{...design.strapTexts,[selected.id]:text}}});
+      onChange({...element,settings:{...element.settings,hiddenTextStraps:[...(design.hiddenTextStraps??[]).filter(id=>id!==selected.id),...(hidden?[selected.id]:[])],strapTexts:{...design.strapTexts,[selected.id]:text}}});
     }
   }
   return <>
@@ -59,6 +60,8 @@ export default function LayoutWovenSettings({element,onChange}:{element:WovenEle
     {selected && fit && <DisclosureSection title="Text fit"><div className="space-y-2">
       {straps.length>1 && <label className="block text-sm">Writing strap<Select value={selected.id} onChange={event=>setStrapId(event.target.value)}>{straps.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</Select></label>}
       <label className="block text-sm">Strap text<textarea className="block w-full rounded border p-2" value={text} onChange={event=>changeText(event.target.value)}/></label>
+      <label className="block text-sm"><input type="checkbox" checked={!!countHidden} onChange={event=>changeText(text,event.target.checked)}/> Count hidden lettering</label>
+      <p className="text-xs text-slate-600">Allow space for letters beneath each crossing before the text reappears.</p>
       <p className="text-xs">{fit.needed.toFixed(1)} of {fit.available.toFixed(1)} mm</p>
       {!fit.fits && <p className="text-xs text-rose-600">Text extends beyond the available strap.</p>}
     </div></DisclosureSection>}

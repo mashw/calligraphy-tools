@@ -7,12 +7,13 @@ import { clipSlantToBand, makeSlantRoute } from '../guides/slant-paths';
 import { sliceGuide, type Point } from '../woven/geometry';
 import { pageSize } from '../woven/design';
 import { metrics, topology, writingRoutes, type Sheet, type Strand } from './model';
-export type TextPlan={text:string;connected:boolean;align:'start'|'center'|'end';startMM:number;reverse:boolean;startGapMM:number;endGapMM:number;spacing:number;preview:boolean;capStyle:'simple'|'flourished';calibration:boolean;lowerMM:number;doubleMM:number};
+export type TextPlan={countHidden?:boolean;text:string;connected:boolean;align:'start'|'center'|'end';startMM:number;reverse:boolean;startGapMM:number;endGapMM:number;spacing:number;preview:boolean;capStyle:'simple'|'flourished';calibration:boolean;lowerMM:number;doubleMM:number};
 export const DEFAULT_TEXT_PLAN:TextPlan={text:'',connected:false,align:'start',startMM:0,reverse:false,startGapMM:0,endGapMM:0,spacing:1,preview:false,capStyle:'simple',calibration:false,lowerMM:0,doubleMM:0};
 export function readTextPlan(value:unknown):TextPlan {
   if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid Text & Fit settings.');
   const v=value as Record<string,unknown>,out={...DEFAULT_TEXT_PLAN};
   if(typeof v.text!=='string'||v.text.length>10000||!['start','center','end'].includes(String(v.align))||!['simple','flourished'].includes(String(v.capStyle)))throw Error('Invalid Text & Fit text or alignment.');
+  if (v.countHidden !== undefined) out.countHidden= v.countHidden === true;
   out.text=v.text;out.align=v.align as TextPlan['align'];out.capStyle=v.capStyle as TextPlan['capStyle'];
   for(const key of ['connected','reverse','preview','calibration'] as const){if(typeof v[key]!=='boolean')throw Error('Invalid Text & Fit option.');out[key]=v[key];}
   for(const key of ['startMM','startGapMM','endGapMM','spacing','lowerMM','doubleMM'] as const){const n=v[key];if(typeof n!=='number'||!Number.isFinite(n)||n<0||n>10000||(key==='spacing'&&(n<.1||n>3)))throw Error('Invalid Text & Fit measurement.');out[key]=n;}
@@ -23,7 +24,7 @@ const lerp=(a:Point,b:Point,t:number)=>({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t});
 function merge(spans:Span[]){const out:Span[]=[];for(const s of spans){const last=out.at(-1);if(last&&Math.abs(last.end-s.start)<1e-6){last.end=s.end;last.points.push(...s.points.slice(1));}else out.push({...s,points:[...s.points]});}return out;}
 /** Uses the renderer's joined passages and crossing polygons. Segment parameters
  * keep separate visits to a self-crossing distinct. Baseline distances are mm. */
-export function writingSpace(sheet:Sheet,selected:Strand,graph=topology(sheet)) {
+export function writingSpace(sheet:Sheet,selected:Strand,graph=topology(sheet), includeHidden=false) {
   const options=selected.textPlan??DEFAULT_TEXT_PLAN;
   const chain=writingRoutes(options.connected?sheet:{...sheet,joins:[]},graph).find(r=>r.ids.includes(selected.id));
   if(!chain)return {total:0,spans:[] as Span[],closed:false};
@@ -36,7 +37,7 @@ export function writingSpace(sheet:Sheet,selected:Strand,graph=topology(sheet)) 
   for(const {interval:[from,to],polygons} of regions)for(let i=1;i<base.length;i++){
     const a=route.distances[i-1],b=route.distances[i];if(b<=from||a>=to||b-a<1e-10)continue;
     let allowed:[number,number][]=[[Math.max(0,(from-a)/(b-a)),Math.min(1,(to-a)/(b-a))]];
-    for(const rail of rails)for(const [polygon,inside] of [[paper,true],...polygons.map(p=>[p,false])] as [Point[],boolean][]){
+    for(const rail of rails)for(const [polygon,inside] of [[paper,true],...(includeHidden?[]:polygons).map(p=>[p,false])] as [Point[],boolean][]){
       const p=rail[i-1],q=rail[i],dx=q.x-p.x,dy=q.y-p.y,den=dx*dx+dy*dy;if(den<1e-14)continue;
       const project=(r:Point)=>Math.max(0,Math.min(1,((r.x-p.x)*dx+(r.y-p.y)*dy)/den));
       allowed=allowed.flatMap(([lo,hi])=>clipSlantToBand([lerp(p,q,lo),lerp(p,q,hi)],polygon,inside).map(part=>[project(part[0]),project(part.at(-1)!)] as [number,number]));
@@ -64,7 +65,8 @@ export function writingSpace(sheet:Sheet,selected:Strand,graph=topology(sheet)) 
   return {total,spans:ordered,closed:!!route.closed};
 }
 export function textFit(sheet:Sheet,selected:Strand,graph=topology(sheet)) {
-  const options=selected.textPlan??DEFAULT_TEXT_PLAN,d=selected.design,m=metrics(selected),space=writingSpace(sheet,selected,graph);
+  const options=selected.textPlan??DEFAULT_TEXT_PLAN,d=selected.design,m=metrics(selected),space=writingSpace(sheet,selected,graph,options.countHidden);
+  const visible=options.countHidden ? writingSpace(sheet,selected,graph).spans : undefined;
   const ctx=d.script==='Copperplate'?buildCopperplateContext({xHeightMM:m.x,capStyle:options.capStyle,calibration:{enabled:options.calibration,calWordLowerMM:options.lowerMM||undefined,calWordDoubleMM:options.doubleMM||undefined}}).ctx:{xHeightMM:m.x,nibMM:d.nib*Math.cos(d.penAngle*Math.PI/180),scale:1,spaceMult:1,capStyle:options.capStyle};
   ctx.spaceMult*=options.spacing;let cursor=0;
   function measure(text:string,span:Span) {
@@ -72,13 +74,21 @@ export function textFit(sheet:Sheet,selected:Strand,graph=topology(sheet)) {
   }
   function fragment(text:string,span:Span,result:ReturnType<typeof measure>) {
     const available=span.end-span.start;
-    const placements=result.placements.map(p=>{const at=pointAt(span.points,Math.min(available,p.sMid));return {...p,point:at.p,tangent:at.t,collision:p.sMid+p.w/2>available+1e-7};});
+    const ranges = visible ? visible.flatMap(part => (space.closed ? [-space.total,0,space.total] : [0]).map(shift => ({
+      from:Math.max(0,part.start+shift-span.start),to:Math.min(available,part.end+shift-span.start)
+    })).filter(range=>range.to>range.from)) : [{from:0,to:available}];
+    const placements=result.placements.filter(p=>!visible || ranges.some(r=>p.sMid-p.w/2>=r.from-1e-7 && p.sMid+p.w/2<=r.to+1e-7)).map(p=>{const at=pointAt(span.points,Math.min(available,p.sMid));return {...p,point:at.p,tangent:at.t,collision:p.sMid+p.w/2>available+1e-7};});
     const start=options.align==='center'?Math.max(0,(available-result.needed)/2):options.align==='end'?Math.max(0,available-result.needed):0;
     const stop = Math.min(available,start+result.needed);
-    const base = stop > start ? sliceGuide(makeSlantRoute(span.points),span.points,[start,stop]) : [];
-    const direction = (selected.invert ? 1 : -1) * (options.reverse ? -1 : 1);
-    const spanPolygon = [...base,...offset(base,direction*m.x).reverse()];
-    return {spanPolygon,text,needed:result.needed,available,remaining:available-result.needed,fits:result.needed<=available+1e-7,placements,start:pointAt(span.points,start).p,end:pointAt(span.points,Math.min(available,start+result.needed)).p};
+    const route=makeSlantRoute(span.points);
+    const direction=(selected.invert ? 1 : -1)*(options.reverse ? -1 : 1);
+    const spanPolygons=ranges.flatMap(range=>{
+      const from=Math.max(start,range.from),to=Math.min(stop,range.to);
+      if(to<=from) return [];
+      const base=sliceGuide(route,span.points,[from,to]);
+      return [[...base,...offset(base,direction*m.x).reverse()]];
+    });
+    return {spanPolygons,text,needed:result.needed,available,remaining:available-result.needed,fits:result.needed<=available+1e-7,placements,start:pointAt(span.points,start).p,end:pointAt(span.points,Math.min(available,start+result.needed)).p};
   }
   const lines:ReturnType<typeof fragment>[]=[];
   for (const paragraph of options.text.split(/\r?\n/).filter(Boolean)) {

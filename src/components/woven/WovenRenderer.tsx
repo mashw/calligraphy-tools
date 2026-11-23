@@ -15,8 +15,8 @@ import type { Frame, WovenElement } from '@/lib/layout/types';
 import { layoutWovenTags, wovenDesignForFrame } from '@/lib/layout/woven';
 
 export function WovenFitSpan({fit}:{fit:ReturnType<typeof textFit>}) {
-  return <g data-no-export="true" pointerEvents="none">{fit.lines.map((line,index) =>
-    line.spanPolygon.length > 2 && <path key={index} d={pointsD(line.spanPolygon)+' Z'} {...TEXT_SPAN_STYLE} strokeWidth=".35" vectorEffect="non-scaling-stroke"/>
+  return <g data-no-export="true" pointerEvents="none">{fit.lines.flatMap(line=>line.spanPolygons).map((polygon,index) =>
+    polygon.length > 2 && <path key={index} d={pointsD(polygon)+' Z'} {...TEXT_SPAN_STYLE} strokeWidth=".35" vectorEffect="non-scaling-stroke"/>
   )}</g>;
 }
 
@@ -32,7 +32,7 @@ export function WovenFitPreview({design,model}:{design:Design;model:ReturnType<t
     sheet.paper = design.paper;
     sheet.orientation = design.orientation;
     const s = strand('woven','Main strap',{kind:design.preset==='figure-eight'?'figure-eight':'rosette'},design);
-    s.textPlan = {...DEFAULT_TEXT_PLAN,text};
+    s.textPlan = {...DEFAULT_TEXT_PLAN,text,countHidden:design.hiddenTextStraps?.includes(s.id)};
     sheet.strands = [s];
     return [textFit(sheet,s,topology(sheet))];
   },[design,model]);
