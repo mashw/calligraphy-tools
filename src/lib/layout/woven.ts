@@ -1,3 +1,6 @@
+import { rotatePoint } from './geometry';
+import { placeSheetTags } from '../guides/sheet-labels';
+import type { Scene } from '../woven/vector-export';
 import { DEFAULT_DESIGN, parseDesign, type Design } from '@/lib/woven/design';
 import { buildWovenModel } from '@/lib/woven/model';
 import type { Frame, WovenElement } from './types';
@@ -24,4 +27,12 @@ export function wovenDesignForFrame(settings:WovenSettings,frame:Frame):Design {
 }
 export function layoutWovenModel(element:WovenElement,frame:Frame=element.frame) {
   return buildWovenModel(layoutWovenDesign(element,frame),{furniture:false});
+}
+
+export function layoutWovenTags(scene: Pick<Scene,'tags'|'strokes'>, frame: Frame, rotation: number, page: {width:number;height:number}) {
+  if (!scene.tags?.length) return [];
+  const centre = {x:frame.x+frame.width/2,y:frame.y+frame.height/2};
+  const locate = (p:{x:number;y:number}) => rotatePoint({x:p.x+frame.x,y:p.y+frame.y},centre,rotation);
+  return placeSheetTags(scene.tags.map(t => ({...t,point:locate(t.point)})),
+    scene.strokes.map(s => ({width:s.width,points:s.points.map(locate)})), {w:page.width,h:page.height});
 }

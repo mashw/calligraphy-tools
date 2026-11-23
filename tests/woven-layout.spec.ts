@@ -72,7 +72,7 @@ for(const width of [390,1440]) {
     const precise=await point(page.locator('[data-woven-hit]').first());await page.mouse.move(precise.x,precise.y);await page.mouse.down();await page.mouse.move(precise.x+6,precise.y+4,{steps:2});await page.mouse.up();await expect(widthInput).toHaveValue('130.5');
     await inspector.getByRole('spinbutton',{name:/^Rotation/}).fill('25');
     await inspector.getByRole('button',{name:'Shape & Geometry',exact:true}).click();await inspector.getByRole('combobox',{name:'Preset',exact:true}).selectOption('figure-eight');
-    await inspector.getByRole('button',{name:'Writing guides',exact:true}).click();await inspector.getByRole('combobox',{name:'Script',exact:true}).selectOption('Copperplate');await expect(inspector.getByRole('spinbutton',{name:'Guide unit',exact:true})).toHaveCount(0);
+    await inspector.getByRole('button',{name:'Script & nib',exact:true}).click();await inspector.getByRole('combobox',{name:'Script',exact:true}).selectOption('Copperplate');await expect(inspector.getByRole('spinbutton',{name:'Guide unit',exact:true})).toHaveCount(0);
     await inspector.getByRole('button',{name:'Route & crossings',exact:true}).click();await inspector.getByRole('button',{name:'Swap crossing 1',exact:true}).click();
     const layers=page.locator('.editor-layers');await layers.getByRole('button',{name:'Duplicate',exact:true}).first().click();await expect(page.locator('[data-layout-id]')).toHaveCount(2);
     await layers.getByRole('button',{name:'Move down',exact:true}).first().click();await layers.getByRole('button',{name:'Lock',exact:true}).first().click();

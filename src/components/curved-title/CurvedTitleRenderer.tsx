@@ -1,3 +1,4 @@
+import { TEXT_SPAN_STYLE } from '@/lib/guides/text-span-style';
 import { SheetLabels } from '@/components/preview/SheetLabels';
 import { curveTags, guideLabel } from '@/lib/guides/sheet-labels';
 import GuideOverlay from '@/components/preview/GuideOverlay';
@@ -23,8 +24,8 @@ export default function CurvedTitleRenderer({box,settings,idPrefix,pageBackgroun
     <GuideOverlay guideSet={model.guideSet} style={styleFor(settings.script)}/>
     {model.top.enabled&&<g clipPath={`url(#${topClip})`}><GuideOverlay guideSet={model.top.guideSet} style={{...styleFor(settings.topBandScript),colors:{...style.colors,frame:'transparent',base:'transparent',desc:'transparent'}}}/></g>}
     {model.bottom.enabled&&<g clipPath={`url(#${bottomClip})`}><GuideOverlay guideSet={model.bottom.guideSet} style={{...styleFor(settings.bottomBandScript),colors:{...style.colors,frame:'transparent',asc:'transparent',waist:'transparent'}}}/></g>}
-    {settings.showSpanFill&&model.spanPoly&&<path d={polyD(model.spanPoly)} fill="rgba(148,163,184,.18)" stroke="rgba(100,116,139,.55)" strokeWidth=".35" vectorEffect="non-scaling-stroke"/>}
-    {settings.showSpanFill&&model.top.spanPoly&&<path d={polyD(model.top.spanPoly)} fill="rgba(148,163,184,.18)" stroke="rgba(100,116,139,.55)" strokeWidth=".35" vectorEffect="non-scaling-stroke"/>}{settings.showSpanFill&&model.bottom.spanPoly&&<path d={polyD(model.bottom.spanPoly)} fill="rgba(148,163,184,.18)" stroke="rgba(100,116,139,.55)" strokeWidth=".35" vectorEffect="non-scaling-stroke"/>}
+    {settings.showSpanFill&&model.spanPoly&&<path d={polyD(model.spanPoly)} {...TEXT_SPAN_STYLE} strokeWidth=".35" vectorEffect="non-scaling-stroke"/>}
+    {settings.showSpanFill&&model.top.spanPoly&&<path d={polyD(model.top.spanPoly)} {...TEXT_SPAN_STYLE} strokeWidth=".35" vectorEffect="non-scaling-stroke"/>}{settings.showSpanFill&&model.bottom.spanPoly&&<path d={polyD(model.bottom.spanPoly)} {...TEXT_SPAN_STYLE} strokeWidth=".35" vectorEffect="non-scaling-stroke"/>}
     {settings.showBoxes&&<LetterBoxes placements={model.layout.placements} base={model.guideSet.baseLine} arcLen={model.arcLen} height={model.xMM} script={settings.script} prefix={`${idPrefix}-main`}/>} {settings.showBoxes&&model.top.enabled&&<LetterBoxes placements={model.top.layout.placements} base={model.top.guideSet.baseLine} arcLen={model.top.arcLen} height={model.top.xMM} script={settings.topBandScript} prefix={`${idPrefix}-top-box`}/>} {settings.showBoxes&&model.bottom.enabled&&<LetterBoxes placements={model.bottom.layout.placements} base={model.bottom.guideSet.baseLine} arcLen={model.bottom.arcLen} height={model.bottom.xMM} script={settings.bottomBandScript} prefix={`${idPrefix}-bottom-box`}/>}
   </g>
   {showGuideTags && <SheetLabels tags={curveTags([

@@ -1,17 +1,28 @@
 'use client';
+import { useState } from 'react';
 import { NumericInput, Switch, Button, Select } from '@/components/editor/Controls';
 import DisclosureSection from '@/components/layout/DisclosureSection';
 import ConstructionGuideControls from '@/components/guidelines/ConstructionGuideControls';
 import SlantStyleControl from '@/components/guidelines/SlantStyleControl';
 import { INSULAR_MAJUSCULE_DEFAULTS } from '@/lib/guides/straight/blackletter';
-import { LIMITS, defaultBorder, type WritingBorder, type Design } from '@/lib/woven/design';
+import { LIMITS, defaultBorder, strapLettering, type WritingBorder, type Design } from '@/lib/woven/design';
 import type { buildWovenRouteModel } from '@/lib/woven/model';
 const field='w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500';
 const button='min-h-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-indigo-500';
-export default function WovenSettings({design, onChange, model, selected, onSelect}: {design:Design;onChange:(design:Design)=>void;model?:ReturnType<typeof buildWovenRouteModel>;selected?:string|null;onSelect?:(id:string|null)=>void}) {
-  const setDesign=(fn:(design:Design)=>Design)=>onChange(fn(design));
+export default function WovenSettings({design: group, onChange, model, selected, onSelect}: {design:Design;onChange:(design:Design)=>void;model?:ReturnType<typeof buildWovenRouteModel>;selected?:string|null;onSelect?:(id:string|null)=>void}) {
+  const [strapId,setStrapId] = useState('');
+  const straps = model?.composition?.sheet.strands ?? [];
+  const released = !!group.independentStraps && straps.length > 1;
+  const active = (released || (group.preset === 'custom-composition' && group.independentStraps && straps.length === 1)) ? straps.find(s => s.id === strapId) ?? straps[0] : undefined;
+  const design = active ? {...group,...strapLettering(active.design)} : group;
+  function setDesign(fn:(design:Design)=>Design) {
+    const next = fn(design);
+    if (!active) { onChange(next); return; }
+    onChange({...group, strapStyles:{...group.strapStyles,[active.id]:strapLettering(next)}});
+  }
   function update<K extends keyof Design>(key:K,value:Design[K]) {
-    onChange({...design,[key]:value,...(['preset','loop','reverse'].includes(key)?{overrides:{}}:{})});
+    if (active && key in strapLettering(design)) { setDesign(d => ({...d,[key]:value})); return; }
+    onChange({...group,[key]:value,...(['preset','loop','reverse'].includes(key)?{overrides:{}}:{})});
   }
   function flip(id:string) {if(!model)return;onSelect?.(id);update('overrides',{...design.overrides,[id]:model.choices[id]==='a'?'b':'a'});}
   function numeric(
@@ -84,7 +95,12 @@ export default function WovenSettings({design, onChange, model, selected, onSele
   const gridVisible = design.gridHorizontal || design.gridVertical;
   const constructionVisible = design.construction.upper || design.construction.lower;
 
-  return <>          <DisclosureSection title="Writing guides" defaultOpen>
+  return <>          <DisclosureSection title="Script & nib" defaultOpen>
+            {straps.length > 1 && <div className="space-y-2">
+              <Switch label="Edit straps individually" checked={released} onChange={independentStraps => onChange({...group,independentStraps})}/>
+              {active && <label className="block text-sm">Editing strap<Select className={field} value={active.id}
+                onChange={event => setStrapId(event.target.value)}>{straps.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></label>}
+            </div>}
             {model && <Switch label="Show guide tags" checked={design.showGuideTags ?? true} onChange={checked => update("showGuideTags", checked)} />}
             <div className="space-y-3">
               <label className="block space-y-1 text-sm">

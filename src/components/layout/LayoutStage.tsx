@@ -298,9 +298,9 @@ if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()
               : element.type==='guidelines'&&element.mask?.enabled&&element.mask.kind!=='customSvg'
               ? <path transform={`translate(${occupied.x} ${occupied.y})`} d={shapePathData(element.mask.kind,occupied.width,occupied.height,element.mask.cornerRadiusMM+Math.max(0,element.paddingMM))} fill={PAGE_BACKGROUND}/>
               : element.type !== 'woven' && element.type !== 'shape' && element.type !== 'artwork' && !((element.type==='curved-title'||element.type==='calligram')&&(element.settings.transparentWhitespace??true)) && <rect x={occupied.x} y={occupied.y} width={occupied.width} height={occupied.height} fill={PAGE_BACKGROUND} />}
-            <g data-full-detail="true" style={{display:previewSimplify&&!internal?'none':undefined}}><ElementVisual element={detailElement} frame={previewSimplify?detailElement.frame:frame} simplify={false} selected={element.id === selectedId} textFitEntry={internal&&draft?null:textFitPlans[element.id]??null} onPlannedLinePlacementChange={onPlannedLinePlacementChange}/></g>
+            <g data-full-detail="true" style={{display:previewSimplify&&!internal?'none':undefined}}><ElementVisual page={page} rotation={rotationDeg} element={detailElement} frame={previewSimplify?detailElement.frame:frame} simplify={false} selected={element.id === selectedId} textFitEntry={internal&&draft?null:textFitPlans[element.id]??null} onPlannedLinePlacementChange={onPlannedLinePlacementChange}/></g>
             {internal&&detailElement.type==='guidelines'&&<GuidelineHandles element={detailElement} preview={setDraft} commit={a=>onArrangement(element.id,a)}/>}
-            {previewSimplify&&!internal&&<g data-no-export="true"><ElementVisual element={element} frame={frame} simplify selected={element.id===selectedId} textFitEntry={textFitPlans[element.id]??null} onPlannedLinePlacementChange={onPlannedLinePlacementChange}/></g>}
+            {previewSimplify&&!internal&&<g data-no-export="true"><ElementVisual page={page} rotation={rotationDeg} element={element} frame={frame} simplify selected={element.id===selectedId} textFitEntry={textFitPlans[element.id]??null} onPlannedLinePlacementChange={onPlannedLinePlacementChange}/></g>}
             {element.type === 'guidelines' && element.showGuideTags && <SheetHeader
               text={guideLabel(element.settings.script, calculateGuidelinesVerticalMetrics(element.settings).xMM, element.settings.nibMM)}
               x={frame.x} y={frame.y - 2} width={frame.width} />}
@@ -383,9 +383,9 @@ function CustomMaskBackground({element,frame}:{element:Extract<LayoutElement,{ty
     transform={customMaskTransform(mask,{...local,x:frame.x+local.x,y:frame.y+local.y})} fill={PAGE_BACKGROUND}/>;
 }
 
-function ElementVisual({ element, frame, simplify, selected, textFitEntry,onPlannedLinePlacementChange }: { element: LayoutElement; frame: Frame; simplify: boolean; selected: boolean; textFitEntry: GuidelinesTextFitEntry | null;onPlannedLinePlacementChange:(guidelinesId:string,lineId:string,customStartMM:number)=>void }) {
+function ElementVisual({ page, rotation, element, frame, simplify, selected, textFitEntry,onPlannedLinePlacementChange }: { page:{width:number;height:number}; rotation:number; element: LayoutElement; frame: Frame; simplify: boolean; selected: boolean; textFitEntry: GuidelinesTextFitEntry | null;onPlannedLinePlacementChange:(guidelinesId:string,lineId:string,customStartMM:number)=>void }) {
   const common = { x: frame.x, y: frame.y, width: frame.width, height: frame.height };
-  if(element.type==='woven')return <LayoutWovenRenderer element={element} frame={frame} simplify={simplify}/>;
+  if(element.type==='woven')return <LayoutWovenRenderer page={page} rotation={rotation} element={element} frame={frame} simplify={simplify}/>;
   if (element.type === 'shape') return <ShapeElementRenderer element={element} frame={frame} selected={selected} />;
   const custom=element.type==='guidelines'?activeCustomMask(element):undefined;
   const customMode=element.type==='guidelines'&&usesCustomMask(element);

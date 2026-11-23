@@ -1,10 +1,11 @@
 import { compositionPresets } from '../paths/composition-presets';
 import type { Design } from '../woven/design';
-import { readTextPlan } from './text-fit';
+import { DEFAULT_TEXT_PLAN, readTextPlan } from './text-fit';
 import { findCrossingsForStraps, slotOrderForPair } from '../paths/intersections';
 import { samplePathDToPolyline } from '../paths/sample-svg-path';
-import { PAPERS_MM } from '../curve-helpers';
-import { parseDesign, DEFAULT_DESIGN, pageSize } from '../woven/design';
+import { PAPERS_MM, pathD } from '../curve-helpers';
+import { parseDesign, DEFAULT_DESIGN, strapLettering, isWovenCompositionPreset, LIMITS, pageSize } from '../woven/design';
+import { gothicCapCrossings, gothicCapStrands, gothicCapWeave } from '../woven/gothic-cap-weave';
 import { findSelfCrossings, makeRoute, type Point } from '../woven/geometry';
 import { canJoin, initialSheet, strand, strandRoute, topology, type Source, type Strand, type Sheet } from './model';
 
@@ -90,6 +91,7 @@ function header(obj:Record<string,unknown>): Pick<Sheet,'paper'|'orientation'> {
 }
 function readStrand(value:unknown):Strand {
   const s=record(value),src=record(s.source),raw=record(s.design);
+  if (raw.preset === 'custom-composition') throw Error('Nested compositions are unsupported.');
   const parsed=parseDesign({...raw,width:100,height:100,ascNib:2,descNib:2,xNib:5});
   const design={...parsed,width:num(raw.width,.00001,10000),height:num(raw.height,.00001,10000),
     xNib:num(raw.xNib,.1,100),ascNib:num(raw.ascNib,0,100),descNib:num(raw.descNib,0,100)};
@@ -164,8 +166,9 @@ export function openSheet(value:unknown):{sheet:Sheet; notice:string} {
       (missing?' '+missing+' unmatched choices omitted.':'')+' Only compatible end-to-start joins are carried over.'};
   }
   const d=parseDesign(obj);
-  if (d.preset === 'woven-double-circle' || d.preset === 'fraktur-scurve-weave-2') return {sheet: wovenComposition(d), notice:'Imported woven composition.'};
+  if (isWovenCompositionPreset(d.preset)) return {sheet: wovenComposition(d), notice:'Imported woven composition.'};
   Object.assign(sheet,header(d)); const s=strand('woven',d.preset,{kind:d.preset},{...d,overrides:{}});
+  if (d.strapTexts?.[s.id] !== undefined) s.textPlan = {...DEFAULT_TEXT_PLAN,text:d.strapTexts[s.id],countHidden:d.hiddenTextStraps?.includes(s.id)};
   sheet.strands=[s];
   const old=makeRoute(d.preset,d.width,d.height,d.loop,d.rotation,d.reverse);
   const canonical=strandRoute(s,sheet), hits=topology(sheet).hits;
@@ -182,30 +185,49 @@ export function openSheet(value:unknown):{sheet:Sheet; notice:string} {
   return {sheet,notice:'Imported Woven geometry, guides and crossing choices. Sheet annotations are omitted.'};
 }
 
-function compositionGeometry(presetId: Design['preset']) {
+function compositionGeometry(design: Design) {
+  const presetId = design.preset;
   const preset = compositionPresets.find(item => item.id === presetId);
-  if (!preset) throw Error('Unknown woven composition.');
-  const { sheet } = openSheet({version:1, format:'calligraphy-tools/path-guides-preset', state:preset.state});
+  let sheet: Sheet;
+  if (presetId === 'custom-composition' && design.composition) {
+    sheet = structuredClone(design.composition);
+  } else if (presetId === gothicCapWeave.id) {
+    sheet = initialSheet();
+    sheet.strands = gothicCapStrands.map(({ id, name, points }) => {
+      const { source, center } = pathSource(pathD(points), points);
+      return strand(id, name, source, {
+        ...DEFAULT_DESIGN, width:source.width, height:source.height, centerX:center.x, centerY:center.y,
+      });
+    });
+  } else {
+    if (!preset) throw Error('Unknown woven composition.');
+    ({ sheet } = openSheet({version:1, format:'calligraphy-tools/path-guides-preset', state:preset.state}));
+  }
   const routes = sheet.strands.map(s => strandRoute(s, sheet));
   const points = routes.flatMap(route => route.points);
-  const xs = points.map(p => p.x), ys = points.map(p => p.y);
-  const left = Math.min(...xs), top = Math.min(...ys);
-  const width = Math.max(...xs)-left, height = Math.max(...ys)-top;
+  let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
+  for (const p of points) { left=Math.min(left,p.x); right=Math.max(right,p.x); top=Math.min(top,p.y); bottom=Math.max(bottom,p.y); }
+  const width=Math.max(.001,right-left),height=Math.max(.001,bottom-top);
   return {sheet,routes,left,top,width,height};
 }
 
 export function fitWovenPreset(design: Design): Design {
   let ratio = design.preset === 'figure-eight' ? 1 / .65 : 1;
-  if (design.preset === 'fraktur-scurve-weave-2' || design.preset === 'woven-double-circle') {
-    const geometry = compositionGeometry(design.preset);
+  if (isWovenCompositionPreset(design.preset)) {
+    const geometry = compositionGeometry(design);
     ratio = geometry.width / geometry.height;
   }
-  const span = Math.max(design.width, design.height);
-  return {...design,width:span*Math.min(1,ratio),height:span/Math.max(1,ratio)};
+  const widthScale = Math.min(1, ratio);
+  const heightScale = 1 / Math.max(1, ratio);
+  const minSpan = design.preset === gothicCapWeave.id && !design.layoutFrame
+    ? Math.max(LIMITS.width[0] / widthScale, LIMITS.height[0] / heightScale)
+    : 0;
+  const span = Math.max(design.width, design.height, minSpan);
+  return {...design,width:span*widthScale,height:span*heightScale};
 }
 
 export function wovenComposition(design: Design): Sheet {
-  const {sheet,routes,left,top,width,height} = compositionGeometry(design.preset);
+  const {sheet,routes,left,top,width,height} = compositionGeometry(design);
   const page = pageSize(design);
   const angle = design.rotation * Math.PI / 180;
   sheet.paper = design.paper;
@@ -213,17 +235,61 @@ export function wovenComposition(design: Design): Sheet {
   sheet.showGuideTags = design.showGuideTags;
   sheet.strands.forEach((s,i) => {
     const transformed = routes[i].points.map(p => {
-      const x = ((p.x-left)/width-.5)*design.width, y = ((p.y-top)/height-.5)*design.height;
+      const x = width <= .001 ? 0 : ((p.x-left)/width-.5)*design.width;
+      const y = height <= .001 ? 0 : ((p.y-top)/height-.5)*design.height;
       return {x:(design.centerX ?? page.w/2)+x*Math.cos(angle)-y*Math.sin(angle),
         y:(design.centerY ?? page.h/2)+x*Math.sin(angle)+y*Math.cos(angle)};
     });
     const {source,center} = pathSource(s.source.kind === 'path' ? s.source.d : '', transformed);
     s.source = source;
+    if (design.strapTexts?.[s.id] !== undefined) s.textPlan = {...(s.textPlan??DEFAULT_TEXT_PLAN),text:design.strapTexts[s.id],countHidden:design.hiddenTextStraps?.includes(s.id)};
     s.scale = 100;
     s.mirror = false;
-    s.design = {...design, preset:'rosette', width:source.width, height:source.height, centerX:center.x, centerY:center.y, rotation:0};
+    const nibScale = design.preset === gothicCapWeave.id ? gothicCapStrands[i].nibScale : 1;
+    const lettering = design.preset === 'custom-composition' ? (design.independentStraps ? s.design : {...s.design,...strapLettering(design)}) : {...design,nib:Math.max(LIMITS.nib[0], design.nib*nibScale)};
+    s.design = {...lettering, composition:undefined, ...(design.independentStraps ? design.strapStyles?.[s.id] : {}), independentStraps:undefined, strapStyles:undefined, preset:'rosette', width:source.width, height:source.height,
+      centerX:center.x, centerY:center.y, rotation:0};
   });
   const hits = topology(sheet).hits;
-  sheet.overrides = hits.map((hit,i) => ({...hit, over:design.overrides['crossing-'+i] ?? hit.over}));
+  const visits = new Map<string, number>();
+  const dormant = sheet.overrides.filter(c => sheet.strands.some(s => !s.visible && (s.id === c.a.id || s.id === c.b.id)));
+  sheet.overrides = hits.map((hit, i) => {
+    let over = hit.over;
+    if (design.preset === gothicCapWeave.id) {
+      const pair = hit.a.id + '|' + hit.b.id;
+      const visit = visits.get(pair) ?? 0;
+      visits.set(pair, visit + 1);
+      const authored = gothicCapCrossings[pair]?.[visit];
+      if (authored === 'a' || authored === 'b') over = authored;
+    }
+    return { ...hit, over:design.overrides['crossing-'+i] ?? over };
+  });
+  sheet.overrides.push(...dormant);
+  return sheet;
+}
+
+export function designFromComposition(sheet: Sheet): Design {
+  if (!sheet.strands.some(s=>s.visible)) throw Error('Show at least one strap to use this composition.');
+  const design: Design = {...DEFAULT_DESIGN,...sheet.strands[0].design,paper:sheet.paper,orientation:sheet.orientation,
+    preset:'custom-composition',composition:sheet,independentStraps:true,strapStyles:undefined,
+    showGuideTags:sheet.showGuideTags ?? true,overrides:{},rotation:0,centerX:undefined,centerY:undefined};
+  const {width,height} = compositionGeometry(design);
+  return {...design,width:Math.max(4,width),height:Math.max(4,height)};
+}
+
+// Reopen the authored geometry, applying lettering edits made in the Layout inspector.
+export function editableComposition(design: Design): Sheet {
+  if (!design.composition) return openSheet({...design,width:Math.max(50,Math.min(400,design.width)),height:Math.max(50,Math.min(400,design.height))}).sheet;
+  const sheet = structuredClone(design.composition);
+  sheet.showGuideTags = design.showGuideTags;
+  for (const s of sheet.strands) {
+    Object.assign(s.design,design.independentStraps ? design.strapStyles?.[s.id] : strapLettering(design));
+  }
+  const graph = topology(sheet);
+  graph.hits.forEach((hit,i) => {
+    const over = design.overrides['crossing-'+i];
+    if (over) hit.over=over;
+  });
+  sheet.overrides = [...graph.hits,...sheet.overrides.filter(c=>sheet.strands.some(s=>!s.visible && (s.id===c.a.id || s.id===c.b.id)))];
   return sheet;
 }

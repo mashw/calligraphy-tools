@@ -1,3 +1,4 @@
+import type { Interval as CrossingInterval } from './geometry';
 import { wovenComposition } from '../interlace/document';
 import { topology, renderSheet, warnings as sheetWarnings } from '../interlace/model';
 import { makeSlantRoute } from '../guides/slant-paths';
@@ -7,7 +8,7 @@ import { placeSheetTags, guideLabel, routeTag } from '@/lib/guides/sheet-labels'
 import { slantPath, clipSlantToBand } from "../guides/slant-paths";
 import { offset } from "@/lib/curve-helpers";
 import { buildGuideSet } from "@/lib/guides/guide-template";
-import { pageSize, type Design } from "./design";
+import { isWovenCompositionPreset, pageSize, type Design } from "./design";
 import { resolveBlackletterGridWidthMM } from "@/lib/guides/straight/blackletter";
 import { dashPolylinePoints } from "@/lib/guides/polyline-dash";
 import { clipPassage, routeFrame } from "./curved-guides";
@@ -27,17 +28,15 @@ import type { Scene, Stroke } from "./vector-export";
 /** Route and crossing geometry only: safe to regenerate during pointer interactions. */
 export function buildWovenRouteModel(design: Design) {
   const page = pageSize(design);
-  if (design.preset === 'fraktur-scurve-weave-2' || design.preset === 'woven-double-circle') {
+  if (isWovenCompositionPreset(design.preset)) {
     let compositionDesign = design;
     if (design.layoutFrame) {
       const unit = design.script === 'Copperplate' ? 1 : design.nib;
       const bands = writingBands(design,design.xNib*unit,design.ascNib*unit,design.descNib*unit,false,0);
       const edges = bandEdges(bands);
       const margin = Math.max(-edges.top,edges.bottom)+1;
-      const tagCount = design.showGuideTags ? bands.length*2 : 0;
-      const footer = Math.min(design.height*.4, tagCount*8+(tagCount ? 6 : 0));
-      const scale = Math.max(.01, Math.min((design.width-2*margin)/design.width,(design.height-2*margin-footer)/design.height));
-      compositionDesign = {...design,width:design.width*scale,height:design.height*scale,centerY:design.height/2-footer/2};
+      const scale = Math.max(.01, Math.min((design.width-2*margin)/design.width,(design.height-2*margin)/design.height));
+      compositionDesign = {...design,width:design.width*scale,height:design.height*scale,centerY:design.height/2};
     }
     const sheet = wovenComposition(compositionDesign), graph = topology(sheet);
     const route = makeSlantRoute(graph.entries.flatMap(entry => entry.route.points));
@@ -76,10 +75,7 @@ export function buildWovenRouteModel(design: Design) {
   const halfBand = bands.length > 1 ? Math.max(-edges.top,edges.bottom) : x / 2 + Math.max(asc, desc);
   const start = (design.start / 100) * route.length;
   const cuts = crossingCuts(crossings, choices, halfBand, design.clearance);
-  const intervals = visibleIntervals(route.length, [
-    ...cuts,
-    { center: start, half: design.gap / 2 },
-  ]);
+  const intervals = clippedCentreIntervals(route,visibleIntervals(route.length,[{center:start,half:design.gap/2}]),crossingMasks(design,route,crossings,choices,bands));
   const warnings: string[] = [];
   const bendWarning = borderBendWarning(route.points,bands);
   if (bendWarning) warnings.push(bendWarning);
@@ -129,12 +125,30 @@ export function buildWovenRouteModel(design: Design) {
 /** Generate physical strokes for one writing passage. Intervals use its own arc length. */
 export function writingStrokes(design: Design, route: import('../guides/slant-paths').SlantRoute,
   intervals: import('./geometry').Interval[], x: number, asc: number, desc: number, invertGuides = false, baselineOffset = x / 2): Stroke[] {
-  return writingBands(design,x,asc,desc,invertGuides,baselineOffset).flatMap(b =>
-    singleBandStrokes(b, route, intervals, invertGuides));
+  const bands = writingBands(design,x,asc,desc,invertGuides,baselineOffset);
+  const last = route.points.length - 1;
+  const turns = new Map<number, number>();
+  for (let i = route.closed ? 0 : 1; i < last; i++) {
+    const a = route.points[i], prev = route.points[i ? i-1 : last-1], next = route.points[i+1];
+    const dx = a.x-prev.x, dy = a.y-prev.y, ex = next.x-a.x, ey = next.y-a.y;
+    const angle = Math.atan2(dx*ey-dy*ex, dx*ex+dy*ey);
+    if (Math.abs(angle) >= Math.PI/6) turns.set(i, Math.tan(angle/2));
+  }
+  if (!turns.size) return bands.flatMap(b => singleBandStrokes(b, route, intervals, invertGuides));
+  const cuts = [0, ...Array.from(turns.keys()).filter(i => i > 0), last];
+  return cuts.slice(1).flatMap((end, index) => {
+    const start = cuts[index], origin = route.distances[start];
+    const local = makeSlantRoute(route.points.slice(start, end+1));
+    const visible: typeof intervals = intervals.map(([a,b]): [number,number] =>
+      [Math.max(0,a-origin), Math.min(local.length,b-origin)]).filter(([a,b]) => b>a);
+    if (!visible.length) return [];
+    return bands.flatMap(band => singleBandStrokes(band, local, visible, invertGuides,
+      turns.get(start) ?? 0, turns.get(end === last && route.closed ? 0 : end) ?? 0));
+  });
 }
 
 function singleBandStrokes(band: ReturnType<typeof writingBands>[number], route: import('../guides/slant-paths').SlantRoute,
-  intervals: import('./geometry').Interval[], invertGuides: boolean): Stroke[] {
+  intervals: import('./geometry').Interval[], invertGuides: boolean, startTurn = 0, endTurn = 0): Stroke[] {
   const { design, x, asc, desc, anchor: baselineOffset, hiddenExtension } = band;
   const baseline = baselineOffset === 0 ? route.points : offset(route.points, baselineOffset);
   const guides = buildGuideSet(
@@ -180,6 +194,30 @@ function singleBandStrokes(band: ReturnType<typeof writingBands>[number], route:
         width: design.gridThickness,
         role: 'grid',
       });
+  const bounds = bandEdges([band], invertGuides);
+  const reach = Math.max(Math.abs(bounds.top), Math.abs(bounds.bottom));
+  // Limit the mitre on very short legs and near-reversals.
+  const limit = Math.min(3, route.length / (4 * Math.max(reach, .001)));
+  const clampTurn = (turn: number) => Math.max(-limit, Math.min(limit, turn));
+  const entry = clampTurn(startTurn), exit = clampTurn(endTurn);
+  const entryZone = Math.abs(entry)*reach*2, exitZone = Math.abs(exit)*reach*2;
+  function joinedRail(points: typeof route.points) {
+    if (!entry && !exit) return points;
+    return points.map((p,i) => {
+      const s = route.distances[i], fromEnd = route.length-s;
+      const nearStart = entryZone > 0 && s < entryZone;
+      if (!nearStart && !(exitZone > 0 && fromEnd < exitZone)) return p;
+      const j = nearStart ? 0 : route.points.length-2;
+      const a = route.points[j], b = route.points[j+1];
+      const len = Math.hypot(b.x-a.x,b.y-a.y) || 1;
+      const tx = (b.x-a.x)/len, ty = (b.y-a.y)/len;
+      const center = route.points[i];
+      const offset = (p.y-center.y)*tx - (p.x-center.x)*ty;
+      const shift = offset * (nearStart ? entry*(1-s/entryZone) : -exit*(1-fromEnd/exitZone));
+      return { x:p.x+shift*tx, y:p.y+shift*ty };
+    });
+  }
+  for (const rail of rails) rail.points = joinedRail(rail.points);
   const strokes: Stroke[] = rails.flatMap((rail) =>
     intervals.map((interval) => ({
       ...rail,
@@ -187,6 +225,18 @@ function singleBandStrokes(band: ReturnType<typeof writingBands>[number], route:
       points: sliceGuide(route, rail.points, interval),
     })),
   );
+  if (entry && intervals.some(([a]) => a === 0)) {
+    const outer = rails.map(rail => rail.points[0]);
+    let ends = [outer[0], outer[0]], longest = 0;
+    for (const a of outer) for (const b of outer) {
+      const length = Math.hypot(a.x-b.x, a.y-b.y);
+      if (length > longest) { ends = [a,b]; longest = length; }
+    }
+    strokes.push({ points:ends, color:'#52677c', width:.16, role:'primary' });
+  }
+  // Leave the fold clear of transverse grid lines, slants and pen markers.
+  intervals = intervals.map(([a,b]): [number,number] =>
+    [Math.max(a,entryZone/2), Math.min(b,route.length-exitZone/2)]).filter(([a,b]) => b>a);
   let slantBand: { x: number; y: number }[] | null = null;
   let locatedRole: Stroke['role'] = 'slant';
   const addLocated = (
@@ -316,20 +366,50 @@ function singleBandStrokes(band: ReturnType<typeof writingBands>[number], route:
   return strokes;
 }
 
-function borderedStrokes(design: Design, route: ReturnType<typeof makeRoute>, crossings: ReturnType<typeof findSelfCrossings>,
-  choices: Record<string,'a'|'b'>, start: number, bands: ReturnType<typeof writingBands>): Stroke[] {
+function crossingMasks(design: Design, route: ReturnType<typeof makeRoute>, crossings: ReturnType<typeof findSelfCrossings>,
+  choices: Record<string,'a'|'b'>, bands: ReturnType<typeof writingBands>) {
   const edges = bandEdges(bands);
   const top = offset(route.points,edges.top-design.clearance);
   const bottom = offset(route.points,edges.bottom+design.clearance);
   const visits = crossings.flatMap(c => [c.a,c.b]).sort((a,b)=>a-b);
   const visit = (at: number) => visitIntervals(visits,at,route.length,true);
-  const masks = crossings.flatMap(c => {
+  return crossings.flatMap(c => {
     const over = choices[c.id] === 'a' ? c.a : c.b;
     const under = choices[c.id] === 'a' ? c.b : c.a;
     const region = visit(over);
     const polygon = [...region.flatMap(i=>sliceGuide(route,top,i)), ...region.flatMap(i=>sliceGuide(route,bottom,i)).reverse()];
     return visit(under).map(interval=>({interval,polygon}));
   });
+}
+
+function clippedCentreIntervals(route:ReturnType<typeof makeRoute>, intervals:CrossingInterval[], masks:ReturnType<typeof crossingMasks>) {
+  const result:CrossingInterval[]=[];
+  for(const [from,to] of intervals) for(let i=1;i<route.points.length;i++) {
+    const a=Math.max(from,route.distances[i-1]), b=Math.min(to,route.distances[i]);
+    if(b<=a) continue;
+    const stops=[a,...masks.flatMap(m=>m.interval).filter(v=>v>a && v<b).sort((x,y)=>x-y),b];
+    for(let j=1;j<stops.length;j++) {
+      const lo=stops[j-1],hi=stops[j];
+      if(hi<=lo) continue;
+      const p=atDistance(route,lo),q=atDistance(route,hi);
+      let parts=[[p,q]];
+      for(const mask of masks) if(lo>=mask.interval[0] && hi<=mask.interval[1])
+        parts=parts.flatMap(part=>clipSlantToBand(part,mask.polygon,false));
+      for(const part of parts) {
+        const start=lo+Math.hypot(part[0].x-p.x,part[0].y-p.y);
+        const end=lo+Math.hypot(part.at(-1)!.x-p.x,part.at(-1)!.y-p.y);
+        const last=result.at(-1);
+        if(last && Math.abs(last[1]-start)<1e-7) last[1]=end;
+        else result.push([start,end]);
+      }
+    }
+  }
+  return result;
+}
+
+function borderedStrokes(design: Design, route: ReturnType<typeof makeRoute>, crossings: ReturnType<typeof findSelfCrossings>,
+  choices: Record<string,'a'|'b'>, start: number, bands: ReturnType<typeof writingBands>): Stroke[] {
+  const masks=crossingMasks(design,route,crossings,choices,bands);
   const strokes: Stroke[] = [];
   for (const [a,b] of visibleIntervals(route.length,[{center:start,half:design.gap/2}])) {
     const stops = [...new Set([a,b,...masks.flatMap(m=>m.interval).filter(s=>s>a && s<b)])].sort((p,q)=>p-q);
@@ -352,12 +432,16 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
   if (model.composition) {
     const {sheet,graph} = model.composition;
     const clean = renderSheet(sheet,graph,{ruler:furniture,tagBounds,clipToPage:!design.layoutFrame});
-    const annotated = {...clean, labels:[...clean.labels,...crossings.map((c,i)=>({point:c.point,text:String(i+1),size:2.5,color:'#9f483b'}))]};
+    const annotated = {...clean, labels:[...clean.labels,...crossings.map((c,i)=>({previewOnly:true,point:c.point,text:String(i+1),size:2.5,color:'#9f483b'}))]};
     return {page,route,crossings,choices,intervals,clean,annotated,startPoint:route.points[0],usableLength,warnings};
   }
   const bands = writingBands(design,x,asc,desc);
-  const strokes = bands.length === 1 ? writingStrokes(design, route, intervals, x, asc, desc) :
-    borderedStrokes(design,route,crossings,choices,start,bands);
+  // Clip in the same coordinate system for every placement, including tangent contacts.
+  const localRoute=makeRoute(design.preset==="figure-eight"?"figure-eight":"rosette",design.width,design.height,design.loop,design.rotation,design.reverse,{x:0,y:0});
+  const localCrossings=findSelfCrossings(localRoute);
+  const dx=design.centerX??page.w/2,dy=design.centerY??page.h/2;
+  const strokes=borderedStrokes(design,localRoute,localCrossings,choices,design.start/100*localRoute.length,bands)
+    .map(stroke=>({...stroke,points:stroke.points.map(p=>({x:p.x+dx,y:p.y+dy}))}));
   const tag = design.showGuideTags ? routeTag(guideLabel(design.script, x, design.nib), route.points, halfBand + 4, .32) : null;
   const tags = tag ? [tag, ...borderGuideTags(bands, route.points, false, .32)] : undefined;
   const clean: Scene = { strokes, labels: [], tags, page };
@@ -405,6 +489,7 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
   };
   crossings.forEach((c, i) =>
     annotated.labels.push({
+      previewOnly:true,
       point: { x: c.point.x + 3, y: c.point.y - 3 },
       text: String(i + 1),
       size: 2.5,
