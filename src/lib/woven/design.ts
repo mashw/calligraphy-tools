@@ -103,8 +103,8 @@ export const DEFAULT_DESIGN: Design = {
   ascNib: 2,
   descNib: 2,
   start: 3,
-  gap: 8,
-  clearance: 0.6,
+  gap: 0,
+  clearance: 0,
   fullGuides: true,
   annotated: true,
   showGuideTags: true,
@@ -319,7 +319,7 @@ export function selectWovenPreset(design: Design, preset: Design['preset']): Des
   if (preset === gothicCapWeave.id) {
     const span = Math.max(design.width, design.height);
     const nib = Math.max(LIMITS.nib[0], Math.min(LIMITS.nib[1], span * 43 / (770 * 8.5)));
-    return { ...next, script:'Fraktur', nib, xNib:4.5, ascNib:2, descNib:2, penAngle:40, gap:0, clearance:0.15 };
+    return { ...next, script:'Fraktur', nib, xNib:4.5, ascNib:2, descNib:2, penAngle:40, gap:0, clearance:0 };
   }
   if (preset === 'fraktur-scurve-weave-2') return { ...next, script:'Fraktur', nib:2, xNib:4.5, ascNib:2, descNib:2, penAngle:40 };
   if (preset === 'woven-double-circle') return { ...next, script:'Copperplate', nib:1, xNib:6, ascNib:6, descNib:6 };
