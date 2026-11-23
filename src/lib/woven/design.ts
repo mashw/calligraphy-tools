@@ -315,7 +315,7 @@ export function pageSize(design: Pick<Design, "paper" | "orientation">) {
 }
 
 export function selectWovenPreset(design: Design, preset: Design['preset']): Design {
-  const next = { ...design, preset, hiddenTextStraps:undefined, strapTexts:undefined, composition:undefined, overrides: {}, independentStraps:undefined, strapStyles:undefined };
+  const next = { ...design, preset, clearance:0, hiddenTextStraps:undefined, strapTexts:undefined, composition:undefined, overrides: {}, independentStraps:undefined, strapStyles:undefined };
   if (preset === gothicCapWeave.id) {
     const span = Math.max(design.width, design.height);
     const nib = Math.max(LIMITS.nib[0], Math.min(LIMITS.nib[1], span * 43 / (770 * 8.5)));
