@@ -325,7 +325,7 @@ export function selectWovenPreset(design: Design, preset: Design['preset']): Des
   }
   if (preset === spiralRibbonWeave.id) {
     const span = Math.max(design.width, design.height);
-    const nib = Math.max(LIMITS.nib[0], Math.min(LIMITS.nib[1], span * .0075));
+    const nib = Math.max(LIMITS.nib[0], Math.min(LIMITS.nib[1], span * .009));
     return {
       ...next, script: 'Fraktur', nib, xNib: 4.5, ascNib: 2, descNib: 2, penAngle: 40,
       gap: 0, reverse: false, fullGuides: true, borders: undefined,

@@ -146,36 +146,28 @@ test('Layout strap text survives reopening single and multi-strap presets in Wov
   }
 });
 
-test('Four-scroll ribbon weave follows circular arcs around all six lobes', () => {
+test('Four-scroll ribbon weave wraps all six circles with tangent joins', () => {
   const points = spiralRibbonStrands[0].points;
-  const samplesPerSegment = 32;
-  const arcs = [
-    { x: 400, y: 370, r: 116, ranges: [[.8, 1.5], [7.4, 8], [13.5, 14.25]] },
-    { x: 522, y: 251, r: 58, ranges: [[3.3, 6.1]] },
-    { x: 278, y: 251, r: 58, ranges: [[9.7, 12.6]] },
-  ];
-  const radii = (point: { x: number; y: number }, x: number, y: number) => Math.hypot(point.x - x, point.y - y);
-  for (const { x, y, r, ranges } of arcs) {
-    for (const [start, end] of ranges) {
-      for (let i = Math.ceil(start * samplesPerSegment); i <= end * samplesPerSegment; i++) {
-        assert.ok(Math.abs(radii(points[i], x, y) - r) < 1e-7);
-        assert.ok(Math.abs(radii(points[points.length - 1 - i], 800 - x, 980 - y) - r) < 1e-7);
+  for (const [x, y, radius, minDegrees] of [
+    [400, 372.5, 116, 245], [400, 607.5, 116, 245],
+    [280, 252.5, 46, 320], [520, 252.5, 46, 320], [280, 727.5, 46, 320], [520, 727.5, 46, 320],
+  ]) {
+    let sweep = 0;
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1], b = points[i];
+      const onCircle = (p: typeof a) => Math.abs(Math.hypot(p.x - x, p.y - y) - radius) < 1e-7;
+      if (onCircle(a) && onCircle(b)) {
+        sweep += 2 * Math.asin(Math.hypot(b.x - a.x, b.y - a.y) / (2 * radius));
       }
     }
+    assert.ok(sweep * 180 / Math.PI >= minDegrees, 'Circular sweep around ' + [x, y]);
   }
-});
-
-test('Four-scroll ribbon weave changes bend smoothly at arc joins', () => {
-  const points = spiralRibbonStrands[0].points;
-  const turn = (index: number) => {
-    const [a, b, c] = points.slice(index - 1, index + 2);
-    const x = b.x - a.x, y = b.y - a.y, u = c.x - b.x, v = c.y - b.y;
-    return Math.atan2(x * v - y * u, x * u + y * v);
-  };
-  for (const join of [23, 51, 102, 197, 234, 257, 310, 404, 430, 458]) {
-    const tolerance = Math.PI / 180;
-    assert.ok(Math.abs(turn(join) - turn(join - 1)) < tolerance, 'Incoming bend at join ' + join);
-    assert.ok(Math.abs(turn(join + 1) - turn(join)) < tolerance, 'Outgoing bend at join ' + join);
+  const loop = points.slice(0, -1);
+  for (let i = 0; i < loop.length; i++) {
+    const a = loop[(i + loop.length - 1) % loop.length], b = loop[i], c = loop[(i + 1) % loop.length];
+    const dx = b.x - a.x, dy = b.y - a.y, ux = c.x - b.x, uy = c.y - b.y;
+    const turn = Math.abs(Math.atan2(dx * uy - dy * ux, dx * ux + dy * uy));
+    assert.ok(turn < .044, 'Unexpected corner at sample ' + i);
   }
 });
 
