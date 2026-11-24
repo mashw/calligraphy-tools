@@ -131,9 +131,9 @@ export function buildWovenRouteModel(design: Design) {
 
 /** Generate physical strokes for one writing passage. Intervals use its own arc length. */
 export function writingStrokes(design: Design, route: import('../guides/slant-paths').SlantRoute,
-  intervals: import('./geometry').Interval[], x: number, asc: number, desc: number, invertGuides = false, baselineOffset = x / 2): Stroke[] {
+  intervals: import('./geometry').Interval[], x: number, asc: number, desc: number, invertGuides = false, baselineOffset = x / 2, edgeOffset = offset): Stroke[] {
   const bands = writingBands(design,x,asc,desc,invertGuides,baselineOffset);
-  if (design.outlinesOnly) return outlineStrokes(route, bands, intervals, invertGuides);
+  if (design.outlinesOnly) return outlineStrokes(route, bands, intervals, invertGuides, edgeOffset);
   const last = route.points.length - 1;
   const turns = new Map<number, number>();
   for (let i = route.closed ? 0 : 1; i < last; i++) {
@@ -417,10 +417,10 @@ function clippedCentreIntervals(route:ReturnType<typeof makeRoute>, intervals:Cr
 }
 
 function outlineStrokes(route: ReturnType<typeof makeSlantRoute>, bands: ReturnType<typeof writingBands>,
-  intervals: CrossingInterval[], invert = false): Stroke[] {
+  intervals: CrossingInterval[], invert = false, edgeOffset = offset): Stroke[] {
   const {top, bottom} = bandEdges(bands, invert);
   return [top, bottom].flatMap(distance => {
-    const edge = offset(route.points, distance);
+    const edge = edgeOffset(route.points, distance);
     return intervals.map(interval => ({points: sliceGuide(route, edge, interval), width: .16, color: '#465363'}));
   });
 }

@@ -1,3 +1,5 @@
+import { gothicCapStrands } from '../woven/gothic-cap-weave';
+import { outlineRail } from '../woven/outline-rail';
 import { scrollPhase, scrollRibbonGroup } from '../woven/spiral-ribbon-weave';
 import { visitIntervals } from '../woven/passages';
 import { writingBands, borderGuideTags, bandEdges, borderBendWarning } from '../woven/bands';
@@ -200,11 +202,16 @@ function passageIntervals(entry: Entry, passage: Passage, hits: Hit[]): Interval
 }
 
 // Three paths in a scroll ribbon share one pass through each crossing.
-function scrollPassageHits(hits: Hit[], crossing: Hit, passage: Passage, entries: Map<string, Entry>) {
+function crossingPassageHits(hits: Hit[], crossing: Hit, passage: Passage, entries: Map<string, Entry>) {
   const family = (id: string) => {
     const group = entries.get(id)?.s.group;
     return group === scrollRibbonGroup;
   };
+  // Parallel Gothic straps can meet the same overpass very close together.
+  // An unrelated visit must not truncate the mask halfway across that strap.
+  if (gothicCapStrands.some(s => s.id === crossing.a.id) && gothicCapStrands.some(s => s.id === crossing.b.id)) {
+    return hits.filter(h => h.a.id === crossing.a.id && h.b.id === crossing.b.id);
+  }
   const side = crossing.a === passage ? 'a' : 'b';
   const opposite = (side: 'a' | 'b') => side === 'a' ? 'b' : 'a';
   const mate = crossing[opposite(side)];
@@ -238,7 +245,8 @@ function bandFootprint(entry: Entry, passage: Passage, hits: Hit[], clearance: n
   const edges=bandEdges(writingBands(s.design,x,asc,desc,s.invert,anchor),s.invert);
   const top=edges.top-clearance, bottom=edges.bottom+clearance;
   const intervals=passageIntervals(entry,passage,hits);
-  const rail=(amount:number)=>{const edge=offset(route.points,amount*sign);return intervals.flatMap(i=>sliceGuide(route,edge,i));};
+  const edgeOffset = gothicCapStrands.some(strand => strand.id === s.id) ? outlineRail : offset;
+  const rail=(amount:number)=>{const edge=edgeOffset(route.points,amount*sign);return intervals.flatMap(i=>sliceGuide(route,edge,i));};
   return [...rail(top),...rail(bottom).reverse()];
 }
 
@@ -272,8 +280,8 @@ export function writingRoutes(sheet:Sheet, graph=topology(sheet)) {
         const under=h.over==='a'?h.b:h.a;
         if(under.id!==s.id) continue;
         const over=h[h.over];
-        const polygon=bandFootprint(byId.get(over.id)!,over,scrollPassageHits(hits,h,over,byId),s.design.clearance);
-        for(const [start,end] of passageIntervals(current,under,scrollPassageHits(hits,h,under,byId)))
+        const polygon=bandFootprint(byId.get(over.id)!,over,crossingPassageHits(hits,h,over,byId),s.design.clearance);
+        for(const [start,end] of passageIntervals(current,under,crossingPassageHits(hits,h,under,byId)))
           masks.push({interval:reverse?[length+route.length-end,length+route.length-start]:[length+start,length+end],polygon});
       }
       if(route.closed && s.design.gap>0) cuts.push({center:length+route.length*s.design.start/100,half:s.design.gap/2});
@@ -312,7 +320,8 @@ export function renderSheet(sheet:Sheet, graph=topology(sheet), { outlinesOnly =
   for(const {root,route,regions} of writingRoutes(sheet,graph)){
     const m=metrics(root);
     for(const {interval,polygons} of regions){
-      let strokes=writingStrokes(outlinesOnly ? {...root.design,outlinesOnly:true} : root.design,route,[interval],m.x,m.asc,m.desc,root.invert,root.baselineSource?0:m.x/2);
+      let strokes=writingStrokes(outlinesOnly ? {...root.design,outlinesOnly:true} : root.design,route,[interval],m.x,m.asc,m.desc,root.invert,root.baselineSource?0:m.x/2,
+        gothicCapStrands.some(s => s.id === root.id) ? outlineRail : offset);
       for(const polygon of polygons)strokes=strokes.flatMap(stroke=>clipSlantToBand(stroke.points,polygon,false).map(points=>({...stroke,points})));
       scene.strokes.push(...strokes);
     }
