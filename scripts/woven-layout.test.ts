@@ -145,27 +145,29 @@ test('Layout strap text survives reopening single and multi-strap presets in Wov
   }
 });
 
-test('Four-scroll ribbon weave keeps its wide centre and narrow borders through Layout and Save/Open', () => {
+test('Four-scroll ribbon weave keeps separate narrow writing paths through Layout Save/Open', () => {
   const design = fitWovenPreset(selectWovenPreset(DEFAULT_DESIGN, 'spiral-ribbon-weave'));
   const standalone = buildWovenRouteModel(design);
-  assert.equal(standalone.composition?.sheet.strands.length, 2);
-  assert.equal(standalone.crossings.length, 5);
-  assert.equal(standalone.choices['crossing-1'], 'b');
-  assert.ok(!standalone.warnings.some(warning => warning.includes('Writing border folds')));
-  const element = newElement('woven', 1, { width: 210, height: 297 }) as WovenElement;
-  element.settings = wovenSettings(design);
-  element.frame = { x: 40, y: 34, width: design.width, height: design.height };
+  const strands = standalone.composition?.sheet.strands;
+  assert.equal(strands?.length, 6);
+  assert.equal(new Set(strands?.map(strand => strand.id)).size, 6);
+  assert.equal(strands?.filter(strand => strand.design.nib === design.nib).length, 2);
+  assert.equal(strands?.filter(strand => strand.design.nib === design.nib / 3).length, 4);
+  assert.ok(standalone.crossings.length > 5);
+  assert.ok(standalone.composition?.graph.hits.some(hit => hit.a.id.endsWith('-inner') && hit.b.id.endsWith('-outer')));
 
+  const element = newElement('woven', 1, { width: 210, height: 297 }) as WovenElement;
+  element.settings = wovenSettings({ ...design, strapTexts: { 'scroll-1-inner': 'Inner lettering' } });
+  element.frame = { x: 40, y: 34, width: design.width, height: design.height };
   const reopened = parseLayoutDesign(serializeLayoutDesign([element, pageElement()], element.id)).elements[0];
   assert.equal(reopened.type, 'woven');
   if (reopened.type !== 'woven') throw Error('Missing Woven element');
-  const loaded = layoutWovenDesign(reopened);
-  assert.equal(loaded.preset, 'spiral-ribbon-weave');
-  for (const side of ['inner', 'outer'] as const) {
-    assert.equal(loaded.borders?.[side]?.enabled, true);
-    assert.equal(loaded.borders[side].xHeight * 3, loaded.nib * loaded.xNib);
-  }
-  const layout = layoutWovenModel(reopened);
-  assert.deepEqual(layout.choices, standalone.choices);
-  assert.ok(layout.clean.strokes.length > 100);
+  const layout = buildWovenRouteModel(layoutWovenDesign(reopened));
+  assert.equal(layout.composition?.sheet.strands.length, 6);
+  const inner = layout.composition?.sheet.strands.find(strand => strand.id === 'scroll-1-inner');
+  assert.equal(inner?.textPlan?.text, 'Inner lettering');
+
+  const strokes = layoutWovenModel(reopened).clean.strokes;
+  assert.ok(strokes.length > 100);
+  assert.ok(strokes.every(stroke => stroke.points.every(point => Number.isFinite(point.x) && Number.isFinite(point.y))));
 });

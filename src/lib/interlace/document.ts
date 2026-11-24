@@ -5,10 +5,10 @@ import { findCrossingsForStraps, slotOrderForPair } from '../paths/intersections
 import { samplePathDToPolyline } from '../paths/sample-svg-path';
 import { PAPERS_MM, pathD } from '../curve-helpers';
 import { parseDesign, DEFAULT_DESIGN, strapLettering, isWovenCompositionPreset, LIMITS, pageSize } from '../woven/design';
-import { spiralRibbonCrossings, spiralRibbonStrands, spiralRibbonWeave } from '../woven/spiral-ribbon-weave';
+import { spiralBorderRoutes, spiralRibbonCrossings, spiralRibbonStrands, spiralRibbonWeave } from '../woven/spiral-ribbon-weave';
 import { gothicCapCrossings, gothicCapStrands, gothicCapWeave } from '../woven/gothic-cap-weave';
 import { findSelfCrossings, makeRoute, type Point } from '../woven/geometry';
-import { canJoin, initialSheet, strand, strandRoute, topology, type Source, type Strand, type Sheet } from './model';
+import { canJoin, initialSheet, strand, strandRoute, topology, type Hit, type Source, type Strand, type Sheet } from './model';
 
 function record(v:unknown): Record<string,unknown> {
   if(!v || typeof v!=='object' || Array.isArray(v)) throw Error('Expected a design object.');
@@ -228,6 +228,50 @@ export function fitWovenPreset(design: Design): Design {
   return {...design,width:span*widthScale,height:span*heightScale};
 }
 
+function addScrollBorders(sheet: Sheet, design: Design) {
+  sheet.strands = sheet.strands.flatMap(main => {
+    main.group = main.id;
+    main.design = { ...main.design, borders: undefined };
+    const { nib, xNib, ascNib, descNib, fullGuides, reverse } = main.design;
+    const borderNib = Math.max(LIMITS.nib[0], design.nib / 3);
+    const points = strandRoute(main, sheet).points;
+    const borderHalfWidth = borderNib * (xNib / 2 + (fullGuides ? 1.25 : 0));
+    const spacing = (extension: number) => borderHalfWidth + nib * (xNib / 2 + (fullGuides ? extension : 0));
+    const borders = spiralBorderRoutes(points, spacing(reverse ? descNib : ascNib), spacing(reverse ? ascNib : descNib)).map(({ side, points }) => {
+      const { source, center } = pathSource(pathD(points), points);
+      const id = main.id + '-' + side;
+      const border = strand(id, main.name + ' · ' + side, source, {
+        ...main.design, nib: borderNib, ascNib: 1.25, descNib: 1.25,
+        ...(design.independentStraps ? design.strapStyles?.[id] : {}),
+        width: source.width, height: source.height, centerX: center.x, centerY: center.y,
+      });
+      border.group = main.id;
+      const text = design.strapTexts?.[id];
+      if (text !== undefined) {
+        border.textPlan = { ...DEFAULT_TEXT_PLAN, text, countHidden: design.hiddenTextStraps?.includes(id) };
+      }
+      return border;
+    });
+    return [main, ...borders];
+  });
+}
+
+function scrollCrossingChoice(hit: Hit, mainCrossings: Hit[]) {
+  const ribbon = (id: string) => id.replace(/-(inner|outer)$/, '');
+  const candidates = mainCrossings.filter(c => c.a.id === ribbon(hit.a.id) && c.b.id === ribbon(hit.b.id));
+  let choice = hit.over;
+  let best = Infinity;
+  for (const crossing of candidates) {
+    const normal = Math.hypot(crossing.a.t - hit.a.t, crossing.b.t - hit.b.t);
+    const swapped = crossing.a.id === crossing.b.id
+      ? Math.hypot(crossing.a.t - hit.b.t, crossing.b.t - hit.a.t) : Infinity;
+    if (Math.min(normal, swapped) >= best) continue;
+    best = Math.min(normal, swapped);
+    choice = normal <= swapped ? crossing.over : crossing.over === 'a' ? 'b' : 'a';
+  }
+  return choice;
+}
+
 export function wovenComposition(design: Design): Sheet {
   const {sheet,routes,left,top,width,height} = compositionGeometry(design);
   const page = pageSize(design);
@@ -257,7 +301,7 @@ export function wovenComposition(design: Design): Sheet {
   const crossingOrder = design.preset === gothicCapWeave.id ? gothicCapCrossings
     : design.preset === spiralRibbonWeave.id ? spiralRibbonCrossings : undefined;
   const dormant = sheet.overrides.filter(c => sheet.strands.some(s => !s.visible && (s.id === c.a.id || s.id === c.b.id)));
-  sheet.overrides = hits.map((hit, i) => {
+  const authoredHits = hits.map((hit, i) => {
     let over = hit.over;
     if (crossingOrder) {
       const pair = hit.a.id + '|' + hit.b.id;
@@ -266,8 +310,18 @@ export function wovenComposition(design: Design): Sheet {
       const authored = crossingOrder[pair]?.[visit];
       if (authored === 'a' || authored === 'b') over = authored;
     }
-    return { ...hit, over:design.overrides['crossing-'+i] ?? over };
+    const legacyScroll = design.preset === spiralRibbonWeave.id && !!design.borders;
+    const choice = design.preset !== spiralRibbonWeave.id || legacyScroll ? design.overrides['crossing-'+i] : undefined;
+    return { ...hit, over: choice ?? over };
   });
+  if (design.preset === spiralRibbonWeave.id) {
+    addScrollBorders(sheet, design);
+    sheet.overrides = topology(sheet).hits.map((hit, i) => ({
+      ...hit, over: (design.borders ? undefined : design.overrides['crossing-'+i]) ?? scrollCrossingChoice(hit, authoredHits),
+    }));
+  } else {
+    sheet.overrides = authoredHits;
+  }
   sheet.overrides.push(...dormant);
   return sheet;
 }

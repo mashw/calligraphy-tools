@@ -198,6 +198,27 @@ function passageIntervals(entry: Entry, passage: Passage, hits: Hit[]): Interval
   return visitIntervals(visits, distance(route,passage.t), route.length, !!route.closed);
 }
 
+// Three paths in a scroll ribbon share one pass through each crossing.
+function scrollPassageHits(hits: Hit[], crossing: Hit, passage: Passage, entries: Map<string, Entry>) {
+  const family = (id: string) => {
+    const group = entries.get(id)?.s.group;
+    return group === 'scroll-1' || group === 'scroll-2' ? group : undefined;
+  };
+  const side = crossing.a === passage ? 'a' : 'b';
+  const opposite = (side: 'a' | 'b') => side === 'a' ? 'b' : 'a';
+  const relatedFamily = family(crossing[opposite(side)].id);
+  if (!family(passage.id) || !relatedFamily) return hits;
+  const isOver = side === crossing.over;
+  return hits.filter(hit => {
+    if (hit === crossing) return true;
+    const sameRole = hit[isOver ? hit.over : opposite(hit.over)];
+    const other = hit[isOver ? opposite(hit.over) : hit.over];
+    return sameRole.id !== passage.id || family(other.id) !== relatedFamily
+      || Math.abs(sameRole.t - passage.t) > .08
+      || Math.abs(other.t - crossing[opposite(side)].t) > .12;
+  });
+}
+
 function bandFootprint(entry: Entry, passage: Passage, hits: Hit[], clearance: number) {
   const {s,route}=entry, {x,asc,desc}=metrics(s);
   const sign=s.design.reverse?-1:1;
@@ -239,8 +260,8 @@ export function writingRoutes(sheet:Sheet, graph=topology(sheet)) {
         const under=h.over==='a'?h.b:h.a;
         if(under.id!==s.id) continue;
         const over=h[h.over];
-        const polygon=bandFootprint(byId.get(over.id)!,over,hits,s.design.clearance);
-        for(const [start,end] of passageIntervals(current,under,hits))
+        const polygon=bandFootprint(byId.get(over.id)!,over,scrollPassageHits(hits,h,over,byId),s.design.clearance);
+        for(const [start,end] of passageIntervals(current,under,scrollPassageHits(hits,h,under,byId)))
           masks.push({interval:reverse?[length+route.length-end,length+route.length-start]:[length+start,length+end],polygon});
       }
       if(route.closed && s.design.gap>0) cuts.push({center:length+route.length*s.design.start/100,half:s.design.gap/2});

@@ -1,4 +1,4 @@
-import { sample, type Pt } from '../curve-helpers';
+import { offset, sample, type Pt } from '../curve-helpers';
 
 export const spiralRibbonWeave = {
   id: 'spiral-ribbon-weave',
@@ -11,24 +11,24 @@ const centre = { x: 400, y: 496 };
 // Author the upper halves against the photo, including the short inner curl,
 // the bridge across the top, and the outer sweep back into the central weave.
 const descendingHalf = [
-  [252, 292, 251, 311, 240, 336],
-  [218, 386, 250, 456, 297, 478],
-  [332, 495, 367, 483, 400, 496],
+  [258, 287, 248, 314, 238, 340],
+  [218, 393, 249, 453, 297, 478],
+  [328, 494, 373, 483, 400, 496],
 ] satisfies Cubic[];
 
 const returningHalf = [
   [485.3, 240.3, 478.4, 254.8, 466.1, 263.4],
   [455.9, 270.5, 443.1, 272.8, 431.1, 269.6],
-  [391.1, 258.9333, 366, 251, 330, 250],
-  [307, 249, 304, 241, 286, 228],
-  [244, 198, 181, 220, 164, 264],
-  [143, 318, 183, 357, 221, 357],
-  [253, 357, 280, 341, 293, 309],
-  [309, 269, 302, 238, 350, 215],
+  [391.1, 258.9333, 365, 254, 333, 249],
+  [313, 245.875, 308, 236, 286, 226],
+  [238, 192, 177, 217, 159, 263],
+  [139, 314, 173, 357, 221, 357],
+  [253, 357, 280, 339, 293, 308],
+  [308, 272, 307, 239, 350, 215],
   [380, 200, 414, 160, 458, 160],
   [506, 159, 548, 192, 551, 237],
-  [554, 282, 501, 287, 492, 328],
-  [484, 364, 500, 371, 482, 415],
+  [554, 282, 502, 290, 492, 328],
+  [482, 366, 500, 373, 482, 415],
   [468, 455, 436, 484, 400, 496],
 ] satisfies Cubic[];
 
@@ -46,7 +46,7 @@ function completeRoute(start: Pt, curves: Cubic[]) {
 }
 
 export const spiralRibbonStrands = [
-  { id: 'scroll-1', name: 'Descending scroll ribbon', points: completeRoute({ x: 242, y: 276 }, descendingHalf) },
+  { id: 'scroll-1', name: 'Descending scroll ribbon', points: completeRoute({ x: 244, y: 269 }, descendingHalf) },
   { id: 'scroll-2', name: 'Returning scroll ribbon', points: completeRoute({ x: 483.8, y: 225.3 }, returningHalf) },
 ];
 
@@ -56,3 +56,10 @@ export const spiralRibbonCrossings: Readonly<Record<string, string>> = {
   'scroll-1|scroll-2': 'aba',
   'scroll-2|scroll-2': 'ab',
 };
+
+export function spiralBorderRoutes(points: Pt[], outerSpacing: number, innerSpacing: number) {
+  return [
+    { side: 'outer', points: offset(points, -outerSpacing) },
+    { side: 'inner', points: offset(points, innerSpacing) },
+  ] as const;
+}

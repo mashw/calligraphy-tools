@@ -132,7 +132,7 @@ export default function WovenSettings({design: group, onChange, model, selected,
               {toggle("fullGuides", "Show ascender and descender guides")}
             </div>
           </DisclosureSection>
-    <DisclosureSection title="Writing borders">
+    {group.preset !== 'spiral-ribbon-weave' && <DisclosureSection title="Writing borders">
       {(['outer', 'inner'] as const).map(side => {
         const border = design.borders?.[side] ?? defaultBorder;
         const change = (patch: Partial<WritingBorder>) => update('borders', {
@@ -158,7 +158,7 @@ export default function WovenSettings({design: group, onChange, model, selected,
           </>}
         </fieldset>;
       })}
-    </DisclosureSection>
+    </DisclosureSection>}
           <DisclosureSection
             title={
               design.script === "Copperplate"
