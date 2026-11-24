@@ -165,6 +165,20 @@ test('Four-scroll ribbon weave follows circular arcs around all six lobes', () =
   }
 });
 
+test('Four-scroll ribbon weave changes bend smoothly at arc joins', () => {
+  const points = spiralRibbonStrands[0].points;
+  const turn = (index: number) => {
+    const [a, b, c] = points.slice(index - 1, index + 2);
+    const x = b.x - a.x, y = b.y - a.y, u = c.x - b.x, v = c.y - b.y;
+    return Math.atan2(x * v - y * u, x * u + y * v);
+  };
+  for (const join of [23, 51, 102, 197, 234, 257, 310, 404, 430, 458]) {
+    const tolerance = Math.PI / 180;
+    assert.ok(Math.abs(turn(join) - turn(join - 1)) < tolerance, 'Incoming bend at join ' + join);
+    assert.ok(Math.abs(turn(join + 1) - turn(join)) < tolerance, 'Outgoing bend at join ' + join);
+  }
+});
+
 test('Four-scroll ribbon weave follows two closed paths through Layout Save/Open', () => {
   const design = fitWovenPreset(selectWovenPreset(DEFAULT_DESIGN, 'spiral-ribbon-weave'));
   const standalone = buildWovenRouteModel(design);

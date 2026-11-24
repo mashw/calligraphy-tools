@@ -55,31 +55,35 @@ const middleLobe = { x: 400, y: 370, radius: 116 };
 const rightScroll = { x: 522, y: 251, radius: 58 };
 const leftScroll = { x: 278, y: 251, radius: 58 };
 
-// The visible portions follow circles. Ease out of each circle only where
-// the strap turns into a bridge, crosses underneath, or enters a scroll eye.
-// Positions are measured in the segments of the traced upper route above.
+// Retain the circular sections and join them with tangent- and
+// curvature-matched transitions. The joins pass through the underpasses.
 const circularRuns = [
-  { circle: middleLobe, from: .21, roundFrom: .7, roundTo: 1.62, to: 2.22 },
-  { circle: rightScroll, from: 2.78, roundFrom: 3.18, roundTo: 6.18, to: 6.92 },
-  { circle: middleLobe, from: 6.58, roundFrom: 7.31, roundTo: 8.06, to: 8.72 },
-  { circle: leftScroll, from: 8.96, roundFrom: 9.66, roundTo: 12.65, to: 13.18 },
-  { circle: middleLobe, from: 12.85, roundFrom: 13.42, roundTo: 14.34, to: 14.89 },
+  { circle: middleLobe, from: .7, to: 1.62 },
+  { circle: rightScroll, from: 3.18, to: 6.18 },
+  { circle: middleLobe, from: 7.31, to: 8.06 },
+  { circle: leftScroll, from: 9.66, to: 12.65 },
+  { circle: middleLobe, from: 13.42, to: 14.34 },
 ];
 
-function roundLobes(point: Pt, position: number) {
-  const smooth = (value: number) => {
-    const t = Math.max(0, Math.min(1, value));
-    return t * t * t * (10 + t * (-15 + 6 * t));
-  };
-  for (const { circle, from, roundFrom, roundTo, to } of circularRuns) {
-    if (position <= from || position >= to) continue;
-    const weight = Math.min(smooth((position - from) / (roundFrom - from)), smooth((to - position) / (to - roundTo)));
-    const dx = point.x - circle.x, dy = point.y - circle.y;
-    const distance = Math.hypot(dx, dy);
-    const scale = 1 + weight * (circle.radius / distance - 1);
-    point = { x: circle.x + dx * scale, y: circle.y + dy * scale };
-  }
-  return point;
+type Frame = { point: Pt; tangent: Pt; curvature: Pt };
+const origin = { x: 0, y: 0 };
+
+function transition(start: Frame, end: Frame, steps: number, length: number): Pt[] {
+  const control = (frame: Frame, tangent: number, curvature: number) => ({
+    x: frame.point.x + frame.tangent.x * tangent * length + frame.curvature.x * curvature * length * length,
+    y: frame.point.y + frame.tangent.y * tangent * length + frame.curvature.y * curvature * length * length,
+  });
+  const points = [
+    start.point, control(start, .2, 0), control(start, .4, .05),
+    control(end, -.4, .05), control(end, -.2, 0), end.point,
+  ];
+  return Array.from({ length: steps }, (_, index) => {
+    const t = (index + 1) / steps, u = 1 - t;
+    const weights = [u ** 5, 5 * u ** 4 * t, 10 * u ** 3 * t ** 2, 10 * u ** 2 * t ** 3, 5 * u * t ** 4, t ** 5];
+    return points.reduce((point, control, i) => ({
+      x: point.x + weights[i] * control.x, y: point.y + weights[i] * control.y,
+    }), origin);
+  });
 }
 
 function broadRoute() {
@@ -88,7 +92,34 @@ function broadRoute() {
   for (const [x1, y1, x2, y2, x, y] of upperRoute) {
     trace.push(...sample(trace.at(-1)!, { x: x1, y: y1 }, { x: x2, y: y2 }, { x, y }, samplesPerSegment).slice(1));
   }
-  const upper = trace.map((point, index) => roundLobes(straighten(tuckScrollEye(point)), index / samplesPerSegment));
+  const reference = trace.map(point => straighten(tuckScrollEye(point)));
+  const angleDelta = (a: number, b: number) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
+  const unit = (x: number, y: number) => ({ x: x / Math.hypot(x, y), y: y / Math.hypot(x, y) });
+  const upper = [centre];
+  let last: Frame = { point: centre, tangent: unit(1, -.31), curvature: origin };
+  let lastIndex = 0;
+  const join = (frame: Frame, index: number) => {
+    let length = 0;
+    for (let i = lastIndex + 1; i <= index; i++) length += Math.hypot(reference[i].x - reference[i - 1].x, reference[i].y - reference[i - 1].y);
+    upper.push(...transition(last, frame, index - lastIndex, length));
+  };
+  for (const { circle, from, to } of circularRuns) {
+    const first = Math.ceil(from * samplesPerSegment), final = Math.floor(to * samplesPerSegment);
+    const angles = reference.slice(first, final + 1).map(p => Math.atan2(p.y - circle.y, p.x - circle.x));
+    const angle = angles[0];
+    const sweep = angles.slice(1).reduce((sum, next, i) => sum + angleDelta(angles[i], next), 0);
+    const direction = Math.sign(sweep);
+    const at = (theta: number): Frame => ({
+      point: { x: circle.x + circle.radius * Math.cos(theta), y: circle.y + circle.radius * Math.sin(theta) },
+      tangent: { x: -direction * Math.sin(theta), y: direction * Math.cos(theta) },
+      curvature: { x: -Math.cos(theta) / circle.radius, y: -Math.sin(theta) / circle.radius },
+    });
+    join(at(angle), first);
+    for (let i = first + 1; i <= final; i++) upper.push(at(angle + sweep * (i - first) / (final - first)).point);
+    last = at(angle + sweep);
+    lastIndex = final;
+  }
+  join({ point: centre, tangent: unit(1, .4), curvature: origin }, trace.length - 1);
   const lower = upper.slice(0, -1).reverse().map(({ x, y }) => ({ x: 2 * centre.x - x, y: 2 * centre.y - y }));
   return [...upper, ...lower];
 }
@@ -126,12 +157,12 @@ export function narrowScrollRoute(points: Pt[], spacing: number, switchPhase: nu
   const outside = scrollOffset(points, -spacing);
   const inside = scrollOffset(points, spacing);
   const count = points.length - 1;
-  const halfTransition = 6;
+  const halfTransition = 8;
   const switchIndex = Math.round(count * switchPhase);
   const path = Array.from({ length: 2 * count }, (_, index) => {
     const cycle = (index - switchIndex + halfTransition + 2 * count) % (2 * count);
     const fraction = Math.min(1, (cycle % count) / (2 * halfTransition));
-    const easing = fraction * fraction * (3 - 2 * fraction);
+    const easing = fraction ** 3 * (10 + fraction * (-15 + 6 * fraction));
     const weight = cycle < count ? easing : 1 - easing;
     const a = outside[index % count], b = inside[index % count];
     return { x: a.x + (b.x - a.x) * weight, y: a.y + (b.y - a.y) * weight };

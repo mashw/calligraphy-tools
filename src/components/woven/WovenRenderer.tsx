@@ -1,9 +1,10 @@
 'use client';
 import { TEXT_SPAN_STYLE } from '@/lib/guides/text-span-style';
 import { DEFAULT_TEXT_PLAN, textFit, wovenCompositionTextFit, wovenStrandTextPlan } from '@/lib/interlace/text-fit';
-import { initialSheet, strand } from '@/lib/interlace/model';
+import { initialSheet, interlaceGuideTags, strand, writingRoutes } from '@/lib/interlace/model';
 import { SheetLabels } from '@/components/preview/SheetLabels';
-import { interlaceGuideTags } from '@/lib/interlace/model';
+import { clipSlantToBand } from '@/lib/guides/slant-paths';
+import { scrollRibbonGroup } from '@/lib/woven/spiral-ribbon-weave';
 import { guideLabel, routeTag } from '@/lib/guides/sheet-labels';
 import { borderGuideTags, writingBands } from '@/lib/woven/bands';
 import { memo, useMemo } from 'react';
@@ -79,8 +80,19 @@ export const WovenScene = memo(function WovenScene({scene}:{scene:Scene}) {
 });
 
 export const WovenSimplified = memo(function WovenSimplified({model}:{model:ReturnType<typeof buildWovenRouteModel>}) {
+  const { composition } = model;
+  const scroll = composition?.graph.entries.some(({ s }) => s.group === scrollRibbonGroup);
+  const paths = scroll && composition
+    ? writingRoutes(composition.sheet, composition.graph).flatMap(({ route, regions }) =>
+        regions.flatMap(({ interval, polygons }) => {
+          const centreline = sliceGuide(route, route.points, interval);
+          return polygons.reduce((pieces, polygon) =>
+            pieces.flatMap(points => clipSlantToBand(points, polygon, false)), [centreline]);
+        }))
+    : model.intervals.map(interval => sliceGuide(model.route, model.route.points, interval));
   return <g data-woven-simplified="true" pointerEvents="none">
-    {model.intervals.map((interval,i)=><path key={i} d={pointsD(sliceGuide(model.route,model.route.points,interval))} fill="none" stroke="#52677c" strokeWidth={1.2} strokeLinecap="round"/>)}
+    {paths.map((points, i) => <path key={i} d={pointsD(points)} fill="none" stroke="#52677c" strokeWidth={1.2}
+      strokeLinecap={scroll ? 'butt' : 'round'} />)}
     {model.crossings.map(crossing=><circle key={crossing.id} cx={crossing.point.x} cy={crossing.point.y} r={1.8} fill="none" stroke="#9f483b" strokeWidth={.3}/>)}
   </g>;
 });
