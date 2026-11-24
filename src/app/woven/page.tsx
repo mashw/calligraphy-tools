@@ -58,12 +58,15 @@ export default function WovenPage() {
   const [status, setStatus] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
-  const drag = useRef<{pointer:number;x:number;y:number;inverse:DOMMatrix;origin:{x:number;y:number};center:{x:number;y:number};crossing:string|null;moved:boolean}|null>(null);
+  const drag = useRef<{pointer:number;x:number;y:number;inverse:DOMMatrix;origin:{x:number;y:number};center:{x:number;y:number};crossing:string|null;moved:boolean;offset:{x:number;y:number}}|null>(null);
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
+  const dragFrame = useRef<number | null>(null);
   const routeModel=useMemo(()=>buildWovenRouteModel(design),[design]);
-  const fullModel=useMemo(()=>previewSimplify?null:buildWovenModel(design),[design,previewSimplify]);
+  const fullModel=useMemo(()=>previewSimplify?null:buildWovenModel(design, { routeModel }),[design,routeModel,previewSimplify]);
   const model={...routeModel,warnings:routeModel.warnings,usableLength:routeModel.intervals.reduce((sum,[a,b])=>sum+b-a,0)};
   const scene=fullModel?(design.annotated?fullModel.annotated:fullModel.clean):null;
-  function exportScene(){const full=buildWovenModel(design);return design.annotated?full.annotated:full.clean;}
+  function exportScene(){const full=fullModel ?? buildWovenModel(design, { routeModel });return design.annotated?full.annotated:full.clean;}
+  const hitPaths = useMemo(() => routeModel.intervals.map(interval => pointsD(sliceGuide(routeModel.route, routeModel.route.points, interval))), [routeModel]);
   const fit=useMemo(()=>{
     const xs=routeModel.route.points.map(p=>p.x),ys=routeModel.route.points.map(p=>p.y),pad=routeModel.halfBand+8;
     return {x:Math.min(...xs)-pad,y:Math.min(...ys)-pad,w:Math.max(...xs)-Math.min(...xs)+pad*2,h:Math.max(...ys)-Math.min(...ys)+pad*2};
@@ -128,20 +131,36 @@ export default function WovenPage() {
     const matrix=svgRef.current?.getScreenCTM();if(!matrix)return;
     const inverse=matrix.inverse(),origin=new DOMPoint(e.clientX,e.clientY).matrixTransform(inverse);
     camera.freeze();
-    drag.current={pointer:e.pointerId,x:e.clientX,y:e.clientY,inverse,origin,center:{x:design.centerX??model.page.w/2,y:design.centerY??model.page.h/2},crossing:(e.target as Element).closest('[data-crossing]')?.getAttribute('data-crossing')??null,moved:false};
+    drag.current={pointer:e.pointerId,x:e.clientX,y:e.clientY,inverse,origin,center:{x:design.centerX??model.page.w/2,y:design.centerY??model.page.h/2},crossing:(e.target as Element).closest('[data-crossing]')?.getAttribute('data-crossing')??null,moved:false,offset:{x:0,y:0}};
     e.currentTarget.setPointerCapture(e.pointerId);setInteracting(true);
   }
   function pointerMove(e:React.PointerEvent<SVGSVGElement>) {
     const d=drag.current;if(!d||d.pointer!==e.pointerId)return;
     if(Math.hypot(e.clientX-d.x,e.clientY-d.y)>4)d.moved=true;
-    if(d.moved){const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(d.inverse);setDesign(current=>({...current,centerX:d.center.x+p.x-d.origin.x,centerY:d.center.y+p.y-d.origin.y}));}
+    if (!d.moved) return;
+    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(d.inverse);
+    d.offset = { x: p.x - d.origin.x, y: p.y - d.origin.y };
+    if (dragFrame.current !== null) return;
+    dragFrame.current = requestAnimationFrame(() => {
+      dragFrame.current = null;
+      if (drag.current === d) setDragOffset(d.offset);
+    });
+  }
+  function clearDrag() {
+    drag.current = null;
+    if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current);
+    dragFrame.current = null;
+    setDragOffset(null);
+    setInteracting(false);
   }
   function pointerUp(e:React.PointerEvent<SVGSVGElement>) {
     const d=drag.current;if(!d||d.pointer!==e.pointerId)return;
-    drag.current=null;setInteracting(false);
+    if (e.type !== 'pointercancel') pointerMove(e);
+    clearDrag();
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
-    if(e.type==='pointercancel'){setDesign(current=>({...current,centerX:d.center.x,centerY:d.center.y}));return;}
-    if(!d.moved&&d.crossing)flip(d.crossing);
+    if (e.type === 'pointercancel') return;
+    if (d.moved) setDesign(current => ({ ...current, centerX: d.center.x + d.offset.x, centerY: d.center.y + d.offset.y }));
+    else if (d.crossing) flip(d.crossing);
   }
   if (composition) return <WovenComposer initial={composition} onFinish={sheet=>{const next=fitWovenPreset({...designFromComposition(sheet),width:design.width,height:design.height});setDesign(next);setScaleBase(next);setSelected(null);setComposition(null);}}/>;
   return (
@@ -190,7 +209,7 @@ export default function WovenPage() {
               onPointerMove={pointerMove}
               onPointerUp={pointerUp}
               onPointerCancel={pointerUp}
-              onLostPointerCapture={()=>{drag.current=null;setInteracting(false);}}
+              onLostPointerCapture={event => { if (drag.current?.pointer === event.pointerId) clearDrag(); }}
             >
               <title>Woven Calligraphy writing sheet</title>
               <defs>
@@ -200,38 +219,40 @@ export default function WovenPage() {
               </defs>
               <rect width={model.page.w} height={model.page.h} fill="white" />
               <g clipPath="url(#woven-page)">
-                {scene?<><WovenScene scene={scene}/><WovenFitPreview design={design} model={routeModel}/></>:<WovenSimplified model={routeModel}/>}
-                <g data-woven-shape="true" data-camera-interactive="true" fill="none" stroke="transparent" strokeWidth={Math.max(5,routeModel.halfBand*2)} pointerEvents="stroke" style={{cursor:'move'}}>
-                  {routeModel.intervals.map((interval,i)=><path key={i} d={pointsD(sliceGuide(routeModel.route,routeModel.route.points,interval))}/>)}
-                </g>
-                {previewSimplify&&<rect x={fit.x+8} y={fit.y+8} width={fit.w-16} height={fit.h-16} fill="none" stroke="#818cf8" strokeWidth={.25} strokeDasharray="2 2" pointerEvents="none"/>}
-                {model.crossings.map((c, i) => (
-                  <g
-                    key={c.id}
-                    role="button"
-                    tabIndex={0}
-                    data-crossing={c.id}
-                    aria-label={`Swap crossing ${i + 1}`}
-                    aria-pressed={selected === c.id}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        flip(c.id);
-                      }
-                    }}
-                    className="cursor-pointer"
-                  >
-                    <title>{`Crossing ${i + 1}: click to swap over/under`}</title>
-                    <circle
-                      cx={c.point.x}
-                      cy={c.point.y}
-                      r={3.5}
-                      fill="transparent"
-                      stroke={selected === c.id ? "#4f46e5" : "transparent"}
-                      strokeWidth={0.35}
-                    />
+                <g transform={dragOffset ? "translate(" + dragOffset.x + " " + dragOffset.y + ")" : undefined}>
+                  {scene?<><WovenScene scene={scene}/><WovenFitPreview design={design} model={routeModel}/></>:<WovenSimplified model={routeModel}/>}
+                  <g data-woven-shape="true" data-camera-interactive="true" fill="none" stroke="transparent" strokeWidth={Math.max(5,routeModel.halfBand*2)} pointerEvents="stroke" style={{cursor:'move'}}>
+                    {hitPaths.map((d,i)=><path key={i} d={d}/>)}
                   </g>
-                ))}
+                  {previewSimplify&&<rect x={fit.x+8} y={fit.y+8} width={fit.w-16} height={fit.h-16} fill="none" stroke="#818cf8" strokeWidth={.25} strokeDasharray="2 2" pointerEvents="none"/>}
+                  {model.crossings.map((c, i) => (
+                    <g
+                      key={c.id}
+                      role="button"
+                      tabIndex={0}
+                      data-crossing={c.id}
+                      aria-label={`Swap crossing ${i + 1}`}
+                      aria-pressed={selected === c.id}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          flip(c.id);
+                        }
+                      }}
+                      className="cursor-pointer"
+                    >
+                      <title>{`Crossing ${i + 1}: click to swap over/under`}</title>
+                      <circle
+                        cx={c.point.x}
+                        cy={c.point.y}
+                        r={3.5}
+                        fill="transparent"
+                        stroke={selected === c.id ? "#4f46e5" : "transparent"}
+                        strokeWidth={0.35}
+                      />
+                    </g>
+                  ))}
+                </g>
               </g>
             </svg>
           </div>
@@ -304,7 +325,7 @@ export default function WovenPage() {
           <Button className={button} onClick={()=>setComposition(editableComposition(design))}>Compose straps</Button>
           <DisclosureSection title="Shape" defaultOpen headerAction={<CompactHelp label="Shape controls help" below><p>Type custom values or use the sliders. Scale changes width and height together, preserving their ratio.</p><p>Editing either dimension or opening a design sets the current size as the new 100% reference. Preset, loop depth and direction changes reset crossing choices.</p></CompactHelp>}>
             <div className="space-y-3" onPointerDownCapture={event=>{if((event.target as HTMLInputElement).type==='range'){camera.freeze();setInteracting(true);}}} onPointerUpCapture={()=>setInteracting(false)} onPointerCancelCapture={()=>setInteracting(false)} onFocusCapture={event=>{if((event.target as HTMLInputElement).type==='number'){camera.freeze();setInteracting(true);}}} onBlurCapture={()=>setInteracting(false)} onKeyDownCapture={event=>{if((event.target as HTMLInputElement).type==='range'&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){camera.freeze();setInteracting(true);}}} onKeyUpCapture={()=>setInteracting(false)}>
-              <div className="grid grid-cols-2 gap-2">{(['centerX','centerY'] as const).map((key,i)=><label key={key} className="text-sm">{i===0?'X position':'Y position'} (mm)<NumericInput className={field} aria-label={i===0?'X position':'Y position'} step="any" value={design[key]??(i===0?model.page.w:model.page.h)/2} onChange={event=>{if(Number.isFinite(event.target.valueAsNumber))update(key,event.target.valueAsNumber);}}/></label>)}</div>
+              <div className="grid grid-cols-2 gap-2">{(['centerX','centerY'] as const).map((key,i)=><label key={key} className="text-sm">{i===0?'X position':'Y position'} (mm)<NumericInput className={field} aria-label={i===0?'X position':'Y position'} step="any" value={(design[key]??(i===0?model.page.w:model.page.h)/2) + (dragOffset?.[i===0?"x":"y"] ?? 0)} onChange={event=>{if(Number.isFinite(event.target.valueAsNumber))update(key,event.target.valueAsNumber);}}/></label>)}</div>
               <Button className={button} onClick={()=>setDesign(current=>({...current,centerX:model.page.w/2,centerY:model.page.h/2}))}>Centre on page</Button>
               <label className="block space-y-1 text-sm">
                 Preset

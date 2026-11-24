@@ -1,3 +1,4 @@
+import { spiralRibbonStrands } from '../src/lib/woven/spiral-ribbon-weave.ts';
 import { DEFAULT_TEXT_PLAN } from '../src/lib/interlace/text-fit.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -143,4 +144,64 @@ test('Layout strap text survives reopening single and multi-strap presets in Wov
     const reopened = editableComposition(parseDesign({...design,strapTexts}));
     for (const s of reopened.strands) assert.equal(s.textPlan?.text,strapTexts[s.id]);
   }
+});
+
+test('Four-scroll ribbon weave wraps all six circles with tangent joins', () => {
+  const points = spiralRibbonStrands[0].points;
+  for (const [x, y, radius, minDegrees] of [
+    [400, 372.5, 116, 245], [400, 607.5, 116, 245],
+    [280, 252.5, 46, 320], [520, 252.5, 46, 320], [280, 727.5, 46, 320], [520, 727.5, 46, 320],
+  ]) {
+    let sweep = 0;
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1], b = points[i];
+      const onCircle = (p: typeof a) => Math.abs(Math.hypot(p.x - x, p.y - y) - radius) < 1e-7;
+      if (onCircle(a) && onCircle(b)) {
+        sweep += 2 * Math.asin(Math.hypot(b.x - a.x, b.y - a.y) / (2 * radius));
+      }
+    }
+    assert.ok(sweep * 180 / Math.PI >= minDegrees, 'Circular sweep around ' + [x, y]);
+  }
+  const loop = points.slice(0, -1);
+  for (let i = 0; i < loop.length; i++) {
+    const a = loop[(i + loop.length - 1) % loop.length], b = loop[i], c = loop[(i + 1) % loop.length];
+    const dx = b.x - a.x, dy = b.y - a.y, ux = c.x - b.x, uy = c.y - b.y;
+    const turn = Math.abs(Math.atan2(dx * uy - dy * ux, dx * ux + dy * uy));
+    assert.ok(turn < .044, 'Unexpected corner at sample ' + i);
+  }
+});
+
+test('Four-scroll ribbon weave follows two closed paths through Layout Save/Open', () => {
+  const design = fitWovenPreset(selectWovenPreset(DEFAULT_DESIGN, 'spiral-ribbon-weave'));
+  const standalone = buildWovenRouteModel(design);
+  const entries = standalone.composition?.graph.entries ?? [];
+  assert.equal(entries.length, 2);
+  const [broad, narrow] = entries;
+  assert.equal(broad.route.closed, true);
+  assert.equal(narrow.route.closed, true);
+  assert.equal(narrow.s.design.nib, broad.s.design.nib / 3);
+  assert.ok(narrow.route.length > broad.route.length * 1.8);
+
+  const broadVisits = (hits: NonNullable<typeof standalone.composition>['graph']['hits']) =>
+    hits.filter(hit => hit.a.id === broad.s.id && hit.b.id === broad.s.id).map(hit => hit.over);
+  assert.deepEqual(broadVisits(standalone.composition?.graph.hits ?? []), ['a', 'b', 'b', 'a', 'a']);
+  assert.equal(standalone.crossings.length, 5);
+  const flipped = buildWovenRouteModel({ ...design, overrides: { 'crossing-0': 'b' } });
+  assert.deepEqual(broadVisits(flipped.composition?.graph.hits ?? []), ['b', 'b', 'b', 'a', 'a']);
+  assert.equal(flipped.composition?.graph.entries[1].route.closed, true);
+
+  const element = newElement('woven', 1, { width: 210, height: 297 }) as WovenElement;
+  element.settings = wovenSettings({ ...design, strapTexts: { 'scroll-2': 'One narrow route' } });
+  element.frame = { x: 40, y: 34, width: design.width, height: design.height };
+  const reopened = parseLayoutDesign(serializeLayoutDesign([element, pageElement()], element.id)).elements[0];
+  assert.equal(reopened.type, 'woven');
+  if (reopened.type !== 'woven') throw Error('Missing Woven element');
+
+  const layout = buildWovenRouteModel(layoutWovenDesign(reopened));
+  assert.equal(layout.composition?.graph.entries.length, 2);
+  assert.equal(layout.composition?.sheet.strands[1].textPlan?.text, 'One narrow route');
+  assert.deepEqual(broadVisits(layout.composition?.graph.hits ?? []), ['a', 'b', 'b', 'a', 'a']);
+  const strokes = layoutWovenModel(reopened).clean.strokes;
+  assert.ok(strokes.length > 100);
+  assert.ok(strokes.every(stroke => stroke.points.every(point => Number.isFinite(point.x) && Number.isFinite(point.y))));
 });

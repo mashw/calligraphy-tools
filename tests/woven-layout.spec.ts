@@ -99,3 +99,27 @@ test('Layout Woven full SVG, PDF, Print and Cricut exports survive Simplify and 
   await page.getByRole('button',{name:'Cricut Draw',exact:true}).click();await page.getByRole('button',{name:'Export Cricut SVG',exact:true}).click();
   const cricut=await exportedText(page,'image/svg+xml');expect(cricut).not.toContain('<image');expect(cricut).toContain('fill="none"');expect(cricut).not.toContain('data-woven-simplified');
 });
+
+test('Layout Fraktur S-curve text continues onto the second strap', async ({ page }) => {
+  await page.goto('/layout');
+  await page.getByText('Add element', { exact: true }).click();
+  await page.getByRole('button', { name: 'Woven Calligraphy', exact: true }).click();
+  await page.getByRole('button', { name: 'Shape & Geometry', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Preset', exact: true }).selectOption('fraktur-scurve-weave-2');
+  await page.getByRole('button', { name: 'Text fit', exact: true }).click();
+
+  const text = page.getByRole('textbox', { name: 'Strap text' });
+  const spans = page.locator('[data-layout-id] path[fill="rgba(139, 92, 246, 0.18)"]');
+  const farthestRight = () => spans.evaluateAll(nodes => Math.max(...nodes.map(node => {
+    const { x, width } = (node as SVGPathElement).getBBox();
+    return x + width;
+  })));
+
+  await text.fill('ffff');
+  await expect(spans.first()).toBeVisible();
+  const firstStrap = await farthestRight();
+  await text.fill('f'.repeat(165));
+  await expect.poll(farthestRight).toBeGreaterThan(firstStrap + 10);
+  await page.getByRole('checkbox', { name: 'Count hidden lettering' }).check();
+  await expect.poll(farthestRight).toBeGreaterThan(firstStrap + 10);
+});

@@ -26,7 +26,7 @@ import { buildInterlacePlotterExport, DEFAULT_INTERLACE_PLOTTER_OPTIONS } from '
 
 
 import { exportForLayout } from '@/lib/interlace/layout-source';
-import { textFit } from '@/lib/interlace/text-fit';
+import { textFit, type TextPlan } from '@/lib/interlace/text-fit';
 import { highContrastScene, textEstimateScene } from '@/lib/interlace/preview';
 import TextFitPanel from '@/components/interlace/TextFitPanel';
 type Mode = 'Move'|'Crossings'|'Joins';
@@ -43,7 +43,18 @@ function measure(label:string,value:number,change:(v:number)=>void,min:number,ma
     }}/></label>;
 }
 export default function WovenComposer({initial,onApply,onClose,onFinish}:{initial?:Sheet;onFinish?:(sheet:Sheet)=>void;onApply?:(sheet:Sheet)=>void;onClose?:()=>void}) {
-  const [sheet,setSheet]=useState(()=>initial ?? initialSheet()),[active,setActive]=useState(initial?.strands[0]?.id ?? 'rosette');
+  const [geometrySheet, setGeometrySheet] = useState(() => initial ?? initialSheet());
+  const [textEdits, setTextEdits] = useState<Record<string, TextPlan>>({});
+  const sheet = useMemo(() => Object.keys(textEdits).length ? {
+    ...geometrySheet,
+    strands: geometrySheet.strands.map(strand => Object.hasOwn(textEdits, strand.id)
+      ? { ...strand, textPlan: textEdits[strand.id] } : strand),
+  } : geometrySheet, [geometrySheet, textEdits]);
+  const [active, setActive] = useState(initial?.strands[0]?.id ?? 'rosette');
+  function setSheet(next: Sheet) {
+    setGeometrySheet(next);
+    setTextEdits({});
+  }
   const [mode,setMode]=useState<Mode>('Move'),[simplify,setSimplify]=useState(false),[busy,setBusyState]=useState(false);
   const [source,setSource]=useState('rosette'),[notice,setNotice]=useState(''),[picked,setPicked]=useState<Choice|null>(null);
   const [plotOpen,setPlotOpen]=useState(false);
@@ -56,19 +67,26 @@ export default function WovenComposer({initial,onApply,onClose,onFinish}:{initia
   const upload=useRef<HTMLInputElement>(null);
   const [onlySelected,setOnlySelected]=useState(false);
   const svg=useRef<SVGSVGElement>(null),file=useRef<HTMLInputElement>(null);
-  const drag=useRef<{sheet:Sheet;id:string;inverse:DOMMatrix;x:number;y:number;pointer:number}|null>(null);
+  const drag = useRef<{ sheet: Sheet; member: Strand; ids: Set<string>; inverse: DOMMatrix; x: number; y: number; pointer: number; dx: number; dy: number } | null>(null);
+  const [dragOffset, setDragOffset] = useState<{ ids: Set<string>; dx: number; dy: number } | null>(null);
+  const dragFrame = useRef<number | null>(null);
   const current=sheet.strands.find(s=>s.id===active);
   const closed=current && (current.source.kind!=='path' || current.source.closed);
   const page=pageSize(sheet),frame={x:0,y:0,w:page.w,h:page.h};
-  const entries=useMemo(()=>sheet.strands.filter(s=>s.visible).map(s=>({s,route:strandRoute(s,sheet)})),[sheet]);
-  const graph=useMemo(()=>busy?null:topology(sheet),[sheet,busy]);
-  const full=useMemo(()=>graph && !simplify?renderSheet(sheet,graph):null,[sheet,graph,simplify]);
-  const camera=useEditorCamera(svg,frame,pointBounds(entries.flatMap(e=>e.route.points),frame,10));
+  const entries = useMemo(() => geometrySheet.strands.filter(s => s.visible).map(s => {
+    const route = strandRoute(s, geometrySheet);
+    return { s, route, path: pointsD(route.points) };
+  }), [geometrySheet]);
+  const graph = useMemo(() => busy ? null : topology(geometrySheet), [geometrySheet, busy]);
+  const full = useMemo(() => graph && !simplify ? renderSheet(geometrySheet, graph) : null, [geometrySheet, graph, simplify]);
+  const bounds = useMemo(() => pointBounds(entries.flatMap(e => e.route.points), { x: 0, y: 0, w: page.w, h: page.h }, 10), [entries, page.w, page.h]);
+  const camera = useEditorCamera(svg, frame, bounds);
   const fits=useMemo(()=>graph?sheet.strands.filter(s=>s.visible&&s.textPlan?.text).map(s=>({id:s.id,name:s.name,fit:textFit(sheet,s,graph)})):[],[sheet,graph]);
   const fit=fits.find(f=>f.id===active)?.fit??null;
   const previewScene=useMemo(()=>full&&contrast?highContrastScene(full):full,[full,contrast]);
   const estimate=useMemo(()=>fit&&current?.textPlan?.preview?textEstimateScene(fit):null,[fit,current]);
-  const warn=busy?heldWarnings:[...(graph?warnings(sheet,graph):[]),...fits.filter(f=>!f.fit.fits).map(f=>f.name+': Text extends beyond the available strap.')];
+  const geometryWarnings = useMemo(() => graph ? warnings(geometrySheet, graph) : [], [geometrySheet, graph]);
+  const warn=busy?heldWarnings:[...geometryWarnings,...fits.filter(f=>!f.fit.fits).map(f=>f.name+': Text extends beyond the available strap.')];
   function setBusy(value:boolean){if(value)setHeldWarnings(warn);setBusyState(value);}
   function commit(next:Sheet) {
     if(next.overrides.length) {
@@ -116,8 +134,9 @@ export default function WovenComposer({initial,onApply,onClose,onFinish}:{initia
     try {
     if(kind==='Export for Layout'){download(exportForLayout(sheet).replace('<svg ', '<svg data-woven-composition="1" '),'image/svg+xml','woven-layout.svg');setNotice('Editable SVG exported for Layout at its physical size.');return;}
     if(kind==='Cricut Draw'){setPlotOpen(true);return;}
-    const scene=renderSheet(sheet);
-    if(includeText)for(const s of sheet.strands.filter(s=>s.visible&&s.textPlan?.text)){const estimate=textEstimateScene(textFit(sheet,s));scene.strokes.push(...estimate.strokes);}
+    const exportGraph = graph ?? topology(sheet);
+    const scene=renderSheet(sheet, exportGraph);
+    if(includeText)for(const s of sheet.strands.filter(s=>s.visible&&s.textPlan?.text)){const estimate=textEstimateScene(textFit(sheet,s,exportGraph));scene.strokes.push(...estimate.strokes);}
     setNotice(kind+' export prepared.');
     if(kind==='PDF'){download(new Uint8Array(scenePdf(scene)).buffer,'application/pdf','interlace.pdf');return;}
     const xml=sceneSvg(scene).replace('Woven Calligraphy writing guides','Interlace Studio');
@@ -135,23 +154,46 @@ export default function WovenComposer({initial,onApply,onClose,onFinish}:{initia
     setActive(s.id);if(s.locked)return;
     const matrix=svg.current?.getScreenCTM();if(!matrix)return;
     const inverse=matrix.inverse(),p=point(e,inverse);camera.freeze();
-    drag.current={sheet,id:s.id,inverse,x:p.x,y:p.y,pointer:e.pointerId};svg.current?.setPointerCapture(e.pointerId);setBusy(true);
+    const ids = new Set(sheet.strands.filter(item => !item.locked && (item.id === s.id || (s.group && item.group === s.group))).map(item => item.id));
+    drag.current = { sheet, member: s, ids, inverse, x: p.x, y: p.y, pointer: e.pointerId, dx: 0, dy: 0 };
+    svg.current?.setPointerCapture(e.pointerId);
+    setBusy(true);
   }
-  function move(e:PointerEvent<SVGSVGElement>) {
-    const d=drag.current;if(!d||d.pointer!==e.pointerId)return;
-    const p=point(e,d.inverse),member=d.sheet.strands.find(s=>s.id===d.id)!;
-    const snap=(v:number)=>d.sheet.snap?Math.round(v*2)/2:v;
-    const cx=member.design.centerX??page.w/2,cy=member.design.centerY??page.h/2;
-    const dx=snap(cx+p.x-d.x)-cx,dy=snap(cy+p.y-d.y)-cy;
-    setSheet({...d.sheet,strands:d.sheet.strands.map(s=>{
-      if(s.locked || (s.id!==member.id && (!member.group || member.group!==s.group))) return s;
-      return {...s,design:{...s.design,centerX:(s.design.centerX??page.w/2)+dx,centerY:(s.design.centerY??page.h/2)+dy}};
-    })});
+  function move(e: PointerEvent<SVGSVGElement>) {
+    const d = drag.current;
+    if (!d || d.pointer !== e.pointerId) return;
+    const p = point(e, d.inverse);
+    const snap = (value: number) => d.sheet.snap ? Math.round(value * 2) / 2 : value;
+    const cx = d.member.design.centerX ?? page.w / 2, cy = d.member.design.centerY ?? page.h / 2;
+    d.dx = snap(cx + p.x - d.x) - cx;
+    d.dy = snap(cy + p.y - d.y) - cy;
+    if (dragFrame.current !== null) return;
+    dragFrame.current = requestAnimationFrame(() => {
+      dragFrame.current = null;
+      if (drag.current === d) setDragOffset({ ids: d.ids, dx: d.dx, dy: d.dy });
+    });
   }
-  function finish(e:PointerEvent<SVGSVGElement>) {
-    const d=drag.current;if(!d||d.pointer!==e.pointerId)return;
-    drag.current=null;setBusy(false);if(e.type==='pointercancel')setSheet(d.sheet);else commit(sheet);
-    if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
+  function clearDrag() {
+    drag.current = null;
+    if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current);
+    dragFrame.current = null;
+    setDragOffset(null);
+    setBusy(false);
+  }
+  function finish(e: PointerEvent<SVGSVGElement>) {
+    const d = drag.current;
+    if (!d || d.pointer !== e.pointerId) return;
+    if (e.type !== 'pointercancel') {
+      const end = point(e, d.inverse);
+      if (d.dx || d.dy || end.x !== d.x || end.y !== d.y) move(e);
+      if (d.dx || d.dy) {
+        commit({ ...d.sheet, strands: d.sheet.strands.map(s => d.ids.has(s.id) ? {
+          ...s, design: { ...s.design, centerX: (s.design.centerX ?? page.w / 2) + d.dx, centerY: (s.design.centerY ?? page.h / 2) + d.dy },
+        } : s) });
+      }
+    }
+    clearDrag();
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   }
   const joins=mode!=='Joins'?[]:entries.flatMap(a=>entries.filter(b=>canJoin(a,b)).map(b=>({from:a.s,to:b.s,point:(a.s.design.reverse?a.route.points[0]:a.route.points.at(-1))!})));
   function toggleJoin(from:string,to:string) {
@@ -212,11 +254,11 @@ export default function WovenComposer({initial,onApply,onClose,onFinish}:{initia
     <div role="status" aria-label="Action notification" aria-live="polite" aria-atomic="true" className={notice?'pointer-events-none fixed bottom-4 right-4 z-50 flex w-80 max-w-[90vw] items-start gap-2 rounded border bg-white p-3 text-sm shadow-lg':'sr-only'}>{notice}{notice&&<Button className="pointer-events-auto" aria-label="Dismiss notification" onClick={()=>setNotice('')}>�</Button>}</div>
     <div className={row} role="group" aria-label="Editing mode">{(['Move','Crossings','Joins'] as const).map(v=><Button key={v} aria-pressed={mode===v} onClick={()=>setMode(v)}>{v}</Button>)}</div>
     <svg ref={svg} className="editor-svg bg-slate-200" viewBox={camera.str} aria-label="Interlace writing sheet"
-      onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={()=>{if(drag.current){setSheet(drag.current.sheet);drag.current=null;setBusy(false);}}}>
+      onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={event => { if (drag.current?.pointer === event.pointerId) clearDrag(); }}>
       <defs><clipPath id="interlace-paper"><rect width={page.w} height={page.h}/></clipPath></defs>
       <rect width={page.w} height={page.h} fill="white"/>
       <g clipPath="url(#interlace-paper)">{previewScene&&<WovenScene scene={previewScene}/>}{estimate&&!busy&&!simplify&&<g data-text-estimate="" pointerEvents="none">{fit && <WovenFitSpan fit={fit}/>}<WovenScene scene={estimate}/>{fit?.lines.flatMap((line,i)=>line.placements.filter(p=>p.sMid<=line.available+p.w/2).map((p,j)=><text key={i+':'+j} transform={`translate(${p.point.x} ${p.point.y}) rotate(${Math.atan2(p.tangent.y,p.tangent.x)*180/Math.PI})`} y={-p.h*.3} textAnchor="middle" fontSize={Math.max(1.5,p.h*.55)} fill={p.collision?'#b91c1c':'#312e81'}>{p.ch}</text>))}</g>}
-        {entries.map(({s,route})=><path key={s.id} data-camera-interactive="" aria-label={s.name} d={pointsD(route.points)} fill="none"
+        {entries.map(({s,path})=><path key={s.id} data-camera-interactive="" aria-label={s.name} d={path} transform={dragOffset?.ids.has(s.id) ? "translate(" + dragOffset.dx + " " + dragOffset.dy + ")" : undefined} fill="none"
           stroke={contrast?(s.id===active?'#1e40af':'#111827'):s.color} strokeWidth={full?7:contrast?1.4:1} strokeOpacity={full?0:1} pointerEvents={mode==='Move'?'stroke':'none'}
           style={{cursor:s.locked?'default':'move'}} onPointerDown={e=>start(e,s)}/>)}
         {mode==='Crossings' && graph?.hits.map((h,i)=>(!onlySelected||h.a.id===active||h.b.id===active)&&<g key={i} data-camera-interactive="" data-crossing-kind={h.a.id===h.b.id?'self':'between'} onClick={()=>flip(h)}>
@@ -284,8 +326,8 @@ export default function WovenComposer({initial,onApply,onClose,onFinish}:{initia
         </div></DisclosureSection>
         <DisclosureSection title="Position & transform" defaultOpen><div className="space-y-2 text-sm">
           <div onPointerDown={()=>setBusy(true)} onPointerUp={()=>setBusy(false)} onPointerCancel={()=>setBusy(false)} onBlur={()=>setBusy(false)}>
-          {measure('X (mm)',current.design.centerX??page.w/2,v=>design({centerX:v}),-10000,10000,.5)}
-          {measure('Y (mm)',current.design.centerY??page.h/2,v=>design({centerY:v}),-10000,10000,.5)}
+          {measure('X (mm)', (current.design.centerX ?? page.w / 2) + (dragOffset?.ids.has(active) ? dragOffset.dx : 0),v=>design({centerX:v}),-10000,10000,.5)}
+          {measure('Y (mm)', (current.design.centerY ?? page.h / 2) + (dragOffset?.ids.has(active) ? dragOffset.dy : 0),v=>design({centerY:v}),-10000,10000,.5)}
           {measure('Width (mm)',current.design.width,v=>design({width:v}),.01,10000,.5)}
           {measure('Height (mm)',current.design.height,v=>design({height:v}),.01,10000,.5)}
           {measure('Scale (%)',current.scale,v=>patch({scale:v}),.01,1000)}
@@ -296,7 +338,7 @@ export default function WovenComposer({initial,onApply,onClose,onFinish}:{initia
             <Button aria-pressed={current.invert} onClick={()=>patch({invert:!current.invert})}>Invert guides</Button>
 </div>
         </div></DisclosureSection>
-        <TextFitPanel value={current.textPlan} result={fit} copperplate={current.design.script==='Copperplate'} onChange={textPlan=>patch({textPlan})}/>
+        <TextFitPanel value={current.textPlan} result={fit} copperplate={current.design.script==='Copperplate'} onChange={textPlan => setTextEdits(edits => ({ ...edits, [current.id]: textPlan }))}/>
         <WovenSettings design={current.design} onChange={d=>patch({design:d})}/>
         <DisclosureSection title="Writing direction & crossings"><div className="space-y-2 text-sm">
           <Button aria-pressed={current.design.reverse} onClick={()=>design({reverse:!current.design.reverse})}>Reverse direction</Button>

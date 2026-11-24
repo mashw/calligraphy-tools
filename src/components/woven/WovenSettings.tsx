@@ -101,6 +101,7 @@ export default function WovenSettings({design: group, onChange, model, selected,
               {active && <label className="block text-sm">Editing strap<Select className={field} value={active.id}
                 onChange={event => setStrapId(event.target.value)}>{straps.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></label>}
             </div>}
+            <Switch label="Outlines only" checked={!!group.outlinesOnly} onChange={outlinesOnly => onChange({...group,outlinesOnly})}/>
             {model && <Switch label="Show guide tags" checked={design.showGuideTags ?? true} onChange={checked => update("showGuideTags", checked)} />}
             <div className="space-y-3">
               <label className="block space-y-1 text-sm">
@@ -132,7 +133,7 @@ export default function WovenSettings({design: group, onChange, model, selected,
               {toggle("fullGuides", "Show ascender and descender guides")}
             </div>
           </DisclosureSection>
-    <DisclosureSection title="Writing borders">
+    {group.preset !== 'spiral-ribbon-weave' && <DisclosureSection title="Writing borders">
       {(['outer', 'inner'] as const).map(side => {
         const border = design.borders?.[side] ?? defaultBorder;
         const change = (patch: Partial<WritingBorder>) => update('borders', {
@@ -158,7 +159,7 @@ export default function WovenSettings({design: group, onChange, model, selected,
           </>}
         </fieldset>;
       })}
-    </DisclosureSection>
+    </DisclosureSection>}
           <DisclosureSection
             title={
               design.script === "Copperplate"
@@ -207,7 +208,7 @@ export default function WovenSettings({design: group, onChange, model, selected,
                   {numeric("penAngle", "Pen angle", 1, "°")}
                   </>}
                   {gridVisible && numeric("gridContrast", "Grid contrast", 0.05)}
-                  {(gridVisible || constructionVisible) && numeric("gridThickness", "Guide thickness", 0.01, "mm")}
+                  {(gridVisible || constructionVisible) && numeric("gridThickness", gridVisible ? "Grid thickness at 2 mm nib" : "Guide thickness", 0.01, "mm")}
                 </>
               )}
             </div>

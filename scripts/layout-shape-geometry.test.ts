@@ -8,6 +8,8 @@ import { artworkBoundsContains, usesArtworkBoundsOcclusion } from '../src/lib/la
 import { resolveHorizontalGridAppearance } from '../src/lib/guides/horizontal-grid.ts';
 import { dashHorizontalGuidePoints, dashPolylinePoints } from '../src/lib/guides/polyline-dash.ts';
 import { boundsOfRotatedFrame, inverseRotatePoint, normalizeDegrees, rotatePoint, rotatePoints } from '../src/lib/layout/geometry.ts';
+import { buildGuidelinesLineLayoutPlan, buildGuidelinesVisibilityCacheKey, getCachedGuidelinesCollisionSpans, getCachedGuidelinesPlacementSpans } from '../src/lib/layout/guidelines-text-fit.ts';
+import { newElement, pageElement, pageSize, type LayoutElement } from '../src/lib/layout/types.ts';
 
 const close=(actual:number,expected:number,message?:string)=>assert(Math.abs(actual-expected)<1e-9,message??`${actual} should equal ${expected}`);
 
@@ -198,16 +200,32 @@ test('visibility cache includes both planning toggles',()=>{
   assert.match(source,/occluders=element\.avoidOccludingElements!==false\?/);
 });
 
-test('overlapping elements warn without repositioning guideline text',()=>{
-  const planning=readFileSync(new URL('../src/lib/layout/guidelines-text-fit.ts',import.meta.url),'utf8');
-  const page=readFileSync(new URL('../src/app/layout/page.tsx',import.meta.url),'utf8');
-  const panel=readFileSync(new URL('../src/components/guidelines/GuidelinesSettingsPanel.tsx',import.meta.url),'utf8');
-  assert.match(planning,/getCachedGuidelinesPlacementSpans[\s\S]*?buildGuidelinesVisibleSpans\(\{\.\.\.element,\s*avoidOccludingElements:\s*false\},\s*page,\s*\[\]\)/);
-  assert.match(planning,/buildGuidelinesCollisionSpans[\s\S]*?pageWaist[\s\S]*?pageBase/);
-  assert.match(page,/collisionSpans=getCachedGuidelinesCollisionSpans[\s\S]*?placementSpans=getCachedGuidelinesPlacementSpans/);
-  assert.match(page,/buildGuidelinesTextFitPlan\(item,placementSpans\)/);
-  assert.match(page,/buildGuidelinesLineLayoutPlan\(item,placementSpans,page,collisionSpans,elements\)/);
-  assert.match(panel,/Flag element collisions/);
+test('overlapping elements warn without repositioning guideline text', () => {
+  const page = pageElement();
+  const guidelines = newElement('guidelines', 1, pageSize(page));
+  const shape = newElement('shape', 1, pageSize(page));
+  assert.ok(guidelines.type === 'guidelines' && shape.type === 'shape');
+  guidelines.mask.enabled = false;
+  guidelines.plannedLines = [{ id: 'first', text: 'Father Christmas', alignment: 'left', customStartMM: 0 }];
+  const placements = getCachedGuidelinesPlacementSpans(guidelines, page);
+  const plan = (higher: LayoutElement[]) => {
+    const elements = [...higher, guidelines, page];
+    const key = buildGuidelinesVisibilityCacheKey(guidelines, page, higher);
+    const collisions = getCachedGuidelinesCollisionSpans(key, guidelines, page, elements);
+    return buildGuidelinesLineLayoutPlan(guidelines, placements, page, collisions, elements).lines[0];
+  };
+
+  const before = plan([]);
+  const first = before.glyphs[0];
+  shape.frame = { x: first.startX - 1, y: before.waistY - 1, width: first.endX - first.startX + 2, height: before.baseY - before.waistY + 2 };
+  shape.settings.kind = 'rectangle';
+
+  const after = plan([shape]);
+  assert.equal(before.collision, false);
+  assert.equal(after.collision, true);
+  assert.equal(after.glyphs[0].collision, true);
+  assert.equal(after.baselineStartX, before.baselineStartX);
+  assert.deepEqual(after.glyphs.map(glyph => [glyph.startX, glyph.endX]), before.glyphs.map(glyph => [glyph.startX, glyph.endX]));
 });
 
 test('Line Layout selects one fitting contiguous span for every alignment',()=>{

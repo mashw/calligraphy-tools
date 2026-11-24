@@ -1,3 +1,5 @@
+import { saxonMarginBraid, marginBraidStrands } from '../woven/saxon-margin-braid';
+import { roundedPageStrands, roundedPageWeave } from '../woven/rounded-page-interlace';
 import { compositionPresets } from '../paths/composition-presets';
 import type { Design } from '../woven/design';
 import { DEFAULT_TEXT_PLAN, readTextPlan } from './text-fit';
@@ -5,9 +7,10 @@ import { findCrossingsForStraps, slotOrderForPair } from '../paths/intersections
 import { samplePathDToPolyline } from '../paths/sample-svg-path';
 import { PAPERS_MM, pathD } from '../curve-helpers';
 import { parseDesign, DEFAULT_DESIGN, strapLettering, isWovenCompositionPreset, LIMITS, pageSize } from '../woven/design';
+import { narrowScrollRoute, scrollPhase, scrollRibbonGroup, spiralRibbonCrossings, spiralRibbonStrands, spiralRibbonWeave } from '../woven/spiral-ribbon-weave';
 import { gothicCapCrossings, gothicCapStrands, gothicCapWeave } from '../woven/gothic-cap-weave';
 import { findSelfCrossings, makeRoute, type Point } from '../woven/geometry';
-import { canJoin, initialSheet, strand, strandRoute, topology, type Source, type Strand, type Sheet } from './model';
+import { canJoin, initialSheet, strand, strandRoute, topology, type Hit, type Source, type Strand, type Sheet } from './model';
 
 function record(v:unknown): Record<string,unknown> {
   if(!v || typeof v!=='object' || Array.isArray(v)) throw Error('Expected a design object.');
@@ -191,9 +194,10 @@ function compositionGeometry(design: Design) {
   let sheet: Sheet;
   if (presetId === 'custom-composition' && design.composition) {
     sheet = structuredClone(design.composition);
-  } else if (presetId === gothicCapWeave.id) {
+  } else if (presetId === gothicCapWeave.id || presetId === spiralRibbonWeave.id || presetId === roundedPageWeave.id || presetId === saxonMarginBraid.id) {
     sheet = initialSheet();
-    sheet.strands = gothicCapStrands.map(({ id, name, points }) => {
+    const strands = presetId === saxonMarginBraid.id ? marginBraidStrands : presetId === gothicCapWeave.id ? gothicCapStrands : presetId === roundedPageWeave.id ? roundedPageStrands : spiralRibbonStrands;
+    sheet.strands = strands.map(({ id, name, points }) => {
       const { source, center } = pathSource(pathD(points), points);
       return strand(id, name, source, {
         ...DEFAULT_DESIGN, width:source.width, height:source.height, centerX:center.x, centerY:center.y,
@@ -226,6 +230,48 @@ export function fitWovenPreset(design: Design): Design {
   return {...design,width:span*widthScale,height:span*heightScale};
 }
 
+function addNarrowScroll(sheet: Sheet, design: Design, switchPhase: number) {
+  const main = sheet.strands[0];
+  main.group = scrollRibbonGroup;
+  main.design = { ...main.design, borders: undefined };
+  const id = 'scroll-2';
+  const narrow = {
+    ...main.design, nib: Math.max(LIMITS.nib[0], design.nib / 3), ascNib: 1.25, descNib: 1.25,
+    ...(design.independentStraps ? design.strapStyles?.[id] : {}),
+  };
+  const unit = (d: Design) => d.script === 'Copperplate' ? 1 : d.nib;
+  const halfWidth = (d: Design) => unit(d) * (d.xNib / 2 + (d.fullGuides ? Math.max(d.ascNib, d.descNib) : 0));
+  const points = narrowScrollRoute(strandRoute(main, sheet).points, halfWidth(main.design) + halfWidth(narrow), switchPhase);
+  const { source, center } = pathSource(pathD(points), points);
+  const border = strand(id, 'Narrow scroll strap', source, {
+    ...narrow, width: source.width, height: source.height, centerX: center.x, centerY: center.y,
+  });
+  border.group = scrollRibbonGroup;
+  // The outline follows the same direction through both laps.
+  const text = design.strapTexts?.[id];
+  if (text !== undefined) {
+    border.textPlan = { ...DEFAULT_TEXT_PLAN, text, countHidden: design.hiddenTextStraps?.includes(id) };
+  }
+  sheet.strands.push(border);
+}
+
+function scrollCrossingChoice(hit: Hit, mainCrossings: Hit[]) {
+  const a = scrollPhase(hit.a.id, hit.a.t), b = scrollPhase(hit.b.id, hit.b.t);
+  const distance = (x: number, y: number) => Math.min(Math.abs(x - y), 1 - Math.abs(x - y));
+  // The two narrow laps change sides underneath the same broad underpass.
+  if (distance(a, b) < .025) return hit.a.id === 'scroll-1' ? 'a' : hit.over;
+  let best = Infinity;
+  let choice = hit.over;
+  for (const crossing of mainCrossings) {
+    const normal = Math.hypot(distance(crossing.a.t, a), distance(crossing.b.t, b));
+    const swapped = Math.hypot(distance(crossing.a.t, b), distance(crossing.b.t, a));
+    if (Math.min(normal, swapped) >= best) continue;
+    best = Math.min(normal, swapped);
+    choice = normal <= swapped ? crossing.over : crossing.over === 'a' ? 'b' : 'a';
+  }
+  return choice;
+}
+
 export function wovenComposition(design: Design): Sheet {
   const {sheet,routes,left,top,width,height} = compositionGeometry(design);
   const page = pageSize(design);
@@ -252,18 +298,34 @@ export function wovenComposition(design: Design): Sheet {
   });
   const hits = topology(sheet).hits;
   const visits = new Map<string, number>();
+  const crossingOrder = design.preset === gothicCapWeave.id ? gothicCapCrossings
+    : design.preset === spiralRibbonWeave.id ? spiralRibbonCrossings : undefined;
   const dormant = sheet.overrides.filter(c => sheet.strands.some(s => !s.visible && (s.id === c.a.id || s.id === c.b.id)));
-  sheet.overrides = hits.map((hit, i) => {
+  const authoredHits = hits.map((hit, i) => {
     let over = hit.over;
-    if (design.preset === gothicCapWeave.id) {
+    if (crossingOrder) {
       const pair = hit.a.id + '|' + hit.b.id;
       const visit = visits.get(pair) ?? 0;
       visits.set(pair, visit + 1);
-      const authored = gothicCapCrossings[pair]?.[visit];
+      const authored = crossingOrder[pair]?.[visit];
       if (authored === 'a' || authored === 'b') over = authored;
     }
-    return { ...hit, over:design.overrides['crossing-'+i] ?? over };
+    if (design.preset === saxonMarginBraid.id) {
+      // Woad crosses over oxblood, oxblood over ochre, ochre over woad.
+      const a = marginBraidStrands.findIndex(s => s.id === hit.a.id);
+      const b = marginBraidStrands.findIndex(s => s.id === hit.b.id);
+      over = (a + 1) % 3 === b ? 'a' : 'b';
+    }
+    return { ...hit, over: design.overrides['crossing-'+i] ?? over };
   });
+  if (design.preset === spiralRibbonWeave.id) {
+    addNarrowScroll(sheet, design, authoredHits[0]?.over === 'b' ? 0 : .5);
+    sheet.overrides = topology(sheet).hits.map(hit => ({
+      ...hit, over: scrollCrossingChoice(hit, authoredHits),
+    }));
+  } else {
+    sheet.overrides = authoredHits;
+  }
   sheet.overrides.push(...dormant);
   return sheet;
 }
@@ -279,7 +341,7 @@ export function designFromComposition(sheet: Sheet): Design {
 
 // Reopen the authored geometry, applying lettering edits made in the Layout inspector.
 export function editableComposition(design: Design): Sheet {
-  if (!design.composition) return openSheet({...design,width:Math.max(50,Math.min(400,design.width)),height:Math.max(50,Math.min(400,design.height))}).sheet;
+  if (!design.composition) return openSheet({...design,width:Math.max(LIMITS.width[0],Math.min(LIMITS.width[1],design.width)),height:Math.max(50,Math.min(400,design.height))}).sheet;
   const sheet = structuredClone(design.composition);
   sheet.showGuideTags = design.showGuideTags;
   for (const s of sheet.strands) {

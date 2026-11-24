@@ -1,3 +1,4 @@
+import { createPolylineSampler } from '../curve-helpers';
 import { SCRIPT_DEFAULTS, buildPreset, lengthPoly, offset, pointAt, sample, transformCubic, type Pt, type PtCubic } from '@/lib/curve-helpers';
 import { buildCopperplateContext } from '@/lib/copperplate/context';
 import { buildGuideSet, type GuideSet } from '@/lib/guides/guide-template';
@@ -14,11 +15,47 @@ export type SpanPoly = { waistPts: Pt[]; basePts: Pt[] };
 
 // Mechanically extracted from the standalone planner. The measured advances and
 // blackletter turn-spacing compensation are intentionally unchanged.
-export function computeCurvedTitleLayout(runData: ReturnType<typeof measureRun>, bandBaseline: Pt[], bandArcLen: number, bandXMM: number, bandNibMM: number, bandCapMM: number, scriptId: ScriptId, align: CurvedTitleAlign): CurvedTitleLayout {
-  const glyphs=runData.glyphs;
-  const placeWithAdvances=(advances:number[])=>{ const totalAdvance=advances.reduce((a,v)=>a+v,0); let s0=0; if(align==='center')s0=Math.max(0,(bandArcLen-totalAdvance)/2); if(align==='end')s0=Math.max(0,bandArcLen-totalAdvance); const placements:CurvedTitlePlace[]=[]; let cursor=s0; for(let i=0;i<glyphs.length;i++){const g=glyphs[i],adv=advances[i]??g.advMM;if(g.kind==='space'){cursor+=adv;continue;}const w=g.wMM,isCap=g.ch>='A'&&g.ch<='Z',h=isCap?bandCapMM:bandXMM;placements.push({ch:g.ch,w,h,sMid:cursor+w/2});cursor+=adv;}return{placements,totalAdvance};};
-  const adv1=glyphs.map(g=>g.advMM),pass1=placeWithAdvances(adv1); if(!pass1.placements.length||scriptId==='Copperplate')return{placements:pass1.placements,needed:pass1.totalAdvance,overBy:Math.max(0,pass1.totalAdvance-bandArcLen)};
-  const adv2=adv1.slice(); for(let i=0;i<pass1.placements.length;i++){const pl=pass1.placements[i],sMid=Math.min(bandArcLen,Math.max(0,pl.sMid)),sL=Math.max(0,Math.min(bandArcLen,sMid-pl.w/2)),sR=Math.max(0,Math.min(bandArcLen,sMid+pl.w/2)),nL=pointAt(bandBaseline,sL).n,nR=pointAt(bandBaseline,sR).n,dot=nL.x*nR.x+nL.y*nR.y,turnDeg=Math.acos(Math.max(-1,Math.min(1,dot)))*180/Math.PI,t=Math.max(0,Math.min(1,(turnDeg-6)/(28-6))),extra=t*bandNibMM*.25*(.6+.4*Math.min(1,pl.h/bandXMM));if(extra>0){let k=0;for(let gi=0;gi<glyphs.length;gi++){if(glyphs[gi].kind==='space')continue;if(k===i){if(gi<adv2.length-1)adv2[gi]+=extra;break;}k++;}}} const pass2=placeWithAdvances(adv2);return{placements:pass2.placements,needed:pass2.totalAdvance,overBy:Math.max(0,pass2.totalAdvance-bandArcLen)};
+export function computeCurvedTitleLayout(
+  runData: ReturnType<typeof measureRun>, bandBaseline: Pt[], bandArcLen: number,
+  bandXMM: number, bandNibMM: number, bandCapMM: number, scriptId: ScriptId,
+  align: CurvedTitleAlign, sampleAt?: ReturnType<typeof createPolylineSampler>,
+): CurvedTitleLayout {
+  const glyphs = runData.glyphs;
+  const place = (advances: number[]) => {
+    const totalAdvance = advances.reduce((sum, advance) => sum + advance, 0);
+    let cursor = align === 'center' ? Math.max(0, (bandArcLen - totalAdvance) / 2)
+      : align === 'end' ? Math.max(0, bandArcLen - totalAdvance) : 0;
+    const placements: CurvedTitlePlace[] = [];
+    for (let i = 0; i < glyphs.length; i++) {
+      const glyph = glyphs[i];
+      if (glyph.kind !== 'space') {
+        const isCap = glyph.ch >= 'A' && glyph.ch <= 'Z';
+        placements.push({ ch: glyph.ch, w: glyph.wMM, h: isCap ? bandCapMM : bandXMM, sMid: cursor + glyph.wMM / 2 });
+      }
+      cursor += advances[i];
+    }
+    return { placements, needed: totalAdvance, overBy: Math.max(0, totalAdvance - bandArcLen) };
+  };
+
+  const advances = glyphs.map(glyph => glyph.advMM);
+  const firstPass = place(advances);
+  if (!firstPass.placements.length || scriptId === 'Copperplate') return firstPass;
+
+  const sample = sampleAt ?? createPolylineSampler(bandBaseline);
+  let placementIndex = 0;
+  for (let i = 0; i < glyphs.length - 1; i++) {
+    if (glyphs[i].kind === 'space') continue;
+    const { sMid, w, h } = firstPass.placements[placementIndex++];
+    const middle = Math.min(bandArcLen, Math.max(0, sMid));
+    const left = sample(Math.max(0, Math.min(bandArcLen, middle - w / 2))).n;
+    const right = sample(Math.max(0, Math.min(bandArcLen, middle + w / 2))).n;
+    const dot = left.x * right.x + left.y * right.y;
+    const turnDeg = Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
+    const turn = Math.max(0, Math.min(1, (turnDeg - 6) / (28 - 6)));
+    const extra = turn * bandNibMM * .25 * (.6 + .4 * Math.min(1, h / bandXMM));
+    if (extra > 0) advances[i] += extra;
+  }
+  return place(advances);
 }
 
 function flipCubicVertically(c:PtCubic,boxH:number):PtCubic{const f=(p:Pt)=>({x:p.x,y:boxH-p.y});const out:PtCubic={...c,p0:f(c.p0),p1:f(c.p1),p2:f(c.p2),p3:f(c.p3)};if(c._extraSegs?.length)out._extraSegs=c._extraSegs.map(seg=>[seg[0],boxH-seg[1],seg[2],boxH-seg[3],seg[4],boxH-seg[5],seg[6],boxH-seg[7]]);return out;}

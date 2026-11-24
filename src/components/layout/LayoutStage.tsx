@@ -12,7 +12,7 @@ import { pointBounds } from '@/lib/editor/camera';
 import { useEditorCamera } from '@/components/editor/useEditorCamera';
 import PreviewToolbar from '@/components/editor/PreviewToolbar';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { bakeExportStrokes, computeRasterPxPerMM, jpegDataUrlToPdf, renderSvgCloneToJpegDataUrl } from '@/lib/export/raster-export';
 import { inverseRotatePoint, normalizeDegrees, occupiedRect, pageContentRect, resizeFrame, rotatePoint, snapMove, type SnapState } from '@/lib/layout/geometry';
 import { elementRotationCenter, elementVisualFrame, rotatedElementBounds } from '@/lib/layout/element-transform';
@@ -170,10 +170,11 @@ export default function LayoutStage({ onArrangement, editingSnapshot, elements, 
   const selected = elements.find(element => element.id === selectedId);
   const pageElement = elements.find(element => element.type === 'page');
   if (!pageElement) throw new Error('Layout requires a Page element.');
-  const page = pageSize(pageElement);
+  const page = useMemo(() => pageSize(pageElement), [pageElement]);
   const cricutSafeRect = getCricutSafeRect(page, cricutMat);
   const pageRect = pageContentRect(page, pageElement.settings.margins);
-  const camera = useEditorCamera(svgRef, {x:0,y:0,w:page.width,h:page.height}, pointBounds(elements.filter(e=>e.type!=="page"&&e.visible!==false).flatMap(e=>{const b=rotatedElementBounds(e);return [{x:b.x,y:b.y},{x:b.x+b.width,y:b.y+b.height}]}),{x:0,y:0,w:page.width,h:page.height},5), true, () => onSelect('page'));
+  const sheetBounds = useMemo(() => pointBounds(elements.filter(e=>e.type!=="page"&&e.visible!==false).flatMap(e=>{const b=rotatedElementBounds(e);return [{x:b.x,y:b.y},{x:b.x+b.width,y:b.y+b.height}]}),{x:0,y:0,w:page.width,h:page.height},5), [elements, page]);
+  const camera = useEditorCamera(svgRef, {x:0,y:0,w:page.width,h:page.height}, sheetBounds, true, () => onSelect('page'));
   const vb = camera;
   const zoom = camera.zoom;
   const begin = (e: React.PointerEvent<SVGElement>, element: LayoutElement, handle?: ResizeHandle) => {
@@ -195,13 +196,24 @@ export default function LayoutStage({ onArrangement, editingSnapshot, elements, 
     interactionRef.current={mode:'rotate',pointerId:e.pointerId,elementId:element.id,original:element.frame,live:element.frame,rotationDeg,initialRotation:rotationDeg,initialPointerAngle:Math.atan2(py-centre.y,px-centre.x),centre,rect,vb};
     svgRef.current.setPointerCapture(e.pointerId);setInteractionActive(true);
   };
+  const paintInteraction = (active: Exclude<Interaction, { mode: 'none' }>) => {
+    if (paintPending.current) return;
+    paintPending.current = true;
+    requestAnimationFrame(() => {
+      paintPending.current = false;
+      if (interactionRef.current !== active) return;
+      setLivePaint(active.mode === 'rotate'
+        ? { id: active.elementId, frame: active.live, rotationDeg: active.rotationDeg }
+        : { id: active.elementId, frame: active.live, visual: active.liveVisual });
+    });
+  };
   const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
     const active = interactionRef.current; if (active.mode === 'none' || active.pointerId !== e.pointerId) return;
     if(active.mode==='rotate'){
       const px=active.vb.x+(e.clientX-active.rect.left)/active.rect.width*active.vb.w,py=active.vb.y+(e.clientY-active.rect.top)/active.rect.height*active.vb.h;
       const delta=(Math.atan2(py-active.centre.y,px-active.centre.x)-active.initialPointerAngle)*180/Math.PI;
       const free=active.initialRotation+delta;active.rotationDeg=normalizeDegrees(e.shiftKey?Math.round(free/15)*15:free);
-      setLivePaint({id:active.elementId,frame:active.live,rotationDeg:active.rotationDeg});return;
+      paintInteraction(active);return;
     }
     const dx = (e.clientX - active.startClient.x) / active.rect.width * active.vb.w;
     const dy = (e.clientY - active.startClient.y) / active.rect.height * active.vb.h;
@@ -233,7 +245,7 @@ export default function LayoutStage({ onArrangement, editingSnapshot, elements, 
       const actual=rotatePoint({x:active.liveVisual.x+active.liveVisual.width*anchorX,y:active.liveVisual.y+active.liveVisual.height*anchorY},newCentre,active.rotationDeg);
       const shift={x:desired.x-actual.x,y:desired.y-actual.y};active.live={...active.live,x:active.live.x+shift.x,y:active.live.y+shift.y};active.liveVisual={...active.liveVisual,x:active.liveVisual.x+shift.x,y:active.liveVisual.y+shift.y};
     }
-if (!paintPending.current) { paintPending.current=true; requestAnimationFrame(()=>{paintPending.current=false;if(interactionRef.current===active)setLivePaint({id:active.elementId,frame:active.live,visual:active.liveVisual});}); }
+    paintInteraction(active);
   };
   const finish = (e: React.PointerEvent<SVGSVGElement>) => {
     const active = interactionRef.current; if (active.mode === 'none' || active.pointerId !== e.pointerId) return;
@@ -383,7 +395,7 @@ function CustomMaskBackground({element,frame}:{element:Extract<LayoutElement,{ty
     transform={customMaskTransform(mask,{...local,x:frame.x+local.x,y:frame.y+local.y})} fill={PAGE_BACKGROUND}/>;
 }
 
-function ElementVisual({ page, rotation, element, frame, simplify, selected, textFitEntry,onPlannedLinePlacementChange }: { page:{width:number;height:number}; rotation:number; element: LayoutElement; frame: Frame; simplify: boolean; selected: boolean; textFitEntry: GuidelinesTextFitEntry | null;onPlannedLinePlacementChange:(guidelinesId:string,lineId:string,customStartMM:number)=>void }) {
+const ElementVisual = memo(function ElementVisual({ page, rotation, element, frame, simplify, selected, textFitEntry,onPlannedLinePlacementChange }: { page:{width:number;height:number}; rotation:number; element: LayoutElement; frame: Frame; simplify: boolean; selected: boolean; textFitEntry: GuidelinesTextFitEntry | null;onPlannedLinePlacementChange:(guidelinesId:string,lineId:string,customStartMM:number)=>void }) {
   const common = { x: frame.x, y: frame.y, width: frame.width, height: frame.height };
   if(element.type==='woven')return <LayoutWovenRenderer page={page} rotation={rotation} element={element} frame={frame} simplify={simplify}/>;
   if (element.type === 'shape') return <ShapeElementRenderer element={element} frame={frame} selected={selected} />;
@@ -443,4 +455,4 @@ function ElementVisual({ page, rotation, element, frame, simplify, selected, tex
   if (element.type === 'calligram') return <g transform={`translate(${frame.x} ${frame.y})`}><CalligramRenderer box={{w:frame.width,h:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`} pageBackground={(element.settings.transparentWhitespace??true)?PAGE_BACKGROUND:undefined} paddingMM={element.paddingMM} selected={selected} showGuideTags={element.showGuideTags}/></g>;
   if (element.type === 'curved-title') return <g transform={`translate(${frame.x} ${frame.y})`}><CurvedTitleRenderer box={{w:frame.width,h:frame.height}} settings={element.settings} idPrefix={`layout-${element.id}`} pageBackground={!(element.settings.transparentWhitespace??true)?PAGE_BACKGROUND:undefined} paddingMM={element.paddingMM} selected={selected} showGuideTags={element.showGuideTags} /></g>;
   return <rect {...common} rx="2" fill="#fef3c7" stroke="#d97706" strokeWidth=".8" />;
-}
+});

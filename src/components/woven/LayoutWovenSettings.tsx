@@ -5,51 +5,54 @@ import { useMemo, useState } from 'react';
 import { Select } from '@/components/editor/Controls';
 import NumericSlider from '@/components/editor/NumericSlider';
 import DisclosureSection from '@/components/layout/DisclosureSection';
-import { DEFAULT_TEXT_PLAN, textFit } from '@/lib/interlace/text-fit';
-import { initialSheet, strand, topology } from '@/lib/interlace/model';
+import { DEFAULT_TEXT_PLAN, textFit, wovenCompositionTextFit, wovenStrandTextPlan } from '@/lib/interlace/text-fit';
+import { initialSheet, strand } from '@/lib/interlace/model';
 import WovenSettings from './WovenSettings';
-import { layoutWovenDesign, wovenSettings } from '@/lib/layout/woven';
-import { buildWovenRouteModel } from '@/lib/woven/model';
+import { layoutWovenPreview, withWovenTextSettings, wovenSettings } from '@/lib/layout/woven';
 import type { WovenElement } from '@/lib/layout/types';
 
-export default function LayoutWovenSettings({element,onChange}:{element:WovenElement;onChange:(element:WovenElement)=>void}) {
+export default function LayoutWovenSettings({element,onChange,pageHeight}:{pageHeight:number;element:WovenElement;onChange:(element:WovenElement)=>void}) {
   const [scale,setScale]=useState(100);
-  const design=useMemo(()=>layoutWovenDesign(element),[element]);
-  const model=useMemo(()=>buildWovenRouteModel(design),[design]);
+  const { settings, frame: { width, height } } = element;
+  const { design, geometryDesign, route: model } = useMemo(() => layoutWovenPreview(settings, width, height), [settings, width, height]);
   const [strapId,setStrapId] = useState('');
   const sheet = useMemo(() => {
     if (model.composition) return model.composition.sheet;
     const sheet = initialSheet();
-    sheet.paper = design.paper;
-    sheet.orientation = design.orientation;
-    sheet.strands = [strand('woven','Main strap',{kind:design.preset === 'figure-eight' ? 'figure-eight' : 'rosette'},design)];
+    sheet.paper = geometryDesign.paper;
+    sheet.orientation = geometryDesign.orientation;
+    sheet.strands = [strand('woven','Main strap',{kind:geometryDesign.preset === 'figure-eight' ? 'figure-eight' : 'rosette'},geometryDesign)];
     return sheet;
-  },[design,model]);
-  const graph = useMemo(() => model.composition?.graph ?? topology(sheet),[model,sheet]);
+  },[geometryDesign,model]);
+  const graph = model.composition?.graph;
   const straps = sheet.strands.filter(strap => strap.visible);
   const selected = straps.find(strap => strap.id === strapId) ?? straps[0];
-  const plan = selected?.textPlan ?? DEFAULT_TEXT_PLAN;
+  const plan = selected ? wovenStrandTextPlan(design, selected) : DEFAULT_TEXT_PLAN;
   const text = design.strapTexts?.[selected?.id] ?? plan.text;
   const countHidden=design.hiddenTextStraps?.includes(selected?.id) ?? plan.countHidden ?? false;
-  const fit = useMemo(() => selected && textFit(sheet,{...selected,textPlan:{...plan,text,countHidden}},graph,model.composition?undefined:model),[model,sheet,selected,plan,text,countHidden,graph]);
+  const fit = useMemo(() => {
+    if (!selected) return null;
+    const member = { ...selected, textPlan: { ...plan, text, countHidden } };
+    return graph ? wovenCompositionTextFit(design, sheet, member, graph) : textFit(sheet, member, undefined, model);
+  }, [design, model, sheet, selected, plan, text, countHidden, graph]);
   function changeText(text:string,hidden=countHidden) {
     if (!selected) return;
     const composition = design.composition;
     if (composition) {
       const strands = composition.strands.map(s => s.id === selected.id ? {...s,textPlan:{...(s.textPlan??DEFAULT_TEXT_PLAN),text,countHidden:hidden}} : s);
-      onChange({...element,settings:{...element.settings,composition:{...composition,strands}}});
+      onChange({...element,settings:withWovenTextSettings(settings, {...settings,composition:{...composition,strands}})});
     } else {
-      onChange({...element,settings:{...element.settings,hiddenTextStraps:[...(design.hiddenTextStraps??[]).filter(id=>id!==selected.id),...(hidden?[selected.id]:[])],strapTexts:{...design.strapTexts,[selected.id]:text}}});
+      onChange({...element,settings:withWovenTextSettings(settings, {...settings,hiddenTextStraps:[...(design.hiddenTextStraps??[]).filter(id=>id!==selected.id),...(hidden?[selected.id]:[])],strapTexts:{...design.strapTexts,[selected.id]:text}})});
     }
   }
   return <>
     <DisclosureSection title="Shape & Geometry" defaultOpen>
       <div className="space-y-3">
         <label className="block space-y-1 text-sm">Preset<Select className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm" aria-label="Preset" value={design.preset} onChange={event=>{
-          const next = fitWovenPreset(selectWovenPreset(design,event.target.value as typeof design.preset));
+          const next = fitWovenPreset(selectWovenPreset(design,event.target.value as typeof design.preset,pageHeight));
           const frame = element.frame;
           setScale(100);
-          onChange({...element,settings:wovenSettings(next),frame:{x:frame.x+(frame.width-next.width)/2,y:frame.y+(frame.height-next.height)/2,width:next.width,height:next.height}});
+          onChange({...element,settings:wovenSettings(next),frame:{x:next.preset === 'saxon-margin-braid' ? next.centerX! - next.width/2 : frame.x+(frame.width-next.width)/2,y:next.preset === 'saxon-margin-braid' || next.preset === 'rounded-page-interlace' ? (pageHeight-next.height)/2 : frame.y+(frame.height-next.height)/2,width:next.width,height:next.height}});
         }}>{design.preset === 'custom-composition' && <option value="custom-composition">Custom composition</option>}<option value="rosette">Six-loop rosette</option><option value="figure-eight">Figure-eight</option>{wovenCompositionOptions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></label>
         <NumericSlider label="Proportional scale" unit="%" min={Math.max(1,4/Math.min(element.frame.width,element.frame.height)*scale)} max={Math.min(1000,2000/Math.max(element.frame.width,element.frame.height)*scale)} value={scale} step={1} onChange={next=>{const factor=next/scale,width=element.frame.width*factor,height=element.frame.height*factor;setScale(next);onChange({...element,frame:{x:element.frame.x+(element.frame.width-width)/2,y:element.frame.y+(element.frame.height-height)/2,width,height}});}}/>
         {design.preset==='rosette'&&<NumericSlider label="Loop depth" min={.22} max={.42} value={design.loop} step={.01} onChange={loop=>onChange({...element,settings:{...element.settings,loop,overrides:{}}})}/>}

@@ -182,3 +182,18 @@ test('shared writing borders stop guide geometry at the main extension', async (
     }
   }
 });
+
+test('horizontal and vertical grid strokes keep their nib-scaled width in SVG and PDF', () => {
+  for (const axis of ['gridHorizontal', 'gridVertical'] as const) {
+    const axisDesign = { ...DEFAULT_DESIGN, gridHorizontal: false, gridVertical: false, [axis]: true };
+    for (const [nib, width] of [[1, .06], [2, .12]] as const) {
+      const { clean } = buildWovenModel({ ...axisDesign, nib }, { furniture: false });
+      const grid = clean.strokes.filter(stroke => stroke.role === 'grid');
+      assert.ok(grid.length > 0, axis);
+      assert.ok(grid.every(stroke => stroke.width === width), axis);
+      assert.ok(sceneSvg({ ...clean, strokes: grid }).includes('stroke-width="' + width + '"'));
+      const pt = (width * 72 / 25.4).toFixed(3);
+      assert.ok(new TextDecoder().decode(scenePdf({ ...clean, strokes: grid })).includes(' ' + pt + ' w'));
+    }
+  }
+});

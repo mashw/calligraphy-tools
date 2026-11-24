@@ -1,3 +1,5 @@
+import { spiralRibbonWeave } from './spiral-ribbon-weave';
+import { gridStrokeWidthMM } from '../guides/grid-stroke';
 import type { Interval as CrossingInterval } from './geometry';
 import { wovenComposition } from '../interlace/document';
 import { topology, renderSheet, warnings as sheetWarnings } from '../interlace/model';
@@ -30,7 +32,7 @@ export function buildWovenRouteModel(design: Design) {
   const page = pageSize(design);
   if (isWovenCompositionPreset(design.preset)) {
     let compositionDesign = design;
-    if (design.layoutFrame) {
+    if (design.layoutFrame && design.preset !== 'saxon-margin-braid') {
       const unit = design.script === 'Copperplate' ? 1 : design.nib;
       const bands = writingBands(design,design.xNib*unit,design.ascNib*unit,design.descNib*unit,false,0);
       const edges = bandEdges(bands);
@@ -46,7 +48,12 @@ export function buildWovenRouteModel(design: Design) {
       intervals.push([route.distances[index], route.distances[index + entry.route.points.length - 1]]);
       index += entry.route.points.length;
     }
-    const crossings = graph.hits.map((hit,i) => ({...hit, id:'crossing-'+i, a:hit.a.t, b:hit.b.t}));
+    // The outline crosses each wide pass twice. A preset crossing control
+    // changes the whole weave junction, including its narrow edges.
+    const visibleHits = design.preset === spiralRibbonWeave.id
+      ? graph.hits.filter(hit => hit.a.id === 'scroll-1' && hit.b.id === 'scroll-1')
+      : graph.hits;
+    const crossings = visibleHits.map((hit,i) => ({...hit, id:'crossing-'+i, a:hit.a.t, b:hit.b.t}));
     const choices = Object.fromEntries(crossings.map(hit => [hit.id, hit.over])) as Record<string,'a'|'b'>;
     const unit = design.script === 'Copperplate' ? 1 : design.nib;
     const x = unit*design.xNib, asc = unit*design.ascNib, desc = unit*design.descNib;
@@ -124,8 +131,9 @@ export function buildWovenRouteModel(design: Design) {
 
 /** Generate physical strokes for one writing passage. Intervals use its own arc length. */
 export function writingStrokes(design: Design, route: import('../guides/slant-paths').SlantRoute,
-  intervals: import('./geometry').Interval[], x: number, asc: number, desc: number, invertGuides = false, baselineOffset = x / 2): Stroke[] {
+  intervals: import('./geometry').Interval[], x: number, asc: number, desc: number, invertGuides = false, baselineOffset = x / 2, edgeOffset = offset): Stroke[] {
   const bands = writingBands(design,x,asc,desc,invertGuides,baselineOffset);
+  if (design.outlinesOnly) return outlineStrokes(route, bands, intervals, invertGuides, edgeOffset);
   const last = route.points.length - 1;
   const turns = new Map<number, number>();
   for (let i = route.closed ? 0 : 1; i < last; i++) {
@@ -186,12 +194,13 @@ function singleBandStrokes(band: ReturnType<typeof writingBands>[number], route:
     const v = Math.round(220 * (1 - contrast));
     return "#" + v.toString(16).padStart(2, "0").repeat(3);
   };
+  const gridWidthMM = gridStrokeWidthMM(design.nib, design.gridThickness);
   if (design.script !== "Copperplate" && design.gridHorizontal)
     for (const points of guides.hGuides ?? [])
       rails.push({
         points,
         color: gray(design.gridContrast),
-        width: design.gridThickness,
+        width: gridWidthMM,
         role: 'grid',
       });
   const bounds = bandEdges([band], invertGuides);
@@ -309,7 +318,7 @@ function singleBandStrokes(band: ReturnType<typeof writingBands>[number], route:
           { x: f.p.x + f.n.x * bottom, y: f.p.y + f.n.y * bottom, s },
         ],
         gray(design.gridContrast),
-        design.gridThickness,
+        gridWidthMM,
       );
     }
   locatedRole = 'construction';
@@ -407,6 +416,15 @@ function clippedCentreIntervals(route:ReturnType<typeof makeRoute>, intervals:Cr
   return result;
 }
 
+function outlineStrokes(route: ReturnType<typeof makeSlantRoute>, bands: ReturnType<typeof writingBands>,
+  intervals: CrossingInterval[], invert = false, edgeOffset = offset): Stroke[] {
+  const {top, bottom} = bandEdges(bands, invert);
+  return [top, bottom].flatMap(distance => {
+    const edge = edgeOffset(route.points, distance);
+    return intervals.map(interval => ({points: sliceGuide(route, edge, interval), width: .16, color: '#465363'}));
+  });
+}
+
 function borderedStrokes(design: Design, route: ReturnType<typeof makeRoute>, crossings: ReturnType<typeof findSelfCrossings>,
   choices: Record<string,'a'|'b'>, start: number, bands: ReturnType<typeof writingBands>): Stroke[] {
   const masks=crossingMasks(design,route,crossings,choices,bands);
@@ -415,7 +433,7 @@ function borderedStrokes(design: Design, route: ReturnType<typeof makeRoute>, cr
     const stops = [...new Set([a,b,...masks.flatMap(m=>m.interval).filter(s=>s>a && s<b)])].sort((p,q)=>p-q);
     for (let i=1;i<stops.length;i++) {
       const from=stops[i-1],to=stops[i],mid=(from+to)/2;
-      let parts = bands.flatMap(band=>singleBandStrokes(band, route, [[from, to]], false));
+      let parts = design.outlinesOnly ? outlineStrokes(route, bands, [[from, to]]) : bands.flatMap(band=>singleBandStrokes(band, route, [[from, to]], false));
       for (const mask of masks) if (mid>=mask.interval[0] && mid<=mask.interval[1])
         parts=parts.flatMap(stroke=>clipSlantToBand(stroke.points,mask.polygon,false).map(points=>({...stroke,points})));
       strokes.push(...parts);
@@ -424,16 +442,18 @@ function borderedStrokes(design: Design, route: ReturnType<typeof makeRoute>, cr
   return strokes;
 }
 
-export function buildWovenModel(design: Design, { furniture = true }: { furniture?: boolean } = {}) {
-  const page = pageSize(design);
-  const model = buildWovenRouteModel(design);
+export function buildWovenModel(design: Design, {
+  furniture = true,
+  routeModel: model = buildWovenRouteModel(design),
+}: { furniture?: boolean; routeModel?: ReturnType<typeof buildWovenRouteModel> } = {}) {
+  const page = model.page;
   const { route, crossings, choices, x, asc, desc, start, intervals, warnings, usableLength, halfBand } = model;
   const tagBounds = furniture ? page : {w:design.width,h:design.height};
   if (model.composition) {
     const {sheet,graph} = model.composition;
-    const clean = renderSheet(sheet,graph,{ruler:furniture,tagBounds,clipToPage:!design.layoutFrame});
+    const clean = renderSheet(sheet,graph,{outlinesOnly:design.outlinesOnly, guideTags:!design.outlinesOnly && sheet.showGuideTags,ruler:furniture && !design.outlinesOnly,tagBounds,clipToPage:!design.layoutFrame});
     const annotated = {...clean, labels:[...clean.labels,...crossings.map((c,i)=>({previewOnly:true,point:c.point,text:String(i+1),size:2.5,color:'#9f483b'}))]};
-    return {page,route,crossings,choices,intervals,clean,annotated,startPoint:route.points[0],usableLength,warnings};
+    return {page,route,crossings,choices,intervals,clean,annotated:design.outlinesOnly ? clean : annotated,startPoint:route.points[0],usableLength,warnings};
   }
   const bands = writingBands(design,x,asc,desc);
   // Clip in the same coordinate system for every placement, including tangent contacts.
@@ -442,7 +462,7 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
   const dx=design.centerX??page.w/2,dy=design.centerY??page.h/2;
   const strokes=borderedStrokes(design,localRoute,localCrossings,choices,design.start/100*localRoute.length,bands)
     .map(stroke=>({...stroke,points:stroke.points.map(p=>({x:p.x+dx,y:p.y+dy}))}));
-  const tag = design.showGuideTags ? routeTag(guideLabel(design.script, x, design.nib), route.points, halfBand + 4, .32) : null;
+  const tag = !design.outlinesOnly && design.showGuideTags ? routeTag(guideLabel(design.script, x, design.nib), route.points, halfBand + 4, .32) : null;
   const tags = tag ? [tag, ...borderGuideTags(bands, route.points, false, .32)] : undefined;
   const clean: Scene = { strokes, labels: [], tags, page };
   const startS = wrap(start + design.gap / 2, route.length);
@@ -497,7 +517,7 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
     }),
   );
   // Include the ruler on both sheets so printed dimensions can be checked.
-  if (furniture) for (const scene of [clean, annotated]) {
+  if (furniture && !design.outlinesOnly) for (const scene of [clean, annotated]) {
     scene.strokes.push({
       points: [
         { x: 15, y: page.h - 17 },
@@ -530,7 +550,7 @@ export function buildWovenModel(design: Design, { furniture = true }: { furnitur
     choices,
     intervals,
     clean,
-    annotated,
+    annotated: design.outlinesOnly ? clean : annotated,
     startPoint,
     usableLength,
     warnings,
