@@ -1,3 +1,4 @@
+import { spiralRibbonStrands } from '../src/lib/woven/spiral-ribbon-weave.ts';
 import { DEFAULT_TEXT_PLAN } from '../src/lib/interlace/text-fit.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -142,6 +143,25 @@ test('Layout strap text survives reopening single and multi-strap presets in Wov
     const strapTexts = Object.fromEntries(straps.map(s => [s.id, 'Text for '+s.id]));
     const reopened = editableComposition(parseDesign({...design,strapTexts}));
     for (const s of reopened.strands) assert.equal(s.textPlan?.text,strapTexts[s.id]);
+  }
+});
+
+test('Four-scroll ribbon weave follows circular arcs around all six lobes', () => {
+  const points = spiralRibbonStrands[0].points;
+  const samplesPerSegment = 32;
+  const arcs = [
+    { x: 400, y: 370, r: 116, ranges: [[.8, 1.5], [7.4, 8], [13.5, 14.25]] },
+    { x: 522, y: 251, r: 58, ranges: [[3.3, 6.1]] },
+    { x: 278, y: 251, r: 58, ranges: [[9.7, 12.6]] },
+  ];
+  const radii = (point: { x: number; y: number }, x: number, y: number) => Math.hypot(point.x - x, point.y - y);
+  for (const { x, y, r, ranges } of arcs) {
+    for (const [start, end] of ranges) {
+      for (let i = Math.ceil(start * samplesPerSegment); i <= end * samplesPerSegment; i++) {
+        assert.ok(Math.abs(radii(points[i], x, y) - r) < 1e-7);
+        assert.ok(Math.abs(radii(points[points.length - 1 - i], 800 - x, 980 - y) - r) < 1e-7);
+      }
+    }
   }
 });
 

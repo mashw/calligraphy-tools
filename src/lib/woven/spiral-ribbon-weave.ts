@@ -22,9 +22,9 @@ const upperRoute: Cubic[] = [
   [419, 216, 437, 197, 462, 190],
   [504, 177, 547, 199, 554, 231],
   [563, 268, 543, 298, 514, 308],
-  [475, 321, 447, 292, 416, 275],
-  [387, 259, 361, 257, 334, 266],
-  [303, 276, 278, 297, 252, 327],
+  [477, 321, 447, 274, 416, 263],
+  [388, 253, 362, 261, 334, 269],
+  [303, 278, 278, 297, 252, 327],
   [236, 345, 212, 337, 197, 319],
   [168, 284, 182, 240, 216, 221],
   [249, 202, 292, 212, 309, 244],
@@ -51,13 +51,46 @@ function straighten({ x, y }: Pt): Pt {
   return { x: x - .11 * (y - centre.y), y: y + .12 * (x - centre.x) };
 }
 
-function broadRoute() {
-  const upper = [centre];
-  for (const [x1, y1, x2, y2, x, y] of upperRoute) {
-    upper.push(...sample(upper.at(-1)!, { x: x1, y: y1 }, { x: x2, y: y2 }, { x, y }, 32).slice(1));
+const middleLobe = { x: 400, y: 370, radius: 116 };
+const rightScroll = { x: 522, y: 251, radius: 58 };
+const leftScroll = { x: 278, y: 251, radius: 58 };
+
+// The visible portions follow circles. Ease out of each circle only where
+// the strap turns into a bridge, crosses underneath, or enters a scroll eye.
+// Positions are measured in the segments of the traced upper route above.
+const circularRuns = [
+  { circle: middleLobe, from: .21, roundFrom: .7, roundTo: 1.62, to: 2.22 },
+  { circle: rightScroll, from: 2.78, roundFrom: 3.18, roundTo: 6.18, to: 6.92 },
+  { circle: middleLobe, from: 6.58, roundFrom: 7.31, roundTo: 8.06, to: 8.72 },
+  { circle: leftScroll, from: 8.96, roundFrom: 9.66, roundTo: 12.65, to: 13.18 },
+  { circle: middleLobe, from: 12.85, roundFrom: 13.42, roundTo: 14.34, to: 14.89 },
+];
+
+function roundLobes(point: Pt, position: number) {
+  const smooth = (value: number) => {
+    const t = Math.max(0, Math.min(1, value));
+    return t * t * t * (10 + t * (-15 + 6 * t));
+  };
+  for (const { circle, from, roundFrom, roundTo, to } of circularRuns) {
+    if (position <= from || position >= to) continue;
+    const weight = Math.min(smooth((position - from) / (roundFrom - from)), smooth((to - position) / (to - roundTo)));
+    const dx = point.x - circle.x, dy = point.y - circle.y;
+    const distance = Math.hypot(dx, dy);
+    const scale = 1 + weight * (circle.radius / distance - 1);
+    point = { x: circle.x + dx * scale, y: circle.y + dy * scale };
   }
+  return point;
+}
+
+function broadRoute() {
+  const samplesPerSegment = 32;
+  const trace = [centre];
+  for (const [x1, y1, x2, y2, x, y] of upperRoute) {
+    trace.push(...sample(trace.at(-1)!, { x: x1, y: y1 }, { x: x2, y: y2 }, { x, y }, samplesPerSegment).slice(1));
+  }
+  const upper = trace.map((point, index) => roundLobes(straighten(tuckScrollEye(point)), index / samplesPerSegment));
   const lower = upper.slice(0, -1).reverse().map(({ x, y }) => ({ x: 2 * centre.x - x, y: 2 * centre.y - y }));
-  return [...upper, ...lower].map(point => straighten(tuckScrollEye(point)));
+  return [...upper, ...lower];
 }
 
 export const spiralRibbonStrands = [
@@ -74,7 +107,7 @@ function scrollOffset(points: Pt[], spacing: number) {
     const last = route.distances.findIndex(distance => distance >= crossing.b);
     // An offset can fold back locally on a tight scroll. Replace just that
     // fold and preserve the sample count used to match the two straps.
-    if (first < 9 || last >= rail.length - 9 || last - first > 25) continue;
+    if (first < 9 || last >= rail.length - 9 || last - first > 35) continue;
     const start = first - 8, end = last + 8;
     const a = rail[start], b = rail[end];
     const handle = Math.hypot(b.x - a.x, b.y - a.y) / 3;
