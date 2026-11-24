@@ -1,3 +1,4 @@
+import { saxonMarginBraid, marginBraidHeight } from './saxon-margin-braid';
 import { roundedPageHeight, roundedPageWeave } from './rounded-page-interlace';
 import { DEFAULT_GRID_STROKE_MM } from '../guides/grid-stroke';
 import type { Sheet } from '../interlace/model';
@@ -10,7 +11,7 @@ import type { SlantStyle } from '../guides/slant-paths';
 import { PAPERS_MM } from "../curve-helpers";
 import type { ConstructionGuideSettings } from "../guides/guide-template";
 
-export const wovenCompositionOptions = [...compositionPresets, gothicCapWeave, spiralRibbonWeave, roundedPageWeave] as const;
+export const wovenCompositionOptions = [...compositionPresets, gothicCapWeave, spiralRibbonWeave, roundedPageWeave, saxonMarginBraid] as const;
 type WovenCompositionPreset = typeof wovenCompositionOptions[number]['id'] | 'custom-composition';
 
 export function isWovenCompositionPreset(preset: string): preset is WovenCompositionPreset {
@@ -72,6 +73,7 @@ export type Design = {
   clearance: number;
   fullGuides: boolean;
   annotated: boolean;
+  outlinesOnly?: boolean;
   showGuideTags?: boolean;
   overrides: Record<string, "a" | "b">;
 };
@@ -122,7 +124,7 @@ export const LIMITS = {
   slantSpacing: [1, 30],
   slantContrast: [0, 1],
   secondAngle: [5, 90],
-  width: [50, 400],
+  width: [4, 400],
   height: [50, 400],
   loop: [0.22, 0.42],
   rotation: [-180, 180],
@@ -167,6 +169,7 @@ export function parseDesign(input: unknown): Design {
     "fullGuides",
     "annotated",
     "showGuideTags",
+    "outlinesOnly",
     "gridHorizontal",
     "gridVertical",
     "slants",
@@ -319,6 +322,13 @@ export function pageSize(design: Pick<Design, "paper" | "orientation">) {
 
 export function selectWovenPreset(design: Design, preset: Design['preset'], pageHeight = pageSize(design).h): Design {
   const next = { ...design, preset, clearance:0, hiddenTextStraps:undefined, strapTexts:undefined, composition:undefined, overrides: {}, independentStraps:undefined, strapStyles:undefined };
+  if (preset === saxonMarginBraid.id) {
+    const height = Math.min(design.layoutFrame ? 2000 : LIMITS.height[1], pageHeight * marginBraidHeight / 1103);
+    const unit = height / marginBraidHeight;
+    return { ...next, height, width: 107 * unit, centerX: 100.5 * unit, centerY: undefined,
+      rotation: 0, reverse: false, gap: 0, script: 'Fraktur', xNib: 4.5, ascNib: 2, descNib: 2,
+      nib: Math.max(.2, Math.min(4, 16 * unit / 8.5)), fullGuides: true, borders: undefined };
+  }
   if (preset === roundedPageWeave.id) {
     const height = Math.min(design.layoutFrame ? 2000 : LIMITS.height[1], pageHeight * roundedPageHeight / 1103);
     return { ...next, height, width: height * 354 / roundedPageHeight, nib: Math.max(LIMITS.nib[0], Math.min(LIMITS.nib[1], height * 25 / (roundedPageHeight * 8.5))),

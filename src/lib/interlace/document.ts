@@ -1,3 +1,4 @@
+import { saxonMarginBraid, marginBraidStrands } from '../woven/saxon-margin-braid';
 import { roundedPageStrands, roundedPageWeave } from '../woven/rounded-page-interlace';
 import { compositionPresets } from '../paths/composition-presets';
 import type { Design } from '../woven/design';
@@ -193,9 +194,9 @@ function compositionGeometry(design: Design) {
   let sheet: Sheet;
   if (presetId === 'custom-composition' && design.composition) {
     sheet = structuredClone(design.composition);
-  } else if (presetId === gothicCapWeave.id || presetId === spiralRibbonWeave.id || presetId === roundedPageWeave.id) {
+  } else if (presetId === gothicCapWeave.id || presetId === spiralRibbonWeave.id || presetId === roundedPageWeave.id || presetId === saxonMarginBraid.id) {
     sheet = initialSheet();
-    const strands = presetId === gothicCapWeave.id ? gothicCapStrands : presetId === roundedPageWeave.id ? roundedPageStrands : spiralRibbonStrands;
+    const strands = presetId === saxonMarginBraid.id ? marginBraidStrands : presetId === gothicCapWeave.id ? gothicCapStrands : presetId === roundedPageWeave.id ? roundedPageStrands : spiralRibbonStrands;
     sheet.strands = strands.map(({ id, name, points }) => {
       const { source, center } = pathSource(pathD(points), points);
       return strand(id, name, source, {
@@ -309,6 +310,12 @@ export function wovenComposition(design: Design): Sheet {
       const authored = crossingOrder[pair]?.[visit];
       if (authored === 'a' || authored === 'b') over = authored;
     }
+    if (design.preset === saxonMarginBraid.id) {
+      // Woad crosses over oxblood, oxblood over ochre, ochre over woad.
+      const a = marginBraidStrands.findIndex(s => s.id === hit.a.id);
+      const b = marginBraidStrands.findIndex(s => s.id === hit.b.id);
+      over = (a + 1) % 3 === b ? 'a' : 'b';
+    }
     return { ...hit, over: design.overrides['crossing-'+i] ?? over };
   });
   if (design.preset === spiralRibbonWeave.id) {
@@ -334,7 +341,7 @@ export function designFromComposition(sheet: Sheet): Design {
 
 // Reopen the authored geometry, applying lettering edits made in the Layout inspector.
 export function editableComposition(design: Design): Sheet {
-  if (!design.composition) return openSheet({...design,width:Math.max(50,Math.min(400,design.width)),height:Math.max(50,Math.min(400,design.height))}).sheet;
+  if (!design.composition) return openSheet({...design,width:Math.max(LIMITS.width[0],Math.min(LIMITS.width[1],design.width)),height:Math.max(50,Math.min(400,design.height))}).sheet;
   const sheet = structuredClone(design.composition);
   sheet.showGuideTags = design.showGuideTags;
   for (const s of sheet.strands) {

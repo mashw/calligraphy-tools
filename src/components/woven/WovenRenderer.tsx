@@ -23,6 +23,7 @@ export function WovenFitSpan({fit}:{fit:ReturnType<typeof textFit>}) {
 
 export const WovenFitPreview = memo(function WovenFitPreview({design,model}:{design:Design;model:ReturnType<typeof buildWovenRouteModel>}) {
   const fits = useMemo(() => {
+    if (design.outlinesOnly) return [];
     if (model.composition) {
       const {sheet,graph} = model.composition;
       return sheet.strands.flatMap(s => {
@@ -52,7 +53,7 @@ export function LayoutWovenRenderer({element,frame,simplify,page,rotation}:{page
   const artwork = useMemo(() => scene && { ...scene, tags: undefined }, [scene]);
   const hitPath = useMemo(() => pointsD(route.route.points), [route]);
   const tags = useMemo(()=>{
-    if (!geometryDesign.showGuideTags) return [];
+    if (design.outlinesOnly || !geometryDesign.showGuideTags) return [];
     if (scene) return layoutWovenTags(scene,frame,rotation,page);
     const composition = route.composition;
     const primary = routeTag(guideLabel(geometryDesign.script,route.x,geometryDesign.nib),route.route.points,route.halfBand+4,.32);
@@ -60,7 +61,7 @@ export function LayoutWovenRenderer({element,frame,simplify,page,rotation}:{page
       : [...(primary ? [primary] : []), ...borderGuideTags(writingBands(geometryDesign,route.x,route.asc,route.desc),route.route.points,false,.32)];
     const paths = composition ? composition.graph.entries.map(e => e.route) : [route.route];
     return layoutWovenTags({tags:labels,strokes:paths.map(path=>({points:path.points,width:1.2,color:'#52677c'}))},frame,rotation,page);
-  },[scene,geometryDesign,route,frame,rotation,page]);
+  },[scene,design.outlinesOnly,geometryDesign,route,frame,rotation,page]);
   return <>
     <g transform={`translate(${frame.x} ${frame.y})`}>
       {simplify ? <WovenSimplified model={route}/> : artwork && <WovenScene scene={artwork}/>}

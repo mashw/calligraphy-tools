@@ -101,6 +101,7 @@ export default function WovenSettings({design: group, onChange, model, selected,
               {active && <label className="block text-sm">Editing strap<Select className={field} value={active.id}
                 onChange={event => setStrapId(event.target.value)}>{straps.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></label>}
             </div>}
+            <Switch label="Outlines only" checked={!!group.outlinesOnly} onChange={outlinesOnly => onChange({...group,outlinesOnly})}/>
             {model && <Switch label="Show guide tags" checked={design.showGuideTags ?? true} onChange={checked => update("showGuideTags", checked)} />}
             <div className="space-y-3">
               <label className="block space-y-1 text-sm">

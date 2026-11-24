@@ -32,7 +32,7 @@ export function buildWovenRouteModel(design: Design) {
   const page = pageSize(design);
   if (isWovenCompositionPreset(design.preset)) {
     let compositionDesign = design;
-    if (design.layoutFrame) {
+    if (design.layoutFrame && design.preset !== 'saxon-margin-braid') {
       const unit = design.script === 'Copperplate' ? 1 : design.nib;
       const bands = writingBands(design,design.xNib*unit,design.ascNib*unit,design.descNib*unit,false,0);
       const edges = bandEdges(bands);
@@ -133,6 +133,7 @@ export function buildWovenRouteModel(design: Design) {
 export function writingStrokes(design: Design, route: import('../guides/slant-paths').SlantRoute,
   intervals: import('./geometry').Interval[], x: number, asc: number, desc: number, invertGuides = false, baselineOffset = x / 2): Stroke[] {
   const bands = writingBands(design,x,asc,desc,invertGuides,baselineOffset);
+  if (design.outlinesOnly) return outlineStrokes(route, bands, intervals, invertGuides);
   const last = route.points.length - 1;
   const turns = new Map<number, number>();
   for (let i = route.closed ? 0 : 1; i < last; i++) {
@@ -415,6 +416,15 @@ function clippedCentreIntervals(route:ReturnType<typeof makeRoute>, intervals:Cr
   return result;
 }
 
+function outlineStrokes(route: ReturnType<typeof makeSlantRoute>, bands: ReturnType<typeof writingBands>,
+  intervals: CrossingInterval[], invert = false): Stroke[] {
+  const {top, bottom} = bandEdges(bands, invert);
+  return [top, bottom].flatMap(distance => {
+    const edge = offset(route.points, distance);
+    return intervals.map(interval => ({points: sliceGuide(route, edge, interval), width: .16, color: '#465363'}));
+  });
+}
+
 function borderedStrokes(design: Design, route: ReturnType<typeof makeRoute>, crossings: ReturnType<typeof findSelfCrossings>,
   choices: Record<string,'a'|'b'>, start: number, bands: ReturnType<typeof writingBands>): Stroke[] {
   const masks=crossingMasks(design,route,crossings,choices,bands);
@@ -423,7 +433,7 @@ function borderedStrokes(design: Design, route: ReturnType<typeof makeRoute>, cr
     const stops = [...new Set([a,b,...masks.flatMap(m=>m.interval).filter(s=>s>a && s<b)])].sort((p,q)=>p-q);
     for (let i=1;i<stops.length;i++) {
       const from=stops[i-1],to=stops[i],mid=(from+to)/2;
-      let parts = bands.flatMap(band=>singleBandStrokes(band, route, [[from, to]], false));
+      let parts = design.outlinesOnly ? outlineStrokes(route, bands, [[from, to]]) : bands.flatMap(band=>singleBandStrokes(band, route, [[from, to]], false));
       for (const mask of masks) if (mid>=mask.interval[0] && mid<=mask.interval[1])
         parts=parts.flatMap(stroke=>clipSlantToBand(stroke.points,mask.polygon,false).map(points=>({...stroke,points})));
       strokes.push(...parts);
@@ -441,9 +451,9 @@ export function buildWovenModel(design: Design, {
   const tagBounds = furniture ? page : {w:design.width,h:design.height};
   if (model.composition) {
     const {sheet,graph} = model.composition;
-    const clean = renderSheet(sheet,graph,{ruler:furniture,tagBounds,clipToPage:!design.layoutFrame});
+    const clean = renderSheet(sheet,graph,{outlinesOnly:design.outlinesOnly, guideTags:!design.outlinesOnly && sheet.showGuideTags,ruler:furniture && !design.outlinesOnly,tagBounds,clipToPage:!design.layoutFrame});
     const annotated = {...clean, labels:[...clean.labels,...crossings.map((c,i)=>({previewOnly:true,point:c.point,text:String(i+1),size:2.5,color:'#9f483b'}))]};
-    return {page,route,crossings,choices,intervals,clean,annotated,startPoint:route.points[0],usableLength,warnings};
+    return {page,route,crossings,choices,intervals,clean,annotated:design.outlinesOnly ? clean : annotated,startPoint:route.points[0],usableLength,warnings};
   }
   const bands = writingBands(design,x,asc,desc);
   // Clip in the same coordinate system for every placement, including tangent contacts.
@@ -452,7 +462,7 @@ export function buildWovenModel(design: Design, {
   const dx=design.centerX??page.w/2,dy=design.centerY??page.h/2;
   const strokes=borderedStrokes(design,localRoute,localCrossings,choices,design.start/100*localRoute.length,bands)
     .map(stroke=>({...stroke,points:stroke.points.map(p=>({x:p.x+dx,y:p.y+dy}))}));
-  const tag = design.showGuideTags ? routeTag(guideLabel(design.script, x, design.nib), route.points, halfBand + 4, .32) : null;
+  const tag = !design.outlinesOnly && design.showGuideTags ? routeTag(guideLabel(design.script, x, design.nib), route.points, halfBand + 4, .32) : null;
   const tags = tag ? [tag, ...borderGuideTags(bands, route.points, false, .32)] : undefined;
   const clean: Scene = { strokes, labels: [], tags, page };
   const startS = wrap(start + design.gap / 2, route.length);
@@ -507,7 +517,7 @@ export function buildWovenModel(design: Design, {
     }),
   );
   // Include the ruler on both sheets so printed dimensions can be checked.
-  if (furniture) for (const scene of [clean, annotated]) {
+  if (furniture && !design.outlinesOnly) for (const scene of [clean, annotated]) {
     scene.strokes.push({
       points: [
         { x: 15, y: page.h - 17 },
@@ -540,7 +550,7 @@ export function buildWovenModel(design: Design, {
     choices,
     intervals,
     clean,
-    annotated,
+    annotated: design.outlinesOnly ? clean : annotated,
     startPoint,
     usableLength,
     warnings,

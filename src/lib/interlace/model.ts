@@ -307,12 +307,12 @@ export function interlaceGuideTags(sheet: Sheet, entries = sheet.strands.filter(
   });
 }
 
-export function renderSheet(sheet:Sheet, graph=topology(sheet), { ruler = true, guideTags = sheet.showGuideTags, tagBounds = pageSize(sheet), clipToPage = true } = {}) {
+export function renderSheet(sheet:Sheet, graph=topology(sheet), { outlinesOnly = false, ruler = true, guideTags = sheet.showGuideTags, tagBounds = pageSize(sheet), clipToPage = true } = {}) {
   const page=pageSize(sheet),scene:Scene={page,strokes:[],labels:[],tags:guideTags ? interlaceGuideTags(sheet, graph.entries) : undefined};
   for(const {root,route,regions} of writingRoutes(sheet,graph)){
     const m=metrics(root);
     for(const {interval,polygons} of regions){
-      let strokes=writingStrokes(root.design,route,[interval],m.x,m.asc,m.desc,root.invert,root.baselineSource?0:m.x/2);
+      let strokes=writingStrokes(outlinesOnly ? {...root.design,outlinesOnly:true} : root.design,route,[interval],m.x,m.asc,m.desc,root.invert,root.baselineSource?0:m.x/2);
       for(const polygon of polygons)strokes=strokes.flatMap(stroke=>clipSlantToBand(stroke.points,polygon,false).map(points=>({...stroke,points})));
       scene.strokes.push(...strokes);
     }
