@@ -11,7 +11,7 @@ import WovenSettings from './WovenSettings';
 import { layoutWovenPreview, withWovenTextSettings, wovenSettings } from '@/lib/layout/woven';
 import type { WovenElement } from '@/lib/layout/types';
 
-export default function LayoutWovenSettings({element,onChange}:{element:WovenElement;onChange:(element:WovenElement)=>void}) {
+export default function LayoutWovenSettings({element,onChange,pageHeight}:{pageHeight:number;element:WovenElement;onChange:(element:WovenElement)=>void}) {
   const [scale,setScale]=useState(100);
   const { settings, frame: { width, height } } = element;
   const { design, geometryDesign, route: model } = useMemo(() => layoutWovenPreview(settings, width, height), [settings, width, height]);
@@ -49,10 +49,10 @@ export default function LayoutWovenSettings({element,onChange}:{element:WovenEle
     <DisclosureSection title="Shape & Geometry" defaultOpen>
       <div className="space-y-3">
         <label className="block space-y-1 text-sm">Preset<Select className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm" aria-label="Preset" value={design.preset} onChange={event=>{
-          const next = fitWovenPreset(selectWovenPreset(design,event.target.value as typeof design.preset));
+          const next = fitWovenPreset(selectWovenPreset(design,event.target.value as typeof design.preset,pageHeight));
           const frame = element.frame;
           setScale(100);
-          onChange({...element,settings:wovenSettings(next),frame:{x:frame.x+(frame.width-next.width)/2,y:frame.y+(frame.height-next.height)/2,width:next.width,height:next.height}});
+          onChange({...element,settings:wovenSettings(next),frame:{x:frame.x+(frame.width-next.width)/2,y:next.preset === 'rounded-page-interlace' ? (pageHeight-next.height)/2 : frame.y+(frame.height-next.height)/2,width:next.width,height:next.height}});
         }}>{design.preset === 'custom-composition' && <option value="custom-composition">Custom composition</option>}<option value="rosette">Six-loop rosette</option><option value="figure-eight">Figure-eight</option>{wovenCompositionOptions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></label>
         <NumericSlider label="Proportional scale" unit="%" min={Math.max(1,4/Math.min(element.frame.width,element.frame.height)*scale)} max={Math.min(1000,2000/Math.max(element.frame.width,element.frame.height)*scale)} value={scale} step={1} onChange={next=>{const factor=next/scale,width=element.frame.width*factor,height=element.frame.height*factor;setScale(next);onChange({...element,frame:{x:element.frame.x+(element.frame.width-width)/2,y:element.frame.y+(element.frame.height-height)/2,width,height}});}}/>
         {design.preset==='rosette'&&<NumericSlider label="Loop depth" min={.22} max={.42} value={design.loop} step={.01} onChange={loop=>onChange({...element,settings:{...element.settings,loop,overrides:{}}})}/>}

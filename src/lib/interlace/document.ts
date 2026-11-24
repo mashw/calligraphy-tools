@@ -1,3 +1,4 @@
+import { roundedPageStrands, roundedPageWeave } from '../woven/rounded-page-interlace';
 import { compositionPresets } from '../paths/composition-presets';
 import type { Design } from '../woven/design';
 import { DEFAULT_TEXT_PLAN, readTextPlan } from './text-fit';
@@ -192,9 +193,9 @@ function compositionGeometry(design: Design) {
   let sheet: Sheet;
   if (presetId === 'custom-composition' && design.composition) {
     sheet = structuredClone(design.composition);
-  } else if (presetId === gothicCapWeave.id || presetId === spiralRibbonWeave.id) {
+  } else if (presetId === gothicCapWeave.id || presetId === spiralRibbonWeave.id || presetId === roundedPageWeave.id) {
     sheet = initialSheet();
-    const strands = presetId === gothicCapWeave.id ? gothicCapStrands : spiralRibbonStrands;
+    const strands = presetId === gothicCapWeave.id ? gothicCapStrands : presetId === roundedPageWeave.id ? roundedPageStrands : spiralRibbonStrands;
     sheet.strands = strands.map(({ id, name, points }) => {
       const { source, center } = pathSource(pathD(points), points);
       return strand(id, name, source, {

@@ -1,3 +1,4 @@
+import { roundedPageHeight, roundedPageWeave } from './rounded-page-interlace';
 import { DEFAULT_GRID_STROKE_MM } from '../guides/grid-stroke';
 import type { Sheet } from '../interlace/model';
 import { openSheet } from '../interlace/document';
@@ -9,7 +10,7 @@ import type { SlantStyle } from '../guides/slant-paths';
 import { PAPERS_MM } from "../curve-helpers";
 import type { ConstructionGuideSettings } from "../guides/guide-template";
 
-export const wovenCompositionOptions = [...compositionPresets, gothicCapWeave, spiralRibbonWeave] as const;
+export const wovenCompositionOptions = [...compositionPresets, gothicCapWeave, spiralRibbonWeave, roundedPageWeave] as const;
 type WovenCompositionPreset = typeof wovenCompositionOptions[number]['id'] | 'custom-composition';
 
 export function isWovenCompositionPreset(preset: string): preset is WovenCompositionPreset {
@@ -316,8 +317,14 @@ export function pageSize(design: Pick<Design, "paper" | "orientation">) {
     : { w: Math.max(p.w, p.h), h: Math.min(p.w, p.h) };
 }
 
-export function selectWovenPreset(design: Design, preset: Design['preset']): Design {
+export function selectWovenPreset(design: Design, preset: Design['preset'], pageHeight = pageSize(design).h): Design {
   const next = { ...design, preset, clearance:0, hiddenTextStraps:undefined, strapTexts:undefined, composition:undefined, overrides: {}, independentStraps:undefined, strapStyles:undefined };
+  if (preset === roundedPageWeave.id) {
+    const height = Math.min(design.layoutFrame ? 2000 : LIMITS.height[1], pageHeight * roundedPageHeight / 1103);
+    return { ...next, height, width: height * 354 / roundedPageHeight, nib: Math.max(LIMITS.nib[0], Math.min(LIMITS.nib[1], height * 25 / (roundedPageHeight * 8.5))),
+      script: 'Fraktur', xNib: 4.5, ascNib: 2, descNib: 2, fullGuides: true, borders: undefined,
+      rotation: 0, reverse: false, gap: 0, centerY: undefined };
+  }
   if (preset === gothicCapWeave.id) {
     const span = Math.max(design.width, design.height);
     const nib = Math.max(LIMITS.nib[0], Math.min(LIMITS.nib[1], span * 43 / (770 * 8.5)));
