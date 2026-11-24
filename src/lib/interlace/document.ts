@@ -5,6 +5,7 @@ import { findCrossingsForStraps, slotOrderForPair } from '../paths/intersections
 import { samplePathDToPolyline } from '../paths/sample-svg-path';
 import { PAPERS_MM, pathD } from '../curve-helpers';
 import { parseDesign, DEFAULT_DESIGN, strapLettering, isWovenCompositionPreset, LIMITS, pageSize } from '../woven/design';
+import { spiralRibbonCrossings, spiralRibbonStrands, spiralRibbonWeave } from '../woven/spiral-ribbon-weave';
 import { gothicCapCrossings, gothicCapStrands, gothicCapWeave } from '../woven/gothic-cap-weave';
 import { findSelfCrossings, makeRoute, type Point } from '../woven/geometry';
 import { canJoin, initialSheet, strand, strandRoute, topology, type Source, type Strand, type Sheet } from './model';
@@ -191,9 +192,10 @@ function compositionGeometry(design: Design) {
   let sheet: Sheet;
   if (presetId === 'custom-composition' && design.composition) {
     sheet = structuredClone(design.composition);
-  } else if (presetId === gothicCapWeave.id) {
+  } else if (presetId === gothicCapWeave.id || presetId === spiralRibbonWeave.id) {
     sheet = initialSheet();
-    sheet.strands = gothicCapStrands.map(({ id, name, points }) => {
+    const strands = presetId === gothicCapWeave.id ? gothicCapStrands : spiralRibbonStrands;
+    sheet.strands = strands.map(({ id, name, points }) => {
       const { source, center } = pathSource(pathD(points), points);
       return strand(id, name, source, {
         ...DEFAULT_DESIGN, width:source.width, height:source.height, centerX:center.x, centerY:center.y,
@@ -252,14 +254,16 @@ export function wovenComposition(design: Design): Sheet {
   });
   const hits = topology(sheet).hits;
   const visits = new Map<string, number>();
+  const crossingOrder = design.preset === gothicCapWeave.id ? gothicCapCrossings
+    : design.preset === spiralRibbonWeave.id ? spiralRibbonCrossings : undefined;
   const dormant = sheet.overrides.filter(c => sheet.strands.some(s => !s.visible && (s.id === c.a.id || s.id === c.b.id)));
   sheet.overrides = hits.map((hit, i) => {
     let over = hit.over;
-    if (design.preset === gothicCapWeave.id) {
+    if (crossingOrder) {
       const pair = hit.a.id + '|' + hit.b.id;
       const visit = visits.get(pair) ?? 0;
       visits.set(pair, visit + 1);
-      const authored = gothicCapCrossings[pair]?.[visit];
+      const authored = crossingOrder[pair]?.[visit];
       if (authored === 'a' || authored === 'b') over = authored;
     }
     return { ...hit, over:design.overrides['crossing-'+i] ?? over };

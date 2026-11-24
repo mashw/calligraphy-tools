@@ -2,13 +2,14 @@ import { DEFAULT_GRID_STROKE_MM } from '../guides/grid-stroke';
 import type { Sheet } from '../interlace/model';
 import { openSheet } from '../interlace/document';
 import { compositionPresets } from '../paths/composition-presets';
+import { spiralRibbonWeave } from './spiral-ribbon-weave';
 import { gothicCapWeave } from './gothic-cap-weave';
 
 import type { SlantStyle } from '../guides/slant-paths';
 import { PAPERS_MM } from "../curve-helpers";
 import type { ConstructionGuideSettings } from "../guides/guide-template";
 
-export const wovenCompositionOptions = [...compositionPresets, gothicCapWeave] as const;
+export const wovenCompositionOptions = [...compositionPresets, gothicCapWeave, spiralRibbonWeave] as const;
 type WovenCompositionPreset = typeof wovenCompositionOptions[number]['id'] | 'custom-composition';
 
 export function isWovenCompositionPreset(preset: string): preset is WovenCompositionPreset {
@@ -321,6 +322,15 @@ export function selectWovenPreset(design: Design, preset: Design['preset']): Des
     const span = Math.max(design.width, design.height);
     const nib = Math.max(LIMITS.nib[0], Math.min(LIMITS.nib[1], span * 43 / (770 * 8.5)));
     return { ...next, script:'Fraktur', nib, xNib:4.5, ascNib:2, descNib:2, penAngle:40, gap:0, clearance:0 };
+  }
+  if (preset === spiralRibbonWeave.id) {
+    const span = Math.max(design.width, design.height);
+    const nib = Math.max(LIMITS.nib[0], Math.min(LIMITS.nib[1], span * .0075));
+    const border = { enabled: true, script: 'Fraktur', xHeight: nib * 1.5, gap: 0, share: true } as const;
+    return {
+      ...next, script: 'Fraktur', nib, xNib: 4.5, ascNib: 2, descNib: 2, penAngle: 40,
+      gap: 0, reverse: false, fullGuides: true, borders: { inner: { ...border }, outer: { ...border } },
+    };
   }
   if (preset === 'fraktur-scurve-weave-2') return { ...next, script:'Fraktur', nib:2, xNib:4.5, ascNib:2, descNib:2, penAngle:40 };
   if (preset === 'woven-double-circle') return { ...next, script:'Copperplate', nib:1, xNib:6, ascNib:6, descNib:6 };
