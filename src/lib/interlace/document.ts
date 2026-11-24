@@ -5,7 +5,7 @@ import { findCrossingsForStraps, slotOrderForPair } from '../paths/intersections
 import { samplePathDToPolyline } from '../paths/sample-svg-path';
 import { PAPERS_MM, pathD } from '../curve-helpers';
 import { parseDesign, DEFAULT_DESIGN, strapLettering, isWovenCompositionPreset, LIMITS, pageSize } from '../woven/design';
-import { spiralBorderRoutes, spiralRibbonCrossings, spiralRibbonStrands, spiralRibbonWeave } from '../woven/spiral-ribbon-weave';
+import { narrowScrollRoute, scrollPhase, scrollRibbonGroup, spiralRibbonCrossings, spiralRibbonStrands, spiralRibbonWeave } from '../woven/spiral-ribbon-weave';
 import { gothicCapCrossings, gothicCapStrands, gothicCapWeave } from '../woven/gothic-cap-weave';
 import { findSelfCrossings, makeRoute, type Point } from '../woven/geometry';
 import { canJoin, initialSheet, strand, strandRoute, topology, type Hit, type Source, type Strand, type Sheet } from './model';
@@ -228,43 +228,41 @@ export function fitWovenPreset(design: Design): Design {
   return {...design,width:span*widthScale,height:span*heightScale};
 }
 
-function addScrollBorders(sheet: Sheet, design: Design) {
-  sheet.strands = sheet.strands.flatMap(main => {
-    main.group = main.id;
-    main.design = { ...main.design, borders: undefined };
-    const { nib, xNib, ascNib, descNib, fullGuides, reverse } = main.design;
-    const borderNib = Math.max(LIMITS.nib[0], design.nib / 3);
-    const points = strandRoute(main, sheet).points;
-    const borderHalfWidth = borderNib * (xNib / 2 + (fullGuides ? 1.25 : 0));
-    const spacing = (extension: number) => borderHalfWidth + nib * (xNib / 2 + (fullGuides ? extension : 0));
-    const borders = spiralBorderRoutes(points, spacing(reverse ? descNib : ascNib), spacing(reverse ? ascNib : descNib)).map(({ side, points }) => {
-      const { source, center } = pathSource(pathD(points), points);
-      const id = main.id + '-' + side;
-      const border = strand(id, main.name + ' · ' + side, source, {
-        ...main.design, nib: borderNib, ascNib: 1.25, descNib: 1.25,
-        ...(design.independentStraps ? design.strapStyles?.[id] : {}),
-        width: source.width, height: source.height, centerX: center.x, centerY: center.y,
-      });
-      border.group = main.id;
-      const text = design.strapTexts?.[id];
-      if (text !== undefined) {
-        border.textPlan = { ...DEFAULT_TEXT_PLAN, text, countHidden: design.hiddenTextStraps?.includes(id) };
-      }
-      return border;
-    });
-    return [main, ...borders];
+function addNarrowScroll(sheet: Sheet, design: Design, switchPhase: number) {
+  const main = sheet.strands[0];
+  main.group = scrollRibbonGroup;
+  main.design = { ...main.design, borders: undefined };
+  const id = 'scroll-2';
+  const narrow = {
+    ...main.design, nib: Math.max(LIMITS.nib[0], design.nib / 3), ascNib: 1.25, descNib: 1.25,
+    ...(design.independentStraps ? design.strapStyles?.[id] : {}),
+  };
+  const unit = (d: Design) => d.script === 'Copperplate' ? 1 : d.nib;
+  const halfWidth = (d: Design) => unit(d) * (d.xNib / 2 + (d.fullGuides ? Math.max(d.ascNib, d.descNib) : 0));
+  const points = narrowScrollRoute(strandRoute(main, sheet).points, halfWidth(main.design) + halfWidth(narrow), switchPhase);
+  const { source, center } = pathSource(pathD(points), points);
+  const border = strand(id, 'Narrow scroll strap', source, {
+    ...narrow, width: source.width, height: source.height, centerX: center.x, centerY: center.y,
   });
+  border.group = scrollRibbonGroup;
+  // The outline follows the same direction through both laps.
+  const text = design.strapTexts?.[id];
+  if (text !== undefined) {
+    border.textPlan = { ...DEFAULT_TEXT_PLAN, text, countHidden: design.hiddenTextStraps?.includes(id) };
+  }
+  sheet.strands.push(border);
 }
 
 function scrollCrossingChoice(hit: Hit, mainCrossings: Hit[]) {
-  const ribbon = (id: string) => id.replace(/-(inner|outer)$/, '');
-  const candidates = mainCrossings.filter(c => c.a.id === ribbon(hit.a.id) && c.b.id === ribbon(hit.b.id));
-  let choice = hit.over;
+  const a = scrollPhase(hit.a.id, hit.a.t), b = scrollPhase(hit.b.id, hit.b.t);
+  const distance = (x: number, y: number) => Math.min(Math.abs(x - y), 1 - Math.abs(x - y));
+  // The two narrow laps change sides underneath the same broad underpass.
+  if (distance(a, b) < .025) return hit.a.id === 'scroll-1' ? 'a' : hit.over;
   let best = Infinity;
-  for (const crossing of candidates) {
-    const normal = Math.hypot(crossing.a.t - hit.a.t, crossing.b.t - hit.b.t);
-    const swapped = crossing.a.id === crossing.b.id
-      ? Math.hypot(crossing.a.t - hit.b.t, crossing.b.t - hit.a.t) : Infinity;
+  let choice = hit.over;
+  for (const crossing of mainCrossings) {
+    const normal = Math.hypot(distance(crossing.a.t, a), distance(crossing.b.t, b));
+    const swapped = Math.hypot(distance(crossing.a.t, b), distance(crossing.b.t, a));
     if (Math.min(normal, swapped) >= best) continue;
     best = Math.min(normal, swapped);
     choice = normal <= swapped ? crossing.over : crossing.over === 'a' ? 'b' : 'a';
@@ -310,14 +308,12 @@ export function wovenComposition(design: Design): Sheet {
       const authored = crossingOrder[pair]?.[visit];
       if (authored === 'a' || authored === 'b') over = authored;
     }
-    const legacyScroll = design.preset === spiralRibbonWeave.id && !!design.borders;
-    const choice = design.preset !== spiralRibbonWeave.id || legacyScroll ? design.overrides['crossing-'+i] : undefined;
-    return { ...hit, over: choice ?? over };
+    return { ...hit, over: design.overrides['crossing-'+i] ?? over };
   });
   if (design.preset === spiralRibbonWeave.id) {
-    addScrollBorders(sheet, design);
-    sheet.overrides = topology(sheet).hits.map((hit, i) => ({
-      ...hit, over: (design.borders ? undefined : design.overrides['crossing-'+i]) ?? scrollCrossingChoice(hit, authoredHits),
+    addNarrowScroll(sheet, design, authoredHits[0]?.over === 'b' ? 0 : .5);
+    sheet.overrides = topology(sheet).hits.map(hit => ({
+      ...hit, over: scrollCrossingChoice(hit, authoredHits),
     }));
   } else {
     sheet.overrides = authoredHits;

@@ -145,28 +145,36 @@ test('Layout strap text survives reopening single and multi-strap presets in Wov
   }
 });
 
-test('Four-scroll ribbon weave keeps separate narrow writing paths through Layout Save/Open', () => {
+test('Four-scroll ribbon weave follows two closed paths through Layout Save/Open', () => {
   const design = fitWovenPreset(selectWovenPreset(DEFAULT_DESIGN, 'spiral-ribbon-weave'));
   const standalone = buildWovenRouteModel(design);
-  const strands = standalone.composition?.sheet.strands;
-  assert.equal(strands?.length, 6);
-  assert.equal(new Set(strands?.map(strand => strand.id)).size, 6);
-  assert.equal(strands?.filter(strand => strand.design.nib === design.nib).length, 2);
-  assert.equal(strands?.filter(strand => strand.design.nib === design.nib / 3).length, 4);
-  assert.ok(standalone.crossings.length > 5);
-  assert.ok(standalone.composition?.graph.hits.some(hit => hit.a.id.endsWith('-inner') && hit.b.id.endsWith('-outer')));
+  const entries = standalone.composition?.graph.entries ?? [];
+  assert.equal(entries.length, 2);
+  const [broad, narrow] = entries;
+  assert.equal(broad.route.closed, true);
+  assert.equal(narrow.route.closed, true);
+  assert.equal(narrow.s.design.nib, broad.s.design.nib / 3);
+  assert.ok(narrow.route.length > broad.route.length * 1.8);
+
+  const broadVisits = (hits: NonNullable<typeof standalone.composition>['graph']['hits']) =>
+    hits.filter(hit => hit.a.id === broad.s.id && hit.b.id === broad.s.id).map(hit => hit.over);
+  assert.deepEqual(broadVisits(standalone.composition?.graph.hits ?? []), ['a', 'b', 'b', 'a', 'a']);
+  assert.equal(standalone.crossings.length, 5);
+  const flipped = buildWovenRouteModel({ ...design, overrides: { 'crossing-0': 'b' } });
+  assert.deepEqual(broadVisits(flipped.composition?.graph.hits ?? []), ['b', 'b', 'b', 'a', 'a']);
+  assert.equal(flipped.composition?.graph.entries[1].route.closed, true);
 
   const element = newElement('woven', 1, { width: 210, height: 297 }) as WovenElement;
-  element.settings = wovenSettings({ ...design, strapTexts: { 'scroll-1-inner': 'Inner lettering' } });
+  element.settings = wovenSettings({ ...design, strapTexts: { 'scroll-2': 'One narrow route' } });
   element.frame = { x: 40, y: 34, width: design.width, height: design.height };
   const reopened = parseLayoutDesign(serializeLayoutDesign([element, pageElement()], element.id)).elements[0];
   assert.equal(reopened.type, 'woven');
   if (reopened.type !== 'woven') throw Error('Missing Woven element');
-  const layout = buildWovenRouteModel(layoutWovenDesign(reopened));
-  assert.equal(layout.composition?.sheet.strands.length, 6);
-  const inner = layout.composition?.sheet.strands.find(strand => strand.id === 'scroll-1-inner');
-  assert.equal(inner?.textPlan?.text, 'Inner lettering');
 
+  const layout = buildWovenRouteModel(layoutWovenDesign(reopened));
+  assert.equal(layout.composition?.graph.entries.length, 2);
+  assert.equal(layout.composition?.sheet.strands[1].textPlan?.text, 'One narrow route');
+  assert.deepEqual(broadVisits(layout.composition?.graph.hits ?? []), ['a', 'b', 'b', 'a', 'a']);
   const strokes = layoutWovenModel(reopened).clean.strokes;
   assert.ok(strokes.length > 100);
   assert.ok(strokes.every(stroke => stroke.points.every(point => Number.isFinite(point.x) && Number.isFinite(point.y))));

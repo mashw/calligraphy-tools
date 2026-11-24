@@ -1,3 +1,4 @@
+import { scrollPhase, scrollRibbonGroup } from '../woven/spiral-ribbon-weave';
 import { visitIntervals } from '../woven/passages';
 import { writingBands, borderGuideTags, bandEdges, borderBendWarning } from '../woven/bands';
 import { placeSheetTags, guideLabel, routeTag, type SheetTag } from '@/lib/guides/sheet-labels';
@@ -202,20 +203,31 @@ function passageIntervals(entry: Entry, passage: Passage, hits: Hit[]): Interval
 function scrollPassageHits(hits: Hit[], crossing: Hit, passage: Passage, entries: Map<string, Entry>) {
   const family = (id: string) => {
     const group = entries.get(id)?.s.group;
-    return group === 'scroll-1' || group === 'scroll-2' ? group : undefined;
+    return group === scrollRibbonGroup;
   };
   const side = crossing.a === passage ? 'a' : 'b';
   const opposite = (side: 'a' | 'b') => side === 'a' ? 'b' : 'a';
-  const relatedFamily = family(crossing[opposite(side)].id);
-  if (!family(passage.id) || !relatedFamily) return hits;
+  const mate = crossing[opposite(side)];
+  if (!family(passage.id) || !family(mate.id)) return hits;
   const isOver = side === crossing.over;
+  const matePhase = scrollPhase(mate.id, mate.t);
+  const nearCentre = (phase: number) => Math.min(phase, Math.abs(phase - .5), 1 - phase) < .04;
+  const central = nearCentre(scrollPhase(passage.id, passage.t)) && nearCentre(matePhase);
+  const nearPassage = (visit: Passage) => {
+    const delta = Math.abs(visit.t - passage.t);
+    return visit.id === passage.id && Math.min(delta, 1 - delta) <= .055;
+  };
   return hits.filter(hit => {
     if (hit === crossing) return true;
+    // Both narrow lanes swap sides behind the central overpass. At that
+    // point they intersect each other as well as the broad strap.
+    if (central && (nearPassage(hit.a) && nearCentre(scrollPhase(hit.b.id, hit.b.t))
+      || nearPassage(hit.b) && nearCentre(scrollPhase(hit.a.id, hit.a.t)))
+      && family(hit.a.id) && family(hit.b.id)) return false;
     const sameRole = hit[isOver ? hit.over : opposite(hit.over)];
     const other = hit[isOver ? opposite(hit.over) : hit.over];
-    return sameRole.id !== passage.id || family(other.id) !== relatedFamily
-      || Math.abs(sameRole.t - passage.t) > .08
-      || Math.abs(other.t - crossing[opposite(side)].t) > .12;
+    const phaseDelta = Math.abs(scrollPhase(other.id, other.t) - matePhase);
+    return !nearPassage(sameRole) || !family(other.id) || Math.min(phaseDelta, 1 - phaseDelta) > .055;
   });
 }
 

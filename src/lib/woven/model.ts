@@ -1,3 +1,4 @@
+import { spiralRibbonWeave } from './spiral-ribbon-weave';
 import { gridStrokeWidthMM } from '../guides/grid-stroke';
 import type { Interval as CrossingInterval } from './geometry';
 import { wovenComposition } from '../interlace/document';
@@ -47,7 +48,12 @@ export function buildWovenRouteModel(design: Design) {
       intervals.push([route.distances[index], route.distances[index + entry.route.points.length - 1]]);
       index += entry.route.points.length;
     }
-    const crossings = graph.hits.map((hit,i) => ({...hit, id:'crossing-'+i, a:hit.a.t, b:hit.b.t}));
+    // The outline crosses each wide pass twice. A preset crossing control
+    // changes the whole weave junction, including its narrow edges.
+    const visibleHits = design.preset === spiralRibbonWeave.id
+      ? graph.hits.filter(hit => hit.a.id === 'scroll-1' && hit.b.id === 'scroll-1')
+      : graph.hits;
+    const crossings = visibleHits.map((hit,i) => ({...hit, id:'crossing-'+i, a:hit.a.t, b:hit.b.t}));
     const choices = Object.fromEntries(crossings.map(hit => [hit.id, hit.over])) as Record<string,'a'|'b'>;
     const unit = design.script === 'Copperplate' ? 1 : design.nib;
     const x = unit*design.xNib, asc = unit*design.ascNib, desc = unit*design.descNib;
